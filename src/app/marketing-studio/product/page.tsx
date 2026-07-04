@@ -1,0 +1,563 @@
+"use client";
+
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Navbar from "@/components/landing/Navbar";
+import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Settings, X } from "lucide-react";
+import { marketingStyleCards } from "@/data/marketingStyleCards";
+
+type Category = "All" | "TikTok" | "UGC" | "Commercial";
+type ModeType = "UGC" | "Mobile" | "Settings";
+type TargetType = "product" | "app";
+
+interface StyleCard {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  badge: boolean;
+  filename: string;
+  localPath: string;
+}
+
+export default function MarketingStudioProduct() {
+  const noop = () => {};
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const viewMode = searchParams.get("mode") || "product";
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
+  const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
+  const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState<Category>("All");
+  const [prompt, setPrompt] = useState("");
+  const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
+  const [panelSearchQuery, setPanelSearchQuery] = useState("");
+
+  // Filter and search
+  const filteredCards = useMemo(() => {
+    return (marketingStyleCards as unknown as StyleCard[]).filter((card) => {
+      const matchesFilter = filterCategory === "All" || card.category === filterCategory;
+      const matchesSearch =
+        card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        card.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFilter && matchesSearch;
+    });
+  }, [filterCategory, searchQuery]);
+
+  // Panel filtered cards
+  const panelFilteredCards = useMemo(() => {
+    return (marketingStyleCards as unknown as StyleCard[]).filter((card) =>
+      card.title.toLowerCase().includes(panelSearchQuery.toLowerCase()) ||
+      card.description.toLowerCase().includes(panelSearchQuery.toLowerCase())
+    );
+  }, [panelSearchQuery]);
+
+  // Handle UGC chip click to open Style panel
+  const handleUgcClick = () => {
+    setSelectedMode("UGC");
+    setSelectedStyle((current) => current || "ugc");
+    setIsStylePanelOpen(true);
+  };
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsStylePanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  const handleAllGenerations = () => {
+    router.push("?mode=all");
+  };
+
+  const handleFavorites = () => {
+    router.push("?mode=favorites");
+  };
+
+  const handleGenerate = () => {
+    console.log({
+      target: selectedTarget,
+      mode: selectedMode,
+      style: selectedStyle,
+      prompt: prompt,
+    });
+  };
+
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{
+        backgroundColor: "#071b10",
+        backgroundImage: `
+          linear-gradient(rgba(210,255,80,0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(210,255,80,0.08) 1px, transparent 1px),
+          radial-gradient(circle at 50% 18%, rgba(190,255,40,0.35), transparent 34%)
+        `,
+        backgroundSize: "44px 44px, 44px 44px, 100% 100%",
+      }}
+    >
+      <Navbar
+        activePanel={null}
+        onOpenImagePanel={noop}
+        onOpenVideoPanel={noop}
+        onOpenAudioPanel={noop}
+        onSetView={noop}
+      />
+
+      <div className="flex min-h-[calc(100vh-4rem)]">
+        {/* LEFT SIDEBAR */}
+        <aside className={`fixed left-0 top-16 z-30 h-[calc(100vh-4rem)] border-r border-white/10 bg-[#031b13]/80 backdrop-blur-xl transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-[190px]"}`}>
+          <div className="flex flex-col h-full px-3 py-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              {!sidebarCollapsed && (
+                <span className="text-xs font-bold text-white/80">Marketing Studio</span>
+              )}
+              <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-white/50 hover:text-white">
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Back Arrow */}
+            <button className="text-white/50 hover:text-white text-center w-full py-2 mb-4">
+              ←
+            </button>
+
+            {/* Navigation */}
+            <nav className="space-y-2 flex-1">
+              <button
+                onClick={() => router.push("/marketing-studio/product")}
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+              >
+                <Home className="h-4 w-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>Home</span>}
+              </button>
+              <button
+                onClick={handleAllGenerations}
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+              >
+                <Grid3x3 className="h-4 w-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>All generations</span>}
+              </button>
+              <button
+                onClick={handleFavorites}
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+              >
+                <Heart className="h-4 w-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>My favorites</span>}
+              </button>
+            </nav>
+
+            {/* Tools */}
+            <div className="space-y-2 pt-4 border-t border-white/10">
+              {!sidebarCollapsed && <p className="text-xs text-white/50 font-bold px-2">TOOLS</p>}
+              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm">
+                <Link2 className="h-4 w-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>Url to Ad</span>}
+              </button>
+              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm">
+                <Paperclip className="h-4 w-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>Ad Reference</span>}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* MAIN CONTENT */}
+        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-[190px]"}`}>
+          {viewMode === "all" ? (
+            // ALL GENERATIONS VIEW
+            <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
+              <div className="relative z-10 text-center max-w-[1000px] mb-12 w-full">
+                <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">ALL GENERATIONS</p>
+                <h1 className="font-grotesk uppercase text-[40px] leading-[48px] font-bold tracking-[-1.6px] text-white/90 mb-8">
+                  Your Generated Videos
+                </h1>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-[1200px]">
+                {[1, 2, 3, 4, 5, 6].map((idx) => (
+                  <div
+                    key={idx}
+                    className="group rounded-3xl overflow-hidden bg-white/5 border border-white/10 hover:border-white/20 transition-all hover:scale-[1.02] cursor-pointer"
+                  >
+                    <div className="aspect-[9/16] bg-gradient-to-br from-white/10 to-white/5 relative overflow-hidden flex items-center justify-center">
+                      <div className="text-white/30 text-sm font-medium">Generation {idx}</div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm font-medium text-white mb-2">Video #{idx}</p>
+                      <p className="text-xs text-white/50 mb-4">Generated today</p>
+                      <div className="flex gap-2">
+                        <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
+                          Download
+                        </button>
+                        <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
+                          Share
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <>
+              {/* HERO SECTION */}
+              <section className="pt-12 px-8 text-center">
+                <div className="text-sm font-bold uppercase tracking-wide text-white/55 mb-8">
+                  MARKETING STUDIO
+                </div>
+                <h1 className="text-5xl font-extrabold uppercase leading-[1.08] text-white">
+                  TURN ANY PRODUCT<br />INTO A VIDEO AD
+                </h1>
+              </section>
+
+              {/* COMPOSER BOX - ONE CONNECTED HORIZONTAL BAR */}
+              <section className="px-8 py-16">
+                <div className="mx-auto flex w-[min(980px,calc(100vw-260px))] items-stretch gap-2">
+                  {/* LEFT PRODUCT/APP SELECTOR */}
+                  <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <button
+                      onClick={() => setSelectedTarget("product")}
+                      className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
+                        selectedTarget === "product"
+                          ? "bg-[#3a3d45] text-white"
+                          : "text-white/55 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <span className="text-[10px]">📱</span>
+                      <span>Product</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedTarget("app")}
+                      className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
+                        selectedTarget === "app"
+                          ? "bg-[#3a3d45] text-white"
+                          : "text-white/55 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <span className="text-[10px]">⌚</span>
+                      <span>App</span>
+                    </button>
+                  </div>
+
+                  {/* MAIN COMPOSER BAR - ONE CONNECTED HORIZONTAL UNIT */}
+                  <div className="relative flex h-[116px] flex-1 items-stretch rounded-[24px] border border-white/10 bg-[#24262b] p-3 shadow-[0_8px_0_rgba(0,0,0,0.25),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    {/* LEFT: PLUS BUTTON + PROMPT INPUT */}
+                    <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
+                      {/* Top Row: Plus + Textarea */}
+                      <div className="flex items-start gap-3">
+                        <button className="flex-shrink-0 size-8 rounded-xl bg-white/8 text-white/80 hover:bg-white/12 flex items-center justify-center transition-colors">
+                          <Plus className="h-4 w-4" />
+                        </button>
+                        <input
+                          type="text"
+                          value={prompt}
+                          onChange={(e) => setPrompt(e.target.value)}
+                          placeholder="Describe what happens in the ad..."
+                          className="min-h-[32px] flex-1 resize-none bg-transparent pt-1 text-sm text-white outline-none placeholder:text-white/55"
+                        />
+                      </div>
+
+                      {/* Bottom Row: Chips */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleUgcClick}
+                          className={`h-8 rounded-lg px-3 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                            selectedMode === "UGC"
+                              ? "bg-cyan-400/20 text-cyan-300"
+                              : "bg-white/7 text-white hover:bg-white/10"
+                          }`}
+                        >
+                          <span className="text-[9px]">▼</span> UGC
+                        </button>
+                        <button
+                          onClick={() => setSelectedMode("Mobile")}
+                          className={`h-8 rounded-lg px-3 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                            selectedMode === "Mobile"
+                              ? "bg-cyan-400/20 text-cyan-300"
+                              : "bg-white/7 text-white hover:bg-white/10"
+                          }`}
+                        >
+                          <span className="text-[9px]">🎯</span> Hook
+                        </button>
+                        <button className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                          <span className="text-[9px]">🌍</span> Setting
+                        </button>
+                        <button className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors">
+                          <Settings className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* RIGHT: PRODUCT TILE + AVATAR TILE + GENERATE */}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {/* PRODUCT TILE */}
+                      <button className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors">
+                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer">
+                          <Plus className="h-3 w-3" />
+                        </div>
+                        <span>PRODUCT</span>
+                      </button>
+
+                      {/* AVATAR TILE */}
+                      <button className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors">
+                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer">
+                          <Plus className="h-3 w-3" />
+                        </div>
+                        <span>AVATAR</span>
+                      </button>
+
+                      {/* GENERATE BUTTON */}
+                      <button
+                        onClick={handleGenerate}
+                        className="h-20 w-[120px] rounded-xl bg-[linear-gradient(135deg,#1fffd0_0%,#00c8ff_100%)] hover:opacity-90 text-black flex flex-col items-center justify-center font-bold text-sm transition-opacity"
+                      >
+                        <span>GENERATE</span>
+                        <div className="text-[10px] mt-1">✦ 156 130</div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* LOWER STYLE PICKER */}
+              <section className="px-8 py-20">
+                <div className="mx-auto w-[min(980px,calc(100vw-260px))] space-y-8">
+                  {/* Header */}
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold text-white">PICK THE STYLE THAT HITS</h2>
+                    <p className="text-white/60 text-sm">
+                      From unboxing to UGC - choose the type of video that fits your product and audience.
+                    </p>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex gap-2 flex-wrap">
+                    {(["All", "TikTok", "UGC", "Commercial"] as const).map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setFilterCategory(cat)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          filterCategory === cat
+                            ? "bg-cyan-400/20 text-cyan-300 border border-cyan-400/50"
+                            : "bg-white/5 text-white/70 hover:bg-white/10"
+                        }`}
+                      >
+                        {cat}
+                        {cat === "TikTok" && <span className="ml-1.5 text-[10px] bg-red-500/80 text-white px-1.5 py-0.5 rounded">New</span>}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search */}
+                  <input
+                    type="text"
+                    placeholder="Search styles..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/50 focus:outline-none focus:border-cyan-400/50 text-sm"
+                  />
+
+                  {/* Cards Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {filteredCards.map((card) => (
+                      <button
+                        key={card.id}
+                        onClick={() => setSelectedStyle(card.id)}
+                        className={`group relative rounded-lg overflow-hidden transition-all ${
+                          selectedStyle === card.id ? "ring-2 ring-cyan-400" : "hover:ring-1 hover:ring-white/50"
+                        }`}
+                      >
+                        {/* Placeholder */}
+                        <div className="relative aspect-square bg-gradient-to-br from-white/10 to-white/5 overflow-hidden flex items-center justify-center">
+                          <div className="text-white/30 text-[10px] font-medium text-center px-2">{card.title}</div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        </div>
+
+                        {/* Hover Info */}
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 bg-gradient-to-t from-black/80 to-transparent">
+                          <p className="text-xs font-semibold text-white truncate">{card.title}</p>
+                          <p className="text-[10px] text-white/70 truncate">{card.description}</p>
+                          {card.badge && (
+                            <span className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded">
+                              New
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* TARGET PANEL MODAL */}
+      {isStylePanelOpen && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsStylePanelOpen(null)}
+        />
+      )}
+
+      {isStylePanelOpen && (
+        <div
+          className="fixed z-[1000] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(720px,calc(100vw-48px))] h-[min(560px,calc(100vh-48px))] rounded-3xl border border-white/5 bg-[#0f1b15] p-2 text-white shadow-xl overflow-hidden flex flex-col"
+          role="dialog"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* HEADER */}
+          <div className="flex shrink-0 items-center justify-between rounded-[20px] px-3 h-11 bg-white/5">
+            <h2 className="text-sm font-medium leading-5">Style</h2>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setIsStylePanelOpen(null)}
+              className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* SHOWCASE SECTION */}
+          <div className="shrink-0 overflow-visible" style={{ height: 140 }}>
+            <div className="relative z-1 flex h-[140px] shrink-0 items-start overflow-visible rounded-2xl gap-6 px-6 py-4">
+              {/* LEFT TEXT AREA */}
+              <div className="w-[280px] flex flex-col justify-start">
+                <h3 className="font-grotesk text-[24px] font-bold uppercase leading-7 text-white tracking-[-1px]">
+                  PICK THE<br />STYLE THAT<br />HITS
+                </h3>
+                <p className="mt-3 w-[250px] text-xs font-medium leading-4 text-white/60">
+                  From unboxing to UGC - choose the type of video that fits your product and audience.
+                </p>
+              </div>
+
+              {/* SHOWCASE IMAGES */}
+              <div className="relative h-[170px] min-w-px flex-1 overflow-hidden">
+                {/* Left Image */}
+                <img
+                  src="/assets/higgsfield/marketing-studio/product/showcase/format-left.webp"
+                  alt="Format Left"
+                  className="absolute"
+                  style={{
+                    left: "20px",
+                    top: "32px",
+                    zIndex: 1,
+                    width: "130px",
+                    height: "130px",
+                    borderRadius: "9999px",
+                    border: "2px solid rgba(255,255,255,0.10)",
+                    transform: "rotate(-10deg)",
+                    objectFit: "cover",
+                  }}
+                />
+                {/* Center Image */}
+                <img
+                  src="/assets/higgsfield/marketing-studio/product/showcase/format-center.webp"
+                  alt="Format Center"
+                  className="absolute"
+                  style={{
+                    left: "150px",
+                    top: "10px",
+                    zIndex: 3,
+                    width: "130px",
+                    height: "170px",
+                    borderRadius: "20px",
+                    border: "2px solid rgba(255,255,255,0.10)",
+                    transform: "rotate(-2.11deg)",
+                    objectFit: "cover",
+                  }}
+                />
+                {/* Right Image */}
+                <img
+                  src="/assets/higgsfield/marketing-studio/product/showcase/format-right.webp"
+                  alt="Format Right"
+                  className="absolute"
+                  style={{
+                    left: "260px",
+                    top: "30px",
+                    zIndex: 2,
+                    width: "95px",
+                    height: "180px",
+                    borderRadius: "20px",
+                    border: "2px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.05)",
+                    transform: "rotate(4.55deg)",
+                    objectFit: "cover",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SEARCH AND GRID AREA */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white/5">
+            {/* SEARCH */}
+            <div className="flex h-12 shrink-0 items-center gap-2 px-4 text-white/50">
+              <input
+                type="text"
+                placeholder="Search"
+                aria-label="Search video styles"
+                value={panelSearchQuery}
+                onChange={(e) => setPanelSearchQuery(e.target.value)}
+                className="h-full min-w-0 flex-1 bg-transparent text-xs leading-4 text-white outline-none placeholder:text-white/50"
+              />
+            </div>
+
+            {/* CARD GRID */}
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-2">
+              <div className="grid grid-cols-2 gap-1.5 pb-4 md:grid-cols-4">
+                {panelFilteredCards.map((card) => (
+                  <button
+                    key={card.id}
+                    onClick={() => {
+                      setSelectedStyle(card.id);
+                      setSelectedTarget(isStylePanelOpen);
+                    }}
+                    className="marketing-video-mode-card flex flex-col gap-2 text-left transition-transform duration-150 hover:scale-[1.01] active:scale-[0.99]"
+                  >
+                    {/* Media */}
+                    <div
+                      className={`relative h-40 overflow-hidden rounded-2xl border cursor-pointer transition-all ${
+                        selectedStyle === card.id
+                          ? "border-cyan-400 ring-2 ring-cyan-300"
+                          : "border-white/5 bg-[#1a2420]"
+                      }`}
+                    >
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-white/5">
+                        <span className="text-white/30 text-[10px] font-medium text-center px-2">
+                          {card.title}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Text */}
+                    <div>
+                      <p className="truncate text-xs font-semibold leading-4 text-white">
+                        {card.title}
+                      </p>
+                      <p className="truncate text-xs leading-4 text-white/60">
+                        {card.description}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

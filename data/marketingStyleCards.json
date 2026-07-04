@@ -1,0 +1,262 @@
+[
+  {
+    "id": "ugc",
+    "title": "UGC",
+    "description": "Realistic social media videos",
+    "category": "UGC",
+    "badge": false,
+    "filename": "ugc.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/ugc.mp4"
+  },
+  {
+    "id": "gadget-saved-me",
+    "title": "Gadget Saved Me",
+    "description": "Turn product features into a creator-led recommendation",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "ugc_gadget_saved_me.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_gadget_saved_me.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.mp4"
+  },
+  {
+    "id": "giant-figure",
+    "title": "Giant Figure",
+    "description": "Oversized, scroll-stopping product moments",
+    "category": "UGC",
+    "badge": false,
+    "filename": "giant_figure.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/giant_figure.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "unboxing-try-on",
+    "title": "Unboxing Try On",
+    "description": "Unbox and try on in one take",
+    "category": "UGC",
+    "badge": false,
+    "filename": "unboxing_try_on.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/unboxing_try_on.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "unboxing-asmr",
+    "title": "Unboxing ASMR",
+    "description": "Satisfying ASMR unboxing experiences",
+    "category": "UGC",
+    "badge": false,
+    "filename": "unboxing_asmr.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/unboxing_asmr.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "try-on-sneakers",
+    "title": "Try On Sneakers",
+    "description": "Virtual sneaker try-on videos",
+    "category": "UGC",
+    "badge": false,
+    "filename": "try_on_sneakers.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/try_on_sneakers.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "couple-sharing",
+    "title": "Couple Sharing",
+    "description": "A couple sharing the product at home",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "couple_sharing_home.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/couple_sharing_home.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/couple_sharing_home.mp4"
+  },
+  {
+    "id": "selfie-testimonial",
+    "title": "Selfie Testimonial",
+    "description": "Authentic selfie-style testimonials",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "ugc_selfie_testimonial.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_selfie_testimonial.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/ugc_selfie_testimonial.mp4"
+  },
+  {
+    "id": "direct-to-camera",
+    "title": "Direct to Camera",
+    "description": "Creator speaking straight to camera",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "ugc_direct_to_camera.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_direct_to_camera.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/ugc_direct_to_camera.mp4"
+  },
+  {
+    "id": "secret-hack-reveal",
+    "title": "Secret Hack Reveal",
+    "description": "Reveal a clever product hack",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "ugc_secret_hack_reveal.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_secret_hack_reveal.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/ugc_secret_hack_reveal.mp4"
+  },
+  {
+    "id": "crush-test",
+    "title": "Crush Test",
+    "description": "Satisfying crush and durability tests",
+    "category": "UGC",
+    "badge": false,
+    "filename": "crush_test.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/crush_test.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "hyper-motion",
+    "title": "Hyper Motion",
+    "description": "High-energy product motion bursts",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "hyper_motion.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/hyper_motion.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "camera-pov",
+    "title": "Camera POV",
+    "description": "Immersive point-of-view product moments",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "camera_pov.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/camera_pov.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/camera_pov.mp4"
+  },
+  {
+    "id": "classic-meets-modern",
+    "title": "Classic Meets Modern",
+    "description": "Blend timeless and contemporary styles",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "classic_meets_modern.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/classic_meets_modern.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/classic_meets_modern.mp4"
+  },
+  {
+    "id": "mess-to-fresh",
+    "title": "Mess to Fresh",
+    "description": "From messy to fresh transformations",
+    "category": "TikTok",
+    "badge": true,
+    "filename": "mess_to_fresh.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/mess_to_fresh.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/mess_to_fresh.mp4"
+  },
+  {
+    "id": "mystery-box",
+    "title": "Mystery Box",
+    "description": "Suspenseful mystery box reveals",
+    "category": "UGC",
+    "badge": false,
+    "filename": "mystery_box.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/mystery_box.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/mystery_box.mp4"
+  },
+  {
+    "id": "reboxing",
+    "title": "Reboxing",
+    "description": "Repackaging and reboxing reveals",
+    "category": "UGC",
+    "badge": false,
+    "filename": "reboxing.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/reboxing.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/ms-modes/reboxing.mp4"
+  },
+  {
+    "id": "tv-spot",
+    "title": "TV Spot",
+    "description": "Authentic stories, amplified",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "tv_spot_mini.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/tv_spot_mini.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/tv-spot-mini.mp4"
+  },
+  {
+    "id": "addiction",
+    "title": "Addiction",
+    "description": "Can't-put-it-down product obsession",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "addiction.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/addiction.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "before-after",
+    "title": "Before & After",
+    "description": "Showcase transformations and results",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "before_after.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/before_after.mp4",
+    "sourceUrl": "REPLACE_WITH_LICENSED_VIDEO_URL_FROM_PROVIDED_HTML_OR_STOCK"
+  },
+  {
+    "id": "tutorial",
+    "title": "Tutorial",
+    "description": "Step-by-step tutorials",
+    "category": "UGC",
+    "badge": false,
+    "filename": "ugc_how_to.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_how_to.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/ugc_how_to.mp4"
+  },
+  {
+    "id": "unboxing",
+    "title": "Unboxing",
+    "description": "High-quality unboxing",
+    "category": "UGC",
+    "badge": false,
+    "filename": "ugc_unboxing.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_unboxing.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/ugc_unboxing.mp4"
+  },
+  {
+    "id": "ugc-virtual-try-on",
+    "title": "UGC Virtual Try On",
+    "description": "Try before you buy",
+    "category": "UGC",
+    "badge": false,
+    "filename": "ugc_virtual_try_on.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/ugc_virtual_try_on.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/ugc_virtual_try_on.mp4"
+  },
+  {
+    "id": "pro-virtual-try-on",
+    "title": "Pro Virtual Try On",
+    "description": "Advanced virtual try-on",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "virtual_try_on.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/virtual_try_on.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/virtual_try_on.mp4"
+  },
+  {
+    "id": "wild-card",
+    "title": "Wild Card",
+    "description": "A unique and creative video mode for custom ideas",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "wild_card.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/wild_card.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/wild_card.mp4"
+  },
+  {
+    "id": "product-review",
+    "title": "Product Review",
+    "description": "Authentic product reviews",
+    "category": "Commercial",
+    "badge": false,
+    "filename": "product_review.mp4",
+    "localPath": "/assets/higgsfield/marketing-studio/product/product_review.mp4",
+    "sourceUrl": "https://static.higgsfield.ai/marketing-studio-presets/product_review.mp4"
+  }
+]
