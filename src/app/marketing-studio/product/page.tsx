@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Settings, X } from "lucide-react";
 import { marketingStyleCards } from "@/data/marketingStyleCards";
+import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -35,6 +36,8 @@ export default function MarketingStudioProduct() {
   const [prompt, setPrompt] = useState("");
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [panelSearchQuery, setPanelSearchQuery] = useState("");
+  const [isMediaAttachPanelOpen, setIsMediaAttachPanelOpen] = useState(false);
+  const [attachedProductMedia, setAttachedProductMedia] = useState<UploadedMedia[]>([]);
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -60,6 +63,18 @@ export default function MarketingStudioProduct() {
     setSelectedMode("UGC");
     setSelectedStyle((current) => current || "ugc");
     setIsStylePanelOpen(true);
+  };
+
+  // Handle + button click to open Media Attach Panel
+  const handleMediaAttachClick = () => {
+    setIsStylePanelOpen(false); // Close other panels
+    setIsMediaAttachPanelOpen(true);
+  };
+
+  // Handle media attach
+  const handleMediaAttach = (media: UploadedMedia[]) => {
+    setAttachedProductMedia(media);
+    setIsMediaAttachPanelOpen(false);
   };
 
   // Escape key handler
@@ -255,7 +270,10 @@ export default function MarketingStudioProduct() {
                     <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
                       {/* Top Row: Plus + Textarea */}
                       <div className="flex items-start gap-3">
-                        <button className="flex-shrink-0 size-8 rounded-xl bg-white/8 text-white/80 hover:bg-white/12 flex items-center justify-center transition-colors">
+                        <button
+                          onClick={handleMediaAttachClick}
+                          className="flex-shrink-0 size-8 rounded-xl bg-white/8 text-white/80 hover:bg-white/12 flex items-center justify-center transition-colors"
+                        >
                           <Plus className="h-4 w-4" />
                         </button>
                         <input
@@ -298,7 +316,7 @@ export default function MarketingStudioProduct() {
                       </div>
                     </div>
 
-                    {/* RIGHT: PRODUCT TILE + AVATAR TILE + GENERATE */}
+                    {/* RIGHT: PRODUCT TILE + AVATAR TILE + ATTACHED MEDIA + GENERATE */}
                     <div className="flex shrink-0 items-center gap-2">
                       {/* PRODUCT TILE */}
                       <button className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors">
@@ -315,6 +333,22 @@ export default function MarketingStudioProduct() {
                         </div>
                         <span>AVATAR</span>
                       </button>
+
+                      {/* ATTACHED MEDIA PREVIEW - Shows first attached image */}
+                      {attachedProductMedia.length > 0 && (
+                        <div className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors overflow-hidden group">
+                          <img
+                            src={attachedProductMedia[0].previewUrl}
+                            alt="Attached media"
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors" />
+                          <span className="relative z-10 text-xs bg-cyan-400/80 text-black px-1 rounded">
+                            {attachedProductMedia.length}
+                          </span>
+                          <span className="relative z-10">MEDIA</span>
+                        </div>
+                      )}
 
                       {/* GENERATE BUTTON */}
                       <button
@@ -402,6 +436,13 @@ export default function MarketingStudioProduct() {
           )}
         </main>
       </div>
+
+      {/* MEDIA ATTACH PANEL */}
+      <MediaAttachPanel
+        isOpen={isMediaAttachPanelOpen}
+        onClose={() => setIsMediaAttachPanelOpen(false)}
+        onAttach={handleMediaAttach}
+      />
 
       {/* TARGET PANEL MODAL */}
       {isStylePanelOpen && (
