@@ -527,7 +527,7 @@ export default function MarketingStudioProduct() {
       {isStylePanelOpen && (
         <div
           className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm"
-          onClick={() => setIsStylePanelOpen(null)}
+          onClick={() => setIsStylePanelOpen(false)}
         />
       )}
 
@@ -543,7 +543,7 @@ export default function MarketingStudioProduct() {
             <button
               type="button"
               aria-label="Close"
-              onClick={() => setIsStylePanelOpen(null)}
+              onClick={() => setIsStylePanelOpen(false)}
               className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" />
@@ -643,7 +643,7 @@ export default function MarketingStudioProduct() {
                     key={card.id}
                     onClick={() => {
                       setSelectedStyle(card.id);
-                      setSelectedTarget(isStylePanelOpen);
+                      setIsStylePanelOpen(false);
                     }}
                     className="marketing-video-mode-card flex flex-col gap-2 text-left transition-transform duration-150 hover:scale-[1.01] active:scale-[0.99]"
                   >
