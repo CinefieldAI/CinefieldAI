@@ -8,6 +8,7 @@ import { marketingStyleCards } from "@/data/marketingStyleCards";
 import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
 import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
 import AddYourAppPanel from "@/components/marketing-studio/AddYourAppPanel";
+import SettingPanel, { SettingItem } from "@/components/marketing-studio/SettingPanel";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -43,6 +44,7 @@ export default function MarketingStudioProduct() {
   const [attachedProductMedia, setAttachedProductMedia] = useState<UploadedMedia[]>([]);
   const [activeFloatingPanel, setActiveFloatingPanel] = useState<FloatingPanelType>(null);
   const [selectedHook, setSelectedHook] = useState<HookItem | null>(null);
+  const [selectedSetting, setSelectedSetting] = useState<SettingItem | null>(null);
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -102,6 +104,18 @@ export default function MarketingStudioProduct() {
   // Handle Product selector click
   const handleProductClick = () => {
     setSelectedTarget("product");
+    setActiveFloatingPanel(null);
+  };
+
+  // Handle Setting button click
+  const handleSettingClick = () => {
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel("setting");
+  };
+
+  // Handle Setting selection
+  const handleSettingSelect = (setting: SettingItem) => {
+    setSelectedSetting(setting);
     setActiveFloatingPanel(null);
   };
 
@@ -331,8 +345,16 @@ export default function MarketingStudioProduct() {
                         >
                           <span className="text-[9px]">🎯</span> Hook {selectedHook ? `: ${selectedHook.title}` : ""}
                         </button>
-                        <button className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                          <span className="text-[9px]">🌍</span> Setting
+                        <button
+                          onClick={handleSettingClick}
+                          className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        >
+                          <span className="text-[9px]">🌍</span> {selectedSetting ? selectedSetting.title : "Setting"}
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 transition-transform ${
+                              activeFloatingPanel === "setting" ? "rotate-180" : ""
+                            }`}
+                          />
                         </button>
                         <button className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors">
                           <Settings className="h-4 w-4" />
@@ -488,6 +510,16 @@ export default function MarketingStudioProduct() {
           onProductClick={handleProductClick}
           onAppClick={handleAppClick}
           selectedTarget={selectedTarget}
+        />
+      )}
+
+      {/* SETTING PANEL */}
+      {activeFloatingPanel === "setting" && (
+        <SettingPanel
+          isOpen={activeFloatingPanel === "setting"}
+          onClose={() => setActiveFloatingPanel(null)}
+          onSelectSetting={handleSettingSelect}
+          selectedSettingId={selectedSetting?.id}
         />
       )}
 
