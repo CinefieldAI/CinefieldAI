@@ -269,7 +269,7 @@ export default function MarketingStudioProduct() {
                   {/* LEFT PRODUCT/APP SELECTOR */}
                   <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
                     <button
-                      onClick={() => setSelectedTarget("product")}
+                      onClick={handleProductClick}
                       className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
                         selectedTarget === "product"
                           ? "bg-[#3a3d45] text-white"
@@ -280,7 +280,7 @@ export default function MarketingStudioProduct() {
                       <span>Product</span>
                     </button>
                     <button
-                      onClick={() => setSelectedTarget("app")}
+                      onClick={handleAppClick}
                       className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
                         selectedTarget === "app"
                           ? "bg-[#3a3d45] text-white"
@@ -326,14 +326,10 @@ export default function MarketingStudioProduct() {
                           <span className="text-[9px]">▼</span> UGC
                         </button>
                         <button
-                          onClick={() => setSelectedMode("Mobile")}
-                          className={`h-8 rounded-lg px-3 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                            selectedMode === "Mobile"
-                              ? "bg-cyan-400/20 text-cyan-300"
-                              : "bg-white/7 text-white hover:bg-white/10"
-                          }`}
+                          onClick={handleHookClick}
+                          className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                         >
-                          <span className="text-[9px]">🎯</span> Hook
+                          <span className="text-[9px]">🎯</span> Hook {selectedHook ? `: ${selectedHook.title}` : ""}
                         </button>
                         <button className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors">
                           <span className="text-[9px]">🌍</span> Setting
@@ -466,11 +462,34 @@ export default function MarketingStudioProduct() {
       </div>
 
       {/* MEDIA ATTACH PANEL */}
-      <MediaAttachPanel
-        isOpen={isMediaAttachPanelOpen}
-        onClose={() => setIsMediaAttachPanelOpen(false)}
-        onAttach={handleMediaAttach}
-      />
+      {activeFloatingPanel === "mediaAttach" && (
+        <MediaAttachPanel
+          isOpen={activeFloatingPanel === "mediaAttach"}
+          onClose={() => setActiveFloatingPanel(null)}
+          onAttach={handleMediaAttach}
+        />
+      )}
+
+      {/* HOOK PANEL */}
+      {activeFloatingPanel === "hook" && (
+        <HookPanel
+          isOpen={activeFloatingPanel === "hook"}
+          onClose={() => setActiveFloatingPanel(null)}
+          onSelectHook={handleHookSelect}
+          selectedHookId={selectedHook?.id}
+        />
+      )}
+
+      {/* ADD YOUR APP PANEL */}
+      {activeFloatingPanel === "app" && (
+        <AddYourAppPanel
+          isOpen={activeFloatingPanel === "app"}
+          onClose={() => setActiveFloatingPanel(null)}
+          onProductClick={handleProductClick}
+          onAppClick={handleAppClick}
+          selectedTarget={selectedTarget}
+        />
+      )}
 
       {/* TARGET PANEL MODAL */}
       {isStylePanelOpen && (
