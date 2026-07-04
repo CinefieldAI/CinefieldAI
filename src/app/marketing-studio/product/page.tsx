@@ -6,10 +6,13 @@ import Navbar from "@/components/landing/Navbar";
 import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Settings, X } from "lucide-react";
 import { marketingStyleCards } from "@/data/marketingStyleCards";
 import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
+import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
+import AddYourAppPanel from "@/components/marketing-studio/AddYourAppPanel";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
 type TargetType = "product" | "app";
+type FloatingPanelType = "mediaAttach" | "hook" | "setting" | "product" | "app" | "avatar" | null;
 
 interface StyleCard {
   id: string;
@@ -38,6 +41,8 @@ export default function MarketingStudioProduct() {
   const [panelSearchQuery, setPanelSearchQuery] = useState("");
   const [isMediaAttachPanelOpen, setIsMediaAttachPanelOpen] = useState(false);
   const [attachedProductMedia, setAttachedProductMedia] = useState<UploadedMedia[]>([]);
+  const [activeFloatingPanel, setActiveFloatingPanel] = useState<FloatingPanelType>(null);
+  const [selectedHook, setSelectedHook] = useState<HookItem | null>(null);
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -67,14 +72,37 @@ export default function MarketingStudioProduct() {
 
   // Handle + button click to open Media Attach Panel
   const handleMediaAttachClick = () => {
-    setIsStylePanelOpen(false); // Close other panels
-    setIsMediaAttachPanelOpen(true);
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel("mediaAttach");
   };
 
   // Handle media attach
   const handleMediaAttach = (media: UploadedMedia[]) => {
     setAttachedProductMedia(media);
-    setIsMediaAttachPanelOpen(false);
+    setActiveFloatingPanel(null);
+  };
+
+  // Handle Hook button click
+  const handleHookClick = () => {
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel("hook");
+  };
+
+  // Handle Hook selection
+  const handleHookSelect = (hook: HookItem) => {
+    setSelectedHook(hook);
+  };
+
+  // Handle App selector click
+  const handleAppClick = () => {
+    setSelectedTarget("app");
+    setActiveFloatingPanel("app");
+  };
+
+  // Handle Product selector click
+  const handleProductClick = () => {
+    setSelectedTarget("product");
+    setActiveFloatingPanel(null);
   };
 
   // Escape key handler
