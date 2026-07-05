@@ -251,7 +251,7 @@ export default function MarketingStudioProduct() {
 
   return (
     <div
-      className="min-h-screen w-full"
+      className="min-h-screen w-full flex flex-col"
       style={{
         backgroundColor: "#071b10",
         backgroundImage: `
@@ -270,7 +270,7 @@ export default function MarketingStudioProduct() {
         onSetView={noop}
       />
 
-      <div className="flex min-h-[calc(100vh-4rem)]">
+      <div className="flex flex-1">
         {/* LEFT SIDEBAR - Cinema Studio Tarzı */}
         <aside className="fixed left-2 top-[72px] z-30 hidden h-[calc(100vh-88px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex transition-all duration-300" style={{ width: sidebarCollapsed ? 52 : 231 }}>
           {/* Header */}
@@ -511,7 +511,7 @@ export default function MarketingStudioProduct() {
           )}
         </main>
 
-        {/* COMPOSER BOX - SHARED ACROSS ALL VIEWS */}
+        {/* COMPOSER BOX - ALWAYS MOUNTED AND VISIBLE */}
         <section
           className={`fixed left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-white/5 transition-all duration-300 ${
             promptBarDock === "bottom"
