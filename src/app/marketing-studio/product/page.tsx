@@ -10,6 +10,8 @@ import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
 import AddYourAppPanel from "@/components/marketing-studio/AddYourAppPanel";
 import SettingPanel, { SettingItem } from "@/components/marketing-studio/SettingPanel";
 import OptionsDropdown from "@/components/marketing-studio/OptionsDropdown";
+import ProductPanel from "@/components/marketing-studio/ProductPanel";
+import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -50,6 +52,11 @@ export default function MarketingStudioProduct() {
   const [quality, setQuality] = useState("1080p");
   const [duration, setDuration] = useState(15);
   const optionsButtonRef = useRef<HTMLButtonElement>(null);
+  const [productUrl, setProductUrl] = useState("");
+  const [avatarFilter, setAvatarFilter] = useState<"all" | "pinned" | "myAvatars">("myAvatars");
+  const [avatarGender, setAvatarGender] = useState<"male" | "female" | null>(null);
+  const [avatarSearchQuery, setAvatarSearchQuery] = useState("");
+  const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -130,6 +137,34 @@ export default function MarketingStudioProduct() {
     setActiveFloatingPanel(
       activeFloatingPanel === "options" ? null : "options"
     );
+  };
+
+  // Handle Product card click
+  const handleProductCardClick = () => {
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel("product");
+  };
+
+  // Handle Product panel close
+  const handleProductPanelClose = () => {
+    setActiveFloatingPanel(null);
+  };
+
+  // Handle Create manually
+  const handleCreateManually = () => {
+    // Placeholder for manual product creation flow
+    console.log("Create manually clicked");
+  };
+
+  // Handle Avatar card click
+  const handleAvatarCardClick = () => {
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel("avatar");
+  };
+
+  // Handle Avatar panel close
+  const handleAvatarPanelClose = () => {
+    setActiveFloatingPanel(null);
   };
 
   // Escape key handler
@@ -382,16 +417,22 @@ export default function MarketingStudioProduct() {
                     {/* RIGHT: PRODUCT TILE + AVATAR TILE + ATTACHED MEDIA + GENERATE */}
                     <div className="flex shrink-0 items-center gap-2">
                       {/* PRODUCT TILE */}
-                      <button className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors">
-                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer">
+                      <button
+                        onClick={handleProductCardClick}
+                        className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                      >
+                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
                           <Plus className="h-3 w-3" />
                         </div>
                         <span>PRODUCT</span>
                       </button>
 
                       {/* AVATAR TILE */}
-                      <button className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors">
-                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer">
+                      <button
+                        onClick={handleAvatarCardClick}
+                        className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                      >
+                        <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
                           <Plus className="h-3 w-3" />
                         </div>
                         <span>AVATAR</span>
@@ -552,6 +593,33 @@ export default function MarketingStudioProduct() {
         onDurationChange={setDuration}
         triggerButtonRef={optionsButtonRef}
       />
+
+      {/* PRODUCT PANEL */}
+      {activeFloatingPanel === "product" && (
+        <ProductPanel
+          isOpen={activeFloatingPanel === "product"}
+          onClose={handleProductPanelClose}
+          productUrl={productUrl}
+          onProductUrlChange={setProductUrl}
+          onCreateManually={handleCreateManually}
+        />
+      )}
+
+      {/* AVATAR PANEL */}
+      {activeFloatingPanel === "avatar" && (
+        <SelectAvatarPanel
+          isOpen={activeFloatingPanel === "avatar"}
+          onClose={handleAvatarPanelClose}
+          avatarFilter={avatarFilter}
+          onAvatarFilterChange={setAvatarFilter}
+          avatarGender={avatarGender}
+          onAvatarGenderChange={setAvatarGender}
+          avatarSearchQuery={avatarSearchQuery}
+          onAvatarSearchQueryChange={setAvatarSearchQuery}
+          selectedAvatarId={selectedAvatarId}
+          onAvatarSelect={setSelectedAvatarId}
+        />
+      )}
 
       {/* TARGET PANEL MODAL */}
       {isStylePanelOpen && (
