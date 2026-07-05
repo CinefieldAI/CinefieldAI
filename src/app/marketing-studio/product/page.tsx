@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Settings, X } from "lucide-react";
@@ -9,11 +9,12 @@ import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/M
 import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
 import AddYourAppPanel from "@/components/marketing-studio/AddYourAppPanel";
 import SettingPanel, { SettingItem } from "@/components/marketing-studio/SettingPanel";
+import OptionsDropdown from "@/components/marketing-studio/OptionsDropdown";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
 type TargetType = "product" | "app";
-type FloatingPanelType = "mediaAttach" | "hook" | "setting" | "product" | "app" | "avatar" | null;
+type FloatingPanelType = "mediaAttach" | "hook" | "setting" | "product" | "app" | "avatar" | "options" | null;
 
 interface StyleCard {
   id: string;
@@ -45,6 +46,10 @@ export default function MarketingStudioProduct() {
   const [activeFloatingPanel, setActiveFloatingPanel] = useState<FloatingPanelType>(null);
   const [selectedHook, setSelectedHook] = useState<HookItem | null>(null);
   const [selectedSetting, setSelectedSetting] = useState<SettingItem | null>(null);
+  const [aspectRatio, setAspectRatio] = useState("21:9");
+  const [quality, setQuality] = useState("1080p");
+  const [duration, setDuration] = useState(15);
+  const optionsButtonRef = useRef<HTMLButtonElement>(null);
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -117,6 +122,14 @@ export default function MarketingStudioProduct() {
   const handleSettingSelect = (setting: SettingItem) => {
     setSelectedSetting(setting);
     setActiveFloatingPanel(null);
+  };
+
+  // Handle Options button click
+  const handleOptionsClick = () => {
+    setIsStylePanelOpen(false);
+    setActiveFloatingPanel(
+      activeFloatingPanel === "options" ? null : "options"
+    );
   };
 
   // Escape key handler
@@ -356,7 +369,11 @@ export default function MarketingStudioProduct() {
                             }`}
                           />
                         </button>
-                        <button className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors">
+                        <button
+                          ref={optionsButtonRef}
+                          onClick={handleOptionsClick}
+                          className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors hover:scale-[1.03] active:scale-[0.97]"
+                        >
                           <Settings className="h-4 w-4" />
                         </button>
                       </div>
@@ -522,6 +539,19 @@ export default function MarketingStudioProduct() {
           selectedSettingId={selectedSetting?.id}
         />
       )}
+
+      {/* OPTIONS DROPDOWN */}
+      <OptionsDropdown
+        isOpen={activeFloatingPanel === "options"}
+        onClose={() => setActiveFloatingPanel(null)}
+        aspectRatio={aspectRatio}
+        onAspectRatioChange={setAspectRatio}
+        quality={quality}
+        onQualityChange={setQuality}
+        duration={duration}
+        onDurationChange={setDuration}
+        triggerButtonRef={optionsButtonRef}
+      />
 
       {/* TARGET PANEL MODAL */}
       {isStylePanelOpen && (
