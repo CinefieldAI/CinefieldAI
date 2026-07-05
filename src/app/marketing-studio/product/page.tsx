@@ -22,6 +22,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
   SidebarMenuButton,
+  SidebarInset,
 } from "@/components/ui/sidebar";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
@@ -260,203 +261,132 @@ export default function MarketingStudioProduct() {
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex flex-col"
-      style={{
-        backgroundColor: "#071b10",
-        backgroundImage: `
-          linear-gradient(rgba(210,255,80,0.08) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(210,255,80,0.08) 1px, transparent 1px),
-          radial-gradient(circle at 50% 18%, rgba(190,255,40,0.35), transparent 34%)
-        `,
-        backgroundSize: "44px 44px, 44px 44px, 100% 100%",
-      }}
-    >
-      <Navbar
-        activePanel={null}
-        onOpenImagePanel={noop}
-        onOpenVideoPanel={noop}
-        onOpenAudioPanel={noop}
-        onSetView={noop}
-      />
+    <SidebarProvider>
+      <div
+        className="min-h-screen w-full flex flex-col"
+        style={{
+          backgroundColor: "#071b10",
+          backgroundImage: `
+            linear-gradient(rgba(210,255,80,0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(210,255,80,0.08) 1px, transparent 1px),
+            radial-gradient(circle at 50% 18%, rgba(190,255,40,0.35), transparent 34%)
+          `,
+          backgroundSize: "44px 44px, 44px 44px, 100% 100%",
+        }}
+      >
+        <Navbar
+          activePanel={null}
+          onOpenImagePanel={noop}
+          onOpenVideoPanel={noop}
+          onOpenAudioPanel={noop}
+          onSetView={noop}
+        />
 
-      <div className="flex flex-1" style={{ minHeight: "calc(100vh - 72px)" }}>
-        {/* LEFT SIDEBAR - Cinema Studio Tarzı */}
-        <aside className="fixed left-2 top-[72px] z-30 hidden h-[calc(100vh-88px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex transition-all duration-300" style={{ width: sidebarCollapsed ? 52 : 231 }}>
-          {/* Header */}
-          <div className="flex h-11 items-center justify-between px-1.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="size-7 shrink-0 rounded-lg bg-gradient-to-br from-lime-300 to-green-600 flex items-center justify-center text-sm font-bold text-black">
-                🎬
+        <div className="flex flex-1" style={{ minHeight: "calc(100vh - 72px)" }}>
+          {/* SIDEBAR COMPONENT */}
+          <Sidebar>
+            <SidebarHeader>
+              <div className="flex items-center gap-2">
+                <div className="size-7 shrink-0 rounded-lg bg-gradient-to-br from-lime-300 to-green-600 flex items-center justify-center text-sm font-bold text-black">
+                  🎬
+                </div>
               </div>
-              {!sidebarCollapsed && (
-                <span className="truncate text-sm font-semibold text-white">Marketing Studio</span>
-              )}
-            </div>
-            {!sidebarCollapsed && (
-              <button
-                onClick={() => setSidebarCollapsed(true)}
-                className="flex size-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                <ChevronDown className="size-4" />
-              </button>
-            )}
-          </div>
+            </SidebarHeader>
 
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="mx-auto flex size-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/5 hover:text-white"
-            >
-              <ChevronDown className="size-4 rotate-90" />
-            </button>
-          )}
+            <SidebarContent>
+              <SidebarMenuItem
+                icon={<Home className="size-[18px]" strokeWidth={1.8} />}
+                label="Home"
+                gradient="linear-gradient(135deg, #222221 3.87%, #3B3C3A 93.45%)"
+                active={activeSidebarView === "home"}
+                onClick={() => setActiveSidebarView("home")}
+              />
+              <SidebarMenuItem
+                icon={<Grid3x3 className="size-[18px]" strokeWidth={1.8} />}
+                label="All generations"
+                gradient="linear-gradient(135deg, #4188BE 3.87%, #0E2772 93.45%)"
+                active={activeSidebarView === "allGenerations"}
+                onClick={() => setActiveSidebarView("allGenerations")}
+              />
+              <SidebarMenuItem
+                icon={<Heart className="size-[18px]" strokeWidth={1.8} />}
+                label="My favorites"
+                gradient="linear-gradient(135deg, #E251B4 3.87%, #8D1237 93.45%)"
+                active={activeSidebarView === "favorites"}
+                onClick={() => setActiveSidebarView("favorites")}
+              />
+            </SidebarContent>
 
-          {/* Navigation */}
-          <nav className="flex flex-col gap-0.5">
-            <button
-              onClick={() => setActiveSidebarView("home")}
-              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
-                activeSidebarView === "home" ? "bg-white/5" : ""
-              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
-            >
-              <span
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: "linear-gradient(135deg, #222221 3.87%, #3B3C3A 93.45%)",
-                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
-                }}
-              >
-                <Home className="size-[18px] text-white" strokeWidth={1.8} />
-              </span>
-              {!sidebarCollapsed && <span className="truncate">Home</span>}
-            </button>
+            <SidebarFooter>
+              <SidebarMenuButton
+                icon={<Link2 className="size-3.5" />}
+                label="Url to Ad"
+              />
+              <SidebarMenuButton
+                icon={<Paperclip className="size-3.5" />}
+                label="Ad Reference"
+              />
+            </SidebarFooter>
+          </Sidebar>
 
-            <button
-              onClick={() => setActiveSidebarView("allGenerations")}
-              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
-                activeSidebarView === "allGenerations" ? "bg-white/5" : ""
-              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
-            >
-              <span
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: "linear-gradient(135deg, #4188BE 3.87%, #0E2772 93.45%)",
-                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
-                }}
-              >
-                <Grid3x3 className="size-[18px] text-white" strokeWidth={1.8} />
-              </span>
-              {!sidebarCollapsed && <span className="truncate">All generations</span>}
-            </button>
-
-            <button
-              onClick={() => setActiveSidebarView("favorites")}
-              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
-                activeSidebarView === "favorites" ? "bg-white/5" : ""
-              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
-            >
-              <span
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: "linear-gradient(135deg, #E251B4 3.87%, #8D1237 93.45%)",
-                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
-                }}
-              >
-                <Heart className="size-[18px] text-white" strokeWidth={1.8} />
-              </span>
-              {!sidebarCollapsed && <span className="truncate">My favorites</span>}
-            </button>
-          </nav>
-
-          {/* Tools */}
-          <div className="mt-1 border-t border-white/[0.06] pt-2">
-            <div className="flex items-center justify-between px-1.5 pb-1">
-              {!sidebarCollapsed && (
-                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Tools</span>
-              )}
-            </div>
-
-            <button
-              className={`mt-1 flex h-9 w-full items-center gap-2 rounded-xl border border-[rgba(197,197,197,0.3)] bg-white/[0.04] text-sm font-medium text-white backdrop-blur-[3.7px] transition-colors hover:bg-white/[0.08] ${
-                sidebarCollapsed ? "justify-center px-0" : "px-2"
-              }`}
-              style={{
-                boxShadow: "0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
-              }}
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/15">
-                <Link2 className="size-3.5" />
-              </span>
-              {!sidebarCollapsed && <span className="truncate">Url to Ad</span>}
-            </button>
-
-            <button
-              className={`mt-1 flex h-9 w-full items-center gap-2 rounded-xl border border-[rgba(197,197,197,0.3)] bg-white/[0.04] text-sm font-medium text-white backdrop-blur-[3.7px] transition-colors hover:bg-white/[0.08] ${
-                sidebarCollapsed ? "justify-center px-0" : "px-2"
-              }`}
-              style={{
-                boxShadow: "0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
-              }}
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/15">
-                <Paperclip className="size-3.5" />
-              </span>
-              {!sidebarCollapsed && <span className="truncate">Ad Reference</span>}
-            </button>
-          </div>
-        </aside>
-
-        {/* MAIN CONTENT */}
-        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[247px]"} ml-0 pb-[300px]`} style={{ minHeight: "100%" }}>
-          {activeSidebarView === "allGenerations" ? (
-            // ALL GENERATIONS VIEW
-            <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
-              <div className="relative z-10 text-center max-w-[1000px] mb-12 w-full">
-                <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">ALL GENERATIONS</p>
-                <h1 className="font-grotesk uppercase text-[40px] leading-[48px] font-bold tracking-[-1.6px] text-white/90 mb-8">
-                  Your Generated Videos
-                </h1>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-[1200px]">
-                {[1, 2, 3, 4, 5, 6].map((idx) => (
-                  <div
-                    key={idx}
-                    className="group rounded-3xl overflow-hidden bg-white/5 border border-white/10 hover:border-white/20 transition-all hover:scale-[1.02] cursor-pointer"
-                  >
-                    <div className="aspect-[9/16] bg-gradient-to-br from-white/10 to-white/5 relative overflow-hidden flex items-center justify-center">
-                      <div className="text-white/30 text-sm font-medium">Generation {idx}</div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                    </div>
-                    <div className="p-4">
-                      <p className="text-sm font-medium text-white mb-2">Video #{idx}</p>
-                      <p className="text-xs text-white/50 mb-4">Generated today</p>
-                      <div className="flex gap-2">
-                        <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
-                          Download
-                        </button>
-                        <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
-                          Share
-                        </button>
-                      </div>
-                    </div>
+          {/* MAIN CONTENT AREA */}
+          <SidebarInset>
+            <main className="relative flex-1 overflow-auto" style={{ minHeight: "calc(100vh - 72px)", paddingBottom: "300px" }}>
+              {activeSidebarView === "allGenerations" && (
+                // ALL GENERATIONS VIEW
+                <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
+                  <div className="relative z-10 text-center max-w-[1000px] mb-12 w-full">
+                    <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">ALL GENERATIONS</p>
+                    <h1 className="font-grotesk uppercase text-[40px] leading-[48px] font-bold tracking-[-1.6px] text-white/90 mb-8">
+                      Your Generated Videos
+                    </h1>
                   </div>
-                ))}
-              </div>
-            </section>
-          ) : activeSidebarView === "favorites" ? (
-            // MY FAVORITES VIEW
-            <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-20">
-              <div className="text-center">
-                <p className="text-white/50 text-sm">My favorites coming soon</p>
-              </div>
-            </section>
-          ) : (
-            // HOME VIEW - LANDING HERO
-            <HomeHeroVideoStack />
-          )}
-        </main>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-[1200px]">
+                    {[1, 2, 3, 4, 5, 6].map((idx) => (
+                      <div
+                        key={idx}
+                        className="group rounded-3xl overflow-hidden bg-white/5 border border-white/10 hover:border-white/20 transition-all hover:scale-[1.02] cursor-pointer"
+                      >
+                        <div className="aspect-[9/16] bg-gradient-to-br from-white/10 to-white/5 relative overflow-hidden flex items-center justify-center">
+                          <div className="text-white/30 text-sm font-medium">Generation {idx}</div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        </div>
+                        <div className="p-4">
+                          <p className="text-sm font-medium text-white mb-2">Video #{idx}</p>
+                          <p className="text-xs text-white/50 mb-4">Generated today</p>
+                          <div className="flex gap-2">
+                            <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
+                              Download
+                            </button>
+                            <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
+                              Share
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {activeSidebarView === "favorites" && (
+                // MY FAVORITES VIEW
+                <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-20">
+                  <div className="text-center">
+                    <p className="text-white/50 text-sm">My favorites coming soon</p>
+                  </div>
+                </section>
+              )}
+
+              {activeSidebarView === "home" && (
+                // HOME VIEW - LANDING HERO
+                <HomeHeroVideoStack />
+              )}
+            </main>
+          </SidebarInset>
+
+        </div>
 
         {/* COMPOSER BOX - ALWAYS MOUNTED AND VISIBLE */}
         <section
@@ -879,6 +809,6 @@ export default function MarketingStudioProduct() {
           </div>
         </div>
       )}
-    </div>
+    </SidebarProvider>
   );
 }
