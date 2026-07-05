@@ -380,82 +380,66 @@ export default function MarketingStudioProduct() {
             </section>
           ) : (
             <>
-              {/* HOME VIEW - HERO SECTION */}
-              <section className="pt-12 px-8 text-center">
-                <div className="text-sm font-bold uppercase tracking-wide text-white/55 mb-8">
-                  MARKETING STUDIO
+              {/* HOME VIEW - VIDEO CARD STACK HERO */}
+              <section className="flex flex-col items-center justify-center min-h-screen px-8">
+                {/* HEADLINE */}
+                <div className="text-center mb-16 max-w-2xl">
+                  <h1 className="text-5xl font-extrabold text-white mb-4">
+                    Turn a prompt into a marketing video
+                  </h1>
+                  <p className="text-white/60">
+                    Describe what happens in the ad, all single-prompt ad videos will show up right here.
+                  </p>
                 </div>
-                <h1 className="text-5xl font-extrabold uppercase leading-[1.08] text-white">
-                  TURN ANY PRODUCT<br />INTO A VIDEO AD
-                </h1>
-              </section>
 
-              {/* LOWER STYLE PICKER */}
-              <section className="px-8 py-20">
-                <div className="mx-auto w-[min(980px,calc(100vw-260px))] space-y-8">
-                  {/* Header */}
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">PICK THE STYLE THAT HITS</h2>
-                    <p className="text-white/60 text-sm">
-                      From unboxing to UGC - choose the type of video that fits your product and audience.
-                    </p>
+                {/* VIDEO CARD STACK */}
+                <div className="relative w-full max-w-2xl h-96">
+                  {/* Left card - behind */}
+                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
+                    transform: 'translateX(-20px) translateY(20px) scale(0.95)',
+                    zIndex: 1
+                  }}>
+                    <video
+                      src="https://d8j0ntlcm91z4.cloudfront.net/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742.mp4"
+                      poster="https://d8j0ntlcm91z4.cloudfront.net/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742.jpg"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
                   </div>
 
-                  {/* Filters */}
-                  <div className="flex gap-2 flex-wrap">
-                    {(["All", "TikTok", "UGC", "Commercial"] as const).map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setFilterCategory(cat)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          filterCategory === cat
-                            ? "bg-cyan-400/20 text-cyan-300 border border-cyan-400/50"
-                            : "bg-white/5 text-white/70 hover:bg-white/10"
-                        }`}
-                      >
-                        {cat}
-                        {cat === "TikTok" && <span className="ml-1.5 text-[10px] bg-red-500/80 text-white px-1.5 py-0.5 rounded">New</span>}
-                      </button>
-                    ))}
+                  {/* Center card - large, top */}
+                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
+                    zIndex: 3,
+                    transform: 'translateY(0)'
+                  }}>
+                    <video
+                      src="https://static.higgsfield.ai/marketing-studio-presets/ugc.mp4"
+                      poster="https://static.higgsfield.ai/marketing-studio-presets/ugc.jpg"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
                   </div>
 
-                  {/* Search */}
-                  <input
-                    type="text"
-                    placeholder="Search styles..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/50 focus:outline-none focus:border-cyan-400/50 text-sm"
-                  />
-
-                  {/* Cards Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {filteredCards.map((card) => (
-                      <button
-                        key={card.id}
-                        onClick={() => setSelectedStyle(card.id)}
-                        className={`group relative rounded-lg overflow-hidden transition-all ${
-                          selectedStyle === card.id ? "ring-2 ring-cyan-400" : "hover:ring-1 hover:ring-white/50"
-                        }`}
-                      >
-                        {/* Placeholder */}
-                        <div className="relative aspect-square bg-gradient-to-br from-white/10 to-white/5 overflow-hidden flex items-center justify-center">
-                          <div className="text-white/30 text-[10px] font-medium text-center px-2">{card.title}</div>
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                        </div>
-
-                        {/* Hover Info */}
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 bg-gradient-to-t from-black/80 to-transparent">
-                          <p className="text-xs font-semibold text-white truncate">{card.title}</p>
-                          <p className="text-[10px] text-white/70 truncate">{card.description}</p>
-                          {card.badge && (
-                            <span className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded">
-                              New
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
+                  {/* Right card - behind */}
+                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
+                    transform: 'translateX(20px) translateY(20px) scale(0.95)',
+                    zIndex: 1
+                  }}>
+                    <video
+                      src="https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.mp4"
+                      poster="https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.jpg"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 </div>
               </section>
