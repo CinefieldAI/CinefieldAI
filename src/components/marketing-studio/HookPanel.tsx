@@ -16,6 +16,7 @@ interface HookPanelProps {
   onClose: () => void;
   onSelectHook: (hook: HookItem) => void;
   selectedHookId?: string;
+  panelPlacement?: "top" | "bottom";
 }
 
 const HOOK_ITEMS: HookItem[] = [
@@ -91,6 +92,7 @@ export default function HookPanel({
   onClose,
   onSelectHook,
   selectedHookId,
+  panelPlacement = "bottom",
 }: HookPanelProps) {
   const [activeCategory, setActiveCategory] = useState<HookCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,7 +131,11 @@ export default function HookPanel({
 
       {/* Panel */}
       <div
-        className="fixed z-[999] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-16px)] rounded-[24px] border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-16px)] rounded-[24px] border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col ${
+          panelPlacement === "bottom"
+            ? "bottom-[140px] translate-y-0"
+            : "top-[140px] translate-y-0"
+        }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >

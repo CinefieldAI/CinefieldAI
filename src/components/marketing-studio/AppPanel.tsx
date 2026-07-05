@@ -7,6 +7,7 @@ interface AppPanelProps {
   onClose: () => void;
   hasApp: boolean;
   onCreateManually: () => void;
+  panelPlacement?: "top" | "bottom";
 }
 
 export default function AppPanel({
@@ -14,6 +15,7 @@ export default function AppPanel({
   onClose,
   hasApp,
   onCreateManually,
+  panelPlacement = "bottom",
 }: AppPanelProps) {
   if (!isOpen) return null;
 
@@ -27,7 +29,11 @@ export default function AppPanel({
 
       {/* Panel */}
       <div
-        className="fixed z-[999] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col ${
+          panelPlacement === "bottom"
+            ? "bottom-[140px] translate-y-0"
+            : "top-[140px] translate-y-0"
+        }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >

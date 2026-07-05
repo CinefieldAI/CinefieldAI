@@ -13,6 +13,7 @@ interface OptionsDropdownProps {
   duration: number;
   onDurationChange: (duration: number) => void;
   triggerButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  panelPlacement?: "top" | "bottom";
 }
 
 const ASPECT_RATIOS = ["Auto", "21:9", "16:9", "9:16", "1:1", "4:5"];
@@ -28,6 +29,7 @@ export default function OptionsDropdown({
   duration,
   onDurationChange,
   triggerButtonRef,
+  panelPlacement = "bottom",
 }: OptionsDropdownProps) {
   const [activeNestedOption, setActiveNestedOption] = useState<
     "aspectRatio" | "quality" | null
@@ -39,11 +41,13 @@ export default function OptionsDropdown({
     if (isOpen && triggerButtonRef?.current) {
       const rect = triggerButtonRef.current.getBoundingClientRect();
       setPosition({
-        top: rect.bottom + 8,
+        top: panelPlacement === "bottom"
+          ? window.innerHeight - 140 - 280
+          : 140,
         left: rect.left,
       });
     }
-  }, [isOpen, triggerButtonRef]);
+  }, [isOpen, triggerButtonRef, panelPlacement]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

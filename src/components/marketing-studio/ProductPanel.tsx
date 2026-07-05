@@ -9,6 +9,7 @@ interface ProductPanelProps {
   productUrl: string;
   onProductUrlChange: (url: string) => void;
   onCreateManually: () => void;
+  panelPlacement?: "top" | "bottom";
 }
 
 export default function ProductPanel({
@@ -17,6 +18,7 @@ export default function ProductPanel({
   productUrl,
   onProductUrlChange,
   onCreateManually,
+  panelPlacement = "bottom",
 }: ProductPanelProps) {
   if (!isOpen) return null;
 
@@ -30,7 +32,11 @@ export default function ProductPanel({
 
       {/* Panel */}
       <div
-        className="fixed z-[999] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col ${
+          panelPlacement === "bottom"
+            ? "bottom-[140px] translate-y-0"
+            : "top-[140px] translate-y-0"
+        }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >

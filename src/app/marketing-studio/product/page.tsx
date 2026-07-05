@@ -67,6 +67,41 @@ export default function MarketingStudioProduct() {
   const [appProductName, setAppProductName] = useState("");
   const [appDescription, setAppDescription] = useState("");
 
+  // Prompt bar positioning system
+  const composerSectionRef = useRef<HTMLDivElement>(null);
+  const [panelPlacement, setPanelPlacement] = useState<"top" | "bottom">("bottom");
+
+  // Measure prompt bar position and calculate panel placement
+  useEffect(() => {
+    const measureComposerPosition = () => {
+      if (!composerSectionRef.current) return;
+
+      const rect = composerSectionRef.current.getBoundingClientRect();
+      const composerTop = rect.top;
+      const windowHeight = window.innerHeight;
+      const spaceAbove = composerTop;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // If more space above, open panels upward; otherwise downward
+      setPanelPlacement(spaceAbove > spaceBelow ? "top" : "bottom");
+    };
+
+    // Measure on mount and whenever layout changes
+    measureComposerPosition();
+
+    const resizeObserver = new ResizeObserver(measureComposerPosition);
+    window.addEventListener("resize", measureComposerPosition);
+
+    if (composerSectionRef.current) {
+      resizeObserver.observe(composerSectionRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", measureComposerPosition);
+      resizeObserver.disconnect();
+    };
+  }, [sidebarCollapsed]);
+
   // Filter and search
   const filteredCards = useMemo(() => {
     return (marketingStyleCards as unknown as StyleCard[]).filter((card) => {
@@ -461,7 +496,10 @@ export default function MarketingStudioProduct() {
         </main>
 
         {/* COMPOSER BOX - SHARED ACROSS ALL VIEWS */}
-        <section className="fixed bottom-0 left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-t border-white/5">
+        <section
+          ref={composerSectionRef}
+          className="fixed bottom-0 left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-t border-white/5"
+        >
           <div className={`mx-auto flex w-[min(980px,calc(100vw-260px-16px))] items-stretch gap-2 ${sidebarCollapsed ? "ml-[32px]" : "ml-[95px]"}`}>
             {/* LEFT PRODUCT/APP SELECTOR */}
             <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
@@ -609,6 +647,7 @@ export default function MarketingStudioProduct() {
           isOpen={activeFloatingPanel === "mediaAttach"}
           onClose={() => setActiveFloatingPanel(null)}
           onAttach={handleMediaAttach}
+          panelPlacement={panelPlacement}
         />
       )}
 
@@ -619,6 +658,7 @@ export default function MarketingStudioProduct() {
           onClose={() => setActiveFloatingPanel(null)}
           onSelectHook={handleHookSelect}
           selectedHookId={selectedHook?.id}
+          panelPlacement={panelPlacement}
         />
       )}
 
@@ -632,6 +672,7 @@ export default function MarketingStudioProduct() {
           onClose={() => setActiveFloatingPanel(null)}
           onSelectSetting={handleSettingSelect}
           selectedSettingId={selectedSetting?.id}
+          panelPlacement={panelPlacement}
         />
       )}
 
@@ -646,6 +687,7 @@ export default function MarketingStudioProduct() {
         duration={duration}
         onDurationChange={setDuration}
         triggerButtonRef={optionsButtonRef}
+        panelPlacement={panelPlacement}
       />
 
       {/* PRODUCT PANEL */}
@@ -656,6 +698,7 @@ export default function MarketingStudioProduct() {
           productUrl={productUrl}
           onProductUrlChange={setProductUrl}
           onCreateManually={handleCreateManually}
+          panelPlacement={panelPlacement}
         />
       )}
 
@@ -672,6 +715,7 @@ export default function MarketingStudioProduct() {
           onAvatarSearchQueryChange={setAvatarSearchQuery}
           selectedAvatarId={selectedAvatarId}
           onAvatarSelect={setSelectedAvatarId}
+          panelPlacement={panelPlacement}
         />
       )}
 
@@ -682,6 +726,7 @@ export default function MarketingStudioProduct() {
           onClose={handleAppPanelClose}
           hasApp={hasApp}
           onCreateManually={handleAppCreateManually}
+          panelPlacement={panelPlacement}
         />
       )}
 
