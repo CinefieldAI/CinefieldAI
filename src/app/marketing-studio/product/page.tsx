@@ -271,7 +271,7 @@ export default function MarketingStudioProduct() {
         onSetView={noop}
       />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1" style={{ minHeight: "calc(100vh - 72px)" }}>
         {/* LEFT SIDEBAR - Cinema Studio Tarzı */}
         <aside className="fixed left-2 top-[72px] z-30 hidden h-[calc(100vh-88px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex transition-all duration-300" style={{ width: sidebarCollapsed ? 52 : 231 }}>
           {/* Header */}
@@ -399,7 +399,7 @@ export default function MarketingStudioProduct() {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[247px]"} ml-0 pb-[300px]`}>
+        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[247px]"} ml-0 pb-[300px]`} style={{ minHeight: "100%" }}>
           {activeSidebarView === "allGenerations" ? (
             // ALL GENERATIONS VIEW
             <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
