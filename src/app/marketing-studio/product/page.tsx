@@ -14,6 +14,15 @@ import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
 import AppPanel from "@/components/marketing-studio/AppPanel";
 import YourAppModal from "@/components/marketing-studio/YourAppModal";
 import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarMenuItem,
+  SidebarFooter,
+  SidebarMenuButton,
+} from "@/components/ui/sidebar";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
