@@ -67,40 +67,8 @@ export default function MarketingStudioProduct() {
   const [appProductName, setAppProductName] = useState("");
   const [appDescription, setAppDescription] = useState("");
 
-  // Prompt bar positioning system
-  const composerSectionRef = useRef<HTMLDivElement>(null);
-  const [panelPlacement, setPanelPlacement] = useState<"top" | "bottom">("bottom");
-
-  // Measure prompt bar position and calculate panel placement
-  useEffect(() => {
-    const measureComposerPosition = () => {
-      if (!composerSectionRef.current) return;
-
-      const rect = composerSectionRef.current.getBoundingClientRect();
-      const composerTop = rect.top;
-      const windowHeight = window.innerHeight;
-      const spaceAbove = composerTop;
-      const spaceBelow = windowHeight - rect.bottom;
-
-      // If more space above, open panels upward; otherwise downward
-      setPanelPlacement(spaceAbove > spaceBelow ? "top" : "bottom");
-    };
-
-    // Measure on mount and whenever layout changes
-    measureComposerPosition();
-
-    const resizeObserver = new ResizeObserver(measureComposerPosition);
-    window.addEventListener("resize", measureComposerPosition);
-
-    if (composerSectionRef.current) {
-      resizeObserver.observe(composerSectionRef.current);
-    }
-
-    return () => {
-      window.removeEventListener("resize", measureComposerPosition);
-      resizeObserver.disconnect();
-    };
-  }, [sidebarCollapsed]);
+  // Prompt bar docking system - USER CONTROLLED
+  const [promptBarDock, setPromptBarDock] = useState<"bottom" | "top">("bottom");
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -497,9 +465,21 @@ export default function MarketingStudioProduct() {
 
         {/* COMPOSER BOX - SHARED ACROSS ALL VIEWS */}
         <section
-          ref={composerSectionRef}
-          className="fixed bottom-0 left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-t border-white/5"
+          className={`fixed left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-white/5 transition-all duration-300 ${
+            promptBarDock === "bottom"
+              ? "bottom-0 border-t"
+              : "top-0 border-b"
+          }`}
         >
+          {/* DOCK TOGGLE - visible control to move prompt bar */}
+          <div className={`flex justify-center mb-2 ${promptBarDock === "top" ? "" : "hidden"}`}>
+            <button
+              onClick={() => setPromptBarDock("bottom")}
+              className="text-xs px-2 py-1 rounded bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
+            >
+              ↓ Dock to Bottom
+            </button>
+          </div>
           <div className={`mx-auto flex w-[min(980px,calc(100vw-260px-16px))] items-stretch gap-2 ${sidebarCollapsed ? "ml-[32px]" : "ml-[95px]"}`}>
             {/* LEFT PRODUCT/APP SELECTOR */}
             <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
@@ -638,6 +618,16 @@ export default function MarketingStudioProduct() {
               </div>
             </div>
           </div>
+
+          {/* DOCK TOGGLE - visible control to move prompt bar */}
+          <div className={`flex justify-center mt-2 ${promptBarDock === "bottom" ? "" : "hidden"}`}>
+            <button
+              onClick={() => setPromptBarDock("top")}
+              className="text-xs px-2 py-1 rounded bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
+            >
+              ↑ Dock to Top
+            </button>
+          </div>
         </section>
       </div>
 
@@ -647,7 +637,7 @@ export default function MarketingStudioProduct() {
           isOpen={activeFloatingPanel === "mediaAttach"}
           onClose={() => setActiveFloatingPanel(null)}
           onAttach={handleMediaAttach}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 
@@ -658,7 +648,7 @@ export default function MarketingStudioProduct() {
           onClose={() => setActiveFloatingPanel(null)}
           onSelectHook={handleHookSelect}
           selectedHookId={selectedHook?.id}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 
@@ -672,7 +662,7 @@ export default function MarketingStudioProduct() {
           onClose={() => setActiveFloatingPanel(null)}
           onSelectSetting={handleSettingSelect}
           selectedSettingId={selectedSetting?.id}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 
@@ -687,7 +677,7 @@ export default function MarketingStudioProduct() {
         duration={duration}
         onDurationChange={setDuration}
         triggerButtonRef={optionsButtonRef}
-        panelPlacement={panelPlacement}
+        promptBarDock={promptBarDock}
       />
 
       {/* PRODUCT PANEL */}
@@ -698,7 +688,7 @@ export default function MarketingStudioProduct() {
           productUrl={productUrl}
           onProductUrlChange={setProductUrl}
           onCreateManually={handleCreateManually}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 
@@ -715,7 +705,7 @@ export default function MarketingStudioProduct() {
           onAvatarSearchQueryChange={setAvatarSearchQuery}
           selectedAvatarId={selectedAvatarId}
           onAvatarSelect={setSelectedAvatarId}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 
@@ -726,7 +716,7 @@ export default function MarketingStudioProduct() {
           onClose={handleAppPanelClose}
           hasApp={hasApp}
           onCreateManually={handleAppCreateManually}
-          panelPlacement={panelPlacement}
+          promptBarDock={promptBarDock}
         />
       )}
 

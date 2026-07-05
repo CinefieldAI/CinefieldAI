@@ -16,7 +16,7 @@ interface SettingPanelProps {
   onClose: () => void;
   onSelectSetting: (setting: SettingItem) => void;
   selectedSettingId?: string;
-  panelPlacement?: "top" | "bottom";
+  promptBarDock?: "top" | "bottom";
 }
 
 const SETTING_ITEMS: SettingItem[] = [
@@ -85,7 +85,7 @@ export default function SettingPanel({
   onClose,
   onSelectSetting,
   selectedSettingId,
-  panelPlacement = "bottom",
+  promptBarDock = "bottom",
 }: SettingPanelProps) {
   const [activeCategory, setActiveCategory] = useState<SettingCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,10 +124,10 @@ export default function SettingPanel({
 
       {/* Panel */}
       <div
-        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-16px)] rounded-[24px] border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col ${
-          panelPlacement === "bottom"
-            ? "bottom-[140px] translate-y-0"
-            : "top-[140px] translate-y-0"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-16px)] rounded-[24px] border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col transition-all duration-300 ${
+          promptBarDock === "bottom"
+            ? "bottom-[160px]"
+            : "top-[160px]"
         }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}

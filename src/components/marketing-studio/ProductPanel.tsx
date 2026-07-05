@@ -9,7 +9,7 @@ interface ProductPanelProps {
   productUrl: string;
   onProductUrlChange: (url: string) => void;
   onCreateManually: () => void;
-  panelPlacement?: "top" | "bottom";
+  promptBarDock?: "top" | "bottom";
 }
 
 export default function ProductPanel({
@@ -18,7 +18,7 @@ export default function ProductPanel({
   productUrl,
   onProductUrlChange,
   onCreateManually,
-  panelPlacement = "bottom",
+  promptBarDock = "bottom",
 }: ProductPanelProps) {
   if (!isOpen) return null;
 
@@ -32,10 +32,10 @@ export default function ProductPanel({
 
       {/* Panel */}
       <div
-        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col ${
-          panelPlacement === "bottom"
-            ? "bottom-[140px] translate-y-0"
-            : "top-[140px] translate-y-0"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(560px,calc(100vw-32px))] rounded-2xl border border-white/10 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-col transition-all duration-300 ${
+          promptBarDock === "bottom"
+            ? "bottom-[160px]"
+            : "top-[160px]"
         }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}

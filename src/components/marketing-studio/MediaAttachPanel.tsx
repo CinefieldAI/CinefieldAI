@@ -16,7 +16,7 @@ interface MediaAttachPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onAttach: (media: UploadedMedia[]) => void;
-  panelPlacement?: "top" | "bottom";
+  promptBarDock?: "top" | "bottom";
 }
 
 type MediaTab = "uploads" | "imageGenerations" | "liked";
@@ -25,7 +25,7 @@ export default function MediaAttachPanel({
   isOpen,
   onClose,
   onAttach,
-  panelPlacement = "bottom",
+  promptBarDock = "bottom",
 }: MediaAttachPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<MediaTab>("uploads");
@@ -148,10 +148,10 @@ export default function MediaAttachPanel({
 
       {/* Panel */}
       <div
-        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(720px,calc(100vw-48px))] h-[min(560px,calc(100vh-48px))] rounded-[24px] border border-white/10 bg-[#0f1b15] text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col ${
-          panelPlacement === "bottom"
-            ? "bottom-[140px] translate-y-0"
-            : "top-[140px] translate-y-0"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(720px,calc(100vw-48px))] h-[min(560px,calc(100vh-48px))] rounded-[24px] border border-white/10 bg-[#0f1b15] text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-all duration-300 ${
+          promptBarDock === "bottom"
+            ? "bottom-[160px]"
+            : "top-[160px]"
         }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}

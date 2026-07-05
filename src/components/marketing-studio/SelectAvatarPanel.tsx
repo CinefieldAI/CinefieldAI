@@ -17,7 +17,7 @@ interface SelectAvatarPanelProps {
   onAvatarSearchQueryChange: (query: string) => void;
   selectedAvatarId: string | null;
   onAvatarSelect: (avatarId: string) => void;
-  panelPlacement?: "top" | "bottom";
+  promptBarDock?: "top" | "bottom";
 }
 
 // Mock avatar data
@@ -40,7 +40,7 @@ export default function SelectAvatarPanel({
   onAvatarSearchQueryChange,
   selectedAvatarId,
   onAvatarSelect,
-  panelPlacement = "bottom",
+  promptBarDock = "bottom",
 }: SelectAvatarPanelProps) {
   if (!isOpen) return null;
 
@@ -78,10 +78,10 @@ export default function SelectAvatarPanel({
 
       {/* Panel */}
       <div
-        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(900px,calc(100vw-32px))] h-[min(560px,calc(100vh-48px))] rounded-2xl border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-row ${
-          panelPlacement === "bottom"
-            ? "bottom-[140px] translate-y-0"
-            : "top-[140px] translate-y-0"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(900px,calc(100vw-32px))] h-[min(560px,calc(100vh-48px))] rounded-2xl border border-white/5 bg-[#0f1b15] text-white shadow-xl overflow-hidden flex flex-row transition-all duration-300 ${
+          promptBarDock === "bottom"
+            ? "bottom-[160px]"
+            : "top-[160px]"
         }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}
