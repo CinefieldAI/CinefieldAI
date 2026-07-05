@@ -36,6 +36,7 @@ export default function MarketingStudioProduct() {
   const viewMode = searchParams.get("mode") || "product";
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
@@ -280,22 +281,34 @@ export default function MarketingStudioProduct() {
             {/* Navigation */}
             <nav className="space-y-2 flex-1">
               <button
-                onClick={() => router.push("/marketing-studio/product")}
-                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+                onClick={() => setActiveSidebarView("home")}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
+                  activeSidebarView === "home"
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:bg-white/5"
+                }`}
               >
                 <Home className="h-4 w-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span>Home</span>}
               </button>
               <button
-                onClick={handleAllGenerations}
-                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+                onClick={() => setActiveSidebarView("allGenerations")}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
+                  activeSidebarView === "allGenerations"
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:bg-white/5"
+                }`}
               >
                 <Grid3x3 className="h-4 w-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span>All generations</span>}
               </button>
               <button
-                onClick={handleFavorites}
-                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm"
+                onClick={() => setActiveSidebarView("favorites")}
+                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
+                  activeSidebarView === "favorites"
+                    ? "bg-white/10 text-white"
+                    : "text-white/70 hover:bg-white/5"
+                }`}
               >
                 <Heart className="h-4 w-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span>My favorites</span>}
@@ -319,9 +332,9 @@ export default function MarketingStudioProduct() {
 
         {/* MAIN CONTENT */}
         <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-[190px]"}`}>
-          {viewMode === "all" ? (
+          {activeSidebarView === "allGenerations" ? (
             // ALL GENERATIONS VIEW
-            <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
+            <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20 pb-[200px]">
               <div className="relative z-10 text-center max-w-[1000px] mb-12 w-full">
                 <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">ALL GENERATIONS</p>
                 <h1 className="font-grotesk uppercase text-[40px] leading-[48px] font-bold tracking-[-1.6px] text-white/90 mb-8">
@@ -355,9 +368,16 @@ export default function MarketingStudioProduct() {
                 ))}
               </div>
             </section>
+          ) : activeSidebarView === "favorites" ? (
+            // MY FAVORITES VIEW
+            <section className="relative min-h-screen flex flex-col items-center justify-center px-8 py-20 pb-[200px]">
+              <div className="text-center">
+                <p className="text-white/50 text-sm">My favorites coming soon</p>
+              </div>
+            </section>
           ) : (
             <>
-              {/* HERO SECTION */}
+              {/* HOME VIEW - HERO SECTION */}
               <section className="pt-12 px-8 text-center">
                 <div className="text-sm font-bold uppercase tracking-wide text-white/55 mb-8">
                   MARKETING STUDIO
