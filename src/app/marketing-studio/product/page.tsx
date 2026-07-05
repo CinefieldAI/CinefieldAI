@@ -271,106 +271,134 @@ export default function MarketingStudioProduct() {
       />
 
       <div className="flex min-h-[calc(100vh-4rem)]">
-        {/* LEFT SIDEBAR */}
-        <aside className={`fixed left-0 top-16 z-30 h-[calc(100vh-4rem)] border-r border-white/10 bg-[#031b13]/80 backdrop-blur-xl transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-[190px]"}`}>
-          <div className="flex flex-col h-full px-3 py-4">
-            {/* Workspace Header */}
-            <div className="mb-3 relative">
+        {/* LEFT SIDEBAR - Cinema Studio Tarzı */}
+        <aside className="fixed left-2 top-[72px] z-30 hidden h-[calc(100vh-88px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex transition-all duration-300" style={{ width: sidebarCollapsed ? 52 : 231 }}>
+          {/* Header */}
+          <div className="flex h-11 items-center justify-between px-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="size-7 shrink-0 rounded-lg bg-gradient-to-br from-lime-300 to-green-600 flex items-center justify-center text-sm font-bold text-black">
+                🎬
+              </div>
+              {!sidebarCollapsed && (
+                <span className="truncate text-sm font-semibold text-white">Marketing Studio</span>
+              )}
+            </div>
+            {!sidebarCollapsed && (
               <button
-                onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
-                className="w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs font-bold text-white/80 hover:bg-white/5 transition-colors"
+                onClick={() => setSidebarCollapsed(true)}
+                className="flex size-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/5 hover:text-white"
               >
-                {!sidebarCollapsed && <span>Marketing Studio</span>}
-                {!sidebarCollapsed && <ChevronDown className="h-3 w-3 text-white/50" />}
+                <ChevronDown className="size-4" />
               </button>
+            )}
+          </div>
 
-              {/* Workspace Dropdown */}
-              {isWorkspaceOpen && !sidebarCollapsed && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-[#0a2819]/95 border border-white/10 rounded-lg shadow-lg z-50">
-                  {workspaces.map((workspace) => (
-                    <button
-                      key={workspace.id}
-                      onClick={() => {
-                        setActiveWorkspace(workspace.id);
-                        setIsWorkspaceOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                        activeWorkspace === workspace.id
-                          ? "bg-white/10 text-white"
-                          : "text-white/70 hover:bg-white/5"
-                      }`}
-                    >
-                      {workspace.label}
-                    </button>
-                  ))}
-                </div>
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="mx-auto flex size-6 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <ChevronDown className="size-4 rotate-90" />
+            </button>
+          )}
+
+          {/* Navigation */}
+          <nav className="flex flex-col gap-0.5">
+            <button
+              onClick={() => setActiveSidebarView("home")}
+              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
+                activeSidebarView === "home" ? "bg-white/5" : ""
+              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
+            >
+              <span
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: "linear-gradient(135deg, #222221 3.87%, #3B3C3A 93.45%)",
+                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
+                }}
+              >
+                <Home className="size-[18px] text-white" strokeWidth={1.8} />
+              </span>
+              {!sidebarCollapsed && <span className="truncate">Home</span>}
+            </button>
+
+            <button
+              onClick={() => setActiveSidebarView("allGenerations")}
+              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
+                activeSidebarView === "allGenerations" ? "bg-white/5" : ""
+              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
+            >
+              <span
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: "linear-gradient(135deg, #4188BE 3.87%, #0E2772 93.45%)",
+                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
+                }}
+              >
+                <Grid3x3 className="size-[18px] text-white" strokeWidth={1.8} />
+              </span>
+              {!sidebarCollapsed && <span className="truncate">All generations</span>}
+            </button>
+
+            <button
+              onClick={() => setActiveSidebarView("favorites")}
+              className={`flex h-9 items-center gap-3 rounded-xl text-sm font-medium text-white transition-colors hover:bg-white/5 ${
+                activeSidebarView === "favorites" ? "bg-white/5" : ""
+              } ${sidebarCollapsed ? "justify-center px-0" : "pl-[11px] pr-1.5"}`}
+            >
+              <span
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: "linear-gradient(135deg, #E251B4 3.87%, #8D1237 93.45%)",
+                  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.45)",
+                }}
+              >
+                <Heart className="size-[18px] text-white" strokeWidth={1.8} />
+              </span>
+              {!sidebarCollapsed && <span className="truncate">My favorites</span>}
+            </button>
+          </nav>
+
+          {/* Tools */}
+          <div className="mt-1 border-t border-white/[0.06] pt-2">
+            <div className="flex items-center justify-between px-1.5 pb-1">
+              {!sidebarCollapsed && (
+                <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Tools</span>
               )}
             </div>
 
-            {/* Active Workspace Label */}
-            {!sidebarCollapsed && activeWorkspace !== "marketing-studio" && (
-              <>
-                <div className="text-xs text-white/60 px-2 mb-3">
-                  {workspaces.find((w) => w.id === activeWorkspace)?.label}
-                </div>
-                <div className="h-px bg-white/10 mb-3" />
-              </>
-            )}
+            <button
+              className={`mt-1 flex h-9 w-full items-center gap-2 rounded-xl border border-[rgba(197,197,197,0.3)] bg-white/[0.04] text-sm font-medium text-white backdrop-blur-[3.7px] transition-colors hover:bg-white/[0.08] ${
+                sidebarCollapsed ? "justify-center px-0" : "px-2"
+              }`}
+              style={{
+                boxShadow: "0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/15">
+                <Link2 className="size-3.5" />
+              </span>
+              {!sidebarCollapsed && <span className="truncate">Url to Ad</span>}
+            </button>
 
-            {/* Navigation */}
-            <nav className="space-y-2 flex-1">
-              <button
-                onClick={() => setActiveSidebarView("home")}
-                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
-                  activeSidebarView === "home"
-                    ? "bg-white/10 text-white"
-                    : "text-white/70 hover:bg-white/5"
-                }`}
-              >
-                <Home className="h-4 w-4 flex-shrink-0" />
-                {!sidebarCollapsed && <span>Home</span>}
-              </button>
-              <button
-                onClick={() => setActiveSidebarView("allGenerations")}
-                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
-                  activeSidebarView === "allGenerations"
-                    ? "bg-white/10 text-white"
-                    : "text-white/70 hover:bg-white/5"
-                }`}
-              >
-                <Grid3x3 className="h-4 w-4 flex-shrink-0" />
-                {!sidebarCollapsed && <span>All generations</span>}
-              </button>
-              <button
-                onClick={() => setActiveSidebarView("favorites")}
-                className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
-                  activeSidebarView === "favorites"
-                    ? "bg-white/10 text-white"
-                    : "text-white/70 hover:bg-white/5"
-                }`}
-              >
-                <Heart className="h-4 w-4 flex-shrink-0" />
-                {!sidebarCollapsed && <span>My favorites</span>}
-              </button>
-            </nav>
-
-            {/* Tools */}
-            <div className="space-y-2 pt-4 border-t border-white/10">
-              {!sidebarCollapsed && <p className="text-xs text-white/50 font-bold px-2">TOOLS</p>}
-              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm">
-                <Link2 className="h-4 w-4 flex-shrink-0" />
-                {!sidebarCollapsed && <span>Url to Ad</span>}
-              </button>
-              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-white/70 hover:bg-white/5 text-sm">
-                <Paperclip className="h-4 w-4 flex-shrink-0" />
-                {!sidebarCollapsed && <span>Ad Reference</span>}
-              </button>
-            </div>
+            <button
+              className={`mt-1 flex h-9 w-full items-center gap-2 rounded-xl border border-[rgba(197,197,197,0.3)] bg-white/[0.04] text-sm font-medium text-white backdrop-blur-[3.7px] transition-colors hover:bg-white/[0.08] ${
+                sidebarCollapsed ? "justify-center px-0" : "px-2"
+              }`}
+              style={{
+                boxShadow: "0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-white/15">
+                <Paperclip className="size-3.5" />
+              </span>
+              {!sidebarCollapsed && <span className="truncate">Ad Reference</span>}
+            </button>
           </div>
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-[190px]"} pb-[300px]`}>
+        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[247px]"} ml-0 pb-[300px]`}>
           {activeSidebarView === "allGenerations" ? (
             // ALL GENERATIONS VIEW
             <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
