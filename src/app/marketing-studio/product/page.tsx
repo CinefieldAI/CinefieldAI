@@ -180,8 +180,9 @@ export default function MarketingStudioProduct() {
     setShowYourAppModal(true);
   };
 
-  // Handle App panel close
+  // Handle App panel close - revert to Product mode
   const handleAppPanelClose = () => {
+    setSelectedTarget("product");
     setActiveFloatingPanel(null);
   };
 
