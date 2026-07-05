@@ -511,15 +511,14 @@ export default function MarketingStudioProduct() {
           )}
         </main>
 
-        {/* COMPOSER BOX - ONLY VISIBLE IN ALL GENERATIONS VIEW */}
-        {activeSidebarView === "allGenerations" ? (
-          <section
-            className={`fixed left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-white/5 transition-all duration-300 ${
-              promptBarDock === "bottom"
-                ? "bottom-0 border-t"
-                : "top-0 border-b"
-            }`}
-          >
+        {/* COMPOSER BOX - SHARED ACROSS ALL VIEWS */}
+        <section
+          className={`fixed left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-white/5 transition-all duration-300 ${
+            promptBarDock === "bottom"
+              ? "bottom-0 border-t"
+              : "top-0 border-b"
+          }`}
+        >
           {/* DOCK TOGGLE - visible control to move prompt bar */}
           <div className={`flex justify-center mb-2 ${promptBarDock === "top" ? "" : "hidden"}`}>
             <button
@@ -677,8 +676,7 @@ export default function MarketingStudioProduct() {
               ↑ Dock to Top
             </button>
           </div>
-          </section>
-        ) : null}
+        </section>
       </div>
 
       {/* MEDIA ATTACH PANEL */}
