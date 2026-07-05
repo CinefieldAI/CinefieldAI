@@ -13,6 +13,7 @@ import ProductPanel from "@/components/marketing-studio/ProductPanel";
 import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
 import AppPanel from "@/components/marketing-studio/AppPanel";
 import YourAppModal from "@/components/marketing-studio/YourAppModal";
+import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -443,71 +444,8 @@ export default function MarketingStudioProduct() {
               </div>
             </section>
           ) : (
-            <>
-              {/* HOME VIEW - VIDEO CARD STACK HERO */}
-              <section className="flex flex-col items-center justify-center min-h-screen px-8">
-                {/* HEADLINE */}
-                <div className="text-center mb-16 max-w-2xl">
-                  <h1 className="text-5xl font-extrabold text-white mb-4">
-                    Turn a prompt into a marketing video
-                  </h1>
-                  <p className="text-white/60">
-                    Describe what happens in the ad, all single-prompt ad videos will show up right here.
-                  </p>
-                </div>
-
-                {/* VIDEO CARD STACK */}
-                <div className="relative w-full max-w-2xl h-96">
-                  {/* Left card - behind */}
-                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
-                    transform: 'translateX(-20px) translateY(20px) scale(0.95)',
-                    zIndex: 1
-                  }}>
-                    <video
-                      src="https://d8j0ntlcm91z4.cloudfront.net/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742.mp4"
-                      poster="https://d8j0ntlcm91z4.cloudfront.net/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742.jpg"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Center card - large, top */}
-                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
-                    zIndex: 3,
-                    transform: 'translateY(0)'
-                  }}>
-                    <video
-                      src="https://static.higgsfield.ai/marketing-studio-presets/ugc.mp4"
-                      poster="https://static.higgsfield.ai/marketing-studio-presets/ugc.jpg"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Right card - behind */}
-                  <div className="absolute inset-0 rounded-2xl border border-white/10 bg-black/20 overflow-hidden" style={{
-                    transform: 'translateX(20px) translateY(20px) scale(0.95)',
-                    zIndex: 1
-                  }}>
-                    <video
-                      src="https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.mp4"
-                      poster="https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.jpg"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-              </section>
-            </>
+            // HOME VIEW - LANDING HERO
+            <HomeHeroVideoStack />
           )}
         </main>
 
