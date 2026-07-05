@@ -47,7 +47,7 @@ export default function OptionsDropdown({
         left: rect.left,
       });
     }
-  }, [isOpen, triggerButtonRef, panelPlacement]);
+  }, [isOpen, panelPlacement]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
