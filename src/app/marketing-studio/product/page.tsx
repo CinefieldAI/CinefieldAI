@@ -7,11 +7,12 @@ import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Sett
 import { marketingStyleCards } from "@/data/marketingStyleCards";
 import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
 import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
-import AddYourAppPanel from "@/components/marketing-studio/AddYourAppPanel";
 import SettingPanel, { SettingItem } from "@/components/marketing-studio/SettingPanel";
 import OptionsDropdown from "@/components/marketing-studio/OptionsDropdown";
 import ProductPanel from "@/components/marketing-studio/ProductPanel";
 import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
+import AppPanel from "@/components/marketing-studio/AppPanel";
+import YourAppModal from "@/components/marketing-studio/YourAppModal";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -57,6 +58,13 @@ export default function MarketingStudioProduct() {
   const [avatarGender, setAvatarGender] = useState<"male" | "female" | null>(null);
   const [avatarSearchQuery, setAvatarSearchQuery] = useState("");
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
+  const [showYourAppModal, setShowYourAppModal] = useState(false);
+  const [hasApp, setHasApp] = useState(false);
+  const [appUploadMode, setAppUploadMode] = useState<"web" | "mobile">("web");
+  const [appScreenshot, setAppScreenshot] = useState<File | null>(null);
+  const [appScreenshotPreview, setAppScreenshotPreview] = useState<string>("");
+  const [appProductName, setAppProductName] = useState("");
+  const [appDescription, setAppDescription] = useState("");
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -164,6 +172,39 @@ export default function MarketingStudioProduct() {
 
   // Handle Avatar panel close
   const handleAvatarPanelClose = () => {
+    setActiveFloatingPanel(null);
+  };
+
+  // Handle App panel create manually
+  const handleAppCreateManually = () => {
+    setShowYourAppModal(true);
+  };
+
+  // Handle App panel close
+  const handleAppPanelClose = () => {
+    setActiveFloatingPanel(null);
+  };
+
+  // Handle Your App modal close
+  const handleYourAppModalClose = () => {
+    setShowYourAppModal(false);
+  };
+
+  // Handle Create App
+  const handleCreateApp = (data: {
+    mode: "web" | "mobile";
+    screenshotFile: File | null;
+    screenshotPreviewUrl: string;
+    productName: string;
+    description: string;
+  }) => {
+    setAppUploadMode(data.mode);
+    setAppScreenshot(data.screenshotFile);
+    setAppScreenshotPreview(data.screenshotPreviewUrl);
+    setAppProductName(data.productName);
+    setAppDescription(data.description);
+    setHasApp(true);
+    setShowYourAppModal(false);
     setActiveFloatingPanel(null);
   };
 
@@ -560,16 +601,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* ADD YOUR APP PANEL */}
-      {activeFloatingPanel === "app" && (
-        <AddYourAppPanel
-          isOpen={activeFloatingPanel === "app"}
-          onClose={() => setActiveFloatingPanel(null)}
-          onProductClick={handleProductClick}
-          onAppClick={handleAppClick}
-          selectedTarget={selectedTarget}
-        />
-      )}
+      {/* ADD YOUR APP PANEL - DEPRECATED: replaced with AppPanel + YourAppModal */}
+      {/* Old component removed to avoid conflicts */}
 
       {/* SETTING PANEL */}
       {activeFloatingPanel === "setting" && (
@@ -618,6 +651,25 @@ export default function MarketingStudioProduct() {
           onAvatarSearchQueryChange={setAvatarSearchQuery}
           selectedAvatarId={selectedAvatarId}
           onAvatarSelect={setSelectedAvatarId}
+        />
+      )}
+
+      {/* APP PANEL */}
+      {activeFloatingPanel === "app" && (
+        <AppPanel
+          isOpen={activeFloatingPanel === "app"}
+          onClose={handleAppPanelClose}
+          hasApp={hasApp}
+          onCreateManually={handleAppCreateManually}
+        />
+      )}
+
+      {/* YOUR APP MODAL */}
+      {showYourAppModal && (
+        <YourAppModal
+          isOpen={showYourAppModal}
+          onClose={handleYourAppModalClose}
+          onCreateApp={handleCreateApp}
         />
       )}
 
