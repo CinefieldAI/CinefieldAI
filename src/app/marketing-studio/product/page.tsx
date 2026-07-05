@@ -65,10 +65,18 @@ export default function MarketingStudioProduct() {
   const [appScreenshot, setAppScreenshot] = useState<File | null>(null);
   const [appScreenshotPreview, setAppScreenshotPreview] = useState<string>("");
   const [appProductName, setAppProductName] = useState("");
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [appDescription, setAppDescription] = useState("");
 
   // Prompt bar docking system - USER CONTROLLED
   const [promptBarDock, setPromptBarDock] = useState<"bottom" | "top">("bottom");
+
+  // Workspace switcher
+  const [activeWorkspace, setActiveWorkspace] = useState("marketing-studio");
+  const workspaces = [
+    { id: "marketing-studio", label: "Marketing Studio" },
+    { id: "higgsfield-ai", label: "Higgsfield AI" },
+  ];
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -266,20 +274,48 @@ export default function MarketingStudioProduct() {
         {/* LEFT SIDEBAR */}
         <aside className={`fixed left-0 top-16 z-30 h-[calc(100vh-4rem)] border-r border-white/10 bg-[#031b13]/80 backdrop-blur-xl transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-[190px]"}`}>
           <div className="flex flex-col h-full px-3 py-4">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              {!sidebarCollapsed && (
-                <span className="text-xs font-bold text-white/80">Marketing Studio</span>
-              )}
-              <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-white/50 hover:text-white">
-                <ChevronDown className="h-4 w-4" />
+            {/* Workspace Header */}
+            <div className="mb-3 relative">
+              <button
+                onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs font-bold text-white/80 hover:bg-white/5 transition-colors"
+              >
+                {!sidebarCollapsed && <span>Marketing Studio</span>}
+                {!sidebarCollapsed && <ChevronDown className="h-3 w-3 text-white/50" />}
               </button>
+
+              {/* Workspace Dropdown */}
+              {isWorkspaceOpen && !sidebarCollapsed && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-[#0a2819]/95 border border-white/10 rounded-lg shadow-lg z-50">
+                  {workspaces.map((workspace) => (
+                    <button
+                      key={workspace.id}
+                      onClick={() => {
+                        setActiveWorkspace(workspace.id);
+                        setIsWorkspaceOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                        activeWorkspace === workspace.id
+                          ? "bg-white/10 text-white"
+                          : "text-white/70 hover:bg-white/5"
+                      }`}
+                    >
+                      {workspace.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Back Arrow */}
-            <button className="text-white/50 hover:text-white text-center w-full py-2 mb-4">
-              ←
-            </button>
+            {/* Active Workspace Label */}
+            {!sidebarCollapsed && activeWorkspace !== "marketing-studio" && (
+              <>
+                <div className="text-xs text-white/60 px-2 mb-3">
+                  {workspaces.find((w) => w.id === activeWorkspace)?.label}
+                </div>
+                <div className="h-px bg-white/10 mb-3" />
+              </>
+            )}
 
             {/* Navigation */}
             <nav className="space-y-2 flex-1">
