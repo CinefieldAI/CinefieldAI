@@ -240,7 +240,7 @@ export default function MarketingStudioProduct() {
 
   // IntersectionObserver for sticky composer
   useEffect(() => {
-    if (activeSidebarView !== "home" || !composerWrapperRef.current) {
+    if (!["home", "allGenerations"].includes(activeSidebarView) || !composerWrapperRef.current) {
       setShowStickyComposer(false);
       return;
     }
@@ -422,8 +422,8 @@ export default function MarketingStudioProduct() {
             </main>
           </div>
 
-          {/* STICKY BOTTOM COMPOSER - Only visible on Home when scrolled down */}
-          {showStickyComposer && activeSidebarView === "home" && (
+          {/* STICKY BOTTOM COMPOSER - Visible on Home and All Generations when scrolled down */}
+          {showStickyComposer && (activeSidebarView === "home" || activeSidebarView === "allGenerations") && (
             <div className="fixed left-0 right-0 bottom-4 z-40 px-8 pointer-events-none">
               <div className="opacity-100 translate-y-0 transition-all duration-300 pointer-events-auto">
                 <ComposerBar
