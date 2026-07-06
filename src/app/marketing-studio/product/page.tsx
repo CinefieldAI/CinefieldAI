@@ -14,16 +14,8 @@ import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
 import AppPanel from "@/components/marketing-studio/AppPanel";
 import YourAppModal from "@/components/marketing-studio/YourAppModal";
 import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenuItem,
-  SidebarFooter,
-  SidebarMenuButton,
-  SidebarInset,
-} from "@/components/ui/sidebar";
+import MarketingStudioSidebar from "@/components/marketing-studio/MarketingStudioSidebar";
+import ComposerBar from "@/components/marketing-studio/ComposerBar";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -46,7 +38,6 @@ export default function MarketingStudioProduct() {
   const searchParams = useSearchParams();
   const viewMode = searchParams.get("mode") || "product";
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
@@ -81,6 +72,10 @@ export default function MarketingStudioProduct() {
 
   // Prompt bar docking system - USER CONTROLLED
   const [promptBarDock, setPromptBarDock] = useState<"bottom" | "top">("bottom");
+
+  // Composer wrapper ref for sticky behavior
+  const composerWrapperRef = useRef<HTMLDivElement>(null);
+  const [showStickyComposer, setShowStickyComposer] = useState(false);
 
   // Workspace switcher
   const [activeWorkspace, setActiveWorkspace] = useState("marketing-studio");
@@ -243,6 +238,30 @@ export default function MarketingStudioProduct() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
+  // IntersectionObserver for sticky composer
+  useEffect(() => {
+    if (activeSidebarView !== "home" || !composerWrapperRef.current) {
+      setShowStickyComposer(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Show sticky when normal composer is NOT visible
+        setShowStickyComposer(!entry.isIntersecting);
+      },
+      {
+        threshold: 0,
+      }
+    );
+
+    observer.observe(composerWrapperRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeSidebarView]);
+
   const handleAllGenerations = () => {
     router.push("?mode=all");
   };
@@ -261,113 +280,38 @@ export default function MarketingStudioProduct() {
   };
 
   return (
-    <SidebarProvider>
-      <div
-        className="min-h-screen w-full flex flex-col"
-        style={{
-          backgroundColor: "#071b10",
-          backgroundImage: `
-            linear-gradient(rgba(210,255,80,0.08) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(210,255,80,0.08) 1px, transparent 1px),
-            radial-gradient(circle at 50% 18%, rgba(190,255,40,0.35), transparent 34%)
-          `,
-          backgroundSize: "44px 44px, 44px 44px, 100% 100%",
-        }}
-      >
-        <Navbar
-          activePanel={null}
-          onOpenImagePanel={noop}
-          onOpenVideoPanel={noop}
-          onOpenAudioPanel={noop}
-          onSetView={noop}
-        />
+    <div
+      className="min-h-screen w-full flex flex-col"
+      style={{
+        backgroundColor: "#071b10",
+        backgroundImage: `
+          linear-gradient(rgba(210,255,80,0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(210,255,80,0.08) 1px, transparent 1px),
+          radial-gradient(circle at 50% 18%, rgba(190,255,40,0.35), transparent 34%)
+        `,
+        backgroundSize: "44px 44px, 44px 44px, 100% 100%",
+      }}
+    >
+      <Navbar
+        activePanel={null}
+        onOpenImagePanel={noop}
+        onOpenVideoPanel={noop}
+        onOpenAudioPanel={noop}
+        onSetView={noop}
+      />
 
-        <div className="flex flex-1" style={{ minHeight: "calc(100vh - 72px)" }}>
-          {/* SIDEBAR COMPONENT */}
-          <Sidebar>
-            <SidebarHeader>
-              <div className="flex items-center gap-2">
-                <div className="size-7 shrink-0 rounded-lg bg-gradient-to-br from-lime-300 to-green-600 flex items-center justify-center text-sm font-bold text-black">
-                  🎬
-                </div>
-              </div>
-            </SidebarHeader>
+      {/* HOVER-COLLAPSIBLE SIDEBAR */}
+      <MarketingStudioSidebar
+        activeSidebarView={activeSidebarView}
+        onViewChange={setActiveSidebarView}
+      />
 
-            <SidebarContent>
-              <SidebarMenuItem
-                icon={<Home className="size-[18px]" strokeWidth={1.8} />}
-                label="Home"
-                gradient="linear-gradient(135deg, #222221 3.87%, #3B3C3A 93.45%)"
-                active={activeSidebarView === "home"}
-                onClick={() => setActiveSidebarView("home")}
-              />
-              <SidebarMenuItem
-                icon={<Grid3x3 className="size-[18px]" strokeWidth={1.8} />}
-                label="All generations"
-                gradient="linear-gradient(135deg, #4188BE 3.87%, #0E2772 93.45%)"
-                active={activeSidebarView === "allGenerations"}
-                onClick={() => setActiveSidebarView("allGenerations")}
-              />
-              <SidebarMenuItem
-                icon={<Heart className="size-[18px]" strokeWidth={1.8} />}
-                label="My favorites"
-                gradient="linear-gradient(135deg, #E251B4 3.87%, #8D1237 93.45%)"
-                active={activeSidebarView === "favorites"}
-                onClick={() => setActiveSidebarView("favorites")}
-              />
-            </SidebarContent>
-
-            <SidebarFooter>
-              <SidebarMenuButton
-                icon={<Link2 className="size-3.5" />}
-                label="Url to Ad"
-              />
-              <SidebarMenuButton
-                icon={<Paperclip className="size-3.5" />}
-                label="Ad Reference"
-              />
-            </SidebarFooter>
-          </Sidebar>
-
-          {/* MAIN CONTENT AREA */}
-          <SidebarInset>
-            <main className="relative flex-1 overflow-auto" style={{ minHeight: "calc(100vh - 72px)", paddingBottom: "300px" }}>
+      <div className="flex flex-1" style={{ minHeight: "calc(100vh - 72px)" }}>
+        {/* MAIN CONTENT AREA */}
+        <main className="relative flex-1 overflow-auto w-full" style={{ minHeight: "calc(100vh - 72px)", paddingBottom: "300px" }}>
               {activeSidebarView === "allGenerations" && (
-                // ALL GENERATIONS VIEW
-                <section className="relative min-h-screen flex flex-col items-center justify-start px-8 py-20">
-                  <div className="relative z-10 text-center max-w-[1000px] mb-12 w-full">
-                    <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">ALL GENERATIONS</p>
-                    <h1 className="font-grotesk uppercase text-[40px] leading-[48px] font-bold tracking-[-1.6px] text-white/90 mb-8">
-                      Your Generated Videos
-                    </h1>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-[1200px]">
-                    {[1, 2, 3, 4, 5, 6].map((idx) => (
-                      <div
-                        key={idx}
-                        className="group rounded-3xl overflow-hidden bg-white/5 border border-white/10 hover:border-white/20 transition-all hover:scale-[1.02] cursor-pointer"
-                      >
-                        <div className="aspect-[9/16] bg-gradient-to-br from-white/10 to-white/5 relative overflow-hidden flex items-center justify-center">
-                          <div className="text-white/30 text-sm font-medium">Generation {idx}</div>
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                        </div>
-                        <div className="p-4">
-                          <p className="text-sm font-medium text-white mb-2">Video #{idx}</p>
-                          <p className="text-xs text-white/50 mb-4">Generated today</p>
-                          <div className="flex gap-2">
-                            <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
-                              Download
-                            </button>
-                            <button className="flex-1 h-8 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/15 transition-colors">
-                              Share
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                // ALL GENERATIONS VIEW - EMPTY STATE
+                <HomeHeroVideoStack />
               )}
 
               {activeSidebarView === "favorites" && (
@@ -380,184 +324,135 @@ export default function MarketingStudioProduct() {
               )}
 
               {activeSidebarView === "home" && (
-                // HOME VIEW - LANDING HERO
-                <HomeHeroVideoStack />
+                // HOME VIEW - MAIN PRODUCT LANDING WITH HERO, COMPOSER, AND STYLE CARDS
+                <section className="relative w-full flex flex-col items-center px-8 py-20">
+                  {/* HERO SECTION */}
+                  <div className="relative z-10 text-center max-w-[1000px] mb-20 w-full">
+                    <p className="text-white/50 font-grotesk uppercase text-sm tracking-wider mb-6">MARKETING STUDIO</p>
+                    <h1 className="font-grotesk uppercase text-[48px] leading-[56px] font-bold tracking-[-2px] text-white mb-8">
+                      TURN ANY PRODUCT<br />INTO A VIDEO AD
+                    </h1>
+                  </div>
+
+                  {/* INLINE COMPOSER - Normal flow */}
+                  <div ref={composerWrapperRef} className="relative z-10 w-full flex justify-center mb-12 pb-8">
+                    <ComposerBar
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                      selectedTarget={selectedTarget}
+                      onProductClick={handleProductClick}
+                      onAppClick={handleAppClick}
+                      selectedMode={selectedMode}
+                      onUgcClick={handleUgcClick}
+                      onHookClick={handleHookClick}
+                      onSettingClick={handleSettingClick}
+                      onMediaAttachClick={handleMediaAttachClick}
+                      onOptionsClick={handleOptionsClick}
+                      selectedHook={selectedHook}
+                      selectedSetting={selectedSetting}
+                      activeFloatingPanel={activeFloatingPanel}
+                      optionsButtonRef={optionsButtonRef}
+                      attachedProductMedia={attachedProductMedia}
+                      onProductCardClick={handleProductCardClick}
+                      onAvatarCardClick={handleAvatarCardClick}
+                      onGenerate={handleGenerate}
+                    />
+                  </div>
+
+                  {/* FILTER BUTTONS */}
+                  <div className="relative z-10 flex gap-3 mb-12 w-full justify-center">
+                    {(["All", "TikTok", "UGC", "Commercial"] as const).map((category) => (
+                      <button
+                        key={category}
+                        onClick={() => setFilterCategory(category)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          filterCategory === category
+                            ? "bg-cyan-400/20 text-cyan-300 border border-cyan-400/40"
+                            : "bg-white/7 text-white/70 hover:bg-white/10 hover:text-white border border-white/10"
+                        }`}
+                      >
+                        {category}
+                        {category === "TikTok" && " NEW"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* STYLE CARDS GRID */}
+                  <div className="w-full max-w-[1400px]">
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                      {filteredCards.map((card) => (
+                        <button
+                          key={card.id}
+                          onClick={() => {
+                            setSelectedStyle(card.id);
+                            setIsStylePanelOpen(true);
+                          }}
+                          className="marketing-style-card flex flex-col gap-2 text-left transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                          {/* Media Preview */}
+                          <div
+                            className={`relative h-32 overflow-hidden rounded-xl border cursor-pointer transition-all ${
+                              selectedStyle === card.id
+                                ? "border-cyan-400 ring-2 ring-cyan-300"
+                                : "border-white/5 bg-[#1a2420]"
+                            }`}
+                          >
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-white/5">
+                              <span className="text-white/40 text-[10px] font-medium text-center px-2">
+                                {card.title}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Text Info */}
+                          <div>
+                            <p className="truncate text-xs font-semibold leading-4 text-white">
+                              {card.title}
+                            </p>
+                            <p className="truncate text-xs leading-3 text-white/50">
+                              {card.description}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
               )}
             </main>
-          </SidebarInset>
-
-        </div>
-
-        {/* COMPOSER BOX - ALWAYS MOUNTED AND VISIBLE */}
-        <section
-          className={`fixed left-0 right-0 px-8 py-4 bg-gradient-to-t from-[#0a0b0e] to-transparent border-white/5 transition-all duration-300 ${
-            promptBarDock === "bottom"
-              ? "bottom-0 border-t"
-              : "top-0 border-b"
-          }`}
-        >
-          {/* DOCK TOGGLE - visible control to move prompt bar */}
-          <div className={`flex justify-center mb-2 ${promptBarDock === "top" ? "" : "hidden"}`}>
-            <button
-              onClick={() => setPromptBarDock("bottom")}
-              className="text-xs px-2 py-1 rounded bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
-            >
-              ↓ Dock to Bottom
-            </button>
           </div>
-          <div className={`mx-auto flex w-[min(980px,calc(100vw-260px-16px))] items-stretch gap-2 ${sidebarCollapsed ? "ml-[32px]" : "ml-[95px]"}`}>
-            {/* LEFT PRODUCT/APP SELECTOR */}
-            <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-              <button
-                onClick={handleProductClick}
-                className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
-                  selectedTarget === "product"
-                    ? "bg-[#3a3d45] text-white"
-                    : "text-white/55 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                <span className="text-[10px]">📱</span>
-                <span>Product</span>
-              </button>
-              <button
-                onClick={handleAppClick}
-                className={`flex-1 rounded-[18px] flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
-                  selectedTarget === "app"
-                    ? "bg-[#3a3d45] text-white"
-                    : "text-white/55 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                <span className="text-[10px]">⌚</span>
-                <span>App</span>
-              </button>
-            </div>
 
-            {/* MAIN COMPOSER BAR - ONE CONNECTED HORIZONTAL UNIT */}
-            <div className="relative flex h-[116px] flex-1 items-stretch rounded-[24px] border border-white/10 bg-[#24262b] p-3 shadow-[0_8px_0_rgba(0,0,0,0.25),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-              {/* LEFT: PLUS BUTTON + PROMPT INPUT */}
-              <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
-                {/* Top Row: Plus + Textarea */}
-                <div className="flex items-start gap-3">
-                  <button
-                    onClick={handleMediaAttachClick}
-                    className="flex-shrink-0 size-8 rounded-xl bg-white/8 text-white/80 hover:bg-white/12 flex items-center justify-center transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="text"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Describe what happens in the ad..."
-                    className="min-h-[32px] flex-1 resize-none bg-transparent pt-1 text-sm text-white outline-none placeholder:text-white/55"
-                  />
-                </div>
-
-                {/* Bottom Row: Chips */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleUgcClick}
-                    className={`h-8 rounded-lg px-3 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                      selectedMode === "UGC"
-                        ? "bg-cyan-400/20 text-cyan-300"
-                        : "bg-white/7 text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="text-[9px]">▼</span> UGC
-                  </button>
-                  <button
-                    onClick={handleHookClick}
-                    className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <span className="text-[9px]">🎯</span> Hook {selectedHook ? `: ${selectedHook.title}` : ""}
-                  </button>
-                  <button
-                    onClick={handleSettingClick}
-                    className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <span className="text-[9px]">🌍</span> {selectedSetting ? selectedSetting.title : "Setting"}
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition-transform ${
-                        activeFloatingPanel === "setting" ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                  <button
-                    ref={optionsButtonRef}
-                    onClick={handleOptionsClick}
-                    className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors hover:scale-[1.03] active:scale-[0.97]"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* RIGHT: PRODUCT TILE + AVATAR TILE + ATTACHED MEDIA + GENERATE */}
-              <div className="flex shrink-0 items-center gap-2">
-                {/* PRODUCT TILE */}
-                <button
-                  onClick={handleProductCardClick}
-                  className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
-                >
-                  <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
-                    <Plus className="h-3 w-3" />
-                  </div>
-                  <span>PRODUCT</span>
-                </button>
-
-                {/* AVATAR TILE */}
-                <button
-                  onClick={handleAvatarCardClick}
-                  className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
-                >
-                  <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
-                    <Plus className="h-3 w-3" />
-                  </div>
-                  <span>AVATAR</span>
-                </button>
-
-                {/* ATTACHED MEDIA PREVIEW - Shows first attached image */}
-                {attachedProductMedia.length > 0 && (
-                  <div className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors overflow-hidden group">
-                    <img
-                      src={attachedProductMedia[0].previewUrl}
-                      alt="Attached media"
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/60 transition-colors" />
-                    <span className="relative z-10 text-xs bg-cyan-400/80 text-black px-1 rounded">
-                      {attachedProductMedia.length}
-                    </span>
-                    <span className="relative z-10">MEDIA</span>
-                  </div>
-                )}
-
-                {/* GENERATE BUTTON */}
-                <button
-                  onClick={handleGenerate}
-                  className="h-20 w-[120px] rounded-xl bg-[linear-gradient(135deg,#1fffd0_0%,#00c8ff_100%)] hover:opacity-90 text-black flex flex-col items-center justify-center font-bold text-sm transition-opacity"
-                >
-                  <span>GENERATE</span>
-                  <div className="text-[10px] mt-1">✦ 156 130</div>
-                </button>
+          {/* STICKY BOTTOM COMPOSER - Only visible on Home when scrolled down */}
+          {showStickyComposer && activeSidebarView === "home" && (
+            <div className="fixed left-0 right-0 bottom-4 z-40 px-8 pointer-events-none">
+              <div className="opacity-100 translate-y-0 transition-all duration-300 pointer-events-auto">
+                <ComposerBar
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  selectedTarget={selectedTarget}
+                  onProductClick={handleProductClick}
+                  onAppClick={handleAppClick}
+                  selectedMode={selectedMode}
+                  onUgcClick={handleUgcClick}
+                  onHookClick={handleHookClick}
+                  onSettingClick={handleSettingClick}
+                  onMediaAttachClick={handleMediaAttachClick}
+                  onOptionsClick={handleOptionsClick}
+                  selectedHook={selectedHook}
+                  selectedSetting={selectedSetting}
+                  activeFloatingPanel={activeFloatingPanel}
+                  optionsButtonRef={optionsButtonRef}
+                  attachedProductMedia={attachedProductMedia}
+                  onProductCardClick={handleProductCardClick}
+                  onAvatarCardClick={handleAvatarCardClick}
+                  onGenerate={handleGenerate}
+                />
               </div>
             </div>
-          </div>
+          )}
 
-          {/* DOCK TOGGLE - visible control to move prompt bar */}
-          <div className={`flex justify-center mt-2 ${promptBarDock === "bottom" ? "" : "hidden"}`}>
-            <button
-              onClick={() => setPromptBarDock("top")}
-              className="text-xs px-2 py-1 rounded bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
-            >
-              ↑ Dock to Top
-            </button>
-          </div>
-        </section>
-      </div>
-
-      {/* MEDIA ATTACH PANEL */}
-      {activeFloatingPanel === "mediaAttach" && (
+        {/* MEDIA ATTACH PANEL */}
+        {activeFloatingPanel === "mediaAttach" && (
         <MediaAttachPanel
           isOpen={activeFloatingPanel === "mediaAttach"}
           onClose={() => setActiveFloatingPanel(null)}
@@ -566,8 +461,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* HOOK PANEL */}
-      {activeFloatingPanel === "hook" && (
+        {/* HOOK PANEL */}
+        {activeFloatingPanel === "hook" && (
         <HookPanel
           isOpen={activeFloatingPanel === "hook"}
           onClose={() => setActiveFloatingPanel(null)}
@@ -580,8 +475,8 @@ export default function MarketingStudioProduct() {
       {/* ADD YOUR APP PANEL - DEPRECATED: replaced with AppPanel + YourAppModal */}
       {/* Old component removed to avoid conflicts */}
 
-      {/* SETTING PANEL */}
-      {activeFloatingPanel === "setting" && (
+        {/* SETTING PANEL */}
+        {activeFloatingPanel === "setting" && (
         <SettingPanel
           isOpen={activeFloatingPanel === "setting"}
           onClose={() => setActiveFloatingPanel(null)}
@@ -591,8 +486,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* OPTIONS DROPDOWN */}
-      <OptionsDropdown
+        {/* OPTIONS DROPDOWN */}
+        <OptionsDropdown
         isOpen={activeFloatingPanel === "options"}
         onClose={() => setActiveFloatingPanel(null)}
         aspectRatio={aspectRatio}
@@ -605,8 +500,8 @@ export default function MarketingStudioProduct() {
         promptBarDock={promptBarDock}
       />
 
-      {/* PRODUCT PANEL */}
-      {activeFloatingPanel === "product" && (
+        {/* PRODUCT PANEL */}
+        {activeFloatingPanel === "product" && (
         <ProductPanel
           isOpen={activeFloatingPanel === "product"}
           onClose={handleProductPanelClose}
@@ -617,8 +512,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* AVATAR PANEL */}
-      {activeFloatingPanel === "avatar" && (
+        {/* AVATAR PANEL */}
+        {activeFloatingPanel === "avatar" && (
         <SelectAvatarPanel
           isOpen={activeFloatingPanel === "avatar"}
           onClose={handleAvatarPanelClose}
@@ -634,8 +529,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* APP PANEL */}
-      {activeFloatingPanel === "app" && (
+        {/* APP PANEL */}
+        {activeFloatingPanel === "app" && (
         <AppPanel
           isOpen={activeFloatingPanel === "app"}
           onClose={handleAppPanelClose}
@@ -645,8 +540,8 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* YOUR APP MODAL */}
-      {showYourAppModal && (
+        {/* YOUR APP MODAL */}
+        {showYourAppModal && (
         <YourAppModal
           isOpen={showYourAppModal}
           onClose={handleYourAppModalClose}
@@ -654,16 +549,16 @@ export default function MarketingStudioProduct() {
         />
       )}
 
-      {/* TARGET PANEL MODAL */}
-      {isStylePanelOpen && (
-        <div
+        {/* TARGET PANEL MODAL */}
+          {isStylePanelOpen && (
+          <div
           className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm"
           onClick={() => setIsStylePanelOpen(false)}
         />
       )}
 
-      {isStylePanelOpen && (
-        <div
+        {isStylePanelOpen && (
+          <div
           className="fixed z-[1000] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(720px,calc(100vw-48px))] h-[min(560px,calc(100vh-48px))] rounded-3xl border border-white/5 bg-[#0f1b15] p-2 text-white shadow-xl overflow-hidden flex flex-col"
           role="dialog"
           onClick={(e) => e.stopPropagation()}
@@ -809,6 +704,6 @@ export default function MarketingStudioProduct() {
           </div>
         </div>
       )}
-    </SidebarProvider>
+    </div>
   );
 }
