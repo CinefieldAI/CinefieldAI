@@ -311,7 +311,9 @@ export default function MarketingStudioProduct() {
         <main className="relative flex-1 overflow-auto w-full" style={{ minHeight: "calc(100vh - 72px)", paddingBottom: "300px" }}>
               {activeSidebarView === "allGenerations" && (
                 // ALL GENERATIONS VIEW - EMPTY STATE
-                <HomeHeroVideoStack />
+                <div ref={composerWrapperRef} className="relative w-full">
+                  <HomeHeroVideoStack />
+                </div>
               )}
 
               {activeSidebarView === "favorites" && (
