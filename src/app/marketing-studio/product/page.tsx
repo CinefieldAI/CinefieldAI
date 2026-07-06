@@ -238,27 +238,42 @@ export default function MarketingStudioProduct() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // IntersectionObserver for sticky composer
+  // Scroll listener for sticky composer on Home view
   useEffect(() => {
-    if (!["home", "allGenerations"].includes(activeSidebarView) || !composerWrapperRef.current) {
+    if (activeSidebarView !== "home" || !composerWrapperRef.current) {
       setShowStickyComposer(false);
       return;
     }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // Show sticky when normal composer is NOT visible
-        setShowStickyComposer(!entry.isIntersecting);
-      },
-      {
-        threshold: 0,
-      }
-    );
+    const handleScroll = () => {
+      if (!composerWrapperRef.current) return;
+      const rect = composerWrapperRef.current.getBoundingClientRect();
+      setShowStickyComposer(rect.top < -100);
+    };
 
-    observer.observe(composerWrapperRef.current);
-
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      observer.disconnect();
+      window.removeEventListener("scroll", handleScroll);
+      setShowStickyComposer(false);
+    };
+  }, [activeSidebarView]);
+
+  // Simple scroll-based sticky for All Generations
+  useEffect(() => {
+    if (activeSidebarView !== "allGenerations") {
+      setShowStickyComposer(false);
+      return;
+    }
+
+    const handleScroll = () => {
+      // Show sticky after scrolling 400px on All Generations
+      setShowStickyComposer(window.scrollY > 400);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      setShowStickyComposer(false);
     };
   }, [activeSidebarView]);
 
