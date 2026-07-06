@@ -266,8 +266,8 @@ export default function MarketingStudioProduct() {
     }
 
     const handleScroll = () => {
-      // Show sticky after scrolling 400px on All Generations
-      setShowStickyComposer(window.scrollY > 400);
+      // Show sticky after scrolling 100px on All Generations
+      setShowStickyComposer(window.scrollY > 100);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
