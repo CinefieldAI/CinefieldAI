@@ -10,12 +10,14 @@ import {
   Ratio,
   Volume2,
   VolumeX,
+  Sparkles,
 } from "lucide-react";
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
 import DurationPopover from "./DurationPopover";
 import QualityPanel from "./QualityPanel";
+import AssetsPickerModal from "./AssetsPickerModal";
 import { RESOLUTIONS } from "./cinemaStudioData";
 
 export interface PromptBarProps {
@@ -191,6 +193,8 @@ function PromptInput({
 export default function PromptBar(props: PromptBarProps) {
   const [qualityPanelOpen, setQualityPanelOpen] = useState(false);
   const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
+  const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
+  const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
 
   const {
     prompt,
@@ -220,6 +224,12 @@ export default function PromptBar(props: PromptBarProps) {
     ? "Describe your scene - use @ to add characters & locations"
     : "Describe your location";
 
+  // Determine Cinema Studio version
+  const isCinema35 = model === "cinema-3.5";
+  const isCinema30 = model === "cinema-3.0";
+  const isCinema25 = model === "cinema-2.5";
+  const showElementsButton = isCinema35 || isCinema30;
+
   return (
     <>
       <div
@@ -240,6 +250,39 @@ export default function PromptBar(props: PromptBarProps) {
           />
 
           <div className="flex flex-wrap items-center gap-1">
+            {/* Assets Picker Buttons - Cinema Studio 3.5, 3.0, and 2.5 */}
+            {(isCinema35 || isCinema30 || isCinema25) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  aria-label="Add assets"
+                  title="Add assets"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <Plus className="size-4" />
+                </button>
+
+                {showElementsButton && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssetsPickerTab("elements");
+                      setAssetsPickerOpen(true);
+                    }}
+                    aria-label="My elements"
+                    title="My elements"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+                  >
+                    <Sparkles className="size-4" />
+                  </button>
+                )}
+              </>
+            )}
+
             <ModelSelector value={model} onChange={onModelChange} mode={mode} />
 
             <AspectRatioDropdown value={aspectRatio} onChange={onAspectRatioChange} />
@@ -309,6 +352,12 @@ export default function PromptBar(props: PromptBarProps) {
         onSelect={onQualityChange}
         selectedQuality={quality}
         availableQualities={["720p", "1080p", "4K"]}
+      />
+
+      <AssetsPickerModal
+        isOpen={assetsPickerOpen}
+        onClose={() => setAssetsPickerOpen(false)}
+        defaultTab={assetsPickerTab}
       />
     </>
   );
