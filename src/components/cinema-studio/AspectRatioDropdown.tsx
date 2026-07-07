@@ -68,7 +68,7 @@ export default function AspectRatioDropdown({
         <div
           role="listbox"
           aria-label="Aspect ratio options"
-          className="absolute bottom-full left-0 z-[100] mb-2 w-[200px] overflow-hidden rounded-xl border border-white/10 bg-[#1a1d1f] p-1 shadow-2xl"
+          className="absolute bottom-full left-0 z-[100000] mb-2 w-[200px] overflow-hidden rounded-xl border border-white/10 bg-[#1a1d1f] p-1 shadow-2xl"
         >
           {ASPECT_RATIO_OPTIONS.map((opt) => {
             const selected = opt.value === value;

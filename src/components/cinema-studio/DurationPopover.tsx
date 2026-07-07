@@ -42,7 +42,7 @@ export default function DurationPopover({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[200] w-[334px] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px]"
+          className="z-[100000] w-[334px] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px]"
         >
           <div className="flex flex-col gap-3 rounded-xl p-2">
             <div>

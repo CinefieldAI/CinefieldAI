@@ -80,7 +80,7 @@ export default function QualityPanel({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[110] w-[180px] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-2"
+      className="fixed z-[100000] w-[180px] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-2"
       style={{ top: pos.top, left: pos.left }}
     >
       {/* Quality Options */}
