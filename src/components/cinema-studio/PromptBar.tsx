@@ -441,14 +441,12 @@ export default function PromptBar(props: PromptBarProps) {
       {isCinema30 && customMultishotPanelOpen && shotControl === "customMultishot" && (
         <div
           ref={panelRef}
-          className="absolute z-30 rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
+          className="fixed z-40 left-1/2 -translate-x-1/2 rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
           style={{
-            position: "absolute",
-            bottom: "100%",
-            left: "76px",
-            width: "calc(100% - 76px)",
+            top: "calc(50% - 380px)",
+            width: "calc(100% - 152px)",
+            maxWidth: "1040px",
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            marginBottom: "8px",
           }}
         >
           <div className="flex items-center gap-3">
