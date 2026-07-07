@@ -198,6 +198,8 @@ export default function PromptBar(props: PromptBarProps) {
   const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
   const [shotControlOpen, setShotControlOpen] = useState(false);
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
+  const [customMultishotPanelOpen, setCustomMultishotPanelOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const {
     prompt,
@@ -232,6 +234,27 @@ export default function PromptBar(props: PromptBarProps) {
   const isCinema30 = model === "cinema-3.0";
   const isCinema25 = model === "cinema-2.5";
   const showElementsButton = isCinema35 || isCinema30;
+
+  // Close Custom Multishot panel on outside click
+  useEffect(() => {
+    if (!customMultishotPanelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setCustomMultishotPanelOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [customMultishotPanelOpen]);
+
+  // Open/close Custom Multishot panel based on shotControl state
+  useEffect(() => {
+    if (shotControl === "customMultishot") {
+      setCustomMultishotPanelOpen(true);
+    } else {
+      setCustomMultishotPanelOpen(false);
+    }
+  }, [shotControl]);
 
   return (
     <>
@@ -413,6 +436,74 @@ export default function PromptBar(props: PromptBarProps) {
         onClose={() => setAssetsPickerOpen(false)}
         defaultTab={assetsPickerTab}
       />
+
+      {/* Custom Multishot Scene Timeline Panel - Cinema Studio 3.0 only */}
+      {isCinema30 && customMultishotPanelOpen && shotControl === "customMultishot" && (
+        <div
+          ref={panelRef}
+          className="relative z-30 mx-auto mb-3 w-full max-w-[1040px] rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
+          style={{
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            {/* Scene 1 Card */}
+            <div
+              className="rounded-[20px] border border-white/10 p-4"
+              style={{
+                width: "75%",
+                height: "100px",
+                background: "rgb(7, 31, 45)",
+                flex: "0 0 auto",
+              }}
+            >
+              <div className="flex h-full flex-col justify-between">
+                <div>
+                  <p className="text-xs font-medium text-[#1ca5e2]">Scene 1</p>
+                  <p className="text-sm font-semibold text-white">Zoom Out</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-neutral-400">9s</p>
+                  <div className="h-6 w-12 rounded bg-white/5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Scene 2 Card */}
+            <div
+              className="rounded-[20px] border border-white/10 p-4"
+              style={{
+                width: "25%",
+                height: "100px",
+                background: "rgb(19, 2, 30)",
+                flex: "0 0 auto",
+              }}
+            >
+              <div className="flex h-full flex-col justify-between">
+                <div>
+                  <p className="text-xs font-medium text-[#a855f7]">Scene 2</p>
+                  <p className="text-sm font-semibold text-white">Auto</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-neutral-400">3s</p>
+                  <div className="h-6 w-12 rounded bg-white/5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Add Scene Button */}
+            <button
+              type="button"
+              onClick={() => {
+                console.log("Add scene clicked");
+              }}
+              className="flex h-[98px] w-12 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-b from-neutral-700 to-neutral-900 hover:from-neutral-600 hover:to-neutral-800 transition-colors"
+            >
+              <Plus className="size-4 text-neutral-400" />
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
