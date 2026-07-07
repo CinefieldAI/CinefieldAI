@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import {
   ChevronDown,
   Diamond,
@@ -195,6 +196,8 @@ export default function PromptBar(props: PromptBarProps) {
   const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
+  const [shotControlOpen, setShotControlOpen] = useState(false);
+  const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
 
   const {
     prompt,
@@ -281,6 +284,57 @@ export default function PromptBar(props: PromptBarProps) {
                   </button>
                 )}
               </>
+            )}
+
+            {/* Shot Control Button - Cinema Studio 3.0 only */}
+            {isCinema30 && (
+              <Popover.Root open={shotControlOpen} onOpenChange={setShotControlOpen}>
+                <Popover.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Shot Control"
+                    className={PILL}
+                  >
+                    <ChevronDown className="size-3.5 text-neutral-400" />
+                    Shot
+                    <ChevronDown className="size-3 text-neutral-500" />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="z-[100000] w-[210px] rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-2 shadow-lg backdrop-blur-[24px]"
+                  >
+                    <div className="space-y-1">
+                      <p className="px-3 py-2 text-xs font-semibold text-neutral-300">
+                        Shot Control
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShotControl("smart");
+                          setShotControlOpen(false);
+                        }}
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-[#131517] transition-colors"
+                      >
+                        Smart
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShotControl("customMultishot");
+                          setShotControlOpen(false);
+                        }}
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-[#131517] transition-colors"
+                      >
+                        Custom Multishot
+                      </button>
+                    </div>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
             )}
 
             <ModelSelector value={model} onChange={onModelChange} mode={mode} />
