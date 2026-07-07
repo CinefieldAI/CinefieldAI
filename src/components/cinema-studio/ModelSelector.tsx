@@ -20,7 +20,6 @@ import {
   getModel,
   type ModelInfo,
 } from "./cinemaStudioData";
-import SeedanceModelPanel from "./SeedanceModelPanel";
 
 interface ModelSelectorProps {
   value: string;
@@ -107,18 +106,16 @@ function VideoFlatRow({
 }: {
   model: ModelInfo;
   value: string;
-  onSelect: (id: string, anchor?: HTMLElement) => void;
+  onSelect: (id: string) => void;
 }) {
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <button
-      ref={buttonRef}
       type="button"
-      onClick={() => onSelect(model.id, buttonRef.current || undefined)}
+      onClick={() => onSelect(model.id)}
       className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ease-out focus:outline-none ${
         active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"
       }`}
@@ -282,8 +279,6 @@ export default function ModelSelector({
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [seedancePanelOpen, setSeedancePanelOpen] = useState(false);
-  const [seedanceAnchor, setSeedanceAnchor] = useState<HTMLElement | null>(null);
   const selected = getModel(value);
   const isImage = mode === "image";
   const source = isImage ? IMAGE_MODEL_CATEGORIES : MODEL_CATEGORIES;
@@ -291,16 +286,7 @@ export default function ModelSelector({
   const TriggerIcon = isImage ? LocationPin : Clapperboard;
   const triggerIconPath = typeof selected.icon === "string" ? selected.icon : null;
 
-  const select = (id: string, anchor?: HTMLElement) => {
-    if (id === "seedance-2.0" && mode === "video") {
-      setSeedanceAnchor(anchor || null);
-      setSeedancePanelOpen(true);
-      onChange(id);
-      setOpen(false);
-      setQuery("");
-      return;
-    }
-
+  const select = (id: string) => {
     onChange(id);
     setOpen(false);
     setQuery("");
@@ -412,17 +398,6 @@ export default function ModelSelector({
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
-
-      <SeedanceModelPanel
-        anchor={seedanceAnchor}
-        isOpen={seedancePanelOpen}
-        onClose={() => setSeedancePanelOpen(false)}
-        onSelect={(modelId) => {
-          onChange(modelId);
-          setSeedancePanelOpen(false);
-        }}
-        selectedModelId={value}
-      />
     </>
   );
 }

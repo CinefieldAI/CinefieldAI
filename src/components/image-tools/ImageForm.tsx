@@ -17,33 +17,33 @@ const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs
 const FEATURED_MODELS_LIST = [
   { id: "higgsfield-soul-2", label: "Higgsfield Soul 2.0", description: "Next generation ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-soul-cinema", label: "Higgsfield Soul Cinema", description: "Cinema-grade visual creation", icon: "google" },
-  { id: "gpt-image-2", label: "GPT Image 2", description: "4K images with near-perfect text rendering", badge: "New", icon: "openai" },
-  { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", badge: "Premium", icon: "seedream" },
+  { id: "gpt-image-2", label: "GPT Image 2", description: "4K images with near-perfect text rendering", icon: "openai" },
+  { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", icon: "seedream" },
   { id: "nano-banana-pro", label: "Nano Banana Pro", description: "Google's flagship generation model", icon: "google" },
-  { id: "nano-banana-2", label: "Nano Banana 2", description: "Pro quality at Flash speed", badge: "Premium", icon: "google" },
-  { id: "nano-banana-2-lite", label: "Nano Banana 2 Lite", description: "Lightweight image generation at speed", badge: "New", icon: "google" },
-  { id: "recraft-v4-1", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", badge: "New", icon: "google" },
+  { id: "nano-banana-2", label: "Nano Banana 2", description: "Pro quality at Flash speed", icon: "google" },
+  { id: "nano-banana-2-lite", label: "Nano Banana 2 Lite", description: "Lightweight image generation at speed", icon: "google" },
+  { id: "recraft-v4-1", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "google" },
 ];
 
 const ALL_MODELS_LIST = [
-  { id: "nano-banana", label: "Nano Banana", description: "Google's standard generation model", badge: "Premium", icon: "google" },
+  { id: "nano-banana", label: "Nano Banana", description: "Google's standard generation model", icon: "google" },
   { id: "higgsfield-soul", label: "Higgsfield Soul", description: "Ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-face-swap", label: "Higgsfield Face Swap", description: "Seamless face swapping", icon: "google" },
   { id: "higgsfield-character-swap", label: "Higgsfield Character Swap", description: "Seamless character swapping", icon: "google" },
-  { id: "seedream-4-0", label: "Seedream 4.0", description: "ByteDance's advanced image editing model", badge: "Premium", icon: "seedream" },
-  { id: "gpt-image-1-5", label: "GPT Image 1.5", description: "True-color precision rendering", badge: "Premium", icon: "openai" },
-  { id: "grok-imagine", label: "Grok Imagine", description: "Versatile image styles by xAI", badge: "Premium", icon: "google" },
-  { id: "recraft-v4-1-alt", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", badge: "New", icon: "google" },
-  { id: "recraft-v4-1-utility", label: "Recraft V4.1 Utility", description: "Simple scenes with flat, even lighting", badge: "New", icon: "google" },
+  { id: "seedream-4-0", label: "Seedream 4.0", description: "ByteDance's advanced image editing model", icon: "seedream" },
+  { id: "gpt-image-1-5", label: "GPT Image 1.5", description: "True-color precision rendering", icon: "openai" },
+  { id: "grok-imagine", label: "Grok Imagine", description: "Versatile image styles by xAI", icon: "google" },
+  { id: "recraft-v4-1-alt", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "google" },
+  { id: "recraft-v4-1-utility", label: "Recraft V4.1 Utility", description: "Simple scenes with flat, even lighting", icon: "google" },
   { id: "z-image", label: "Z-Image", description: "Instant lifelike portraits", icon: "google" },
-  { id: "kling-o1", label: "Kling O1", description: "Kling's Photorealistic Image Model", badge: "Premium", icon: "google" },
+  { id: "kling-o1", label: "Kling O1", description: "Kling's Photorealistic Image Model", icon: "google" },
   { id: "flux-2-pro", label: "FLUX.2 Pro", description: "Speed-optimized detail", icon: "google" },
-  { id: "flux-2-flex", label: "FLUX.2 Flex", description: "Next-gen image generation", badge: "Premium", icon: "google" },
-  { id: "flux-2-max", label: "FLUX.2 Max", description: "Ultimate precision and speed", badge: "Premium", icon: "google" },
-  { id: "flux-kontext-max", label: "Flux Kontext Max", description: "Edit with accuracy", badge: "Premium", icon: "google" },
-  { id: "gpt-image", label: "GPT Image", description: "Versatile text-to-image AI", badge: "Premium", icon: "openai" },
-  { id: "multi-reference", label: "Multi Reference", description: "Multiple edits in one shot", badge: "Premium", icon: "google" },
-  { id: "reve", label: "Reve", description: "Advanced image editing model", badge: "Premium", icon: "google" },
+  { id: "flux-2-flex", label: "FLUX.2 Flex", description: "Next-gen image generation", icon: "google" },
+  { id: "flux-2-max", label: "FLUX.2 Max", description: "Ultimate precision and speed", icon: "google" },
+  { id: "flux-kontext-max", label: "Flux Kontext Max", description: "Edit with accuracy", icon: "google" },
+  { id: "gpt-image", label: "GPT Image", description: "Versatile text-to-image AI", icon: "openai" },
+  { id: "multi-reference", label: "Multi Reference", description: "Multiple edits in one shot", icon: "google" },
+  { id: "reve", label: "Reve", description: "Advanced image editing model", icon: "google" },
   { id: "seedream-5-lite", label: "Seedream 5.0 lite", description: "Intelligent visual reasoning", icon: "seedream" },
   { id: "wan-2-2", label: "WAN 2.2", description: "High-fidelity cinematic visuals", icon: "google" },
 ];
@@ -59,8 +59,6 @@ export default function ImageForm({ isDrawOpen = false, onDrawOpen }: ImageFormP
   const modelParam = searchParams.get("model") || "nano-banana-pro";
   const config = IMAGE_MODEL_CONFIGS[modelParam];
 
-  if (!config) return null;
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLDivElement>(null);
 
@@ -70,9 +68,11 @@ export default function ImageForm({ isDrawOpen = false, onDrawOpen }: ImageFormP
   const [isAspectOpen, setIsAspectOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
-  const [quality, setQuality] = useState(config.defaultQuality);
-  const [aspectRatio, setAspectRatio] = useState(config.defaultAspectRatio);
-  const [count, setCount] = useState(config.defaultCount);
+  const [quality, setQuality] = useState(config?.defaultQuality ?? "");
+  const [aspectRatio, setAspectRatio] = useState(config?.defaultAspectRatio ?? "Auto");
+  const [count, setCount] = useState(config?.defaultCount ?? 1);
+
+  if (!config) return null;
 
   const handleModelSelect = (modelId: string) => {
     const newConfig = IMAGE_MODEL_CONFIGS[modelId];
