@@ -319,7 +319,7 @@ export default function PromptBar(props: PromptBarProps) {
                     className={PILL}
                   >
                     <ChevronDown className="size-3.5 text-neutral-400" />
-                    Shot
+                    {shotControl === "smart" ? "Smart" : "Custom Multishot"}
                     <ChevronDown className="size-3 text-neutral-500" />
                   </button>
                 </Popover.Trigger>
