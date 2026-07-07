@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
-  Clock,
+  Diamond,
   Minus,
   Monitor,
   Plus,
@@ -14,6 +14,8 @@ import {
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
+import DurationPopover from "./DurationPopover";
+import QualityPanel from "./QualityPanel";
 import { RESOLUTIONS } from "./cinemaStudioData";
 
 export interface PromptBarProps {
@@ -30,6 +32,8 @@ export interface PromptBarProps {
   onAspectRatioChange: (value: string) => void;
   resolution: string;
   onResolutionChange: (value: string) => void;
+  quality: string;
+  onQualityChange: (value: string) => void;
   duration: number;
   durations: number[];
   onDurationChange: (value: number) => void;
@@ -185,6 +189,9 @@ function PromptInput({
 }
 
 export default function PromptBar(props: PromptBarProps) {
+  const [qualityPanelOpen, setQualityPanelOpen] = useState(false);
+  const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
+
   const {
     prompt,
     onPromptChange,
@@ -195,6 +202,8 @@ export default function PromptBar(props: PromptBarProps) {
     onAspectRatioChange,
     resolution,
     onResolutionChange,
+    quality,
+    onQualityChange,
     duration,
     durations,
     onDurationChange,
@@ -212,69 +221,95 @@ export default function PromptBar(props: PromptBarProps) {
     : "Describe your location";
 
   return (
-    <div
-      className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3 opacity-100"
-      style={{
-        minHeight: 116,
-        maxHeight: 400,
-        boxShadow:
-          "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
-      }}
-    >
-      {/* Prompt input + controls */}
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-        <PromptInput
-          value={prompt}
-          onChange={onPromptChange}
-          placeholder={placeholder}
-        />
-
-        <div className="flex flex-wrap items-center gap-1">
-          <ModelSelector value={model} onChange={onModelChange} mode={mode} />
-
-          <AspectRatioDropdown value={aspectRatio} onChange={onAspectRatioChange} />
-          <PillDropdown
-            label="Resolution"
-            value={resolution}
-            options={RESOLUTIONS}
-            onChange={onResolutionChange}
-            icon={Monitor}
+    <>
+      <div
+        className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3 opacity-100"
+        style={{
+          minHeight: 116,
+          maxHeight: 400,
+          boxShadow:
+            "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
+        }}
+      >
+        {/* Prompt input + controls */}
+        <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+          <PromptInput
+            value={prompt}
+            onChange={onPromptChange}
+            placeholder={placeholder}
           />
-          <BatchStepper value={batch} onChange={onBatchChange} />
 
-          {isVideo && (
-            <>
-              <button
-                type="button"
-                onClick={() => onSoundChange(!sound)}
-                aria-label="Toggle sound"
-                aria-pressed={sound}
-                className={`${PILL} ${
-                  sound ? "text-[#00e5ff]" : "text-neutral-400"
-                }`}
-              >
-                {sound ? (
-                  <Volume2 className="size-3.5" />
-                ) : (
-                  <VolumeX className="size-3.5" />
-                )}
-                {sound ? "On" : "Off"}
-              </button>
+          <div className="flex flex-wrap items-center gap-1">
+            <ModelSelector value={model} onChange={onModelChange} mode={mode} />
 
-              <PillDropdown
-                label="Duration"
-                value={`${duration}s`}
-                options={durations.map((d) => `${d}s`)}
-                onChange={(v) => onDurationChange(Number(v.replace("s", "")))}
-                icon={Clock}
-              />
-            </>
-          )}
+            <AspectRatioDropdown value={aspectRatio} onChange={onAspectRatioChange} />
+
+            {/* Quality Button */}
+            <button
+              ref={(el) => el && !qualityAnchor && setQualityAnchor(el)}
+              type="button"
+              onClick={(e) => {
+                setQualityAnchor(e.currentTarget);
+                setQualityPanelOpen(true);
+              }}
+              aria-label="Quality"
+              className={PILL}
+            >
+              <Diamond className="size-3.5 text-neutral-400" />
+              {quality}
+              <ChevronDown className="size-3 text-neutral-500" />
+            </button>
+
+            <PillDropdown
+              label="Resolution"
+              value={resolution}
+              options={RESOLUTIONS}
+              onChange={onResolutionChange}
+              icon={Monitor}
+            />
+            <BatchStepper value={batch} onChange={onBatchChange} />
+
+            {isVideo && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSoundChange(!sound)}
+                  aria-label="Toggle sound"
+                  aria-pressed={sound}
+                  className={`${PILL} ${
+                    sound ? "text-[#00e5ff]" : "text-neutral-400"
+                  }`}
+                >
+                  {sound ? (
+                    <Volume2 className="size-3.5" />
+                  ) : (
+                    <VolumeX className="size-3.5" />
+                  )}
+                  {sound ? "On" : "Off"}
+                </button>
+
+                <DurationPopover
+                  value={duration}
+                  durations={durations}
+                  onChange={onDurationChange}
+                />
+              </>
+            )}
+          </div>
         </div>
+
+        {/* C — Generate */}
+        <GenerateButton creditCost={creditCost} onGenerate={onGenerate} mode={mode} />
       </div>
 
-      {/* C — Generate */}
-      <GenerateButton creditCost={creditCost} onGenerate={onGenerate} mode={mode} />
-    </div>
+      <QualityPanel
+        anchor={qualityAnchor}
+        isOpen={qualityPanelOpen}
+        onClose={() => setQualityPanelOpen(false)}
+        onSelect={onQualityChange}
+        selectedQuality={quality}
+        availableQualities={["720p", "1080p", "4K"]}
+      />
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import Sidebar from "./Sidebar";
 import HeroBanner from "./HeroBanner";
@@ -10,24 +11,36 @@ import PromptBar from "./PromptBar";
 import GenrePanel from "./GenrePanel";
 import StyleModal from "./StyleModal";
 import CameraSettings from "./CameraSettings";
+import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
 export default function CinemaStudioWorkspace() {
+  const searchParams = useSearchParams();
+  const promptBarWrapperRef = useRef<HTMLDivElement>(null);
+
   // Core settings
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"image" | "video">("video");
-  const [model, setModel] = useState("cinema-3.5");
+  const [model, setModel] = useState(() => {
+    return searchParams.get("model") || "cinema-3.5";
+  });
   const [genre, setGenre] = useState<string | undefined>();
   const [style, setStyle] = useState<NonNullable<CinemaStudioSettings["style"]>>({});
   const [camera, setCamera] = useState<NonNullable<CinemaStudioSettings["camera"]>>({});
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState("1080p");
+  const [quality, setQuality] = useState("720p");
   const [duration, setDuration] = useState(8);
   const [batch, setBatch] = useState("3/4");
   const [sound, setSound] = useState(true);
+
+  // Cinema Studio 3.0 Director's Panel settings
+  const [cinema3Genre, setCinema3Genre] = useState("General");
+  const [cinema3CameraMovement, setCinema3CameraMovement] = useState("Auto");
+  const [cinema3SpeedRamp, setCinema3SpeedRamp] = useState("Auto");
 
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
@@ -83,6 +96,7 @@ export default function CinemaStudioWorkspace() {
 
   // Genre/Style/Camera controls show only for Cinema Studio 3.5.
   const isCinema35 = selectedModel.id === "cinema-3.5";
+  const isCinema30 = selectedModel.id === "cinema-3.0";
   const isCinema = selectedModel.id.startsWith("cinema-");
 
   // Navbar requires handlers; on /generate these are inert (links still work).
@@ -136,29 +150,45 @@ export default function CinemaStudioWorkspace() {
           )}
         </div>
 
-        {/* Mode toggle (left sidebar) + prompt bar */}
-        <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end justify-center gap-1">
-          <ModeToggle mode={mode} onChange={handleModeChange} />
-          <PromptBar
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          model={model}
-          onModelChange={handleModelChange}
-          mode={mode}
-          aspectRatio={aspectRatio}
-          onAspectRatioChange={setAspectRatio}
-          resolution={resolution}
-          onResolutionChange={setResolution}
-          duration={duration}
-          durations={selectedModel.durations}
-          onDurationChange={setDuration}
-          batch={batch}
-          onBatchChange={setBatch}
-          sound={sound}
-          onSoundChange={setSound}
-          creditCost={creditCost}
-          onGenerate={noop}
-          />
+        {/* Mode toggle (left sidebar) + prompt bar + Cinema 3.0 Panel */}
+        <div className="relative w-full">
+          <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end justify-center gap-1" ref={promptBarWrapperRef}>
+            <ModeToggle mode={mode} onChange={handleModeChange} />
+            <PromptBar
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              model={model}
+              onModelChange={handleModelChange}
+              mode={mode}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={setAspectRatio}
+              resolution={resolution}
+              onResolutionChange={setResolution}
+              quality={quality}
+              onQualityChange={setQuality}
+              duration={duration}
+              durations={selectedModel.durations}
+              onDurationChange={setDuration}
+              batch={batch}
+              onBatchChange={setBatch}
+              sound={sound}
+              onSoundChange={setSound}
+              creditCost={creditCost}
+              onGenerate={noop}
+            />
+          </div>
+
+          {/* Cinema Studio 3.0 Director's Panel - positioned above prompt bar */}
+          {isCinema30 && (
+            <Cinema3DirectorsPanel
+              selectedGenre={cinema3Genre}
+              onGenreSelect={setCinema3Genre}
+              selectedCameraMovement={cinema3CameraMovement}
+              onCameraMovementSelect={setCinema3CameraMovement}
+              selectedSpeedRamp={cinema3SpeedRamp}
+              onSpeedRampSelect={setCinema3SpeedRamp}
+            />
+          )}
         </div>
       </main>
 
@@ -196,6 +226,7 @@ export default function CinemaStudioWorkspace() {
           </DockedPanelContainer>
         </>
       )}
+
     </div>
   );
 }

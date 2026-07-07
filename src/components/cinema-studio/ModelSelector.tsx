@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import * as Popover from "@radix-ui/react-popover";
 import {
   Check,
   ChevronDown,
@@ -19,6 +20,7 @@ import {
   getModel,
   type ModelInfo,
 } from "./cinemaStudioData";
+import SeedanceModelPanel from "./SeedanceModelPanel";
 
 interface ModelSelectorProps {
   value: string;
@@ -105,15 +107,18 @@ function VideoFlatRow({
 }: {
   model: ModelInfo;
   value: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, anchor?: HTMLElement) => void;
 }) {
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
   return (
     <button
+      ref={buttonRef}
       type="button"
-      onClick={() => onSelect(model.id)}
+      onClick={() => onSelect(model.id, buttonRef.current || undefined)}
       className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ease-out focus:outline-none ${
         active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"
       }`}
@@ -207,7 +212,7 @@ function VideoParentRow({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-white">{model.name}</span>
-            </span>
+          </span>
           {model.description && (
             <span className="mt-0.5 block truncate text-xs text-gray-400">
               {model.description}
@@ -277,7 +282,8 @@ export default function ModelSelector({
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const [seedancePanelOpen, setSeedancePanelOpen] = useState(false);
+  const [seedanceAnchor, setSeedanceAnchor] = useState<HTMLElement | null>(null);
   const selected = getModel(value);
   const isImage = mode === "image";
   const source = isImage ? IMAGE_MODEL_CATEGORIES : MODEL_CATEGORIES;
@@ -285,27 +291,16 @@ export default function ModelSelector({
   const TriggerIcon = isImage ? LocationPin : Clapperboard;
   const triggerIconPath = typeof selected.icon === "string" ? selected.icon : null;
 
-  // Click-outside to close
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        // Keep open when interacting with a portaled flyout.
-        const t = e.target as HTMLElement;
-        if (t.closest("[data-model-flyout]")) return;
-        setOpen(false);
-      }
-    };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [open]);
+  const select = (id: string, anchor?: HTMLElement) => {
+    if (id === "seedance-2.0" && mode === "video") {
+      setSeedanceAnchor(anchor || null);
+      setSeedancePanelOpen(true);
+      onChange(id);
+      setOpen(false);
+      setQuery("");
+      return;
+    }
 
-  const select = (id: string) => {
     onChange(id);
     setOpen(false);
     setQuery("");
@@ -325,80 +320,109 @@ export default function ModelSelector({
   }, [query, source]);
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
-      >
-        {triggerIconPath ? (
-          <img src={triggerIconPath} alt="" className="h-5 w-5 object-cover" />
-        ) : (
-          <TriggerIcon className="h-5 w-5" style={{ color: accent }} />
-        )}
-        <span className="max-w-[140px] truncate" style={{ color: accent }}>
-          {selected.name}
-        </span>
-        <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
-      </button>
-
-      {open && (
-        <div
-          className={`absolute bottom-full left-0 z-[100] mb-2 max-h-[500px] overflow-y-auto ${FROSTED} ${
-            isImage ? "w-[400px]" : "w-[320px]"
-          }`}
-        >
-          {/* Search */}
-          <div className="sticky top-0 z-10 flex h-[41px] items-center gap-2 border-b border-white/10 bg-[rgba(24,26,30,0.92)] px-3 backdrop-blur-[24px]">
-            <Search className="size-4 shrink-0 text-gray-400" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search..."
-              aria-label="Search models"
-              className="w-full bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-none"
-            />
-          </div>
-
-          {/* Categories */}
-          <div className="p-2">
-            {categories.length === 0 && (
-              <p className="px-2 py-6 text-center text-xs text-neutral-500">
-                No models match “{query}”.
-              </p>
+    <>
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          >
+            {triggerIconPath ? (
+              <img src={triggerIconPath} alt="" className="h-5 w-5 object-cover" />
+            ) : (
+              <TriggerIcon className="h-5 w-5" style={{ color: accent }} />
             )}
-            {categories.map((cat) => (
-              <div key={cat.label} className="mb-2">
-                <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                  {isImage || cat.label !== "All models" ? (
-                    <Sparkles className="size-3" />
-                  ) : (
-                    <Film className="size-3" />
-                  )}
-                  {cat.label}
+            <span className="max-w-[140px] truncate" style={{ color: accent }}>
+              {selected.name}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            side="top"
+            align="start"
+            sideOffset={8}
+            className={`z-[100] max-h-[500px] overflow-y-auto ${FROSTED} ${
+              isImage ? "w-[400px]" : "w-[320px]"
+            }`}
+          >
+            <div className="sticky top-0 z-10 flex h-[41px] items-center gap-2 border-b border-white/10 bg-[rgba(24,26,30,0.92)] px-3 backdrop-blur-[24px]">
+              <Search className="size-4 shrink-0 text-gray-400" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search..."
+                aria-label="Search models"
+                className="w-full bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="p-2">
+              {categories.length === 0 && (
+                <p className="px-2 py-6 text-center text-xs text-neutral-500">
+                  No models match "{query}".
                 </p>
-                <div className="space-y-1">
-                  {cat.models.map((m, i) => {
-                    const key = `${m.id}-${i}`;
-                    if (isImage)
-                      return (
-                        <ImageRow key={key} model={m} value={value} onSelect={select} />
-                      );
-                    return m.submodels?.length ? (
-                      <VideoParentRow key={key} model={m} value={value} onSelect={select} />
+              )}
+              {categories.map((cat) => (
+                <div key={cat.label} className="mb-2">
+                  <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    {isImage || cat.label !== "All models" ? (
+                      <Sparkles className="size-3" />
                     ) : (
-                      <VideoFlatRow key={key} model={m} value={value} onSelect={select} />
-                    );
-                  })}
+                      <Film className="size-3" />
+                    )}
+                    {cat.label}
+                  </p>
+                  <div className="space-y-1">
+                    {cat.models.map((m, i) => {
+                      const key = `${m.id}-${i}`;
+                      if (isImage)
+                        return (
+                          <ImageRow
+                            key={key}
+                            model={m}
+                            value={value}
+                            onSelect={(id) => select(id)}
+                          />
+                        );
+                      return m.submodels?.length ? (
+                        <VideoParentRow
+                          key={key}
+                          model={m}
+                          value={value}
+                          onSelect={(id) => select(id)}
+                        />
+                      ) : (
+                        <VideoFlatRow
+                          key={key}
+                          model={m}
+                          value={value}
+                          onSelect={select}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+              ))}
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+
+      <SeedanceModelPanel
+        anchor={seedanceAnchor}
+        isOpen={seedancePanelOpen}
+        onClose={() => setSeedancePanelOpen(false)}
+        onSelect={(modelId) => {
+          onChange(modelId);
+          setSeedancePanelOpen(false);
+        }}
+        selectedModelId={value}
+      />
+    </>
   );
 }
