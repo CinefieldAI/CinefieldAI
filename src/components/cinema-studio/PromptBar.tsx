@@ -335,34 +335,67 @@ export default function PromptBar(props: PromptBarProps) {
                     side="top"
                     align="start"
                     sideOffset={8}
-                    className="z-[100000] w-[210px] rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-2 shadow-lg backdrop-blur-[24px]"
+                    className="outline-none z-[100000] rounded-2xl shadow-[0_4px_4px_rgba(0,0,0,0.12)] border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] backdrop-blur data-[state=closed]:animate-fade-out data-[side=bottom]:data-[state=open]:animate-popover-in-down data-[side=top]:data-[state=open]:animate-popover-in-up data-[side=right]:data-[state=open]:animate-popover-in-right data-[side=left]:data-[state=open]:animate-popover-in-left flex flex-col gap-1 p-2 w-[210px]"
                   >
-                    <div className="space-y-1">
-                      <p className="px-3 py-2 text-xs font-semibold text-neutral-300">
-                        Shot Control
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShotControl("smart");
-                          setShotControlOpen(false);
-                        }}
-                        className="w-full rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-[#131517] transition-colors"
-                      >
-                        Smart
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShotControl("customMultishot");
-                          setIsCustomMultishotOpen((open) => !open);
-                          setShotControlOpen(false);
-                        }}
-                        className="w-full rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-[#131517] transition-colors"
-                      >
-                        Custom Multishot
-                      </button>
-                    </div>
+                    <span className="px-3 pt-1 pb-0.5 text-xs font-medium text-font-secondary">
+                      Shot Control
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShotControl("smart");
+                        setIsCustomMultishotOpen(false);
+                        setShotControlOpen(false);
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${
+                        shotControl === "smart" ? "bg-[#131517]" : ""
+                      }`}
+                    >
+                      <span className="font-medium text-sm text-white">Smart</span>
+                      {shotControl === "smart" && (
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          className="size-5 text-[#d1fe17]"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            clipRule="evenodd"
+                            d="M14.7838 5.98556C15.0449 6.21134 15.0735 6.60602 14.8477 6.86712L8.72275 13.9505C8.60875 14.0823 8.44491 14.1605 8.27078 14.1663C8.09661 14.1721 7.92794 14.1049 7.80545 13.981L5.18045 11.3247C4.93782 11.0792 4.94016 10.6835 5.18568 10.4409C5.4312 10.1982 5.82691 10.2006 6.06955 10.4461L8.21939 12.6215L13.9022 6.04952C14.128 5.78842 14.5227 5.75979 14.7838 5.98556Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShotControl("customMultishot");
+                        setIsCustomMultishotOpen(true);
+                        setShotControlOpen(false);
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${
+                        shotControl === "customMultishot" ? "bg-[#131517]" : ""
+                      }`}
+                    >
+                      <span className="font-medium text-sm text-white">Custom Multishot</span>
+                      {shotControl === "customMultishot" && (
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          className="size-5 text-[#d1fe17]"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            clipRule="evenodd"
+                            d="M14.7838 5.98556C15.0449 6.21134 15.0735 6.60602 14.8477 6.86712L8.72275 13.9505C8.60875 14.0823 8.44491 14.1605 8.27078 14.1663C8.09661 14.1721 7.92794 14.1049 7.80545 13.981L5.18045 11.3247C4.93782 11.0792 4.94016 10.6835 5.18568 10.4409C5.4312 10.1982 5.82691 10.2006 6.06955 10.4461L8.21939 12.6215L13.9022 6.04952C14.128 5.78842 14.5227 5.75979 14.7838 5.98556Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      )}
+                    </button>
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
@@ -447,77 +480,200 @@ export default function PromptBar(props: PromptBarProps) {
         defaultTab={assetsPickerTab}
       />
 
-      {/* Custom Multishot Scene Timeline Panel - Cinema Studio 3.0 only */}
+      {/* Custom Multishot Scene Strip - Cinema Studio 3.0 only */}
       {isCinema30 && isCustomMultishotOpen && shotControl === "customMultishot" && (
         <div
           ref={panelRef}
-          className="fixed rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
+          className="absolute w-full -top-1 -translate-y-full z-30"
           style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "calc(100% - 152px)",
-            maxWidth: "1040px",
-            zIndex: 1200,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            filter: "drop-shadow(rgba(0, 0, 0, 0.4) 0px 8px 24px)",
+            left: "76px",
+            width: "calc(100% - 76px)",
+            opacity: 1,
+            display: "block",
+            transform: "none",
           }}
         >
-          <div className="flex items-center gap-3">
-            {/* Scene 1 Card */}
+          <div className="relative w-full">
             <div
-              className="rounded-[20px] border border-white/10 p-4"
-              style={{
-                width: "75%",
-                height: "100px",
-                background: "rgb(7, 31, 45)",
-                flex: "0 0 auto",
-              }}
+              className="flex items-center gap-1 h-full w-[calc(100%-68px)]"
+              style={{ overflowAnchor: "none" }}
             >
-              <div className="flex h-full flex-col justify-between">
-                <div>
-                  <p className="text-xs font-medium text-[#1ca5e2]">Scene 1</p>
-                  <p className="text-sm font-semibold text-white">Zoom Out</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-neutral-400">9s</p>
-                  <div className="h-6 w-12 rounded bg-white/5" />
+              {/* Scene 1 */}
+              <div
+                className="touch-none shrink-0"
+                style={{ width: "33.3333%", zIndex: "unset", transform: "none" }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="group relative flex items-center h-[100px] rounded-[20px] select-none cursor-pointer transition-all duration-200 border border-transparent"
+                  style={{
+                    backgroundColor: "rgb(7, 31, 45)",
+                    boxShadow: "rgba(0, 0, 0, 0.25) 0px 4px 4px 0px",
+                  }}
+                >
+                  <div className="group/trim flex items-center h-full pl-1.5 pr-0.5 py-3 rounded-l-xl cursor-col-resize shrink-0">
+                    <div className="w-1 h-6 rounded-full bg-white/[0.06] group-hover/trim:bg-white/20 transition-colors" />
+                  </div>
+                  <div className="flex-1 h-full min-w-0 p-1 pl-0">
+                    <div className="relative flex flex-col justify-between h-full bg-white/[0.04] rounded-xl p-1.5">
+                      <div className="flex items-start justify-between w-full">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span
+                            className="text-xxs font-semibold leading-3.5 truncate"
+                            style={{ color: "rgb(28, 165, 226)" }}
+                          >
+                            Scene 1
+                          </span>
+                          <span className="text-md font-semibold truncate leading-6" style={{ color: "white" }}>
+                            Auto
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: "36px" }}>
+                          <svg
+                            viewBox="0 0 100 36"
+                            className="absolute inset-0 w-full h-full"
+                            preserveAspectRatio="none"
+                          >
+                            <path
+                              d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z"
+                              fill="#1ca5e21A"
+                              stroke="none"
+                              style={{ transition: "none" }}
+                            />
+                            <path
+                              d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677"
+                              fill="none"
+                              stroke="#1ca5e2"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              vectorEffect="non-scaling-stroke"
+                              style={{ transition: "none" }}
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                      <div
+                        className="flex items-center justify-center px-1 py-0.5 rounded-md shrink-0 w-fit z-10"
+                        style={{ border: "1px solid rgba(28, 165, 226, 0.2)" }}
+                      >
+                        <span className="text-xxs font-semibold leading-3.5" style={{ color: "rgb(28, 165, 226)" }}>
+                          4s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="group/trim flex items-center h-full pl-0.5 pr-1.5 py-3 rounded-r-xl cursor-col-resize shrink-0 opacity-80">
+                    <div className="w-1 h-6 rounded-full bg-white/[0.06] group-hover/trim:bg-white/20 transition-colors" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Scene 2 Card */}
-            <div
-              className="rounded-[20px] border border-white/10 p-4"
-              style={{
-                width: "25%",
-                height: "100px",
-                background: "rgb(19, 2, 30)",
-                flex: "0 0 auto",
-              }}
-            >
-              <div className="flex h-full flex-col justify-between">
-                <div>
-                  <p className="text-xs font-medium text-[#a855f7]">Scene 2</p>
-                  <p className="text-sm font-semibold text-white">Auto</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-neutral-400">3s</p>
-                  <div className="h-6 w-12 rounded bg-white/5" />
+              {/* Scene 2 */}
+              <div
+                className="touch-none shrink-0"
+                style={{ width: "25%", zIndex: "unset", transform: "none" }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="group relative flex items-center h-[100px] rounded-[20px] select-none cursor-pointer transition-all duration-200 border border-transparent"
+                  style={{
+                    backgroundColor: "rgb(19, 2, 30)",
+                    boxShadow: "rgba(0, 0, 0, 0.25) 0px 4px 4px 0px",
+                  }}
+                >
+                  <div className="group/trim flex items-center h-full pl-1.5 pr-0.5 py-3 rounded-l-xl cursor-col-resize shrink-0">
+                    <div className="w-1 h-6 rounded-full bg-white/[0.06] group-hover/trim:bg-white/20 transition-colors" />
+                  </div>
+                  <div className="flex-1 h-full min-w-0 p-1 pl-0">
+                    <div className="relative flex flex-col justify-between h-full bg-white/[0.04] rounded-xl p-1.5">
+                      <div className="flex items-start justify-between w-full">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span
+                            className="text-xxs font-semibold leading-3.5 truncate"
+                            style={{ color: "rgb(168, 85, 247)" }}
+                          >
+                            Scene 2
+                          </span>
+                          <span className="text-md font-semibold truncate leading-6" style={{ color: "white" }}>
+                            Auto
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: "36px" }}>
+                          <svg
+                            viewBox="0 0 100 36"
+                            className="absolute inset-0 w-full h-full"
+                            preserveAspectRatio="none"
+                          >
+                            <path
+                              d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z"
+                              fill="#a855f71A"
+                              stroke="none"
+                              style={{ transition: "none" }}
+                            />
+                            <path
+                              d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677"
+                              fill="none"
+                              stroke="#a855f7"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              vectorEffect="non-scaling-stroke"
+                              style={{ transition: "none" }}
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                      <div
+                        className="flex items-center justify-center px-1 py-0.5 rounded-md shrink-0 w-fit z-10"
+                        style={{ border: "1px solid rgba(168, 85, 247, 0.2)" }}
+                      >
+                        <span className="text-xxs font-semibold leading-3.5" style={{ color: "rgb(168, 85, 247)" }}>
+                          3s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="group/trim flex items-center h-full pl-0.5 pr-1.5 py-3 rounded-r-xl cursor-col-resize shrink-0 opacity-80">
+                    <div className="w-1 h-6 rounded-full bg-white/[0.06] group-hover/trim:bg-white/20 transition-colors" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Add Scene Button */}
-            <button
-              type="button"
-              onClick={() => {
-                console.log("Add scene clicked");
-              }}
-              className="flex h-[98px] w-12 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-b from-neutral-700 to-neutral-900 hover:from-neutral-600 hover:to-neutral-800 transition-colors"
-            >
-              <Plus className="size-4 text-neutral-400" />
-            </button>
+              {/* Add Scene Button */}
+              <button
+                type="button"
+                className="w-12 h-[98px] flex items-center justify-center shrink-0 rounded-2xl border border-separator-card"
+                style={{
+                  background: "linear-gradient(162deg, rgba(36, 43, 50, 0.12) 27.93%, rgba(219, 219, 219, 0.12) 106.42%), rgb(15, 17, 19)",
+                }}
+              >
+                <svg
+                  className="size-4 text-font-secondary"
+                  aria-hidden="true"
+                  width="24px"
+                  height="24px"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 3.75V12M12 12V20.25M12 12H3.75M12 12H20.25"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       )}
