@@ -11,7 +11,6 @@ import {
   Ratio,
   Volume2,
   VolumeX,
-  Sparkles,
 } from "lucide-react";
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
@@ -288,8 +287,12 @@ export default function PromptBar(props: PromptBarProps) {
 
                   <button
                     type="button"
-                    aria-label="Reference element"
-                    title="Reference element"
+                    onClick={() => {
+                      setAssetsPickerTab("elements");
+                      setAssetsPickerOpen(true);
+                    }}
+                    aria-label="My elements"
+                    title="My elements"
                     className="flex h-7 min-h-7 min-w-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent p-0 text-font-primary shadow-none transition-colors hover:bg-neutral-primary-reverted-10 active:bg-neutral-primary-reverted-20"
                   >
                     <svg
@@ -310,21 +313,6 @@ export default function PromptBar(props: PromptBarProps) {
                     </svg>
                   </button>
                 </div>
-
-                {showElementsButton && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAssetsPickerTab("elements");
-                      setAssetsPickerOpen(true);
-                    }}
-                    aria-label="My elements"
-                    title="My elements"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
-                  >
-                    <Sparkles className="size-4" />
-                  </button>
-                )}
               </>
             )}
 
