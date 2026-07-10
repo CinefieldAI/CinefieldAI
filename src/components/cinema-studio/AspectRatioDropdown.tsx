@@ -10,6 +10,7 @@ interface AspectRatioDropdownProps {
   onChange: (value: string) => void;
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
+  portalContainer?: HTMLElement | null;
 }
 
 /** Small rectangle preview shaped to the option's aspect ratio. */
@@ -35,6 +36,7 @@ export default function AspectRatioDropdown({
   onChange,
   onOpenChange,
   isOpen,
+  portalContainer,
 }: AspectRatioDropdownProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -59,12 +61,12 @@ export default function AspectRatioDropdown({
           <ChevronDown className="size-3 text-neutral-400" />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer || document.body}>
         <Popover.Content
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px]"
+          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px] pointer-events-auto"
         >
           {ASPECT_RATIO_OPTIONS.map((opt) => {
             const selected = opt.value === value;

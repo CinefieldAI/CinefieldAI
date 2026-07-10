@@ -11,6 +11,7 @@ interface ResolutionPopoverProps {
   onChange: (value: string) => void;
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
+  portalContainer?: HTMLElement | null;
 }
 
 export default function ResolutionPopover({
@@ -18,6 +19,7 @@ export default function ResolutionPopover({
   onChange,
   onOpenChange,
   isOpen,
+  portalContainer,
 }: ResolutionPopoverProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -42,12 +44,12 @@ export default function ResolutionPopover({
           <ChevronDown className="size-3 text-neutral-400" />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer || document.body}>
         <Popover.Content
           side="top"
           align="center"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[180px]"
+          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[180px] pointer-events-auto"
         >
           <div className="px-3 py-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">

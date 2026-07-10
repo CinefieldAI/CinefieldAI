@@ -205,6 +205,24 @@ export default function PromptBar(props: PromptBarProps) {
   >(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const portalRootRef = useRef<HTMLDivElement>(null);
+
+  // Create/maintain shared portal root for all prompt popovers
+  useEffect(() => {
+    let root = document.getElementById("prompt-popover-root") as HTMLDivElement | null;
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "prompt-popover-root";
+      root.style.position = "fixed";
+      root.style.top = "0";
+      root.style.left = "0";
+      root.style.zIndex = "100000";
+      root.style.pointerEvents = "none";
+      document.body.appendChild(root);
+    }
+    portalRootRef.current = root;
+    root.style.pointerEvents = "none";
+  }, []);
 
   const {
     prompt,
@@ -362,12 +380,12 @@ export default function PromptBar(props: PromptBarProps) {
                     <ChevronDown className="size-3 text-neutral-500" />
                   </button>
                 </Popover.Trigger>
-                <Popover.Portal>
+                <Popover.Portal container={portalRootRef.current || document.body}>
                   <Popover.Content
                     side="top"
                     align="start"
                     sideOffset={8}
-                    className="outline-none z-[100000] rounded-2xl shadow-[0_4px_4px_rgba(0,0,0,0.12)] border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] backdrop-blur data-[state=closed]:animate-fade-out data-[side=bottom]:data-[state=open]:animate-popover-in-down data-[side=top]:data-[state=open]:animate-popover-in-up data-[side=right]:data-[state=open]:animate-popover-in-right data-[side=left]:data-[state=open]:animate-popover-in-left flex flex-col gap-1 p-2 w-[210px]"
+                    className="outline-none z-[100000] rounded-2xl shadow-[0_4px_4px_rgba(0,0,0,0.12)] border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] backdrop-blur data-[state=closed]:animate-fade-out data-[side=bottom]:data-[state=open]:animate-popover-in-down data-[side=top]:data-[state=open]:animate-popover-in-up data-[side=right]:data-[state=open]:animate-popover-in-right data-[side=left]:data-[state=open]:animate-popover-in-left flex flex-col gap-1 p-2 w-[210px] pointer-events-auto"
                   >
                     <span className="px-3 pt-1 pb-0.5 text-xs font-medium text-font-secondary">
                       Shot Control
@@ -433,12 +451,13 @@ export default function PromptBar(props: PromptBarProps) {
               </Popover.Root>
             )}
 
-            <ModelSelector value={model} onChange={onModelChange} mode={mode} />
+            <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRootRef.current} />
 
             <AspectRatioDropdown
               value={aspectRatio}
               onChange={onAspectRatioChange}
               isOpen={activePromptPopover === "aspectRatio"}
+              portalContainer={portalRootRef.current}
               onOpenChange={(open) => {
                 if (open) setActivePromptPopover("aspectRatio");
                 else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
@@ -467,6 +486,7 @@ export default function PromptBar(props: PromptBarProps) {
               value={resolution}
               onChange={onResolutionChange}
               isOpen={activePromptPopover === "resolution"}
+              portalContainer={portalRootRef.current}
               onOpenChange={(open) => {
                 if (open) setActivePromptPopover("resolution");
                 else if (activePromptPopover === "resolution") setActivePromptPopover(null);
@@ -497,6 +517,7 @@ export default function PromptBar(props: PromptBarProps) {
                   value={duration}
                   durations={durations}
                   onChange={onDurationChange}
+                  portalContainer={portalRootRef.current}
                 />
               </>
             )}

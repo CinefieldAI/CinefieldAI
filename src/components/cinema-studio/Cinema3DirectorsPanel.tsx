@@ -212,7 +212,7 @@ export default function Cinema3DirectorsPanel({
   return (
     <div
       ref={panelRef}
-      className="absolute left-1/2 -translate-x-1/2 z-[999999] w-[min(876px,calc(100vw-32px))] flex flex-col gap-1"
+      className="absolute left-1/2 -translate-x-1/2 z-50 w-[min(876px,calc(100vw-32px))] flex flex-col gap-1"
       style={{ bottom: "calc(100% + 12px)" }}
     >
       {/* Top Control Strip */}

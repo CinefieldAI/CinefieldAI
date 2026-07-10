@@ -25,6 +25,7 @@ interface ModelSelectorProps {
   value: string;
   onChange: (id: string) => void;
   mode?: "image" | "video";
+  portalContainer?: HTMLElement | null;
 }
 
 /** Location-pin icon (exact spec paths) for the image-mode model selector. */
@@ -276,6 +277,7 @@ export default function ModelSelector({
   value,
   onChange,
   mode = "video",
+  portalContainer,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -326,12 +328,12 @@ export default function ModelSelector({
             <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
           </button>
         </Popover.Trigger>
-        <Popover.Portal>
+        <Popover.Portal container={portalContainer || document.body}>
           <Popover.Content
             side="top"
             align="start"
             sideOffset={8}
-            className={`z-[100000] max-h-[500px] overflow-y-auto ${FROSTED} ${
+            className={`z-[100000] max-h-[500px] overflow-y-auto pointer-events-auto ${FROSTED} ${
               isImage ? "w-[400px]" : "w-[320px]"
             }`}
           >
