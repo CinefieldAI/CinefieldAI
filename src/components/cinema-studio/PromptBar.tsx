@@ -198,7 +198,7 @@ export default function PromptBar(props: PromptBarProps) {
   const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
   const [shotControlOpen, setShotControlOpen] = useState(false);
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
-  const [customMultishotPanelOpen, setCustomMultishotPanelOpen] = useState(false);
+  const [isCustomMultishotOpen, setIsCustomMultishotOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -237,24 +237,15 @@ export default function PromptBar(props: PromptBarProps) {
 
   // Close Custom Multishot panel on outside click
   useEffect(() => {
-    if (!customMultishotPanelOpen) return;
+    if (!isCustomMultishotOpen) return;
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setCustomMultishotPanelOpen(false);
+        setIsCustomMultishotOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [customMultishotPanelOpen]);
-
-  // Open/close Custom Multishot panel based on shotControl state
-  useEffect(() => {
-    if (shotControl === "customMultishot") {
-      setCustomMultishotPanelOpen(true);
-    } else {
-      setCustomMultishotPanelOpen(false);
-    }
-  }, [shotControl]);
+  }, [isCustomMultishotOpen]);
 
   return (
     <>
@@ -279,18 +270,46 @@ export default function PromptBar(props: PromptBarProps) {
             {/* Assets Picker Buttons - Cinema Studio 3.5, 3.0, and 2.5 */}
             {(isCinema35 || isCinema30 || isCinema25) && (
               <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  aria-label="Add assets"
-                  title="Add assets"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
-                >
-                  <Plus className="size-4" />
-                </button>
+                <div className="flex items-center gap-0 rounded-lg bg-card">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssetsPickerTab("uploads");
+                      setAssetsPickerOpen(true);
+                    }}
+                    aria-label="Add assets"
+                    title="Add assets"
+                    className="flex h-7 w-7 items-center justify-center rounded-none text-neutral-400 hover:bg-white/10 transition-colors"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+
+                  <div className="h-4 w-px bg-white/20" />
+
+                  <button
+                    type="button"
+                    aria-label="Reference element"
+                    title="Reference element"
+                    className="flex h-7 min-h-7 min-w-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent p-0 text-font-primary shadow-none transition-colors hover:bg-neutral-primary-reverted-10 active:bg-neutral-primary-reverted-20"
+                  >
+                    <svg
+                      className="size-4 text-icon-primary"
+                      aria-hidden="true"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M16.8684 19.8667C15.4543 20.7437 13.7863 21.25 12 21.25C6.89137 21.25 2.75 17.1086 2.75 12C2.75 6.89137 6.89137 2.75 12 2.75C17.1086 2.75 21.25 6.89137 21.25 12C21.25 13.9797 20.2662 16.0242 17.9715 15.8156C16.0837 15.644 14.7249 13.9258 14.993 12.0492L15.5226 8.40278M14.9375 12.4805C14.63 14.6681 12.8291 16.2235 10.9149 15.9544C9.00068 15.6854 7.69817 13.6939 8.00562 11.5063C8.31308 9.31862 10.1141 7.76327 12.0283 8.03229C13.9424 8.30131 15.245 10.2928 14.9375 12.4805Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
 
                 {showElementsButton && (
                   <button
@@ -348,6 +367,7 @@ export default function PromptBar(props: PromptBarProps) {
                         type="button"
                         onClick={() => {
                           setShotControl("customMultishot");
+                          setIsCustomMultishotOpen((open) => !open);
                           setShotControlOpen(false);
                         }}
                         className="w-full rounded-xl px-3 py-2 text-left text-sm text-white hover:bg-[#131517] transition-colors"
@@ -440,17 +460,19 @@ export default function PromptBar(props: PromptBarProps) {
       />
 
       {/* Custom Multishot Scene Timeline Panel - Cinema Studio 3.0 only */}
-      {isCinema30 && customMultishotPanelOpen && shotControl === "customMultishot" && (
+      {isCinema30 && isCustomMultishotOpen && shotControl === "customMultishot" && (
         <div
           ref={panelRef}
-          className="absolute rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
+          className="fixed rounded-2xl border border-white/10 bg-[rgba(24,26,30,0.92)] p-4 backdrop-blur-[24px]"
           style={{
-            bottom: "100%",
-            left: "76px",
-            width: "calc(100% - 76px)",
-            zIndex: 50,
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "calc(100% - 152px)",
+            maxWidth: "1040px",
+            zIndex: 1200,
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            marginBottom: "8px",
           }}
         >
           <div className="flex items-center gap-3">
