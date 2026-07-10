@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import {
   ChevronDown,
@@ -198,7 +199,9 @@ export default function PromptBar(props: PromptBarProps) {
   const [shotControlOpen, setShotControlOpen] = useState(false);
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
   const [isCustomMultishotOpen, setIsCustomMultishotOpen] = useState(false);
+  const [composerRect, setComposerRect] = useState<DOMRect | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
 
   const {
     prompt,
@@ -246,9 +249,29 @@ export default function PromptBar(props: PromptBarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [isCustomMultishotOpen]);
 
+  // Track composer position for portal rendering
+  useEffect(() => {
+    if (!isCustomMultishotOpen || !composerRef.current) return;
+
+    const updateRect = () => {
+      if (composerRef.current) {
+        setComposerRect(composerRef.current.getBoundingClientRect());
+      }
+    };
+
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    window.addEventListener("scroll", updateRect);
+    return () => {
+      window.removeEventListener("resize", updateRect);
+      window.removeEventListener("scroll", updateRect);
+    };
+  }, [isCustomMultishotOpen]);
+
   return (
     <>
       <div
+        ref={composerRef}
         className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3 opacity-100"
         style={{
           minHeight: 116,
@@ -480,20 +503,20 @@ export default function PromptBar(props: PromptBarProps) {
         defaultTab={assetsPickerTab}
       />
 
-      {/* Custom Multishot Scene Strip - Cinema Studio 3.0 only */}
-      {isCinema30 && isCustomMultishotOpen && shotControl === "customMultishot" && (
-        <div
-          ref={panelRef}
-          className="absolute w-full -top-1 -translate-y-full z-30"
-          style={{
-            filter: "drop-shadow(rgba(0, 0, 0, 0.4) 0px 8px 24px)",
-            left: "76px",
-            width: "calc(100% - 76px)",
-            opacity: 1,
-            display: "block",
-            transform: "none",
-          }}
-        >
+      {/* Custom Multishot Scene Strip - Cinema Studio 3.0 only - Rendered via Portal */}
+      {isCinema30 && isCustomMultishotOpen && shotControl === "customMultishot" && composerRect &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[60]"
+            style={{
+              filter: "drop-shadow(rgba(0, 0, 0, 0.4) 0px 8px 24px)",
+              left: composerRect.left + 76,
+              top: composerRect.top - 130,
+              width: composerRect.width - 76,
+              pointerEvents: "auto",
+            }}
+          >
           <div className="relative w-full">
             <div
               className="flex items-center gap-1 h-full w-[calc(100%-68px)]"
@@ -539,12 +562,13 @@ export default function PromptBar(props: PromptBarProps) {
                             preserveAspectRatio="none"
                           >
                             <path
+                              className="scene-1-fill"
                               d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z"
                               fill="#1ca5e21A"
                               stroke="none"
-                              style={{ transition: "none" }}
                             />
                             <path
+                              className="scene-1-stroke"
                               d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677"
                               fill="none"
                               stroke="#1ca5e2"
@@ -552,7 +576,6 @@ export default function PromptBar(props: PromptBarProps) {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               vectorEffect="non-scaling-stroke"
-                              style={{ transition: "none" }}
                             />
                           </svg>
                         </div>
@@ -613,12 +636,13 @@ export default function PromptBar(props: PromptBarProps) {
                             preserveAspectRatio="none"
                           >
                             <path
+                              className="scene-2-fill"
                               d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z"
                               fill="#a855f71A"
                               stroke="none"
-                              style={{ transition: "none" }}
                             />
                             <path
+                              className="scene-2-stroke"
                               d="M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677"
                               fill="none"
                               stroke="#a855f7"
@@ -626,7 +650,6 @@ export default function PromptBar(props: PromptBarProps) {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               vectorEffect="non-scaling-stroke"
-                              style={{ transition: "none" }}
                             />
                           </svg>
                         </div>
@@ -675,7 +698,43 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             </div>
           </div>
-        </div>
+          <style>{`
+            @keyframes waveShift1 {
+              0%, 100% {
+                d: path('M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z');
+              }
+              50% {
+                d: path('M 0 23.505711384209455 C 3.75 21.814127998860297, 17.5 14.48020223047796, 25 12.228488815215055 C 32.5 9.97677539995215, 42.5 8.362835260354736, 50 12.49428861579008 C 57.5 13.625741971225423, 67.5 21.519797769521222, 75 23.77151118478401 C 82.5 26.0232246000468, 96.25 26.945581354294976, 100 27.505711384208677 L 100 36 L 0 36 Z');
+              }
+            }
+            @keyframes waveShift2 {
+              0%, 100% {
+                d: path('M 0 25.505711384209455 C 3.75 23.814127998860297, 17.5 16.48020223047796, 25 14.228488815215055 C 32.5 11.97677539995215, 42.5 9.362835260354736, 50 10.49428861579008 C 57.5 11.625741971225423, 67.5 19.519797769521222, 75 21.77151118478401 C 82.5 24.0232246000468, 96.25 24.945581354294976, 100 25.505711384208677 L 100 36 L 0 36 Z');
+              }
+              50% {
+                d: path('M 0 27.505711384209455 C 3.75 25.814127998860297, 17.5 18.48020223047796, 25 16.228488815215055 C 32.5 13.97677539995215, 42.5 11.362835260354736, 50 8.49428861579008 C 57.5 9.625741971225423, 67.5 17.519797769521222, 75 19.77151118478401 C 82.5 22.0232246000468, 96.25 22.945581354294976, 100 23.505711384208677 L 100 36 L 0 36 Z');
+              }
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .scene-1-fill, .scene-1-stroke, .scene-2-fill, .scene-2-stroke {
+                animation: none !important;
+              }
+            }
+            .scene-1-fill {
+              animation: waveShift1 5s ease-in-out infinite;
+            }
+            .scene-1-stroke {
+              animation: waveShift1 5s ease-in-out infinite;
+            }
+            .scene-2-fill {
+              animation: waveShift2 5.5s ease-in-out infinite 0.3s;
+            }
+            .scene-2-stroke {
+              animation: waveShift2 5.5s ease-in-out infinite 0.3s;
+            }
+          `}</style>
+        </div>,
+        document.body
       )}
     </>
   );
