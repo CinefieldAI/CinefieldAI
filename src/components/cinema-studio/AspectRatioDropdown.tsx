@@ -61,7 +61,7 @@ export default function AspectRatioDropdown({
           <ChevronDown className="size-3 text-neutral-400" />
         </button>
       </Popover.Trigger>
-      <Popover.Portal container={portalContainer || document.body}>
+      <Popover.Portal container={portalContainer}>
         <Popover.Content
           side="top"
           align="start"

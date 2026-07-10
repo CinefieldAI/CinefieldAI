@@ -380,7 +380,7 @@ export default function PromptBar(props: PromptBarProps) {
                     <ChevronDown className="size-3 text-neutral-500" />
                   </button>
                 </Popover.Trigger>
-                <Popover.Portal container={portalRootRef.current || document.body}>
+                <Popover.Portal container={portalRootRef.current}>
                   <Popover.Content
                     side="top"
                     align="start"

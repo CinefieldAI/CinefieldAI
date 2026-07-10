@@ -328,7 +328,7 @@ export default function ModelSelector({
             <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
           </button>
         </Popover.Trigger>
-        <Popover.Portal container={portalContainer || document.body}>
+        <Popover.Portal container={portalContainer}>
           <Popover.Content
             side="top"
             align="start"
