@@ -197,12 +197,12 @@ export default function PromptBar(props: PromptBarProps) {
   const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
-  const [shotControlOpen, setShotControlOpen] = useState(false);
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
   const [isCustomMultishotOpen, setIsCustomMultishotOpen] = useState(false);
   const [composerRect, setComposerRect] = useState<DOMRect | null>(null);
-  const [aspectRatioPopoverOpen, setAspectRatioPopoverOpen] = useState(false);
-  const [resolutionPopoverOpen, setResolutionPopoverOpen] = useState(false);
+  const [activePromptPopover, setActivePromptPopover] = useState<
+    "shotControl" | "aspectRatio" | "resolution" | "duration" | "model" | null
+  >(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
 
@@ -344,7 +344,13 @@ export default function PromptBar(props: PromptBarProps) {
 
             {/* Shot Control Button - Cinema Studio 3.0 only */}
             {isCinema30 && (
-              <Popover.Root open={shotControlOpen} onOpenChange={setShotControlOpen}>
+              <Popover.Root
+                open={activePromptPopover === "shotControl"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("shotControl");
+                  else setActivePromptPopover(null);
+                }}
+              >
                 <Popover.Trigger asChild>
                   <button
                     type="button"
@@ -371,7 +377,7 @@ export default function PromptBar(props: PromptBarProps) {
                       onClick={() => {
                         setShotControl("smart");
                         setIsCustomMultishotOpen(false);
-                        setShotControlOpen(false);
+                        setActivePromptPopover(null);
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${
                         shotControl === "smart" ? "bg-[#131517]" : ""
@@ -383,7 +389,7 @@ export default function PromptBar(props: PromptBarProps) {
                           width="20"
                           height="20"
                           viewBox="0 0 20 20"
-                          className="size-5 text-[#d1fe17]"
+                          className="size-5 text-[#00e5ff]"
                         >
                           <path
                             fillRule="evenodd"
@@ -399,7 +405,7 @@ export default function PromptBar(props: PromptBarProps) {
                       onClick={() => {
                         setShotControl("customMultishot");
                         setIsCustomMultishotOpen(true);
-                        setShotControlOpen(false);
+                        setActivePromptPopover(null);
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${
                         shotControl === "customMultishot" ? "bg-[#131517]" : ""
@@ -411,7 +417,7 @@ export default function PromptBar(props: PromptBarProps) {
                           width="20"
                           height="20"
                           viewBox="0 0 20 20"
-                          className="size-5 text-[#d1fe17]"
+                          className="size-5 text-[#00e5ff]"
                         >
                           <path
                             fillRule="evenodd"
@@ -432,9 +438,10 @@ export default function PromptBar(props: PromptBarProps) {
             <AspectRatioDropdown
               value={aspectRatio}
               onChange={onAspectRatioChange}
+              isOpen={activePromptPopover === "aspectRatio"}
               onOpenChange={(open) => {
-                setAspectRatioPopoverOpen(open);
-                if (open) setResolutionPopoverOpen(false);
+                if (open) setActivePromptPopover("aspectRatio");
+                else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
               }}
             />
 
@@ -459,9 +466,10 @@ export default function PromptBar(props: PromptBarProps) {
             <ResolutionPopover
               value={resolution}
               onChange={onResolutionChange}
+              isOpen={activePromptPopover === "resolution"}
               onOpenChange={(open) => {
-                setResolutionPopoverOpen(open);
-                if (open) setAspectRatioPopoverOpen(false);
+                if (open) setActivePromptPopover("resolution");
+                else if (activePromptPopover === "resolution") setActivePromptPopover(null);
               }}
             />
             <BatchStepper value={batch} onChange={onBatchChange} />

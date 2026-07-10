@@ -9,6 +9,7 @@ interface AspectRatioDropdownProps {
   value: string;
   onChange: (value: string) => void;
   onOpenChange?: (open: boolean) => void;
+  isOpen?: boolean;
 }
 
 /** Small rectangle preview shaped to the option's aspect ratio. */
@@ -33,22 +34,24 @@ export default function AspectRatioDropdown({
   value,
   onChange,
   onOpenChange,
+  isOpen,
 }: AspectRatioDropdownProps) {
   const [open, setOpen] = useState(false);
+  const controlledOpen = isOpen !== undefined ? isOpen : open;
 
   const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
+    if (isOpen === undefined) setOpen(newOpen);
     onOpenChange?.(newOpen);
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
+    <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
           aria-label="Aspect ratio"
           aria-haspopup="listbox"
-          aria-expanded={open}
+          aria-expanded={controlledOpen}
           className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
         >
           <RectangleHorizontal className="size-4" />

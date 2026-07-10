@@ -10,28 +10,31 @@ interface ResolutionPopoverProps {
   value: string;
   onChange: (value: string) => void;
   onOpenChange?: (open: boolean) => void;
+  isOpen?: boolean;
 }
 
 export default function ResolutionPopover({
   value,
   onChange,
   onOpenChange,
+  isOpen,
 }: ResolutionPopoverProps) {
   const [open, setOpen] = useState(false);
+  const controlledOpen = isOpen !== undefined ? isOpen : open;
 
   const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
+    if (isOpen === undefined) setOpen(newOpen);
     onOpenChange?.(newOpen);
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
+    <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
           aria-label="Resolution"
           aria-haspopup="listbox"
-          aria-expanded={open}
+          aria-expanded={controlledOpen}
           className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
         >
           <MonitorPlay className="size-4" />
