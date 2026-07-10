@@ -11,6 +11,7 @@ interface QualityPanelProps {
   onSelect: (quality: string) => void;
   selectedQuality: string;
   availableQualities: string[];
+  portalContainer?: HTMLElement | null;
 }
 
 export default function QualityPanel({
@@ -20,6 +21,7 @@ export default function QualityPanel({
   onSelect,
   selectedQuality,
   availableQualities,
+  portalContainer,
 }: QualityPanelProps) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,7 @@ export default function QualityPanel({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[100000] w-[180px] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-2"
+      className="fixed z-[100000] w-[180px] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-2 pointer-events-auto"
       style={{ top: pos.top, left: pos.left }}
     >
       {/* Quality Options */}
@@ -109,6 +111,6 @@ export default function QualityPanel({
         })}
       </div>
     </div>,
-    document.body
+    portalContainer || document.body
   );
 }

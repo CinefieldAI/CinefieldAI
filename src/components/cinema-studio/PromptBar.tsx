@@ -535,6 +535,7 @@ export default function PromptBar(props: PromptBarProps) {
         onSelect={onQualityChange}
         selectedQuality={quality}
         availableQualities={["720p", "1080p", "4K"]}
+        portalContainer={portalRootRef.current}
       />
 
       <AssetsPickerModal
