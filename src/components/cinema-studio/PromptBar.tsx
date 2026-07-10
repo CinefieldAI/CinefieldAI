@@ -508,11 +508,11 @@ export default function PromptBar(props: PromptBarProps) {
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[60]"
+            className="fixed z-[9999]"
             style={{
               filter: "drop-shadow(rgba(0, 0, 0, 0.4) 0px 8px 24px)",
               left: composerRect.left + 76,
-              top: composerRect.top - 130,
+              top: composerRect.top - 120,
               width: composerRect.width - 76,
               pointerEvents: "auto",
             }}
