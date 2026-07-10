@@ -16,6 +16,7 @@ import {
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
+import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
 import QualityPanel from "./QualityPanel";
 import AssetsPickerModal from "./AssetsPickerModal";
@@ -200,6 +201,8 @@ export default function PromptBar(props: PromptBarProps) {
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
   const [isCustomMultishotOpen, setIsCustomMultishotOpen] = useState(false);
   const [composerRect, setComposerRect] = useState<DOMRect | null>(null);
+  const [aspectRatioPopoverOpen, setAspectRatioPopoverOpen] = useState(false);
+  const [resolutionPopoverOpen, setResolutionPopoverOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
 
@@ -426,7 +429,14 @@ export default function PromptBar(props: PromptBarProps) {
 
             <ModelSelector value={model} onChange={onModelChange} mode={mode} />
 
-            <AspectRatioDropdown value={aspectRatio} onChange={onAspectRatioChange} />
+            <AspectRatioDropdown
+              value={aspectRatio}
+              onChange={onAspectRatioChange}
+              onOpenChange={(open) => {
+                setAspectRatioPopoverOpen(open);
+                if (open) setResolutionPopoverOpen(false);
+              }}
+            />
 
             {/* Quality Button - Hidden for Cinema Studio 3.0 */}
             {!isCinema30 && (
@@ -446,12 +456,13 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
-            <PillDropdown
-              label="Resolution"
+            <ResolutionPopover
               value={resolution}
-              options={RESOLUTIONS}
               onChange={onResolutionChange}
-              icon={Monitor}
+              onOpenChange={(open) => {
+                setResolutionPopoverOpen(open);
+                if (open) setAspectRatioPopoverOpen(false);
+              }}
             />
             <BatchStepper value={batch} onChange={onBatchChange} />
 

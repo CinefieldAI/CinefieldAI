@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronDown, RectangleHorizontal } from "lucide-react";
 import { ASPECT_RATIO_OPTIONS } from "./cinemaStudioData";
 
 interface AspectRatioDropdownProps {
   value: string;
   onChange: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Small rectangle preview shaped to the option's aspect ratio. */
@@ -24,51 +26,42 @@ function ShapeIcon({ shape }: { shape: [number, number] }) {
 }
 
 /**
- * Aspect-ratio selector — opens UPWARD, shows a shape preview + description
- * per option, checkmark on the selected row. Used in both Image and Video
- * prompt-bar panels.
+ * Aspect-ratio selector — opens UPWARD with Radix Popover, shows a shape
+ * preview + description per option, turquoise checkmark on selected.
  */
 export default function AspectRatioDropdown({
   value,
   onChange,
+  onOpenChange,
 }: AspectRatioDropdownProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [open]);
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    onOpenChange?.(newOpen);
+  };
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Aspect ratio"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)]"
-      >
-        <RectangleHorizontal className="size-4" />
-        <span className="min-w-[40px] text-center">{value}</span>
-        <ChevronDown className="size-3 text-neutral-400" />
-      </button>
-
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Aspect ratio options"
-          className="absolute bottom-full left-0 z-[100000] mb-2 w-[200px] overflow-hidden rounded-xl border border-white/10 bg-[#1a1d1f] p-1 shadow-2xl"
+    <Popover.Root open={open} onOpenChange={handleOpenChange}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Aspect ratio"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+        >
+          <RectangleHorizontal className="size-4" />
+          <span className="min-w-[40px] text-center">{value}</span>
+          <ChevronDown className="size-3 text-neutral-400" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px]"
         >
           {ASPECT_RATIO_OPTIONS.map((opt) => {
             const selected = opt.value === value;
@@ -80,10 +73,12 @@ export default function AspectRatioDropdown({
                 aria-selected={selected}
                 onClick={() => {
                   onChange(opt.value);
-                  setOpen(false);
+                  handleOpenChange(false);
                 }}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                  selected ? "bg-white/5" : "hover:bg-white/5"
+                  selected
+                    ? "bg-[#131517]"
+                    : "hover:bg-[#131517]"
                 }`}
               >
                 <ShapeIcon shape={opt.shape} />
@@ -95,12 +90,12 @@ export default function AspectRatioDropdown({
                     {opt.description}
                   </span>
                 </span>
-                {selected && <Check className="size-4 shrink-0 text-white" />}
+                {selected && <Check className="size-4 shrink-0 text-[#00e5ff]" />}
               </button>
             );
           })}
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
