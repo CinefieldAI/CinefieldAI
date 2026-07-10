@@ -226,7 +226,7 @@ function VideoParentRow({
             data-model-flyout
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleClose}
-            className={`fixed z-[110] max-h-[500px] w-[280px] overflow-y-auto p-1 ${FROSTED}`}
+            className={`fixed z-[100000] max-h-[500px] w-[280px] overflow-y-auto p-1 ${FROSTED}`}
             style={{ top: pos.top, left: pos.left }}
           >
             {subs.map((s) => {
@@ -331,7 +331,7 @@ export default function ModelSelector({
             side="top"
             align="start"
             sideOffset={8}
-            className={`z-[100] max-h-[500px] overflow-y-auto ${FROSTED} ${
+            className={`z-[100000] max-h-[500px] overflow-y-auto ${FROSTED} ${
               isImage ? "w-[400px]" : "w-[320px]"
             }`}
           >

@@ -226,7 +226,7 @@ export default function GenrePanel({
 
   // Modal mode: wrap in backdrop
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-auto">
+    <div className="fixed inset-0 z-[100000] flex items-center justify-center pointer-events-auto">
       {/* Backdrop */}
       <div
         className="absolute inset-0 backdrop-blur-[40px]"
