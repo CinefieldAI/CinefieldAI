@@ -44,7 +44,8 @@ export default function DurationPopover({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] w-[334px] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto"
+          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto"
+          style={{ width: durations.length === 4 ? "220px" : "334px" }}
         >
           <div className="flex flex-col gap-3 rounded-xl p-2">
             <div>
@@ -52,29 +53,54 @@ export default function DurationPopover({
                 Duration
               </label>
             </div>
-            <div className="relative h-9 overflow-hidden rounded-md border border-[#424242] bg-[rgba(255,255,255,0.05)] hover:border-white/24">
-              <input
-                type="range"
-                min={min}
-                max={max}
-                value={value}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className="absolute inset-0 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:rounded [&::-webkit-slider-thumb]:bg-[#00e5ff] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-1 [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:rounded [&::-moz-range-thumb]:bg-[#00e5ff] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
-                style={{
-                  background: `linear-gradient(to right, #00e5ff 0%, #00e5ff ${
-                    ((value - min) / (max - min)) * 100
-                  }%, rgba(255,255,255,0.05) ${
-                    ((value - min) / (max - min)) * 100
-                  }%, rgba(255,255,255,0.05) 100%)`,
-                }}
-              />
-              <div
-                className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-medium text-white pointer-events-none"
-                style={{ zIndex: 10 }}
-              >
-                {value}s
+            {durations.length === 4 ? (
+              <div className="space-y-1">
+                {durations.map((d) => {
+                  const selected = d === value;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        onChange(d);
+                        setOpen(false);
+                      }}
+                      className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        selected
+                          ? "bg-[#131517] text-[#00e5ff]"
+                          : "text-white hover:bg-[#131517]"
+                      }`}
+                    >
+                      {d}s
+                    </button>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <div className="relative h-9 overflow-hidden rounded-md border border-[#424242] bg-[rgba(255,255,255,0.05)] hover:border-white/24">
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  value={value}
+                  onChange={(e) => onChange(Number(e.target.value))}
+                  className="absolute inset-0 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:rounded [&::-webkit-slider-thumb]:bg-[#00e5ff] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-1 [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:rounded [&::-moz-range-thumb]:bg-[#00e5ff] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
+                  style={{
+                    background: `linear-gradient(to right, #00e5ff 0%, #00e5ff ${
+                      ((value - min) / (max - min)) * 100
+                    }%, rgba(255,255,255,0.05) ${
+                      ((value - min) / (max - min)) * 100
+                    }%, rgba(255,255,255,0.05) 100%)`,
+                  }}
+                />
+                <div
+                  className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-medium text-white pointer-events-none"
+                  style={{ zIndex: 10 }}
+                >
+                  {value}s
+                </div>
+              </div>
+            )}
           </div>
         </Popover.Content>
       </Popover.Portal>

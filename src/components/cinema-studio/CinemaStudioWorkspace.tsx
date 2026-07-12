@@ -37,6 +37,9 @@ export default function CinemaStudioWorkspace() {
   const [batch, setBatch] = useState("3/4");
   const [sound, setSound] = useState(true);
 
+  // Kling 3.0 Motion Control advanced settings
+  const [klingAdvancedPrompt, setKlingAdvancedPrompt] = useState("");
+
   // Cinema Studio 3.0 Director's Panel settings
   const [cinema3Genre, setCinema3Genre] = useState("General");
   const [cinema3CameraMovement, setCinema3CameraMovement] = useState("Auto");
@@ -101,6 +104,51 @@ export default function CinemaStudioWorkspace() {
 
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
+
+  // Generate video handler
+  const handleGenerate = async () => {
+    try {
+      const isKling3MotionControl = model === "kling-3.0-motion-control";
+      const effectivePrompt = prompt || klingAdvancedPrompt;
+
+      if (!effectivePrompt.trim()) {
+        console.warn("Prompt is empty");
+        return;
+      }
+
+      const response = await fetch("/api/generate-video", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          prompt: isKling3MotionControl ? undefined : effectivePrompt,
+          advancedPrompt: isKling3MotionControl ? effectivePrompt : undefined,
+          resolution,
+          aspectRatio,
+          duration,
+          batchSize: batch ? parseInt(batch.split("/")[0]) : undefined,
+          sound,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Generation error:", error);
+        return;
+      }
+
+      const result = await response.json();
+      console.log("Video generation queued:", result);
+
+      // Optionally show toast notification
+      // toast.success(`Video queued: ${result.jobId}`);
+    } catch (error) {
+      console.error("Failed to generate video:", error);
+      // toast.error("Failed to queue video generation");
+    }
+  };
 
   return (
     <div
@@ -167,14 +215,16 @@ export default function CinemaStudioWorkspace() {
               quality={quality}
               onQualityChange={setQuality}
               duration={duration}
-              durations={selectedModel.durations}
+              durations={model === "gemini-omni-flash" ? [4, 6, 8, 10] : selectedModel.durations}
               onDurationChange={setDuration}
               batch={batch}
               onBatchChange={setBatch}
               sound={sound}
               onSoundChange={setSound}
               creditCost={creditCost}
-              onGenerate={noop}
+              onGenerate={handleGenerate}
+              klingAdvancedPrompt={klingAdvancedPrompt}
+              onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
             />
           </div>
 

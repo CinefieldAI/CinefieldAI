@@ -1,0 +1,74 @@
+"use client";
+
+import { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { ChevronDown } from "lucide-react";
+
+interface KlingSceneControlProps {
+  value: string;
+  onChange: (value: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  portalContainer?: HTMLElement | null;
+}
+
+const PILL =
+  "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
+
+const SCENE_OPTIONS = ["Off", "Light", "Medium", "Heavy"];
+
+export default function KlingSceneControl({
+  value,
+  onChange,
+  isOpen: externalIsOpen,
+  onOpenChange: externalOnOpenChange,
+  portalContainer,
+}: KlingSceneControlProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalOpen;
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (externalIsOpen === undefined) setInternalOpen(newOpen);
+    externalOnOpenChange?.(newOpen);
+  };
+
+  return (
+    <Popover.Root open={isOpen} onOpenChange={handleOpenChange}>
+      <Popover.Trigger asChild>
+        <button type="button" aria-label="Scene Control" className={PILL}>
+          Scene Control
+          <ChevronDown className="size-3 text-neutral-500" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal container={portalContainer}>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[120px] pointer-events-auto"
+        >
+          {SCENE_OPTIONS.map((opt) => {
+            const selected = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(opt);
+                  handleOpenChange(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-xs font-medium rounded-lg transition-colors ${
+                  selected ? "bg-[#131517] text-[#00e5ff]" : "text-white hover:bg-[#131517]"
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}

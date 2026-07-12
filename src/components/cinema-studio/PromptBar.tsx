@@ -16,10 +16,18 @@ import {
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
+import GeminiAspectRatioControl from "./GeminiAspectRatioControl";
 import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
 import QualityPanel from "./QualityPanel";
 import AssetsPickerModal from "./AssetsPickerModal";
+import KlingPromptDisabled from "./KlingPromptDisabled";
+import KlingAdvancedSettingsPanel from "./KlingAdvancedSettingsPanel";
+import KlingMotionModal from "./KlingMotionModal";
+import KlingCharacterPanel from "./KlingCharacterPanel";
+import KlingSceneControl from "./KlingSceneControl";
+import KlingMotionCard from "./KlingMotionCard";
+import KlingCharacterCard from "./KlingCharacterCard";
 import { RESOLUTIONS } from "./cinemaStudioData";
 
 export interface PromptBarProps {
@@ -48,6 +56,10 @@ export interface PromptBarProps {
 
   creditCost: number;
   onGenerate: () => void;
+
+  // Kling 3.0 Motion Control advanced prompt
+  klingAdvancedPrompt: string;
+  onKlingAdvancedPromptChange: (value: string) => void;
 }
 
 /** Shared h-7 control-pill style. */
@@ -203,6 +215,17 @@ export default function PromptBar(props: PromptBarProps) {
   const [activePromptPopover, setActivePromptPopover] = useState<
     "shotControl" | "aspectRatio" | "resolution" | "duration" | "model" | null
   >(null);
+
+  // Kling 3.0 Motion Control state
+  const [klingMotionControlSettings, setKlingMotionControlSettings] = useState({
+    advancedPrompt: "",
+    orientation: "video" as "video" | "image",
+    sceneControl: "Off",
+  });
+  const [motionModalOpen, setMotionModalOpen] = useState(false);
+  const [characterPanelOpen, setCharacterPanelOpen] = useState(false);
+  const [klingAdvancedSettingsOpen, setKlingAdvancedSettingsOpen] = useState(false);
+
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const portalRootRef = useRef<HTMLDivElement>(null);
@@ -245,6 +268,8 @@ export default function PromptBar(props: PromptBarProps) {
     onSoundChange,
     creditCost,
     onGenerate,
+    klingAdvancedPrompt,
+    onKlingAdvancedPromptChange,
   } = props;
 
   const isVideo = mode === "video";
@@ -257,6 +282,36 @@ export default function PromptBar(props: PromptBarProps) {
   const isCinema30 = model === "cinema-3.0";
   const isCinema25 = model === "cinema-2.5";
   const showElementsButton = isCinema35 || isCinema30;
+
+  // Seedance 2.0 family detection
+  const isSeedance2Family =
+    model === "seedance-2.0" ||
+    model === "seedance-2.0-mini" ||
+    model === "seedance-2.0-fast";
+
+  // Gemini Omni Flash detection
+  const isGeminiOmniFlash = model === "gemini-omni-flash";
+
+  // Kling 3.0 Motion Control detection
+  const isKling3MotionControl = model === "kling-3.0-motion-control";
+
+  // Set Gemini Omni Flash defaults
+  useEffect(() => {
+    if (isGeminiOmniFlash) {
+      onAspectRatioChange("9:16");
+      onResolutionChange("720p");
+      onDurationChange(8);
+      onBatchChange("1/4");
+    }
+  }, [isGeminiOmniFlash, onAspectRatioChange, onResolutionChange, onDurationChange, onBatchChange]);
+
+  // Set Kling 3.0 Motion Control defaults
+  useEffect(() => {
+    if (isKling3MotionControl) {
+      onResolutionChange("1080p");
+      // Reset modals when model changes away from Kling
+    }
+  }, [isKling3MotionControl, onResolutionChange]);
 
   // Close Custom Multishot panel on outside click
   useEffect(() => {
@@ -303,11 +358,15 @@ export default function PromptBar(props: PromptBarProps) {
       >
         {/* Prompt input + controls */}
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          <PromptInput
-            value={prompt}
-            onChange={onPromptChange}
-            placeholder={placeholder}
-          />
+          {isKling3MotionControl ? (
+            <KlingPromptDisabled />
+          ) : (
+            <PromptInput
+              value={prompt}
+              onChange={onPromptChange}
+              placeholder={placeholder}
+            />
+          )}
 
           <div className="flex flex-wrap items-center gap-1">
             {/* Assets Picker Buttons - Cinema Studio 3.5, 3.0, and 2.5 */}
@@ -451,21 +510,101 @@ export default function PromptBar(props: PromptBarProps) {
               </Popover.Root>
             )}
 
+            {/* Seedance 2.0 Family Controls - Plus and Mention Buttons */}
+            {isSeedance2Family && (
+              <div className="flex items-center gap-0 rounded-lg bg-card">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  aria-label="Add assets"
+                  title="Add assets"
+                  className="flex h-7 w-7 items-center justify-center rounded-none text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <Plus className="size-4" />
+                </button>
+
+                <div className="h-4 w-px bg-white/20" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetsPickerTab("elements");
+                    setAssetsPickerOpen(true);
+                  }}
+                  aria-label="My elements"
+                  title="My elements"
+                  className="flex h-7 min-h-7 min-w-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent p-0 text-font-primary shadow-none transition-colors hover:bg-neutral-primary-reverted-10 active:bg-neutral-primary-reverted-20"
+                >
+                  <svg
+                    className="size-4 text-icon-primary"
+                    aria-hidden="true"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M16.8684 19.8667C15.4543 20.7437 13.7863 21.25 12 21.25C6.89137 21.25 2.75 17.1086 2.75 12C2.75 6.89137 6.89137 2.75 12 2.75C17.1086 2.75 21.25 6.89137 21.25 12C21.25 13.9797 20.2662 16.0242 17.9715 15.8156C16.0837 15.644 14.7249 13.9258 14.993 12.0492L15.5226 8.40278M14.9375 12.4805C14.63 14.6681 12.8291 16.2235 10.9149 15.9544C9.00068 15.6854 7.69817 13.6939 8.00562 11.5063C8.31308 9.31862 10.1141 7.76327 12.0283 8.03229C13.9424 8.30131 15.245 10.2928 14.9375 12.4805Z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Gemini Omni Flash Controls - Plus Button Only */}
+            {isGeminiOmniFlash && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                aria-label="Add assets"
+                title="Add assets"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+              >
+                <Plus className="size-4" />
+              </button>
+            )}
+
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRootRef.current} />
 
-            <AspectRatioDropdown
-              value={aspectRatio}
-              onChange={onAspectRatioChange}
-              isOpen={activePromptPopover === "aspectRatio"}
-              portalContainer={portalRootRef.current}
-              onOpenChange={(open) => {
-                if (open) setActivePromptPopover("aspectRatio");
-                else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
-              }}
-            />
+            {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control */}
+            {!isKling3MotionControl && (
+              isGeminiOmniFlash ? (
+                <GeminiAspectRatioControl
+                  value={aspectRatio}
+                  onChange={onAspectRatioChange}
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRootRef.current}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                />
+              ) : (
+                <AspectRatioDropdown
+                  value={aspectRatio}
+                  onChange={onAspectRatioChange}
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRootRef.current}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                />
+              )
+            )}
 
-            {/* Quality Button - Hidden for Cinema Studio 3.0 */}
-            {!isCinema30 && (
+            {/* Quality Button - Hidden for Cinema Studio 3.0, Gemini, and Kling 3.0 Motion Control */}
+            {!isCinema30 && !isGeminiOmniFlash && !isKling3MotionControl && (
               <button
                 ref={(el) => el && !qualityAnchor && setQualityAnchor(el)}
                 type="button"
@@ -482,44 +621,79 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
-            <ResolutionPopover
-              value={resolution}
-              onChange={onResolutionChange}
-              isOpen={activePromptPopover === "resolution"}
-              portalContainer={portalRootRef.current}
-              onOpenChange={(open) => {
-                if (open) setActivePromptPopover("resolution");
-                else if (activePromptPopover === "resolution") setActivePromptPopover(null);
-              }}
-            />
-            <BatchStepper value={batch} onChange={onBatchChange} />
+            {/* Resolution - For all models except Gemini */}
+            {!isGeminiOmniFlash && (
+              <ResolutionPopover
+                value={resolution}
+                onChange={onResolutionChange}
+                isOpen={activePromptPopover === "resolution"}
+                portalContainer={portalRootRef.current}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("resolution");
+                  else if (activePromptPopover === "resolution") setActivePromptPopover(null);
+                }}
+              />
+            )}
 
-            {isVideo && (
+            {/* Kling 3.0 Motion Control Specific Controls */}
+            {isKling3MotionControl && (
               <>
-                <button
-                  type="button"
-                  onClick={() => onSoundChange(!sound)}
-                  aria-label="Toggle sound"
-                  aria-pressed={sound}
-                  className={`${PILL} ${
-                    sound ? "text-[#00e5ff]" : "text-neutral-400"
-                  }`}
-                >
-                  {sound ? (
-                    <Volume2 className="size-3.5" />
-                  ) : (
-                    <VolumeX className="size-3.5" />
-                  )}
-                  {sound ? "On" : "Off"}
-                </button>
-
-                <DurationPopover
-                  value={duration}
-                  durations={durations}
-                  onChange={onDurationChange}
+                <KlingAdvancedSettingsPanel
+                  isOpen={klingAdvancedSettingsOpen}
+                  onOpenChange={setKlingAdvancedSettingsOpen}
+                  advancedPrompt={klingAdvancedPrompt}
+                  onPromptChange={onKlingAdvancedPromptChange}
+                  orientation={klingMotionControlSettings.orientation}
+                  onOrientationChange={(orientation) =>
+                    setKlingMotionControlSettings((s) => ({ ...s, orientation }))
+                  }
                   portalContainer={portalRootRef.current}
                 />
+
+                <KlingSceneControl
+                  value={klingMotionControlSettings.sceneControl}
+                  onChange={(value) =>
+                    setKlingMotionControlSettings((s) => ({ ...s, sceneControl: value }))
+                  }
+                  portalContainer={portalRootRef.current}
+                />
+
+                <KlingMotionCard onClick={() => setMotionModalOpen(true)} />
+
+                <KlingCharacterCard onClick={() => setCharacterPanelOpen(true)} />
               </>
+            )}
+
+            {/* Duration - Hidden for Kling 3.0 Motion Control */}
+            {isVideo && !isKling3MotionControl && (
+              <DurationPopover
+                value={duration}
+                durations={durations}
+                onChange={onDurationChange}
+                portalContainer={portalRootRef.current}
+              />
+            )}
+
+            {/* Batch - Hidden for Kling 3.0 Motion Control */}
+            {!isKling3MotionControl && <BatchStepper value={batch} onChange={onBatchChange} />}
+
+            {isVideo && !isGeminiOmniFlash && !isKling3MotionControl && (
+              <button
+                type="button"
+                onClick={() => onSoundChange(!sound)}
+                aria-label="Toggle sound"
+                aria-pressed={sound}
+                className={`${PILL} ${
+                  sound ? "text-[#00e5ff]" : "text-neutral-400"
+                }`}
+              >
+                {sound ? (
+                  <Volume2 className="size-3.5" />
+                ) : (
+                  <VolumeX className="size-3.5" />
+                )}
+                {sound ? "On" : "Off"}
+              </button>
             )}
           </div>
         </div>
@@ -543,6 +717,14 @@ export default function PromptBar(props: PromptBarProps) {
         onClose={() => setAssetsPickerOpen(false)}
         defaultTab={assetsPickerTab}
       />
+
+      {/* Kling 3.0 Motion Control Modals and Panels */}
+      {isKling3MotionControl && (
+        <>
+          <KlingMotionModal isOpen={motionModalOpen} onClose={() => setMotionModalOpen(false)} />
+          <KlingCharacterPanel isOpen={characterPanelOpen} onClose={() => setCharacterPanelOpen(false)} />
+        </>
+      )}
 
       {/* Custom Multishot Scene Strip - Cinema Studio 3.0 only - Rendered via Portal */}
       {isCinema30 && isCustomMultishotOpen && shotControl === "customMultishot" && composerRect &&

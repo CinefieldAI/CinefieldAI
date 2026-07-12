@@ -186,6 +186,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
       vfeat("seedance-2.0", "Seedance 2.0", "/Seedance_2.0_-_Runway.png", "4K", "4s-15s"),
       vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s", ["NEW", "EXCLUSIVE"]),
       vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s"),
+      vfeat("gemini-omni-flash", "Gemini Omni Flash", "/Google_Veo_3.1.png", "720p", "4s-10s", ["NEW"]),
       vfeat("kling-3.0", "Kling 3.0", "/Kling_3.0.png", "4K", "3s-15s"),
       vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", "/Kling_3.0.png", "1080p", "3s-15s", ["NEW"]),
       vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", "/Kling_3.0.png", "1080p", "3s-30s"),
