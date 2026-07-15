@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
-import { Plus, ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip, Upload, Settings, X } from "lucide-react";
+import { X } from "lucide-react";
 import { marketingStyleCards } from "@/data/marketingStyleCards";
 import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
 import HookPanel, { HookItem } from "@/components/marketing-studio/HookPanel";
@@ -34,20 +33,15 @@ interface StyleCard {
 
 export default function MarketingStudioProduct() {
   const noop = () => {};
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const viewMode = searchParams.get("mode") || "product";
-
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = "";
   const [filterCategory, setFilterCategory] = useState<Category>("All");
   const [prompt, setPrompt] = useState("");
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [panelSearchQuery, setPanelSearchQuery] = useState("");
-  const [isMediaAttachPanelOpen, setIsMediaAttachPanelOpen] = useState(false);
   const [attachedProductMedia, setAttachedProductMedia] = useState<UploadedMedia[]>([]);
   const [activeFloatingPanel, setActiveFloatingPanel] = useState<FloatingPanelType>(null);
   const [selectedHook, setSelectedHook] = useState<HookItem | null>(null);
@@ -63,26 +57,11 @@ export default function MarketingStudioProduct() {
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
   const [showYourAppModal, setShowYourAppModal] = useState(false);
   const [hasApp, setHasApp] = useState(false);
-  const [appUploadMode, setAppUploadMode] = useState<"web" | "mobile">("web");
-  const [appScreenshot, setAppScreenshot] = useState<File | null>(null);
-  const [appScreenshotPreview, setAppScreenshotPreview] = useState<string>("");
-  const [appProductName, setAppProductName] = useState("");
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
-  const [appDescription, setAppDescription] = useState("");
-
-  // Prompt bar docking system - USER CONTROLLED
-  const [promptBarDock, setPromptBarDock] = useState<"bottom" | "top">("bottom");
+  const promptBarDock = "bottom" as const;
 
   // Composer wrapper ref for sticky behavior
   const composerWrapperRef = useRef<HTMLDivElement>(null);
   const [showStickyComposer, setShowStickyComposer] = useState(false);
-
-  // Workspace switcher
-  const [activeWorkspace, setActiveWorkspace] = useState("marketing-studio");
-  const workspaces = [
-    { id: "marketing-studio", label: "Marketing Studio" },
-    { id: "higgsfield-ai", label: "Higgsfield AI" },
-  ];
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -210,18 +189,7 @@ export default function MarketingStudioProduct() {
   };
 
   // Handle Create App
-  const handleCreateApp = (data: {
-    mode: "web" | "mobile";
-    screenshotFile: File | null;
-    screenshotPreviewUrl: string;
-    productName: string;
-    description: string;
-  }) => {
-    setAppUploadMode(data.mode);
-    setAppScreenshot(data.screenshotFile);
-    setAppScreenshotPreview(data.screenshotPreviewUrl);
-    setAppProductName(data.productName);
-    setAppDescription(data.description);
+  const handleCreateApp = () => {
     setHasApp(true);
     setShowYourAppModal(false);
     setActiveFloatingPanel(null);
@@ -260,10 +228,7 @@ export default function MarketingStudioProduct() {
 
   // Simple scroll-based sticky for All Generations
   useEffect(() => {
-    if (activeSidebarView !== "allGenerations") {
-      setShowStickyComposer(false);
-      return;
-    }
+    if (activeSidebarView !== "allGenerations") return;
 
     const handleScroll = () => {
       // Show sticky after scrolling 100px on All Generations
@@ -276,14 +241,6 @@ export default function MarketingStudioProduct() {
       setShowStickyComposer(false);
     };
   }, [activeSidebarView]);
-
-  const handleAllGenerations = () => {
-    router.push("?mode=all");
-  };
-
-  const handleFavorites = () => {
-    router.push("?mode=favorites");
-  };
 
   const handleGenerate = () => {
     console.log({

@@ -80,9 +80,6 @@ export default function KlingMotionModal({ isOpen, onClose }: KlingMotionModalPr
                     type="file"
                     accept="video/*"
                     className="hidden"
-                    onChange={(e) => {
-                      // Handle motion upload
-                    }}
                   />
                 </label>
               </div>
@@ -101,9 +98,6 @@ export default function KlingMotionModal({ isOpen, onClose }: KlingMotionModalPr
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => {
-                      // Handle character upload
-                    }}
                   />
                 </label>
               </div>

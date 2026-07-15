@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { X, ChevronUp, ChevronDown } from "lucide-react";
 import { genrePresets, DEFAULT_GENRE } from "./genrePresetsData";
 

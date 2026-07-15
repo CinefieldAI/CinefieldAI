@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Settings2 } from "lucide-react";
 

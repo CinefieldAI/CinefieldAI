@@ -13,7 +13,7 @@ export default function CharacterCardPopover({
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (next) onOpen?.(); }}>
       <Popover.Trigger asChild>
         <button
           type="button"

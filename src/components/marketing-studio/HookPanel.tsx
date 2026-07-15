@@ -97,8 +97,6 @@ export default function HookPanel({
   const [activeCategory, setActiveCategory] = useState<HookCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  if (!isOpen) return null;
-
   const filteredHooks = useMemo(() => {
     let result = HOOK_ITEMS;
 
@@ -116,6 +114,8 @@ export default function HookPanel({
 
     return result;
   }, [activeCategory, searchQuery]);
+
+  if (!isOpen) return null;
 
   const handleHookSelect = (hook: HookItem) => {
     onSelectHook(hook);

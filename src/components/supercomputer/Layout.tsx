@@ -2,7 +2,6 @@
 
 import Sidebar from "./Sidebar";
 import Hero from "./Hero";
-import CapabilitiesSection from "./CapabilitiesSection";
 
 export default function Layout() {
   return (

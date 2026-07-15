@@ -35,8 +35,6 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
     setActivePanel(null);
   };
 
-  const backToExplore = () => setActiveView("default");
-
   return (
     <div className="min-h-screen w-full bg-black text-white">
       <Navbar

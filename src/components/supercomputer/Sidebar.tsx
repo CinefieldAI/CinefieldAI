@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -73,7 +74,7 @@ function NavButton({
   badge,
   collapsed,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   badge?: string;
   collapsed?: boolean;

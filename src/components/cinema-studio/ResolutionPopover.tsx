@@ -4,7 +4,7 @@ import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronDown, MonitorPlay } from "lucide-react";
 
-const RESOLUTION_OPTIONS = ["480p", "720p", "1080p", "4K"];
+const DEFAULT_RESOLUTION_OPTIONS = ["480p", "720p", "1080p", "4K"];
 
 interface ResolutionPopoverProps {
   value: string;
@@ -12,6 +12,8 @@ interface ResolutionPopoverProps {
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
   portalContainer?: HTMLElement | null;
+  /** Overrides the default option list (e.g. Kling 3.0 only supports 720p/1080p/4K). */
+  options?: string[];
 }
 
 export default function ResolutionPopover({
@@ -20,6 +22,7 @@ export default function ResolutionPopover({
   onOpenChange,
   isOpen,
   portalContainer,
+  options = DEFAULT_RESOLUTION_OPTIONS,
 }: ResolutionPopoverProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -56,7 +59,7 @@ export default function ResolutionPopover({
               Resolution
             </span>
           </div>
-          {RESOLUTION_OPTIONS.map((opt) => {
+          {options.map((opt) => {
             const selected = opt === value;
             return (
               <button

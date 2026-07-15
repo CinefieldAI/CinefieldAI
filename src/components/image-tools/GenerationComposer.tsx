@@ -18,8 +18,6 @@ export default function GenerationComposer() {
   const modelParam = searchParams.get("model") || "nano-banana-pro";
   const config = IMAGE_MODEL_CONFIGS[modelParam];
 
-  if (!config) return null;
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLDivElement>(null);
   const [prompt, setPrompt] = useState("");
@@ -43,11 +41,14 @@ export default function GenerationComposer() {
     );
   }, [searchTerm]);
 
+  if (!config) return null;
+
   const handleModelSelect = (modelId: string) => {
     const newConfig = IMAGE_MODEL_CONFIGS[modelId];
     setQuality(newConfig.defaultQuality);
     setAspectRatio(newConfig.defaultAspectRatio);
     setCount(newConfig.defaultCount);
+    setSelectedModel(modelId);
     setIsModelOpen(false);
     router.push(`/generate/image?model=${modelId}`);
   };

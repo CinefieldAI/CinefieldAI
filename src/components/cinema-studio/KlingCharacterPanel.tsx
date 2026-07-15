@@ -44,9 +44,6 @@ export default function KlingCharacterPanel({ isOpen, onClose }: KlingCharacterP
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
-                  // Handle character upload
-                }}
               />
             </label>
           </div>

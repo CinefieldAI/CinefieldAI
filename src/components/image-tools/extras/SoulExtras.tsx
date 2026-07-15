@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 
 export default function SoulExtras() {
-  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [selectedCharacter] = useState<string | null>(null);
+  const [selectedStyle] = useState<string | null>(null);
 
   return (
     <div className="space-y-3 border-t border-white/10 pt-3">

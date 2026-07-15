@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import {
   ChevronDown,
-  Diamond,
   Minus,
-  Monitor,
   Plus,
-  Ratio,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -17,9 +14,14 @@ import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
 import GeminiAspectRatioControl from "./GeminiAspectRatioControl";
+import Kling3AspectRatioControl from "./Kling3AspectRatioControl";
+import ReferencesControl from "./ReferencesControl";
+import Kling3MultiShotControl from "./Kling3MultiShotControl";
+import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
+import FrameCard from "./FrameCard";
+import SoundOffConfirmDialog from "./SoundOffConfirmDialog";
 import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
-import QualityPanel from "./QualityPanel";
 import AssetsPickerModal from "./AssetsPickerModal";
 import KlingPromptDisabled from "./KlingPromptDisabled";
 import KlingAdvancedSettingsPanel from "./KlingAdvancedSettingsPanel";
@@ -28,7 +30,6 @@ import KlingCharacterPanel from "./KlingCharacterPanel";
 import KlingSceneControl from "./KlingSceneControl";
 import KlingMotionCard from "./KlingMotionCard";
 import KlingCharacterCard from "./KlingCharacterCard";
-import { RESOLUTIONS } from "./cinemaStudioData";
 
 export interface PromptBarProps {
   prompt: string;
@@ -44,8 +45,6 @@ export interface PromptBarProps {
   onAspectRatioChange: (value: string) => void;
   resolution: string;
   onResolutionChange: (value: string) => void;
-  quality: string;
-  onQualityChange: (value: string) => void;
   duration: number;
   durations: number[];
   onDurationChange: (value: number) => void;
@@ -60,75 +59,25 @@ export interface PromptBarProps {
   // Kling 3.0 Motion Control advanced prompt
   klingAdvancedPrompt: string;
   onKlingAdvancedPromptChange: (value: string) => void;
+
+  // Kling 3.0 Turbo — isolated per-model settings (not shared with any other model)
+  kling3TurboSettings: {
+    aspectRatio: string;
+    resolution: string;
+    startFrame: string | null;
+  };
+  onKling3TurboSettingsChange: Dispatch<
+    SetStateAction<{
+      aspectRatio: string;
+      resolution: string;
+      startFrame: string | null;
+    }>
+  >;
 }
 
 /** Shared h-7 control-pill style. */
 const PILL =
   "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
-
-/** Compact pop-up dropdown matching the h-7 control row. */
-function PillDropdown({
-  label,
-  value,
-  options,
-  onChange,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  icon: typeof Ratio;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={label}
-        aria-expanded={open}
-        className={PILL}
-      >
-        <Icon className="size-3.5 text-neutral-400" />
-        {value}
-        <ChevronDown className="size-3 text-neutral-500" />
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a] p-1 shadow-xl">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
-                opt === value
-                  ? "bg-[#00e5ff]/10 text-[#00e5ff]"
-                  : "text-neutral-300 hover:bg-[#1e1e1e]"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
@@ -205,16 +154,45 @@ function PromptInput({
 }
 
 export default function PromptBar(props: PromptBarProps) {
-  const [qualityPanelOpen, setQualityPanelOpen] = useState(false);
-  const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   const [assetsPickerTab, setAssetsPickerTab] = useState<"uploads" | "elements">("uploads");
   const [shotControl, setShotControl] = useState<"smart" | "customMultishot">("smart");
   const [isCustomMultishotOpen, setIsCustomMultishotOpen] = useState(false);
   const [composerRect, setComposerRect] = useState<DOMRect | null>(null);
   const [activePromptPopover, setActivePromptPopover] = useState<
-    "shotControl" | "aspectRatio" | "resolution" | "duration" | "model" | null
+    | "shotControl"
+    | "aspectRatio"
+    | "resolution"
+    | "duration"
+    | "model"
+    | "references"
+    | "multiShot"
+    | null
   >(null);
+
+  // Kling 3.0 (plain) — new prompt-control-row extras. aspectRatio/resolution/
+  // duration reuse the existing shared top-level state (see effect below)
+  // rather than duplicating them here.
+  const [kling3Extras, setKling3Extras] = useState<{
+    multiShot: string;
+    startFrame: string | null;
+    endFrame: string | null;
+  }>({ multiShot: "custom", startFrame: null, endFrame: null });
+  const [kling3ReferenceMode, setKling3ReferenceMode] = useState<
+    "startFrame" | "endFrame" | null
+  >(null);
+
+  // Google Veo 3.1 Lite — Start/End Frame reference images + the "Turn sound
+  // off?" confirmation. aspectRatio/resolution/duration/sound reuse the
+  // shared top-level state (not isolated, unlike Kling 3.0 Turbo).
+  const [veo31Frames, setVeo31Frames] = useState<{
+    startFrame: string | null;
+    endFrame: string | null;
+  }>({ startFrame: null, endFrame: null });
+  const [veo31FrameMode, setVeo31FrameMode] = useState<
+    "startFrame" | "endFrame" | null
+  >(null);
+  const [soundConfirmOpen, setSoundConfirmOpen] = useState(false);
 
   // Kling 3.0 Motion Control state
   const [klingMotionControlSettings, setKlingMotionControlSettings] = useState({
@@ -228,24 +206,7 @@ export default function PromptBar(props: PromptBarProps) {
 
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
-  const portalRootRef = useRef<HTMLDivElement>(null);
-
-  // Create/maintain shared portal root for all prompt popovers
-  useEffect(() => {
-    let root = document.getElementById("prompt-popover-root") as HTMLDivElement | null;
-    if (!root) {
-      root = document.createElement("div");
-      root.id = "prompt-popover-root";
-      root.style.position = "fixed";
-      root.style.top = "0";
-      root.style.left = "0";
-      root.style.zIndex = "100000";
-      root.style.pointerEvents = "none";
-      document.body.appendChild(root);
-    }
-    portalRootRef.current = root;
-    root.style.pointerEvents = "none";
-  }, []);
+  const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
 
   const {
     prompt,
@@ -257,8 +218,6 @@ export default function PromptBar(props: PromptBarProps) {
     onAspectRatioChange,
     resolution,
     onResolutionChange,
-    quality,
-    onQualityChange,
     duration,
     durations,
     onDurationChange,
@@ -270,6 +229,8 @@ export default function PromptBar(props: PromptBarProps) {
     onGenerate,
     klingAdvancedPrompt,
     onKlingAdvancedPromptChange,
+    kling3TurboSettings,
+    onKling3TurboSettingsChange,
   } = props;
 
   const isVideo = mode === "video";
@@ -281,7 +242,6 @@ export default function PromptBar(props: PromptBarProps) {
   const isCinema35 = model === "cinema-3.5";
   const isCinema30 = model === "cinema-3.0";
   const isCinema25 = model === "cinema-2.5";
-  const showElementsButton = isCinema35 || isCinema30;
 
   // Seedance 2.0 family detection
   const isSeedance2Family =
@@ -294,6 +254,15 @@ export default function PromptBar(props: PromptBarProps) {
 
   // Kling 3.0 Motion Control detection
   const isKling3MotionControl = model === "kling-3.0-motion-control";
+
+  // Kling 3.0 (plain) detection
+  const isKling3 = model === "kling-3.0";
+
+  // Kling 3.0 Turbo detection
+  const isKling3Turbo = model === "kling-3.0-turbo";
+
+  // Google Veo 3.1 Lite detection
+  const isVeo31Lite = model === "veo-3.1-lite";
 
   // Set Gemini Omni Flash defaults
   useEffect(() => {
@@ -312,6 +281,15 @@ export default function PromptBar(props: PromptBarProps) {
       // Reset modals when model changes away from Kling
     }
   }, [isKling3MotionControl, onResolutionChange]);
+
+  // Set Kling 3.0 (plain) defaults
+  useEffect(() => {
+    if (isKling3) {
+      onAspectRatioChange("16:9");
+      onResolutionChange("1080p");
+      onDurationChange(9);
+    }
+  }, [isKling3, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
   // Close Custom Multishot panel on outside click
   useEffect(() => {
@@ -346,6 +324,11 @@ export default function PromptBar(props: PromptBarProps) {
 
   return (
     <>
+      <div
+        id="prompt-popover-root"
+        ref={setPortalRoot}
+        className="pointer-events-none fixed left-0 top-0 z-[100000]"
+      />
       <div
         ref={composerRef}
         className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3 opacity-100"
@@ -439,7 +422,7 @@ export default function PromptBar(props: PromptBarProps) {
                     <ChevronDown className="size-3 text-neutral-500" />
                   </button>
                 </Popover.Trigger>
-                <Popover.Portal container={portalRootRef.current}>
+                <Popover.Portal container={portalRoot}>
                   <Popover.Content
                     side="top"
                     align="start"
@@ -574,7 +557,41 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
-            <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRootRef.current} />
+            {/* Kling 3.0 (plain) References Button - opens Start/End Frame choice, then Assets picker */}
+            {isKling3 && (
+              <ReferencesControl
+                isOpen={activePromptPopover === "references"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("references");
+                  else if (activePromptPopover === "references") setActivePromptPopover(null);
+                }}
+                onSelectReferenceMode={(refMode) => {
+                  setKling3ReferenceMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Google Veo 3.1 Lite References Button - opens Start/End Frame choice, then Assets picker */}
+            {isVeo31Lite && (
+              <ReferencesControl
+                isOpen={activePromptPopover === "references"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("references");
+                  else if (activePromptPopover === "references") setActivePromptPopover(null);
+                }}
+                onSelectReferenceMode={(refMode) => {
+                  setVeo31FrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control */}
             {!isKling3MotionControl && (
@@ -583,7 +600,42 @@ export default function PromptBar(props: PromptBarProps) {
                   value={aspectRatio}
                   onChange={onAspectRatioChange}
                   isOpen={activePromptPopover === "aspectRatio"}
-                  portalContainer={portalRootRef.current}
+                  portalContainer={portalRoot}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                />
+              ) : isKling3Turbo ? (
+                <Kling3AspectRatioControl
+                  value={kling3TurboSettings.aspectRatio}
+                  onChange={(value) =>
+                    onKling3TurboSettingsChange((s) => ({ ...s, aspectRatio: value }))
+                  }
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRoot}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                />
+              ) : isKling3 ? (
+                <Kling3AspectRatioControl
+                  value={aspectRatio}
+                  onChange={onAspectRatioChange}
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRoot}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                />
+              ) : isVeo31Lite ? (
+                <Veo31AspectRatioControl
+                  value={aspectRatio}
+                  onChange={onAspectRatioChange}
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRoot}
                   onOpenChange={(open) => {
                     if (open) setActivePromptPopover("aspectRatio");
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
@@ -594,7 +646,7 @@ export default function PromptBar(props: PromptBarProps) {
                   value={aspectRatio}
                   onChange={onAspectRatioChange}
                   isOpen={activePromptPopover === "aspectRatio"}
-                  portalContainer={portalRootRef.current}
+                  portalContainer={portalRoot}
                   onOpenChange={(open) => {
                     if (open) setActivePromptPopover("aspectRatio");
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
@@ -603,35 +655,44 @@ export default function PromptBar(props: PromptBarProps) {
               )
             )}
 
-            {/* Quality Button - Hidden for Cinema Studio 3.0, Gemini, and Kling 3.0 Motion Control */}
-            {!isCinema30 && !isGeminiOmniFlash && !isKling3MotionControl && (
-              <button
-                ref={(el) => el && !qualityAnchor && setQualityAnchor(el)}
-                type="button"
-                onClick={(e) => {
-                  setQualityAnchor(e.currentTarget);
-                  setQualityPanelOpen(true);
-                }}
-                aria-label="Quality"
-                className={PILL}
-              >
-                <Diamond className="size-3.5 text-neutral-400" />
-                {quality}
-                <ChevronDown className="size-3 text-neutral-500" />
-              </button>
-            )}
-
             {/* Resolution - For all models except Gemini */}
             {!isGeminiOmniFlash && (
               <ResolutionPopover
-                value={resolution}
-                onChange={onResolutionChange}
+                value={isKling3Turbo ? kling3TurboSettings.resolution : resolution}
+                onChange={
+                  isKling3Turbo
+                    ? (value) => onKling3TurboSettingsChange((s) => ({ ...s, resolution: value }))
+                    : onResolutionChange
+                }
                 isOpen={activePromptPopover === "resolution"}
-                portalContainer={portalRootRef.current}
+                portalContainer={portalRoot}
                 onOpenChange={(open) => {
                   if (open) setActivePromptPopover("resolution");
                   else if (activePromptPopover === "resolution") setActivePromptPopover(null);
                 }}
+                options={
+                  isKling3 || isKling3Turbo
+                    ? ["720p", "1080p", "4K"]
+                    : isVeo31Lite
+                      ? ["720p", "1080p"]
+                      : undefined
+                }
+              />
+            )}
+
+            {/* Start Frame - Kling 3.0 Turbo only, placed after Resolution per spec */}
+            {isKling3Turbo && (
+              <FrameCard
+                label="Start Frame"
+                value={kling3TurboSettings.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() =>
+                  onKling3TurboSettingsChange((s) => ({ ...s, startFrame: null }))
+                }
               />
             )}
 
@@ -647,7 +708,7 @@ export default function PromptBar(props: PromptBarProps) {
                   onOrientationChange={(orientation) =>
                     setKlingMotionControlSettings((s) => ({ ...s, orientation }))
                   }
-                  portalContainer={portalRootRef.current}
+                  portalContainer={portalRoot}
                 />
 
                 <KlingSceneControl
@@ -655,7 +716,7 @@ export default function PromptBar(props: PromptBarProps) {
                   onChange={(value) =>
                     setKlingMotionControlSettings((s) => ({ ...s, sceneControl: value }))
                   }
-                  portalContainer={portalRootRef.current}
+                  portalContainer={portalRoot}
                 />
 
                 <KlingMotionCard onClick={() => setMotionModalOpen(true)} />
@@ -664,23 +725,56 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Duration - Hidden for Kling 3.0 Motion Control */}
-            {isVideo && !isKling3MotionControl && (
+            {/* Duration - Hidden for Kling 3.0 Motion Control and Kling 3.0 Turbo */}
+            {isVideo && !isKling3MotionControl && !isKling3Turbo && (
               <DurationPopover
                 value={duration}
                 durations={durations}
                 onChange={onDurationChange}
-                portalContainer={portalRootRef.current}
+                portalContainer={portalRoot}
+                isOpen={isKling3 ? activePromptPopover === "duration" : undefined}
+                onOpenChange={
+                  isKling3
+                    ? (open) => {
+                        if (open) setActivePromptPopover("duration");
+                        else if (activePromptPopover === "duration") setActivePromptPopover(null);
+                      }
+                    : undefined
+                }
               />
             )}
 
-            {/* Batch - Hidden for Kling 3.0 Motion Control */}
-            {!isKling3MotionControl && <BatchStepper value={batch} onChange={onBatchChange} />}
+            {/* Multi-shot - Kling 3.0 (plain) only, placed after Duration per spec */}
+            {isKling3 && (
+              <Kling3MultiShotControl
+                value={kling3Extras.multiShot}
+                onChange={(value) => setKling3Extras((s) => ({ ...s, multiShot: value }))}
+                isOpen={activePromptPopover === "multiShot"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("multiShot");
+                  else if (activePromptPopover === "multiShot") setActivePromptPopover(null);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
 
-            {isVideo && !isGeminiOmniFlash && !isKling3MotionControl && (
+            {/* Batch - Hidden for Kling 3.0 Motion Control, Kling 3.0 (plain), Kling 3.0 Turbo, and Google Veo 3.1 Lite */}
+            {!isKling3MotionControl && !isKling3 && !isKling3Turbo && !isVeo31Lite && (
+              <BatchStepper value={batch} onChange={onBatchChange} />
+            )}
+
+            {isVideo && !isGeminiOmniFlash && !isKling3MotionControl && !isKling3 && !isKling3Turbo && (
               <button
                 type="button"
-                onClick={() => onSoundChange(!sound)}
+                onClick={() => {
+                  // Google Veo 3.1 Lite confirms before turning sound Off; every
+                  // other model (and Off -> On for Veo) toggles directly.
+                  if (isVeo31Lite && sound) {
+                    setSoundConfirmOpen(true);
+                  } else {
+                    onSoundChange(!sound);
+                  }
+                }}
                 aria-label="Toggle sound"
                 aria-pressed={sound}
                 className={`${PILL} ${
@@ -695,6 +789,34 @@ export default function PromptBar(props: PromptBarProps) {
                 {sound ? "On" : "Off"}
               </button>
             )}
+
+            {/* Start/End Frame - Google Veo 3.1 Lite only, placed after Sound */}
+            {isVeo31Lite && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={veo31Frames.startFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setVeo31FrameMode("startFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setVeo31Frames((s) => ({ ...s, startFrame: null }))}
+                />
+                <FrameCard
+                  label="End Frame"
+                  value={veo31Frames.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setVeo31FrameMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setVeo31Frames((s) => ({ ...s, endFrame: null }))}
+                />
+              </>
+            )}
           </div>
         </div>
 
@@ -702,21 +824,59 @@ export default function PromptBar(props: PromptBarProps) {
         <GenerateButton creditCost={creditCost} onGenerate={onGenerate} mode={mode} />
       </div>
 
-      <QualityPanel
-        anchor={qualityAnchor}
-        isOpen={qualityPanelOpen}
-        onClose={() => setQualityPanelOpen(false)}
-        onSelect={onQualityChange}
-        selectedQuality={quality}
-        availableQualities={["720p", "1080p", "4K"]}
-        portalContainer={portalRootRef.current}
-      />
-
       <AssetsPickerModal
         isOpen={assetsPickerOpen}
-        onClose={() => setAssetsPickerOpen(false)}
+        onClose={() => {
+          setAssetsPickerOpen(false);
+          // Clear only the transient "which frame are we picking" marker —
+          // an already-assigned Start/End Frame in kling3Extras/veo31Frames is untouched.
+          setKling3ReferenceMode(null);
+          setVeo31FrameMode(null);
+        }}
         defaultTab={assetsPickerTab}
+        mode={
+          isKling3 && kling3ReferenceMode
+            ? kling3ReferenceMode
+            : isKling3Turbo
+              ? "startFrame"
+              : isVeo31Lite && veo31FrameMode
+                ? veo31FrameMode
+                : "default"
+        }
+        accept={isKling3Turbo || isVeo31Lite ? "image/*" : undefined}
+        onSelectAsset={
+          isKling3 && kling3ReferenceMode
+            ? (url) => {
+                setKling3Extras((s) =>
+                  kling3ReferenceMode === "startFrame"
+                    ? { ...s, startFrame: url }
+                    : { ...s, endFrame: url },
+                );
+              }
+            : isKling3Turbo
+              ? (url) => onKling3TurboSettingsChange((s) => ({ ...s, startFrame: url }))
+              : isVeo31Lite && veo31FrameMode
+                ? (url) =>
+                    setVeo31Frames((s) =>
+                      veo31FrameMode === "startFrame"
+                        ? { ...s, startFrame: url }
+                        : { ...s, endFrame: url },
+                    )
+                : undefined
+        }
       />
+
+      {/* "Turn sound off?" confirm — Google Veo 3.1 Lite only */}
+      {isVeo31Lite && (
+        <SoundOffConfirmDialog
+          isOpen={soundConfirmOpen}
+          onCancel={() => setSoundConfirmOpen(false)}
+          onConfirm={() => {
+            onSoundChange(false);
+            setSoundConfirmOpen(false);
+          }}
+        />
+      )}
 
       {/* Kling 3.0 Motion Control Modals and Panels */}
       {isKling3MotionControl && (

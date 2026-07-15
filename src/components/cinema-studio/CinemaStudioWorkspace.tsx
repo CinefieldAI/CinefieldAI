@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import Sidebar from "./Sidebar";
@@ -14,6 +14,7 @@ import CameraSettings from "./CameraSettings";
 import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
+import type { GenerateVideoRequest } from "@/lib/jobs";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
@@ -32,13 +33,21 @@ export default function CinemaStudioWorkspace() {
   const [camera, setCamera] = useState<NonNullable<CinemaStudioSettings["camera"]>>({});
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState("1080p");
-  const [quality, setQuality] = useState("720p");
+  const [quality] = useState("720p");
   const [duration, setDuration] = useState(8);
   const [batch, setBatch] = useState("3/4");
   const [sound, setSound] = useState(true);
 
   // Kling 3.0 Motion Control advanced settings
   const [klingAdvancedPrompt, setKlingAdvancedPrompt] = useState("");
+
+  // Kling 3.0 Turbo — deliberately isolated from the shared aspectRatio/resolution
+  // state (and from every other model) so switching models never overwrites it.
+  const [kling3TurboSettings, setKling3TurboSettings] = useState<{
+    aspectRatio: string;
+    resolution: string;
+    startFrame: string | null;
+  }>({ aspectRatio: "16:9", resolution: "1080p", startFrame: null });
 
   // Cinema Studio 3.0 Director's Panel settings
   const [cinema3Genre, setCinema3Genre] = useState("General");
@@ -100,7 +109,6 @@ export default function CinemaStudioWorkspace() {
   // Genre/Style/Camera controls show only for Cinema Studio 3.5.
   const isCinema35 = selectedModel.id === "cinema-3.5";
   const isCinema30 = selectedModel.id === "cinema-3.0";
-  const isCinema = selectedModel.id.startsWith("cinema-");
 
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
@@ -109,6 +117,7 @@ export default function CinemaStudioWorkspace() {
   const handleGenerate = async () => {
     try {
       const isKling3MotionControl = model === "kling-3.0-motion-control";
+      const isKling3Turbo = model === "kling-3.0-turbo";
       const effectivePrompt = prompt || klingAdvancedPrompt;
 
       if (!effectivePrompt.trim()) {
@@ -116,21 +125,33 @@ export default function CinemaStudioWorkspace() {
         return;
       }
 
+      // Genre/Style/Camera are only surfaced in the UI for Cinema Studio 3.5
+      // (ControlButtons + docked panels). Omitting them for every other model
+      // — including other Cinema Studio versions — avoids sending stale
+      // values left over from a prior 3.5 session.
+      // Kling 3.0 Turbo uses its own isolated aspectRatio/resolution rather
+      // than the shared state (see kling3TurboSettings above).
+      const payload: GenerateVideoRequest = {
+        model,
+        prompt: isKling3MotionControl ? undefined : effectivePrompt,
+        advancedPrompt: isKling3MotionControl ? effectivePrompt : undefined,
+        resolution: isKling3Turbo ? kling3TurboSettings.resolution : resolution,
+        aspectRatio: isKling3Turbo ? kling3TurboSettings.aspectRatio : aspectRatio,
+        duration,
+        batchSize: batch ? parseInt(batch.split("/")[0]) : undefined,
+        sound,
+        quality,
+        genre: isCinema35 ? genre : undefined,
+        style: isCinema35 ? style : undefined,
+        camera: isCinema35 ? camera : undefined,
+      };
+
       const response = await fetch("/api/generate-video", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model,
-          prompt: isKling3MotionControl ? undefined : effectivePrompt,
-          advancedPrompt: isKling3MotionControl ? effectivePrompt : undefined,
-          resolution,
-          aspectRatio,
-          duration,
-          batchSize: batch ? parseInt(batch.split("/")[0]) : undefined,
-          sound,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -212,8 +233,6 @@ export default function CinemaStudioWorkspace() {
               onAspectRatioChange={setAspectRatio}
               resolution={resolution}
               onResolutionChange={setResolution}
-              quality={quality}
-              onQualityChange={setQuality}
               duration={duration}
               durations={model === "gemini-omni-flash" ? [4, 6, 8, 10] : selectedModel.durations}
               onDurationChange={setDuration}
@@ -225,6 +244,8 @@ export default function CinemaStudioWorkspace() {
               onGenerate={handleGenerate}
               klingAdvancedPrompt={klingAdvancedPrompt}
               onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+              kling3TurboSettings={kling3TurboSettings}
+              onKling3TurboSettingsChange={setKling3TurboSettings}
             />
           </div>
 

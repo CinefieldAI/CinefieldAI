@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Clock, ChevronDown } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 
@@ -9,6 +9,9 @@ interface DurationPopoverProps {
   durations: number[];
   onChange: (value: number) => void;
   portalContainer?: HTMLElement | null;
+  /** Controlled open state — omit to keep the existing uncontrolled behavior. */
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Shared h-7 control-pill style. */
@@ -20,18 +23,25 @@ export default function DurationPopover({
   durations,
   onChange,
   portalContainer,
+  isOpen,
+  onOpenChange,
 }: DurationPopoverProps) {
   const [open, setOpen] = useState(false);
+  const controlledOpen = isOpen !== undefined ? isOpen : open;
+  const handleOpenChange = (newOpen: boolean) => {
+    if (isOpen === undefined) setOpen(newOpen);
+    onOpenChange?.(newOpen);
+  };
   const min = Math.min(...durations);
   const max = Math.max(...durations);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
           aria-label="Duration"
-          aria-expanded={open}
+          aria-expanded={controlledOpen}
           className={PILL}
         >
           <Clock className="size-3.5 text-neutral-400" />
@@ -63,7 +73,7 @@ export default function DurationPopover({
                       type="button"
                       onClick={() => {
                         onChange(d);
-                        setOpen(false);
+                        handleOpenChange(false);
                       }}
                       className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         selected

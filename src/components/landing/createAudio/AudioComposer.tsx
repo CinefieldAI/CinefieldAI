@@ -281,7 +281,6 @@ export default function AudioComposer({
                 "rgb(39,41,44) 0px 0px 0px 1px, rgba(0,0,0,0.4) 0px -1px 0px 0px inset",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- decorative glare overlay, clones the reference DOM structure */}
             <img
               aria-hidden="true"
               src="/asset/glare.svg"

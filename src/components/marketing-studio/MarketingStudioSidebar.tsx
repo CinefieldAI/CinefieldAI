@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Grid3x3, Heart, Link2, Paperclip, FolderOpen, Settings, User } from "lucide-react";
+import { Home, Grid3x3, Heart, Link2, Paperclip, FolderOpen, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -25,7 +24,6 @@ export default function MarketingStudioSidebar({
   onViewChange,
 }: MarketingStudioSidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const pathname = usePathname();
 
   const topNavItems: NavItem[] = [
     {
@@ -78,7 +76,7 @@ export default function MarketingStudioSidebar({
     return false;
   };
 
-  const NavItemButton = ({ item, isBottom = false }: { item: NavItem; isBottom?: boolean }) => (
+  const NavItemButton = ({ item }: { item: NavItem; isBottom?: boolean }) => (
     <motion.button
       onClick={item.onClick}
       className={cn(

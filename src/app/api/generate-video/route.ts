@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { createJob } from "@/lib/jobs";
+import { createJob, type GenerateVideoRequest } from "@/lib/jobs";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Partial<GenerateVideoRequest>;
 
+    // Explicit allow-list — only these fields are ever read from the body.
     const {
       model,
       prompt,
@@ -14,7 +15,10 @@ export async function POST(request: Request) {
       aspectRatio,
       duration,
       sound,
-      ...rest
+      genre,
+      style,
+      camera,
+      quality,
     } = body;
 
     // Validate model
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create job
+    // Create job — explicit allow-list, no unrestricted spreading
     const job = createJob({
       model,
       prompt: prompt || undefined,
@@ -55,7 +59,10 @@ export async function POST(request: Request) {
       aspectRatio: aspectRatio || undefined,
       duration: duration || undefined,
       sound: sound !== undefined ? sound : undefined,
-      ...rest,
+      genre: genre || undefined,
+      style: style || undefined,
+      camera: camera || undefined,
+      quality: quality || undefined,
     });
 
     return NextResponse.json({

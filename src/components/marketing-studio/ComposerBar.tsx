@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useEffect } from "react";
 import { Plus, ChevronDown, Settings } from "lucide-react";
 import { UploadedMedia } from "./MediaAttachPanel";
 import { HookItem } from "./HookPanel";
@@ -21,7 +20,7 @@ interface ComposerBarProps {
   selectedHook: HookItem | null;
   selectedSetting: SettingItem | null;
   activeFloatingPanel: string | null;
-  optionsButtonRef: React.RefObject<HTMLButtonElement>;
+  optionsButtonRef: React.RefObject<HTMLButtonElement | null>;
   attachedProductMedia: UploadedMedia[];
   onProductCardClick: () => void;
   onAvatarCardClick: () => void;
@@ -49,7 +48,6 @@ export default function ComposerBar({
   onProductCardClick,
   onAvatarCardClick,
   onGenerate,
-  isSticky = false,
 }: ComposerBarProps) {
   return (
     <div className="mx-auto flex w-[min(980px,calc(100vw-32px))] items-stretch gap-2">

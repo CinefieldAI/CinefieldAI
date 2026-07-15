@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, ReactNode } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import { Upload, X, Heart, ImageIcon } from "lucide-react";
 
 export interface UploadedMedia {
@@ -20,6 +20,51 @@ interface MediaAttachPanelProps {
 }
 
 type MediaTab = "uploads" | "imageGenerations" | "liked";
+
+function TabButton({
+  tab,
+  label,
+  activeTab,
+  onSelect,
+}: {
+  tab: MediaTab;
+  label: string;
+  activeTab: MediaTab;
+  onSelect: (tab: MediaTab) => void;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(tab)}
+      className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
+        activeTab === tab
+          ? "bg-white/20 text-white"
+          : "bg-white/5 text-white/60 hover:bg-white/10"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex h-full items-center justify-center flex-col gap-4">
+      <div className="text-white/30">{icon}</div>
+      <div className="text-center">
+        <p className="text-sm font-medium text-white">{title}</p>
+        <p className="text-xs text-white/60">{description}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function MediaAttachPanel({
   isOpen,
@@ -101,43 +146,6 @@ export default function MediaAttachPanel({
     onClose();
   };
 
-  const TabButton = ({
-    tab,
-    label,
-  }: {
-    tab: MediaTab;
-    label: string;
-  }) => (
-    <button
-      onClick={() => setActiveTab(tab)}
-      className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
-        activeTab === tab
-          ? "bg-white/20 text-white"
-          : "bg-white/5 text-white/60 hover:bg-white/10"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
-  const EmptyState = ({
-    icon: Icon,
-    title,
-    description,
-  }: {
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-  }) => (
-    <div className="flex h-full items-center justify-center flex-col gap-4">
-      <div className="text-white/30">{Icon}</div>
-      <div className="text-center">
-        <p className="text-sm font-medium text-white">{title}</p>
-        <p className="text-xs text-white/60">{description}</p>
-      </div>
-    </div>
-  );
-
   return (
     <>
       {/* Backdrop */}
@@ -160,12 +168,14 @@ export default function MediaAttachPanel({
         <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/5">
           {/* Tabs */}
           <div className="flex gap-2">
-            <TabButton tab="uploads" label="Uploads" />
+            <TabButton tab="uploads" label="Uploads" activeTab={activeTab} onSelect={setActiveTab} />
             <TabButton
               tab="imageGenerations"
               label="Image Generations"
+              activeTab={activeTab}
+              onSelect={setActiveTab}
             />
-            <TabButton tab="liked" label="Liked" />
+            <TabButton tab="liked" label="Liked" activeTab={activeTab} onSelect={setActiveTab} />
           </div>
 
           {/* Close Button */}

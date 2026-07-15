@@ -90,8 +90,6 @@ export default function SettingPanel({
   const [activeCategory, setActiveCategory] = useState<SettingCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  if (!isOpen) return null;
-
   const filteredSettings = useMemo(() => {
     let result = SETTING_ITEMS;
 
@@ -109,6 +107,8 @@ export default function SettingPanel({
 
     return result;
   }, [activeCategory, searchQuery]);
+
+  if (!isOpen) return null;
 
   const handleSettingSelect = (setting: SettingItem) => {
     onSelectSetting(setting);

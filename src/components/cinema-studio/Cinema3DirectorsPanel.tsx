@@ -221,7 +221,7 @@ export default function Cinema3DirectorsPanel({
         <div className="flex items-center gap-0.5 rounded-[20px] bg-gradient-to-r from-[#141619] to-[#27292b] p-0.5">
           <div className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0">
             <Clapperboard className="w-4 h-4 text-white/60" />
-            <span className="text-xs font-medium text-white/60">Director's Panel</span>
+            <span className="text-xs font-medium text-white/60">Director&apos;s Panel</span>
           </div>
 
           <ControlChip

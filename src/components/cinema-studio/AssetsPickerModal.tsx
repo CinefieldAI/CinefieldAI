@@ -7,6 +7,12 @@ interface AssetsPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultTab?: "uploads" | "elements" | "imageGenerations" | "videoGenerations" | "liked";
+  /** Reserved for callers (e.g. Kling 3.0 References, Kling 3.0 Turbo Start Frame) that assign the picked asset to a specific slot. */
+  mode?: "default" | "startFrame" | "endFrame";
+  /** Called with an object URL when an asset is picked. Only wired for callers that pass it. */
+  onSelectAsset?: (url: string) => void;
+  /** Restricts the Uploads file input (e.g. "image/*" for Kling 3.0 Turbo's image-only Start Frame). Defaults to the existing image+video behavior. */
+  accept?: string;
 }
 
 type Tab = "uploads" | "elements" | "imageGenerations" | "videoGenerations" | "liked";
@@ -27,14 +33,31 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "liked", label: "Liked", icon: <Heart className="size-4" /> },
 ];
 
+const MODE_LABELS: Record<"startFrame" | "endFrame", string> = {
+  startFrame: "Selecting: Start Frame",
+  endFrame: "Selecting: End Frame",
+};
+
 export default function AssetsPickerModal({
   isOpen,
   onClose,
   defaultTab = "uploads",
+  mode = "default",
+  onSelectAsset,
+  accept = "image/*,video/*",
 }: AssetsPickerModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   if (!isOpen) return null;
+
+  // Only wired when a caller passes onSelectAsset (e.g. Kling 3.0 References).
+  // Other callers keep the prior fully-inert upload behavior.
+  const handleSelectAsset = onSelectAsset
+    ? (url: string) => {
+        onSelectAsset(url);
+        onClose();
+      }
+    : undefined;
 
   return (
     <div
@@ -54,6 +77,12 @@ export default function AssetsPickerModal({
         >
           <X className="size-5" />
         </button>
+
+        {mode !== "default" && (
+          <div className="absolute left-6 top-4 z-10 text-xs font-medium text-[#00e5ff]">
+            {MODE_LABELS[mode]}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-white/10">
@@ -76,7 +105,9 @@ export default function AssetsPickerModal({
 
         {/* Content */}
         <div className="overflow-y-auto h-[calc(600px-60px)]">
-          {activeTab === "uploads" && <UploadsTab onClose={onClose} />}
+          {activeTab === "uploads" && (
+            <UploadsTab onSelectAsset={handleSelectAsset} accept={accept} />
+          )}
           {activeTab === "elements" && <ElementsTab />}
           {activeTab === "imageGenerations" && (
             <EmptyTab label="No image generations yet" />
@@ -91,7 +122,13 @@ export default function AssetsPickerModal({
   );
 }
 
-function UploadsTab({ onClose }: { onClose: () => void }) {
+function UploadsTab({
+  onSelectAsset,
+  accept = "image/*,video/*",
+}: {
+  onSelectAsset?: (url: string) => void;
+  accept?: string;
+}) {
   const [hasUploads] = useState(false);
 
   return (
@@ -109,9 +146,10 @@ function UploadsTab({ onClose }: { onClose: () => void }) {
               <input
                 type="file"
                 className="hidden"
-                accept="image/*,video/*"
-                onChange={() => {
-                  // Handle upload
+                accept={accept}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file && onSelectAsset) onSelectAsset(URL.createObjectURL(file));
                 }}
               />
             </label>

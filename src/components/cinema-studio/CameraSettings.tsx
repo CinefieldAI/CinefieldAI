@@ -20,7 +20,7 @@ interface CameraSettingsProps {
     focalLength?: number;
     aperture?: string;
   };
-  onCameraChange?: (camera: any) => void;
+  onCameraChange?: (camera: NonNullable<CameraSettingsProps["camera"]>) => void;
   /** Real current Genre/Style summary so the top pills stay in sync
       instead of showing stale hardcoded text. */
   genre?: string;

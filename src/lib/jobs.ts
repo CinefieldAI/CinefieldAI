@@ -1,23 +1,44 @@
 // In-memory job storage (development only)
 // Production: migrate to Redis or database
 
+export interface CinemaStyleSettings {
+  colorPalette?: string[];
+  lighting?: string[];
+  cameraMovement?: string[];
+}
+
+export interface CinemaCameraSettings {
+  camera?: string;
+  lens?: string;
+  focalLength?: number;
+  aperture?: string;
+}
+
+export interface GenerateVideoRequest {
+  model: string;
+  prompt?: string;
+  advancedPrompt?: string;
+  batchSize?: number;
+  resolution?: string;
+  aspectRatio?: string;
+  duration?: number;
+  sound?: boolean;
+  /** Cinema Studio 3.5 only — omitted for every other model. */
+  genre?: string;
+  /** Cinema Studio 3.5 only — omitted for every other model. */
+  style?: CinemaStyleSettings;
+  /** Cinema Studio 3.5 only — omitted for every other model. */
+  camera?: CinemaCameraSettings;
+  quality?: string;
+}
+
 export interface JobData {
   jobId: string;
   status: "queued" | "processing" | "completed" | "failed";
   progress: number;
   estimatedTime: number;
   createdAt: number;
-  request: {
-    model: string;
-    prompt?: string;
-    advancedPrompt?: string;
-    batchSize?: number;
-    resolution?: string;
-    aspectRatio?: string;
-    duration?: number;
-    sound?: boolean;
-    [key: string]: unknown;
-  };
+  request: GenerateVideoRequest;
   result?: {
     videoUrl: string | null;
     error?: string;
@@ -26,7 +47,7 @@ export interface JobData {
 
 const jobs = new Map<string, JobData>();
 
-export function createJob(request: JobData["request"]): JobData {
+export function createJob(request: GenerateVideoRequest): JobData {
   const jobId = crypto.randomUUID();
   const job: JobData = {
     jobId,

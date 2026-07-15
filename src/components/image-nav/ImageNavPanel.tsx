@@ -113,9 +113,6 @@ export default function ImageNavPanel({ isOpen, onSelect }: ImageNavPanelProps) 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const modelParam = searchParams.get("model");
-  const isImageRoute =
-    pathname === "/generate/image" || pathname.startsWith("/generate/image/");
-
   if (!isOpen) return null;
 
   return (

@@ -54,24 +54,6 @@ const CAMERA_IMAGES: Record<string, string> = {
   "Dreamy Flow": "/cinema-studio/camera/dreamy-flow.mp4",
 };
 
-/** Camera preset icons. */
-const CAMERA_PRESETS: Record<string, string> = {
-  "Vintage Haze": "/cinema-studio/camera-settings/camera/raw-16mm.webp",
-};
-
-/** Lens preset icons. */
-const LENS_PRESETS: Record<string, string> = {
-  "35mm": "/cinema-studio/camera-settings/lens/clinical-sharp.webp",
-  "50mm": "/cinema-studio/camera-settings/lens/anamorphic.webp",
-  "85mm": "/cinema-studio/camera-settings/lens/warm-halation.webp",
-};
-
-/** Aperture preset icons. */
-const APERTURE_PRESETS: Record<string, string> = {
-  "f/1.4": "/cinema-studio/camera-settings/aperture/f14-wide-open.webp",
-  "f/4": "/cinema-studio/camera-settings/aperture/f4-moderate.webp",
-};
-
 function thumbFor(label: string): string {
   let h = 0;
   for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 360;
@@ -106,7 +88,6 @@ function Column({
   selected,
   onToggle,
   onAuto,
-  docked,
 }: {
   title: string;
   options: string[];
@@ -114,7 +95,6 @@ function Column({
   selected: string[];
   onToggle: (name: string) => void;
   onAuto: () => void;
-  docked?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const scrollUp = () => ref.current?.scrollBy({ top: -120, behavior: "smooth" });
@@ -288,7 +268,6 @@ export default function StyleModal({
         selected={value.colorPalette ?? []}
         onToggle={(n) => toggle("colorPalette", n)}
         onAuto={() => clear("colorPalette")}
-        docked={docked}
       />
       <Column
         title="Lighting"
@@ -297,7 +276,6 @@ export default function StyleModal({
         selected={value.lighting ?? []}
         onToggle={(n) => toggle("lighting", n)}
         onAuto={() => clear("lighting")}
-        docked={docked}
       />
       <Column
         title="Camera Moveset Style"
@@ -306,7 +284,6 @@ export default function StyleModal({
         selected={value.cameraMovement ?? []}
         onToggle={(n) => toggle("cameraMovement", n)}
         onAuto={() => clear("cameraMovement")}
-        docked={docked}
       />
     </div>
   );

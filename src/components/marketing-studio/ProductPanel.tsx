@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { X, Link2 } from "lucide-react";
 
 interface ProductPanelProps {

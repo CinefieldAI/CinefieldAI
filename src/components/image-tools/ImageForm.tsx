@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, Plus, Search, Check } from "lucide-react";
-import { IMAGE_MODEL_CONFIGS, FEATURED_IMAGE_MODELS } from "@/lib/imageModelConfig";
+import { IMAGE_MODEL_CONFIGS } from "@/lib/imageModelConfig";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const MODEL_ICONS: Record<string, string> = {
@@ -14,7 +14,15 @@ const MODEL_ICONS: Record<string, string> = {
 
 const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
 
-const FEATURED_MODELS_LIST = [
+type ModelListItem = {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  badge?: string;
+};
+
+const FEATURED_MODELS_LIST: ModelListItem[] = [
   { id: "higgsfield-soul-2", label: "Higgsfield Soul 2.0", description: "Next generation ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-soul-cinema", label: "Higgsfield Soul Cinema", description: "Cinema-grade visual creation", icon: "google" },
   { id: "gpt-image-2", label: "GPT Image 2", description: "4K images with near-perfect text rendering", icon: "openai" },
@@ -25,7 +33,7 @@ const FEATURED_MODELS_LIST = [
   { id: "recraft-v4-1", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "google" },
 ];
 
-const ALL_MODELS_LIST = [
+const ALL_MODELS_LIST: ModelListItem[] = [
   { id: "nano-banana", label: "Nano Banana", description: "Google's standard generation model", icon: "google" },
   { id: "higgsfield-soul", label: "Higgsfield Soul", description: "Ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-face-swap", label: "Higgsfield Face Swap", description: "Seamless face swapping", icon: "google" },
@@ -53,7 +61,7 @@ interface ImageFormProps {
   onDrawOpen?: (open: boolean) => void;
 }
 
-export default function ImageForm({ isDrawOpen = false, onDrawOpen }: ImageFormProps) {
+export default function ImageForm({ onDrawOpen }: ImageFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const modelParam = searchParams.get("model") || "nano-banana-pro";
@@ -62,7 +70,7 @@ export default function ImageForm({ isDrawOpen = false, onDrawOpen }: ImageFormP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLDivElement>(null);
 
-  const [prompt, setPrompt] = useState("");
+  const [, setPrompt] = useState("");
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [isQualityOpen, setIsQualityOpen] = useState(false);
   const [isAspectOpen, setIsAspectOpen] = useState(false);

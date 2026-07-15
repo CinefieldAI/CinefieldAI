@@ -32,7 +32,6 @@ export default function AttachmentPreview({ attachments, onRemove }: AttachmentP
                 <Loader2 className="h-4 w-4 animate-spin text-magenta-400" />
               </div>
             ) : file.url ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local blob preview, optimization N/A
               <img src={file.url} alt={file.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-zinc-500">

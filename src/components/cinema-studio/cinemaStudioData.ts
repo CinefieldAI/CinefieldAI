@@ -1,16 +1,11 @@
-// @ts-nocheck
 import {
   Aperture,
-  Banana,
   BarChart3,
-  Bot,
   Camera,
   Clapperboard,
   Compass,
   Copy,
   Film,
-  Globe,
-  Grid3x3,
   Home,
   Heart,
   Layers,
@@ -19,7 +14,6 @@ import {
   Sparkle,
   Sparkles,
   Star,
-  Triangle,
   UserRound,
   Users,
   Wand2,
@@ -70,6 +64,8 @@ export interface ModelInfo {
   /** Model-specific default duration applied on selection. */
   defaultDuration?: number;
   badges?: ModelBadge[];
+  /** Shows a small sound/audio icon next to the name (e.g. Wan 2.5, Wan 2.5 Fast). */
+  sound?: boolean;
   baseCredits: number;
   /** Supports Character & Style controls. */
   characterStyle?: boolean;
@@ -99,6 +95,7 @@ const vsub = (
   resolution: ModelInfo["resolution"],
   durationLabel: string,
   badges?: ModelBadge[],
+  sound?: boolean,
 ): ModelInfo => ({
   id,
   name,
@@ -108,6 +105,7 @@ const vsub = (
   durations: durationLabel.replace(/s/g, "").split("-").map(Number),
   baseCredits: RES_CRED[resolution] ?? 80,
   badges,
+  sound,
 });
 
 /** Video parent category (renders with a right-side flyout of submodels). */
@@ -115,7 +113,7 @@ const vparent = (
   id: string,
   name: string,
   description: string,
-  icon: LucideIcon,
+  icon: LucideIcon | string,
   submodels: ModelInfo[],
   badges?: ModelBadge[],
 ): ModelInfo => ({
@@ -138,7 +136,8 @@ const vfeat = (
   resolution: ModelInfo["resolution"],
   durationLabel: string,
   badges?: ModelBadge[],
-): ModelInfo => ({ ...vsub(id, name, resolution, durationLabel, badges), icon });
+  sound?: boolean,
+): ModelInfo => ({ ...vsub(id, name, resolution, durationLabel, badges, sound), icon });
 
 export const MODEL_CATEGORIES: ModelCategory[] = [
   {
@@ -187,13 +186,13 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
       vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s", ["NEW", "EXCLUSIVE"]),
       vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s"),
       vfeat("gemini-omni-flash", "Gemini Omni Flash", "/Google_Veo_3.1.png", "720p", "4s-10s", ["NEW"]),
-      vfeat("kling-3.0", "Kling 3.0", "/Kling_3.0.png", "4K", "3s-15s"),
+      vfeat("kling-3.0", "Kling 3.0", "/Kling_3.0.png", "4K", "3s-15s", undefined, true),
       vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", "/Kling_3.0.png", "1080p", "3s-15s", ["NEW"]),
       vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", "/Kling_3.0.png", "1080p", "3s-30s"),
-      vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", ["NEW"]),
+      vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", ["NEW"], true),
       vfeat("grok-base", "Grok Imagine", "/Grok_Imagine_1.5.png", "720p", "1s-15s"),
       vfeat("grok-1.5", "Grok Imagine 1.5", "/Grok_Imagine_1.5.png", "720p", "1s-15s", ["NEW"]),
-      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", ["NEW"]),
+      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", ["NEW"], true),
       vfeat("wan-2.7", "Wan 2.7", Wind, "1080p", "2s-15s", ["NEW"]),
     ],
   },
@@ -272,10 +271,11 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         Wind,
         [
           vsub("wan-2.7", "Wan 2.7", "1080p", "2s-15s", ["NEW"]),
-          vsub("wan-2.6", "Wan 2.6", "1080p", "5s-10s", ["NEW"]),
-          vsub("wan-2.5", "Wan 2.5", "1080p", "5s-10s", ["PREMIUM"]),
-          vsub("wan-2.5-fast", "Wan 2.5 Fast", "1080p", "5s-10s", ["PREMIUM"]),
+          vsub("wan-2.6", "Wan 2.6", "1080p", "5s-15s", ["NEW"]),
+          vsub("wan-2.5", "Wan 2.5", "1080p", "5s-10s", ["PREMIUM"], true),
+          vsub("wan-2.5-fast", "Wan 2.5 Fast", "1080p", "5s-10s", ["PREMIUM"], true),
           vsub("wan-2.2", "Wan 2.2", "720p", "5s", ["PREMIUM"]),
+          vsub("wan-2.2-fast", "Wan 2.2 Fast", "720p", "5s"),
         ],
       ),
       vparent(
@@ -322,7 +322,7 @@ const M = (
   id: string,
   name: string,
   description: string,
-  icon: LucideIcon,
+  icon: LucideIcon | string,
   opts: { resolution?: ModelInfo["resolution"]; isNew?: boolean } = {},
 ): ModelInfo => ({
   id,

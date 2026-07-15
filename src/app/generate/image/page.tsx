@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import ImageForm from "@/components/image-tools/ImageForm";
 import HeroSection from "@/components/image-tools/HeroSection";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { useSearchParams } from "next/navigation";
 
-export default function GenerateImagePage() {
+function GenerateImageContent() {
   const searchParams = useSearchParams();
   const modelParam = searchParams.get("model") || "nano-banana-pro";
   const [isDrawOpen, setIsDrawOpen] = useState(false);
@@ -53,5 +53,13 @@ export default function GenerateImagePage() {
         <NanoBananaProDrawWorkspace isOpen={isDrawOpen} onClose={() => setIsDrawOpen(false)} />
       )}
     </div>
+  );
+}
+
+export default function GenerateImagePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
+      <GenerateImageContent />
+    </Suspense>
   );
 }

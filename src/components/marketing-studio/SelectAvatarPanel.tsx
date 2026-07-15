@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { X, Search } from "lucide-react";
 
 type AvatarFilter = "all" | "pinned" | "myAvatars";
@@ -42,8 +42,6 @@ export default function SelectAvatarPanel({
   onAvatarSelect,
   promptBarDock = "bottom",
 }: SelectAvatarPanelProps) {
-  if (!isOpen) return null;
-
   const filteredAvatars = useMemo(() => {
     let result = MOCK_AVATARS;
 
@@ -67,6 +65,8 @@ export default function SelectAvatarPanel({
 
     return result;
   }, [avatarFilter, avatarGender, avatarSearchQuery]);
+
+  if (!isOpen) return null;
 
   return (
     <>

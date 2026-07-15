@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Home, Grid3x3, Heart, Link2, Paperclip } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 interface SidebarContextType {
   open: boolean;
@@ -46,7 +46,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function SidebarHeader({ children }: { children: React.ReactNode }) {
+export function SidebarHeader({}: { children: React.ReactNode }) {
   const { open, setOpen } = useSidebar();
 
   return (

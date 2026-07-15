@@ -11,7 +11,6 @@ interface CapabilityCardProps {
 }
 
 export default function CapabilityCard({
-  id,
   title,
   description,
   icon,
