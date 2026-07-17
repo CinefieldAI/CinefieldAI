@@ -47,7 +47,7 @@ export default function CinemaStudioWorkspace() {
     aspectRatio: string;
     resolution: string;
     startFrame: string | null;
-  }>({ aspectRatio: "16:9", resolution: "1080p", startFrame: null });
+  }>({ aspectRatio: "1:1", resolution: "720p", startFrame: null });
 
   // Cinema Studio 3.0 Director's Panel settings
   const [cinema3Genre, setCinema3Genre] = useState("General");
@@ -237,9 +237,14 @@ export default function CinemaStudioWorkspace() {
               durations={
                 model === "gemini-omni-flash"
                   ? [4, 6, 8, 10]
-                  : model === "kling-3.0-omni-edit"
+                  : model === "kling-3.0-omni-edit" || model === "kling-o1-video-edit"
                     ? [3, 4, 5, 6, 7, 8, 9, 10]
-                    : selectedModel.durations
+                    : model === "sora-2" ||
+                        model === "sora-2-pro" ||
+                        model === "sora-2-max" ||
+                        model === "sora-2-pro-max"
+                      ? [4, 8, 12]
+                      : selectedModel.durations
               }
               onDurationChange={setDuration}
               batch={batch}

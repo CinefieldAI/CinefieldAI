@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import {
+  AtSign,
   ChevronDown,
   Minus,
   Plus,
@@ -31,7 +32,7 @@ import KlingCharacterPanel from "./KlingCharacterPanel";
 import KlingSceneControl from "./KlingSceneControl";
 import KlingMotionCard from "./KlingMotionCard";
 import KlingCharacterCard from "./KlingCharacterCard";
-import { getModel } from "./cinemaStudioData";
+import MotionPresetsPanel from "./MotionPresetsPanel";
 
 export interface PromptBarProps {
   prompt: string;
@@ -101,6 +102,65 @@ function EnhanceIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/** Generic "+" (add assets) and "@" (mention) input-action button pair, per live reference. */
+function PlusAtButtons({ onOpenPicker }: { onOpenPicker: () => void }) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onOpenPicker}
+        aria-label="Add assets"
+        title="Add assets"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+      >
+        <Plus className="size-4" />
+      </button>
+      <button
+        type="button"
+        aria-label="Mention"
+        title="Mention"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+      >
+        <AtSign className="size-4" />
+      </button>
+    </>
+  );
+}
+
+/** "Auto settings" toggle switch, shared by Kling 3.0 Omni Edit and Kling O1 Video Edit. */
+function AutoSettingsToggle({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/[0.04] px-2 py-1">
+      <span className="whitespace-nowrap px-1 text-xs font-semibold text-white">
+        Auto settings
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label="Auto settings"
+        onClick={onToggle}
+        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#00e5ff] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+          checked ? "bg-emerald-500" : "bg-white/20"
+        }`}
+      >
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute left-0.5 top-1/2 size-3 -translate-y-1/2 transform rounded-full bg-white shadow-lg transition-transform duration-300 ease-in-out ${
+            checked ? "translate-x-3" : ""
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -250,9 +310,63 @@ export default function PromptBar(props: PromptBarProps) {
   const [klingOmniFrameMode, setKlingOmniFrameMode] = useState<
     "startFrame" | "endFrame" | null
   >(null);
+  const [klingOmniReferencesOpen, setKlingOmniReferencesOpen] = useState(false);
+  // Multi-shot only shown/interactive in Elements mode (per live click-audit).
+  const [klingOmniMultiShot, setKlingOmniMultiShot] = useState("off");
+
+  // Kling O1 Video — Mode (Frames/Elements), interactive (per live click-audit).
+  const [klingO1Mode, setKlingO1Mode] = useState<"frames" | "elements">("frames");
+  const [klingO1ReferencesOpen, setKlingO1ReferencesOpen] = useState(false);
+
+  // Kling O1 Video Edit — Auto settings toggle + single Video Reference slot.
+  const [o1VideoEditAutoSettings, setO1VideoEditAutoSettings] = useState(true);
+  const [o1VideoEditVideoReference, setO1VideoEditVideoReference] = useState<string | null>(null);
+
+  // Kling Motion Control (non-3.0) — isolated from the LOCKED Kling 3.0 Motion
+  // Control's state entirely; reuses the same generic sub-components.
+  const [klingMcSettings, setKlingMcSettings] = useState({
+    advancedPrompt: "",
+    orientation: "video" as "video" | "image",
+    sceneControl: "Image",
+  });
+  const [klingMcMotionModalOpen, setKlingMcMotionModalOpen] = useState(false);
+  const [klingMcCharacterPanelOpen, setKlingMcCharacterPanelOpen] = useState(false);
+  const [klingMcAdvancedSettingsOpen, setKlingMcAdvancedSettingsOpen] = useState(false);
+
+  // GENERAL tile's presets panel — shared by Minimax Hailuo and every Kling
+  // model with a GENERAL tile (2.6, 2.5 Turbo, 2.1, 2.1 Master); the live
+  // click-audit showed byte-identical GENERAL tile markup across families.
+  const [motionPresetsPanelOpen, setMotionPresetsPanelOpen] = useState(false);
+
+  // Kling 2.5 Turbo / Kling 2.1 — identical composer (shared state is safe since only one
+  // model is selected at a time). The "On" toggle is the shared Sound toggle (not duplicated).
+  const [klingLegacyStartFrame, setKlingLegacyStartFrame] = useState<string | null>(null);
+  const [klingLegacyReferencesOpen, setKlingLegacyReferencesOpen] = useState(false);
+
+  // Kling 2.1 Master — Start/End Frame + General tile ("On" toggle is the shared Sound toggle).
+  const [kling21MasterFrames, setKling21MasterFrames] = useState<{
+    startFrame: string | null;
+    endFrame: string | null;
+  }>({ startFrame: null, endFrame: null });
+  const [kling21MasterFrameMode, setKling21MasterFrameMode] = useState<
+    "startFrame" | "endFrame" | null
+  >(null);
+  const [kling21MasterReferencesOpen, setKling21MasterReferencesOpen] = useState(false);
+
+  // OpenAI Sora 2 family — single optional Start Frame slot.
+  const [soraStartFrame, setSoraStartFrame] = useState<string | null>(null);
+  const [soraReferencesOpen, setSoraReferencesOpen] = useState(false);
+
+  // HappyHorse — single optional Start Frame slot.
+  const [happyHorseStartFrame, setHappyHorseStartFrame] = useState<string | null>(null);
+  const [happyHorseReferencesOpen, setHappyHorseReferencesOpen] = useState(false);
+
+  // Grok Imagine family — single mandatory Start Frame slot.
+  const [grokStartFrame, setGrokStartFrame] = useState<string | null>(null);
 
   // Kling 2.6 — Enhance toggle + Start Frame (General preset tile is visual-only for now).
   const [kling26Enhance, setKling26Enhance] = useState(true);
+  const [kling26AudioVoice, setKling26AudioVoice] = useState(true);
   const [kling26StartFrame, setKling26StartFrame] = useState<string | null>(null);
 
   // Kling O1 Video (both "kling-2.6-max" and "kling-01-video" ids) — Start/End Frame.
@@ -346,6 +460,34 @@ export default function PromptBar(props: PromptBarProps) {
   // Kling O1 Video detection (two ids sharing the same composer)
   const isKlingO1Video = model === "kling-2.6-max" || model === "kling-01-video";
 
+  // Kling O1 Video Edit detection
+  const isKlingO1VideoEdit = model === "kling-o1-video-edit";
+
+  // Kling Motion Control (non-3.0) detection — separate from the LOCKED "kling-3.0-motion-control"
+  const isKlingMotionControlNon3 = model === "kling-motion-control";
+
+  // Kling 2.5 Turbo / Kling 2.1 — identical composer
+  const isKling25TurboOr21 = model === "kling-2.5-turbo" || model === "kling-2.1";
+
+  // Kling 2.1 Master detection
+  const isKling21Master = model === "kling-2.1-master";
+
+  // OpenAI Sora 2 family (4 confirmed ids — "sora-3.1-lite" and "sora-2-3.1-fast"
+  // aren't in the live click-audit's "All models" list, so they're left on the
+  // existing generic composer rather than guessed at here)
+  const isOpenAISora =
+    model === "sora-2" ||
+    model === "sora-2-pro" ||
+    model === "sora-2-max" ||
+    model === "sora-2-pro-max";
+
+  // HappyHorse detection
+  const isHappyHorse = model === "happyhorse";
+
+  // Grok Imagine family (only "grok-1.5" is confirmed via live click-audit;
+  // "grok-base"/"grok-edit" are assumed to share the same composer)
+  const isGrokImagine = model === "grok-base" || model === "grok-1.5" || model === "grok-edit";
+
   // Minimax Hailuo family detection (2.3 Fast / 2.3 / 02 Fast / 02)
   const isMinimaxHailuo =
     model === "minimax-2.3-fast" ||
@@ -353,12 +495,17 @@ export default function PromptBar(props: PromptBarProps) {
     model === "minimax-02-fast" ||
     model === "minimax-02";
 
+  // Minimax "2.3" family has no Duration chip (per live reference capture);
+  // the "02" family shows one, defaulting to 6s.
+  const isMinimax23Family = model === "minimax-2.3-fast" || model === "minimax-2.3";
+  const isMinimax02Family = model === "minimax-02-fast" || model === "minimax-02";
+
   // Set Gemini Omni Flash defaults
   useEffect(() => {
     if (isGeminiOmniFlash) {
       onAspectRatioChange("9:16");
       onResolutionChange("720p");
-      onDurationChange(8);
+      onDurationChange(10);
       onBatchChange("1/4");
     }
   }, [isGeminiOmniFlash, onAspectRatioChange, onResolutionChange, onDurationChange, onBatchChange]);
@@ -380,14 +527,12 @@ export default function PromptBar(props: PromptBarProps) {
     }
   }, [isKling3, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
-  // Set Kling 3.0 Omni Edit defaults
+  // Set Kling 3.0 Omni Edit defaults (no Aspect Ratio or Duration chip — confirmed absent from the real reference)
   useEffect(() => {
     if (isKling3OmniEdit) {
-      onAspectRatioChange("1:1");
       onResolutionChange("1080p");
-      onDurationChange(4);
     }
-  }, [isKling3OmniEdit, onAspectRatioChange, onResolutionChange, onDurationChange]);
+  }, [isKling3OmniEdit, onResolutionChange]);
 
   // Set Kling 3.0 Omni defaults
   useEffect(() => {
@@ -425,14 +570,91 @@ export default function PromptBar(props: PromptBarProps) {
     }
   }, [isKlingO1Video, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
-  // Set Minimax Hailuo defaults — Quality/Resolution follows the selected
-  // submodel's catalog value (1080p vs 512p), Sound defaults Off.
+  // Set Kling 3.0 Turbo's Duration default (6s) — the isolated kling3TurboSettings
+  // doesn't cover duration, so this reuses the shared top-level duration state.
+  useEffect(() => {
+    if (isKling3Turbo) {
+      onDurationChange(6);
+    }
+  }, [isKling3Turbo, onDurationChange]);
+
+  // Set Kling O1 Video Edit defaults
+  useEffect(() => {
+    if (isKlingO1VideoEdit) {
+      onAspectRatioChange("1:1");
+      onResolutionChange("1080p");
+    }
+  }, [isKlingO1VideoEdit, onAspectRatioChange, onResolutionChange]);
+
+  // Set Google Veo 3.1 Lite's Aspect default to "Auto" (confirmed via live click-audit)
+  useEffect(() => {
+    if (isVeo31Lite) {
+      onAspectRatioChange("auto");
+    }
+  }, [isVeo31Lite, onAspectRatioChange]);
+
+  // Set OpenAI Sora 2 family defaults
+  useEffect(() => {
+    if (isOpenAISora) {
+      onAspectRatioChange("16:9");
+      onDurationChange(12);
+    }
+  }, [isOpenAISora, onAspectRatioChange, onDurationChange]);
+
+  // Set HappyHorse defaults
+  useEffect(() => {
+    if (isHappyHorse) {
+      onAspectRatioChange("16:9");
+      onResolutionChange("720p");
+      onDurationChange(6);
+    }
+  }, [isHappyHorse, onAspectRatioChange, onResolutionChange, onDurationChange]);
+
+  // Set Grok Imagine defaults
+  useEffect(() => {
+    if (isGrokImagine) {
+      onDurationChange(5);
+    }
+  }, [isGrokImagine, onDurationChange]);
+
+  // Set Kling Motion Control (non-3.0) defaults
+  useEffect(() => {
+    if (isKlingMotionControlNon3) {
+      onResolutionChange("1080p");
+    }
+  }, [isKlingMotionControlNon3, onResolutionChange]);
+
+  // Set Kling 2.5 Turbo / Kling 2.1 defaults
+  useEffect(() => {
+    if (isKling25TurboOr21) {
+      onResolutionChange("720p");
+      onDurationChange(5);
+    }
+  }, [isKling25TurboOr21, onResolutionChange, onDurationChange]);
+
+  // Set Kling 2.1 Master defaults
+  useEffect(() => {
+    if (isKling21Master) {
+      onDurationChange(5);
+    }
+  }, [isKling21Master, onDurationChange]);
+
+  // Set Minimax Hailuo defaults — Quality defaults to 1080p for all 4
+  // submodels (confirmed via live click-audit — even "512p"-native 02 Fast
+  // defaults its Quality chip to 1080p), Sound defaults Off.
   useEffect(() => {
     if (isMinimaxHailuo) {
-      onResolutionChange(getModel(model).resolution);
+      onResolutionChange("1080p");
       onSoundChange(false);
     }
-  }, [isMinimaxHailuo, model, onResolutionChange, onSoundChange]);
+  }, [isMinimaxHailuo, onResolutionChange, onSoundChange]);
+
+  // "02" family shows a Duration chip defaulting to 6s (the "2.3" family has none).
+  useEffect(() => {
+    if (isMinimax02Family) {
+      onDurationChange(6);
+    }
+  }, [isMinimax02Family, onDurationChange]);
 
   // Close Custom Multishot panel on outside click
   useEffect(() => {
@@ -484,7 +706,7 @@ export default function PromptBar(props: PromptBarProps) {
       >
         {/* Prompt input + controls */}
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          {isKling3MotionControl ? (
+          {isKling3MotionControl || isKlingMotionControlNon3 ? (
             <KlingPromptDisabled />
           ) : (
             <PromptInput
@@ -700,7 +922,7 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
-            {/* Kling 3.0 (plain) References Button - opens Start/End Frame choice, then Assets picker */}
+            {/* Kling 3.0 (plain) References Button - opens Start Frame choice, then Assets picker */}
             {isKling3 && (
               <ReferencesControl
                 isOpen={activePromptPopover === "references"}
@@ -714,7 +936,125 @@ export default function PromptBar(props: PromptBarProps) {
                   setAssetsPickerOpen(true);
                 }}
                 portalContainer={portalRoot}
+                showEndFrame={false}
               />
+            )}
+
+            {/* Kling 3.0 Omni References Button - Frames mode only (Elements mode uses +/@ instead) */}
+            {isKling3Omni && klingOmniMode === "frames" && (
+              <ReferencesControl
+                isOpen={klingOmniReferencesOpen}
+                onOpenChange={setKlingOmniReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setKlingOmniFrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Kling 2.6 References Button - Start Frame only */}
+            {isKling2_6 && (
+              <ReferencesControl
+                isOpen={activePromptPopover === "references"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("references");
+                  else if (activePromptPopover === "references") setActivePromptPopover(null);
+                }}
+                onSelectReferenceMode={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+                showEndFrame={false}
+              />
+            )}
+
+            {/* Kling O1 Video References Button - Frames mode only (Elements mode uses +/@ instead) */}
+            {isKlingO1Video && klingO1Mode === "frames" && (
+              <ReferencesControl
+                isOpen={klingO1ReferencesOpen}
+                onOpenChange={setKlingO1ReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setKlingO1FrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Kling 2.5 Turbo / Kling 2.1 References Button - Start Frame only */}
+            {isKling25TurboOr21 && (
+              <ReferencesControl
+                isOpen={klingLegacyReferencesOpen}
+                onOpenChange={setKlingLegacyReferencesOpen}
+                onSelectReferenceMode={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+                showEndFrame={false}
+              />
+            )}
+
+            {/* Kling 2.1 Master References Button - Start + End Frame */}
+            {isKling21Master && (
+              <ReferencesControl
+                isOpen={kling21MasterReferencesOpen}
+                onOpenChange={setKling21MasterReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setKling21MasterFrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* OpenAI Sora 2 References Button - Start Frame only */}
+            {isOpenAISora && (
+              <ReferencesControl
+                isOpen={soraReferencesOpen}
+                onOpenChange={setSoraReferencesOpen}
+                onSelectReferenceMode={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+                showEndFrame={false}
+              />
+            )}
+
+            {/* HappyHorse References Button - Start Frame only */}
+            {isHappyHorse && (
+              <ReferencesControl
+                isOpen={happyHorseReferencesOpen}
+                onOpenChange={setHappyHorseReferencesOpen}
+                onSelectReferenceMode={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+                showEndFrame={false}
+              />
+            )}
+
+            {/* Grok Imagine Plus Button - plain "Add assets", no References submenu confirmed */}
+            {isGrokImagine && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                aria-label="Add assets"
+                title="Add assets"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+              >
+                <Plus className="size-4" />
+              </button>
             )}
 
             {/* Google Veo 3.1 Lite References Button - opens Start/End Frame choice, then Assets picker */}
@@ -734,10 +1074,30 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* + / @ input actions - Kling 3.0 Omni Edit, Kling O1 Video Edit, and
+                Omni/O1 Video's Elements mode, per live reference */}
+            {(isKling3OmniEdit ||
+              isKlingO1VideoEdit ||
+              (isKling3Omni && klingOmniMode === "elements") ||
+              (isKlingO1Video && klingO1Mode === "elements")) && (
+              <PlusAtButtons
+                onOpenPicker={() => {
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+              />
+            )}
+
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
-            {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control */}
-            {!isKling3MotionControl && (
+            {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
+                Kling Motion Control (non-3.0), Kling 2.5 Turbo/2.1, Kling 2.1 Master, and Grok Imagine (not in its chip row) */}
+            {!isKling3MotionControl &&
+              !isKling3OmniEdit &&
+              !isKlingMotionControlNon3 &&
+              !isKling25TurboOr21 &&
+              !isKling21Master &&
+              !isGrokImagine && (
               isGeminiOmniFlash ? (
                 <GeminiAspectRatioControl
                   value={aspectRatio}
@@ -762,7 +1122,7 @@ export default function PromptBar(props: PromptBarProps) {
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
                 />
-              ) : isKling3 || isKling3OmniEdit || isKling3Omni || isKling2_6 || isKlingO1Video ? (
+              ) : isKling3 || isKling3Omni || isKling2_6 || isKlingO1Video || isKlingO1VideoEdit ? (
                 <Kling3AspectRatioControl
                   value={aspectRatio}
                   onChange={onAspectRatioChange}
@@ -784,6 +1144,18 @@ export default function PromptBar(props: PromptBarProps) {
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
                 />
+              ) : isOpenAISora ? (
+                <Veo31AspectRatioControl
+                  value={aspectRatio}
+                  onChange={onAspectRatioChange}
+                  isOpen={activePromptPopover === "aspectRatio"}
+                  portalContainer={portalRoot}
+                  onOpenChange={(open) => {
+                    if (open) setActivePromptPopover("aspectRatio");
+                    else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
+                  }}
+                  includeAuto={false}
+                />
               ) : (
                 <AspectRatioDropdown
                   value={aspectRatio}
@@ -794,12 +1166,13 @@ export default function PromptBar(props: PromptBarProps) {
                     if (open) setActivePromptPopover("aspectRatio");
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
+                  options={isHappyHorse ? ["16:9", "9:16", "1:1", "4:3", "3:4"] : undefined}
                 />
               )
             )}
 
-            {/* Resolution - For all models except Gemini and Kling 2.6 (not in its chip row) */}
-            {!isGeminiOmniFlash && !isKling2_6 && (
+            {/* Resolution - Hidden for Gemini, Kling 2.6, Kling 2.1 Master, and OpenAI Sora 2 (not in their chip row) */}
+            {!isGeminiOmniFlash && !isKling2_6 && !isKling21Master && !isOpenAISora && (
               <ResolutionPopover
                 value={isKling3Turbo ? kling3TurboSettings.resolution : resolution}
                 onChange={
@@ -814,17 +1187,21 @@ export default function PromptBar(props: PromptBarProps) {
                   else if (activePromptPopover === "resolution") setActivePromptPopover(null);
                 }}
                 options={
-                  isKling3 || isKling3Turbo
+                  isKling3 || isKling3Turbo || isKling3Omni
                     ? ["720p", "1080p", "4K"]
-                    : isVeo31Lite
+                    : isVeo31Lite ||
+                        isKlingO1Video ||
+                        isKling3OmniEdit ||
+                        isKlingO1VideoEdit ||
+                        isKlingMotionControlNon3 ||
+                        isKling25TurboOr21 ||
+                        isHappyHorse
                       ? ["720p", "1080p"]
-                      : isMinimaxHailuo
-                        ? ["512p", "1080p"]
-                        : isKling3OmniEdit || isKlingO1Video
-                          ? ["1080p"]
-                          : isKling3Omni
-                            ? ["4K"]
-                            : undefined
+                      : isMinimax23Family
+                        ? ["768p", "1080p"]
+                        : isMinimax02Family
+                          ? ["512p", "768p", "1080p"]
+                          : undefined
                 }
               />
             )}
@@ -874,34 +1251,39 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Duration - Hidden for Kling 3.0 Motion Control and Kling 3.0 Turbo */}
-            {isVideo && !isKling3MotionControl && !isKling3Turbo && (
+            {/* Duration - Hidden for Kling 3.0 Motion Control, Kling 3.0 (plain, confirmed
+                absent from the live click-audit — Multi-shot is its only time control),
+                Kling 3.0 Omni Edit, Kling Motion Control (non-3.0), and Minimax Hailuo "2.3" family */}
+            {isVideo &&
+              !isKling3MotionControl &&
+              !isKling3 &&
+              !isKling3OmniEdit &&
+              !isKlingMotionControlNon3 &&
+              !isMinimax23Family && (
               <DurationPopover
                 value={duration}
                 durations={durations}
                 onChange={onDurationChange}
                 portalContainer={portalRoot}
-                isOpen={
-                  isKling3 || isKling3OmniEdit || isKling3Omni || isKling2_6 || isKlingO1Video
-                    ? activePromptPopover === "duration"
-                    : undefined
-                }
-                onOpenChange={
-                  isKling3 || isKling3OmniEdit || isKling3Omni || isKling2_6 || isKlingO1Video
-                    ? (open) => {
-                        if (open) setActivePromptPopover("duration");
-                        else if (activePromptPopover === "duration") setActivePromptPopover(null);
-                      }
-                    : undefined
-                }
+                isOpen={activePromptPopover === "duration"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("duration");
+                  else if (activePromptPopover === "duration") setActivePromptPopover(null);
+                }}
               />
             )}
 
-            {/* Multi-shot - Kling 3.0 (plain) only, placed after Duration per spec */}
+            {/* Multi-shot - Kling 3.0 (plain) only, placed after Duration per spec.
+                Live click-audit confirms 3 options: Off, Auto, Custom (default Custom). */}
             {isKling3 && (
               <Kling3MultiShotControl
                 value={kling3Extras.multiShot}
                 onChange={(value) => setKling3Extras((s) => ({ ...s, multiShot: value }))}
+                options={[
+                  { value: "off", label: "Off" },
+                  { value: "auto", label: "Auto" },
+                  { value: "custom", label: "Custom" },
+                ]}
                 isOpen={activePromptPopover === "multiShot"}
                 onOpenChange={(open) => {
                   if (open) setActivePromptPopover("multiShot");
@@ -911,12 +1293,16 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Multi-shot (Off-only) - Kling 3.0 Omni, placed after Duration per spec */}
-            {isKling3Omni && (
+            {/* Multi-shot - Kling 3.0 Omni, Elements mode only (hidden in Frames mode per live click-audit) */}
+            {isKling3Omni && klingOmniMode === "elements" && (
               <Kling3MultiShotControl
-                value="off"
-                onChange={() => {}}
-                options={[{ value: "off", label: "Off" }]}
+                value={klingOmniMultiShot}
+                onChange={setKlingOmniMultiShot}
+                options={[
+                  { value: "off", label: "Off" },
+                  { value: "auto", label: "Auto" },
+                  { value: "custom", label: "Custom" },
+                ]}
                 isOpen={activePromptPopover === "multiShot"}
                 onOpenChange={(open) => {
                   if (open) setActivePromptPopover("multiShot");
@@ -944,12 +1330,15 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Mode chip - Kling O1 Video (Frames only — no other mode confirmed) */}
+            {/* Mode chip - Kling O1 Video (Frames/Elements, interactive per live click-audit) */}
             {isKlingO1Video && (
               <KlingModeControl
-                value="frames"
-                onChange={() => {}}
-                options={[{ value: "frames", label: "Frames" }]}
+                value={klingO1Mode}
+                onChange={(value) => setKlingO1Mode(value as "frames" | "elements")}
+                options={[
+                  { value: "frames", label: "Frames" },
+                  { value: "elements", label: "Elements" },
+                ]}
                 isOpen={activePromptPopover === "mode"}
                 onOpenChange={(open) => {
                   if (open) setActivePromptPopover("mode");
@@ -973,33 +1362,21 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
-            {/* Auto settings toggle - Kling 3.0 Omni Edit only, placed after Duration per spec */}
+            {/* Auto settings toggle - Kling 3.0 Omni Edit + Kling O1 Video Edit */}
             {isKling3OmniEdit && (
-              <div className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/[0.04] px-2 py-1">
-                <span className="whitespace-nowrap px-1 text-xs font-semibold text-white">
-                  Auto settings
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={omniEditAutoSettings}
-                  aria-label="Auto settings"
-                  onClick={() => setOmniEditAutoSettings((v) => !v)}
-                  className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#00e5ff] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
-                    omniEditAutoSettings ? "bg-emerald-500" : "bg-white/20"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className={`pointer-events-none absolute left-0.5 top-1/2 size-3 -translate-y-1/2 transform rounded-full bg-white shadow-lg transition-transform duration-300 ease-in-out ${
-                      omniEditAutoSettings ? "translate-x-3" : ""
-                    }`}
-                  />
-                </button>
-              </div>
+              <AutoSettingsToggle
+                checked={omniEditAutoSettings}
+                onToggle={() => setOmniEditAutoSettings((v) => !v)}
+              />
+            )}
+            {isKlingO1VideoEdit && (
+              <AutoSettingsToggle
+                checked={o1VideoEditAutoSettings}
+                onToggle={() => setO1VideoEditAutoSettings((v) => !v)}
+              />
             )}
 
-            {/* Video Reference tile - Kling 3.0 Omni Edit only, placed after Auto settings */}
+            {/* Video Reference tile - Kling 3.0 Omni Edit + Kling O1 Video Edit */}
             {isKling3OmniEdit && (
               <FrameCard
                 variant="reference"
@@ -1012,6 +1389,107 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 onRemove={() => setOmniEditVideoReference(null)}
               />
+            )}
+            {isKlingO1VideoEdit && (
+              <FrameCard
+                variant="reference"
+                label="Video Reference"
+                value={o1VideoEditVideoReference}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setO1VideoEditVideoReference(null)}
+              />
+            )}
+
+            {/* Kling Motion Control (non-3.0) Specific Controls — isolated state from the LOCKED Kling 3.0 Motion Control */}
+            {isKlingMotionControlNon3 && (
+              <>
+                <KlingAdvancedSettingsPanel
+                  isOpen={klingMcAdvancedSettingsOpen}
+                  onOpenChange={setKlingMcAdvancedSettingsOpen}
+                  advancedPrompt={klingMcSettings.advancedPrompt}
+                  onPromptChange={(advancedPrompt) =>
+                    setKlingMcSettings((s) => ({ ...s, advancedPrompt }))
+                  }
+                  orientation={klingMcSettings.orientation}
+                  onOrientationChange={(orientation) =>
+                    setKlingMcSettings((s) => ({ ...s, orientation }))
+                  }
+                  portalContainer={portalRoot}
+                />
+
+                <KlingSceneControl
+                  value={klingMcSettings.sceneControl}
+                  onChange={(sceneControl) => setKlingMcSettings((s) => ({ ...s, sceneControl }))}
+                  options={["Off", "Video", "Image"]}
+                  label="Scene control"
+                  showValue
+                  portalContainer={portalRoot}
+                />
+
+                <KlingMotionCard onClick={() => setKlingMcMotionModalOpen(true)} />
+
+                <KlingCharacterCard onClick={() => setKlingMcCharacterPanelOpen(true)} />
+              </>
+            )}
+
+            {/* Start Frame + General preset tile - Kling 2.5 Turbo / Kling 2.1 */}
+            {isKling25TurboOr21 && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={klingLegacyStartFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setKlingLegacyStartFrame(null)}
+                />
+                <FrameCard
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+                />
+              </>
+            )}
+
+            {/* Start + End Frame + General preset tile - Kling 2.1 Master */}
+            {isKling21Master && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={kling21MasterFrames.startFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setKling21MasterFrameMode("startFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setKling21MasterFrames((s) => ({ ...s, startFrame: null }))}
+                />
+                <FrameCard
+                  label="End Frame"
+                  value={kling21MasterFrames.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setKling21MasterFrameMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setKling21MasterFrames((s) => ({ ...s, endFrame: null }))}
+                />
+                <FrameCard
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+                />
+              </>
             )}
 
             {/* Start/End Frame - Kling 3.0 Omni, Frames mode only (hidden in Elements mode) */}
@@ -1064,8 +1542,8 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Start/End Frame - Kling O1 Video */}
-            {isKlingO1Video && (
+            {/* Start/End Frame - Kling O1 Video, Frames mode only (hidden in Elements mode) */}
+            {isKlingO1Video && klingO1Mode === "frames" && (
               <>
                 <FrameCard
                   label="Start Frame"
@@ -1092,7 +1570,7 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Batch - Hidden for Kling 3.0 Motion Control, Kling 3.0 (plain), Kling 3.0 Turbo, Google Veo 3.1 Lite, Kling 3.0 Omni Edit, Kling 3.0 Omni, Kling 2.6, and Kling O1 Video */}
+            {/* Batch - Hidden for every Kling family model and Google Veo 3.1 Lite (no model list shows a batch stepper) */}
             {!isKling3MotionControl &&
               !isKling3 &&
               !isKling3Turbo &&
@@ -1100,15 +1578,25 @@ export default function PromptBar(props: PromptBarProps) {
               !isKling3OmniEdit &&
               !isKling3Omni &&
               !isKling2_6 &&
-              !isKlingO1Video && <BatchStepper value={batch} onChange={onBatchChange} />}
+              !isKlingO1Video &&
+              !isKlingO1VideoEdit &&
+              !isKlingMotionControlNon3 &&
+              !isKling25TurboOr21 &&
+              !isKling21Master &&
+              !isOpenAISora &&
+              !isGrokImagine && <BatchStepper value={batch} onChange={onBatchChange} />}
 
             {isVideo &&
               !isGeminiOmniFlash &&
               !isKling3MotionControl &&
-              !isKling3 &&
               !isKling3Turbo &&
               !isKling3OmniEdit &&
-              !isKlingO1Video && (
+              !isKlingO1Video &&
+              !isKlingO1VideoEdit &&
+              !isKlingMotionControlNon3 &&
+              !isOpenAISora &&
+              !isHappyHorse &&
+              !isGrokImagine && (
               <button
                 type="button"
                 onClick={() => {
@@ -1132,6 +1620,24 @@ export default function PromptBar(props: PromptBarProps) {
                   <VolumeX className="size-3.5" />
                 )}
                 {sound ? "On" : "Off"}
+              </button>
+            )}
+
+            {/* Audio-Voice chip - Kling 2.6 only, separate from Sound per live reference capture */}
+            {isKling2_6 && (
+              <button
+                type="button"
+                onClick={() => setKling26AudioVoice((v) => !v)}
+                aria-label="Toggle audio voice"
+                aria-pressed={kling26AudioVoice}
+                className={`${PILL} ${kling26AudioVoice ? "text-[#00e5ff]" : "text-neutral-400"}`}
+              >
+                {kling26AudioVoice ? (
+                  <Volume2 className="size-3.5" />
+                ) : (
+                  <VolumeX className="size-3.5" />
+                )}
+                {kling26AudioVoice ? "On" : "Off"}
               </button>
             )}
 
@@ -1163,12 +1669,59 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Start/End Frame - Minimax Hailuo family only, placed after Sound */}
+            {/* Start Frame - OpenAI Sora 2 family only */}
+            {isOpenAISora && (
+              <FrameCard
+                label="Start Frame"
+                value={soraStartFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setSoraStartFrame(null)}
+              />
+            )}
+
+            {/* Start Frame - HappyHorse only (Optional) */}
+            {isHappyHorse && (
+              <FrameCard
+                label="Start Frame"
+                value={happyHorseStartFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setHappyHorseStartFrame(null)}
+              />
+            )}
+
+            {/* Start Frame - Grok Imagine family only (mandatory, no "Optional" label) */}
+            {isGrokImagine && (
+              <FrameCard
+                label="Start Frame"
+                value={grokStartFrame}
+                optional={false}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setGrokStartFrame(null)}
+              />
+            )}
+
+            {/* Start/End Frame - Minimax Hailuo family only, placed after Sound.
+                The "2.3" family has Start Frame only (no End Frame); the "02"
+                family has both. Start Frame is mandatory (no "Optional" label)
+                except for "minimax-2.3" specifically — all per live click-audit. */}
             {isMinimaxHailuo && (
               <>
                 <FrameCard
                   label="Start Frame"
                   value={minimaxFrames.startFrame}
+                  optional={model === "minimax-2.3"}
                   onOpenPicker={() => {
                     setActivePromptPopover(null);
                     setMinimaxFrameMode("startFrame");
@@ -1177,16 +1730,24 @@ export default function PromptBar(props: PromptBarProps) {
                   }}
                   onRemove={() => setMinimaxFrames((s) => ({ ...s, startFrame: null }))}
                 />
+                {isMinimax02Family && (
+                  <FrameCard
+                    label="End Frame"
+                    value={minimaxFrames.endFrame}
+                    onOpenPicker={() => {
+                      setActivePromptPopover(null);
+                      setMinimaxFrameMode("endFrame");
+                      setAssetsPickerTab("uploads");
+                      setAssetsPickerOpen(true);
+                    }}
+                    onRemove={() => setMinimaxFrames((s) => ({ ...s, endFrame: null }))}
+                  />
+                )}
                 <FrameCard
-                  label="End Frame"
-                  value={minimaxFrames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setMinimaxFrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setMinimaxFrames((s) => ({ ...s, endFrame: null }))}
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
                 />
               </>
             )}
@@ -1208,6 +1769,7 @@ export default function PromptBar(props: PromptBarProps) {
           setMinimaxFrameMode(null);
           setKlingOmniFrameMode(null);
           setKlingO1FrameMode(null);
+          setKling21MasterFrameMode(null);
         }}
         defaultTab={assetsPickerTab}
         mode={
@@ -1219,20 +1781,22 @@ export default function PromptBar(props: PromptBarProps) {
                 ? veo31FrameMode
                 : isMinimaxHailuo && minimaxFrameMode
                   ? minimaxFrameMode
-                  : isKling3OmniEdit
+                  : isKling3OmniEdit || isKlingO1VideoEdit
                     ? "videoReference"
                     : isKling3Omni && klingOmniFrameMode
                       ? klingOmniFrameMode
-                      : isKling2_6
+                      : isKling2_6 || isKling25TurboOr21 || isOpenAISora || isHappyHorse || isGrokImagine
                         ? "startFrame"
                         : isKlingO1Video && klingO1FrameMode
                           ? klingO1FrameMode
-                          : "default"
+                          : isKling21Master && kling21MasterFrameMode
+                            ? kling21MasterFrameMode
+                            : "default"
         }
         accept={
           isKling3Turbo || isVeo31Lite || isMinimaxHailuo
             ? "image/*"
-            : isKling3OmniEdit
+            : isKling3OmniEdit || isKlingO1VideoEdit
               ? "video/*"
               : undefined
         }
@@ -1263,23 +1827,40 @@ export default function PromptBar(props: PromptBarProps) {
                       )
                   : isKling3OmniEdit
                     ? (url) => setOmniEditVideoReference(url)
-                    : isKling3Omni && klingOmniFrameMode
-                      ? (url) =>
-                          setKlingOmniFrames((s) =>
-                            klingOmniFrameMode === "startFrame"
-                              ? { ...s, startFrame: url }
-                              : { ...s, endFrame: url },
-                          )
-                      : isKling2_6
-                        ? (url) => setKling26StartFrame(url)
-                        : isKlingO1Video && klingO1FrameMode
-                          ? (url) =>
-                              setKlingO1Frames((s) =>
-                                klingO1FrameMode === "startFrame"
-                                  ? { ...s, startFrame: url }
-                                  : { ...s, endFrame: url },
-                              )
-                          : undefined
+                    : isKlingO1VideoEdit
+                      ? (url) => setO1VideoEditVideoReference(url)
+                      : isKling3Omni && klingOmniFrameMode
+                        ? (url) =>
+                            setKlingOmniFrames((s) =>
+                              klingOmniFrameMode === "startFrame"
+                                ? { ...s, startFrame: url }
+                                : { ...s, endFrame: url },
+                            )
+                        : isKling2_6
+                          ? (url) => setKling26StartFrame(url)
+                          : isKling25TurboOr21
+                            ? (url) => setKlingLegacyStartFrame(url)
+                            : isOpenAISora
+                              ? (url) => setSoraStartFrame(url)
+                              : isHappyHorse
+                                ? (url) => setHappyHorseStartFrame(url)
+                                : isGrokImagine
+                                  ? (url) => setGrokStartFrame(url)
+                                  : isKlingO1Video && klingO1FrameMode
+                              ? (url) =>
+                                  setKlingO1Frames((s) =>
+                                    klingO1FrameMode === "startFrame"
+                                      ? { ...s, startFrame: url }
+                                      : { ...s, endFrame: url },
+                                  )
+                              : isKling21Master && kling21MasterFrameMode
+                                ? (url) =>
+                                    setKling21MasterFrames((s) =>
+                                      kling21MasterFrameMode === "startFrame"
+                                        ? { ...s, startFrame: url }
+                                        : { ...s, endFrame: url },
+                                    )
+                                : undefined
         }
       />
 
@@ -1295,11 +1876,31 @@ export default function PromptBar(props: PromptBarProps) {
         />
       )}
 
-      {/* Kling 3.0 Motion Control Modals and Panels */}
+      <MotionPresetsPanel
+        isOpen={motionPresetsPanelOpen}
+        onClose={() => setMotionPresetsPanelOpen(false)}
+        onSelectPreset={() => {}}
+      />
+
+      {/* Kling 3.0 Motion Control Modals and Panels (LOCKED) */}
       {isKling3MotionControl && (
         <>
           <KlingMotionModal isOpen={motionModalOpen} onClose={() => setMotionModalOpen(false)} />
           <KlingCharacterPanel isOpen={characterPanelOpen} onClose={() => setCharacterPanelOpen(false)} />
+        </>
+      )}
+
+      {/* Kling Motion Control (non-3.0) Modals and Panels — isolated instances */}
+      {isKlingMotionControlNon3 && (
+        <>
+          <KlingMotionModal
+            isOpen={klingMcMotionModalOpen}
+            onClose={() => setKlingMcMotionModalOpen(false)}
+          />
+          <KlingCharacterPanel
+            isOpen={klingMcCharacterPanelOpen}
+            onClose={() => setKlingMcCharacterPanelOpen(false)}
+          />
         </>
       )}
 

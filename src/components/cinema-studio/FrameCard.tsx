@@ -18,6 +18,8 @@ interface FrameCardProps {
    * on hover, label always visible. Not wired to a real presets panel yet.
    */
   variant?: "frame" | "reference" | "general";
+  /** "frame" variant only — hides the "Optional" label for mandatory slots (default true, matches existing behavior). */
+  optional?: boolean;
 }
 
 /** Verbatim reference icon — diagonal pencil-with-tip stroke (GENERAL tile's hover edit affordance). */
@@ -42,6 +44,7 @@ export default function FrameCard({
   onOpenPicker,
   onRemove,
   variant = "frame",
+  optional = true,
 }: FrameCardProps) {
   if (variant === "general") {
     return (
@@ -135,9 +138,11 @@ export default function FrameCard({
             <span className="flex size-5 items-center justify-center rounded-full bg-white/10 text-white">
               <Plus className="size-3" />
             </span>
-            <span className="text-[9px] font-medium leading-tight text-neutral-400">
-              Optional
-            </span>
+            {optional && (
+              <span className="text-[9px] font-medium leading-tight text-neutral-400">
+                Optional
+              </span>
+            )}
             <span className="text-[9px] font-semibold uppercase leading-tight tracking-wide text-neutral-300">
               {label}
             </span>

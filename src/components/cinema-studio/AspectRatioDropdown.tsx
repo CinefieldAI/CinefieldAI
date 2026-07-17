@@ -11,6 +11,8 @@ interface AspectRatioDropdownProps {
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
   portalContainer?: HTMLElement | null;
+  /** Restricts the option list (e.g. HappyHorse's 5 options, no "Auto"/"21:9"). Defaults to the full ASPECT_RATIO_OPTIONS list. */
+  options?: string[];
 }
 
 /** Small rectangle preview shaped to the option's aspect ratio. */
@@ -37,9 +39,13 @@ export default function AspectRatioDropdown({
   onOpenChange,
   isOpen,
   portalContainer,
+  options,
 }: AspectRatioDropdownProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
+  const visibleOptions = options
+    ? ASPECT_RATIO_OPTIONS.filter((opt) => options.includes(opt.value))
+    : ASPECT_RATIO_OPTIONS;
 
   const handleOpenChange = (newOpen: boolean) => {
     if (isOpen === undefined) setOpen(newOpen);
@@ -68,7 +74,7 @@ export default function AspectRatioDropdown({
           sideOffset={8}
           className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px] pointer-events-auto"
         >
-          {ASPECT_RATIO_OPTIONS.map((opt) => {
+          {visibleOptions.map((opt) => {
             const selected = opt.value === value;
             return (
               <button

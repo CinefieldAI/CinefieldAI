@@ -7,6 +7,8 @@ interface ReferencesControlProps {
   onOpenChange: (open: boolean) => void;
   onSelectReferenceMode: (mode: "startFrame" | "endFrame") => void;
   portalContainer?: HTMLElement | null;
+  /** Hides "As End Frame" for single-slot models (default true, matches the existing two-option behavior). */
+  showEndFrame?: boolean;
 }
 
 /** Verbatim reference plus icon (stroke-based, not lucide's filled Plus). */
@@ -63,6 +65,7 @@ export default function ReferencesControl({
   onOpenChange,
   onSelectReferenceMode,
   portalContainer,
+  showEndFrame = true,
 }: ReferencesControlProps) {
   const select = (mode: "startFrame" | "endFrame") => {
     onSelectReferenceMode(mode);
@@ -104,16 +107,18 @@ export default function ReferencesControl({
             </span>
             <span className="text-sm font-medium text-white">As Start Frame</span>
           </button>
-          <button
-            type="button"
-            onClick={() => select("endFrame")}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#131517]"
-          >
-            <span className="text-neutral-400">
-              <EndFrameIcon />
-            </span>
-            <span className="text-sm font-medium text-white">As End Frame</span>
-          </button>
+          {showEndFrame && (
+            <button
+              type="button"
+              onClick={() => select("endFrame")}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#131517]"
+            >
+              <span className="text-neutral-400">
+                <EndFrameIcon />
+              </span>
+              <span className="text-sm font-medium text-white">As End Frame</span>
+            </button>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

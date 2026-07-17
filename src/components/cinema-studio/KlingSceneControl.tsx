@@ -10,6 +10,12 @@ interface KlingSceneControlProps {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   portalContainer?: HTMLElement | null;
+  /** Overrides the option list (e.g. Kling Motion Control's is Off/Video/Image). Defaults to the locked Kling 3.0 Motion Control list. */
+  options?: string[];
+  /** Overrides the trigger label (default "Scene Control", matches the locked caller). */
+  label?: string;
+  /** Shows the current value inline in the trigger, next to the label (off by default, matches the locked caller). */
+  showValue?: boolean;
 }
 
 const PILL =
@@ -23,6 +29,9 @@ export default function KlingSceneControl({
   isOpen: externalIsOpen,
   onOpenChange: externalOnOpenChange,
   portalContainer,
+  options = SCENE_OPTIONS,
+  label = "Scene Control",
+  showValue = false,
 }: KlingSceneControlProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalOpen;
@@ -36,7 +45,8 @@ export default function KlingSceneControl({
     <Popover.Root open={isOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button type="button" aria-label="Scene Control" className={PILL}>
-          Scene Control
+          {label}
+          {showValue && <span className="font-semibold text-[#00e5ff]">{value}</span>}
           <ChevronDown className="size-3 text-neutral-500" />
         </button>
       </Popover.Trigger>
@@ -47,7 +57,7 @@ export default function KlingSceneControl({
           sideOffset={8}
           className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[120px] pointer-events-auto"
         >
-          {SCENE_OPTIONS.map((opt) => {
+          {options.map((opt) => {
             const selected = opt === value;
             return (
               <button

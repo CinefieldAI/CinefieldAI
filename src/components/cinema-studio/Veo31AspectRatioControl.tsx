@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 
 interface Veo31AspectRatioControlProps {
   value: string;
@@ -10,16 +10,22 @@ interface Veo31AspectRatioControlProps {
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
   portalContainer?: HTMLElement | null;
+  /** Hides the "Auto" option (e.g. OpenAI Sora 2, which only has 16:9/9:16). Defaults to true (Veo 3.1 Lite's existing behavior). */
+  includeAuto?: boolean;
 }
 
-/** Google Veo 3.1 Lite-specific aspect ratio options (only 9:16 and 16:9). */
+/** Google Veo 3.1 Lite-specific aspect ratio options — confirmed via live click-audit: Auto (default), 16:9, 9:16. */
 const VEO31_ASPECT_RATIOS = [
-  { value: "9:16", description: "Stories/Reels" },
+  { value: "auto", description: "Recommended" },
   { value: "16:9", description: "Widescreen" },
+  { value: "9:16", description: "Stories/Reels" },
 ];
 
-/** Exact reference SVGs (verbatim) — a tall rounded rect for 9:16, a wide rounded rect for 16:9. */
+/** Exact reference SVGs (verbatim) — a tall rounded rect for 9:16, a wide rounded rect for 16:9. No verbatim icon was captured for "Auto", so it uses a generic sparkle icon instead of an invented custom path. */
 function AspectIcon({ value }: { value: string }) {
+  if (value === "auto") {
+    return <Sparkles className="size-4" />;
+  }
   if (value === "9:16") {
     return (
       <svg width="16" height="16" viewBox="0 0 16 16" className="size-4">
@@ -50,9 +56,13 @@ export default function Veo31AspectRatioControl({
   onOpenChange,
   isOpen,
   portalContainer,
+  includeAuto = true,
 }: Veo31AspectRatioControlProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
+  const options = includeAuto
+    ? VEO31_ASPECT_RATIOS
+    : VEO31_ASPECT_RATIOS.filter((opt) => opt.value !== "auto");
 
   const handleOpenChange = (newOpen: boolean) => {
     if (isOpen === undefined) setOpen(newOpen);
@@ -80,7 +90,7 @@ export default function Veo31AspectRatioControl({
           sideOffset={8}
           className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[200px] pointer-events-auto"
         >
-          {VEO31_ASPECT_RATIOS.map((opt) => {
+          {options.map((opt) => {
             const selected = opt.value === value;
             return (
               <button
