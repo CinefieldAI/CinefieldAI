@@ -33,6 +33,7 @@ import KlingSceneControl from "./KlingSceneControl";
 import KlingMotionCard from "./KlingMotionCard";
 import KlingCharacterCard from "./KlingCharacterCard";
 import MotionPresetsPanel from "./MotionPresetsPanel";
+import BitrateControl from "./BitrateControl";
 
 export interface PromptBarProps {
   prompt: string;
@@ -257,6 +258,7 @@ export default function PromptBar(props: PromptBarProps) {
     | "references"
     | "multiShot"
     | "mode"
+    | "bitrate"
     | null
   >(null);
 
@@ -363,6 +365,9 @@ export default function PromptBar(props: PromptBarProps) {
 
   // Grok Imagine family — single mandatory Start Frame slot.
   const [grokStartFrame, setGrokStartFrame] = useState<string | null>(null);
+
+  // Seedance 2.0 family — Bitrate chip (High default / Standard).
+  const [seedanceBitrate, setSeedanceBitrate] = useState("High");
 
   // Kling 2.6 — Enhance toggle + Start Frame (General preset tile is visual-only for now).
   const [kling26Enhance, setKling26Enhance] = useState(true);
@@ -616,6 +621,15 @@ export default function PromptBar(props: PromptBarProps) {
       onDurationChange(5);
     }
   }, [isGrokImagine, onDurationChange]);
+
+  // Set Seedance 2.0 family defaults
+  useEffect(() => {
+    if (isSeedance2Family) {
+      onResolutionChange("1080p");
+      onDurationChange(7);
+      onSoundChange(false);
+    }
+  }, [isSeedance2Family, onResolutionChange, onDurationChange, onSoundChange]);
 
   // Set Kling Motion Control (non-3.0) defaults
   useEffect(() => {
@@ -1201,7 +1215,9 @@ export default function PromptBar(props: PromptBarProps) {
                         ? ["768p", "1080p"]
                         : isMinimax02Family
                           ? ["512p", "768p", "1080p"]
-                          : undefined
+                          : isSeedance2Family
+                            ? ["480p", "720p", "1080p", "4K"]
+                            : undefined
                 }
               />
             )}
@@ -1270,6 +1286,20 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("duration");
                   else if (activePromptPopover === "duration") setActivePromptPopover(null);
                 }}
+              />
+            )}
+
+            {/* Bitrate chip - Seedance 2.0 family only, placed after Duration */}
+            {isSeedance2Family && (
+              <BitrateControl
+                value={seedanceBitrate}
+                onChange={setSeedanceBitrate}
+                isOpen={activePromptPopover === "bitrate"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("bitrate");
+                  else if (activePromptPopover === "bitrate") setActivePromptPopover(null);
+                }}
+                portalContainer={portalRoot}
               />
             )}
 
