@@ -234,7 +234,13 @@ export default function CinemaStudioWorkspace() {
               resolution={resolution}
               onResolutionChange={setResolution}
               duration={duration}
-              durations={model === "gemini-omni-flash" ? [4, 6, 8, 10] : selectedModel.durations}
+              durations={
+                model === "gemini-omni-flash"
+                  ? [4, 6, 8, 10]
+                  : model === "kling-3.0-omni-edit"
+                    ? [3, 4, 5, 6, 7, 8, 9, 10]
+                    : selectedModel.durations
+              }
               onDurationChange={setDuration}
               batch={batch}
               onBatchChange={setBatch}

@@ -8,7 +8,7 @@ interface AssetsPickerModalProps {
   onClose: () => void;
   defaultTab?: "uploads" | "elements" | "imageGenerations" | "videoGenerations" | "liked";
   /** Reserved for callers (e.g. Kling 3.0 References, Kling 3.0 Turbo Start Frame) that assign the picked asset to a specific slot. */
-  mode?: "default" | "startFrame" | "endFrame";
+  mode?: "default" | "startFrame" | "endFrame" | "videoReference";
   /** Called with an object URL when an asset is picked. Only wired for callers that pass it. */
   onSelectAsset?: (url: string) => void;
   /** Restricts the Uploads file input (e.g. "image/*" for Kling 3.0 Turbo's image-only Start Frame). Defaults to the existing image+video behavior. */
@@ -33,9 +33,10 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "liked", label: "Liked", icon: <Heart className="size-4" /> },
 ];
 
-const MODE_LABELS: Record<"startFrame" | "endFrame", string> = {
+const MODE_LABELS: Record<"startFrame" | "endFrame" | "videoReference", string> = {
   startFrame: "Selecting: Start Frame",
   endFrame: "Selecting: End Frame",
+  videoReference: "Selecting: Video Reference",
 };
 
 export default function AssetsPickerModal({
