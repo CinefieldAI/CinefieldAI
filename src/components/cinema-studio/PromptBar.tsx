@@ -34,6 +34,7 @@ import KlingMotionCard from "./KlingMotionCard";
 import KlingCharacterCard from "./KlingCharacterCard";
 import MotionPresetsPanel from "./MotionPresetsPanel";
 import BitrateControl from "./BitrateControl";
+import SeedControl from "./SeedControl";
 
 export interface PromptBarProps {
   prompt: string;
@@ -369,6 +370,27 @@ export default function PromptBar(props: PromptBarProps) {
   // Seedance 2.0 family — Bitrate chip (High default / Standard).
   const [seedanceBitrate, setSeedanceBitrate] = useState("High");
 
+  // Higgsfield family — Start/End Frame + Seed chip (Random by default).
+  const [higgsfieldFrames, setHiggsfieldFrames] = useState<{
+    startFrame: string | null;
+    endFrame: string | null;
+  }>({ startFrame: null, endFrame: null });
+  const [higgsfieldFrameMode, setHiggsfieldFrameMode] = useState<
+    "startFrame" | "endFrame" | null
+  >(null);
+  const [higgsfieldReferencesOpen, setHiggsfieldReferencesOpen] = useState(false);
+  const [higgsfieldSeedLocked, setHiggsfieldSeedLocked] = useState(false);
+  const [higgsfieldSeed, setHiggsfieldSeed] = useState<number | null>(null);
+  const [higgsfieldSeedOpen, setHiggsfieldSeedOpen] = useState(false);
+
+  // Wan family — Start/End Frame (both Optional).
+  const [wanFrames, setWanFrames] = useState<{
+    startFrame: string | null;
+    endFrame: string | null;
+  }>({ startFrame: null, endFrame: null });
+  const [wanFrameMode, setWanFrameMode] = useState<"startFrame" | "endFrame" | null>(null);
+  const [wanReferencesOpen, setWanReferencesOpen] = useState(false);
+
   // Kling 2.6 — Enhance toggle + Start Frame (General preset tile is visual-only for now).
   const [kling26Enhance, setKling26Enhance] = useState(true);
   const [kling26AudioVoice, setKling26AudioVoice] = useState(true);
@@ -492,6 +514,22 @@ export default function PromptBar(props: PromptBarProps) {
   // Grok Imagine family (only "grok-1.5" is confirmed via live click-audit;
   // "grok-base"/"grok-edit" are assumed to share the same composer)
   const isGrokImagine = model === "grok-base" || model === "grok-1.5" || model === "grok-edit";
+
+  // Higgsfield family (Lite/Standard/Turbo) — only "Lite" is confirmed via
+  // live click-audit; the other two share identical catalog metadata (720p,
+  // 3s-5s, PREMIUM) so the same composer is assumed for all three.
+  const isHiggsfield =
+    model === "higgsfield-lite" || model === "higgsfield-standard" || model === "higgsfield-turbo";
+
+  // Wan family — only "Wan 2.7" is confirmed via live click-audit; the other
+  // 5 variants are assumed to share the same composer.
+  const isWan =
+    model === "wan-2.7" ||
+    model === "wan-2.6" ||
+    model === "wan-2.5" ||
+    model === "wan-2.5-fast" ||
+    model === "wan-2.2" ||
+    model === "wan-2.2-fast";
 
   // Minimax Hailuo family detection (2.3 Fast / 2.3 / 02 Fast / 02)
   const isMinimaxHailuo =
@@ -630,6 +668,22 @@ export default function PromptBar(props: PromptBarProps) {
       onSoundChange(false);
     }
   }, [isSeedance2Family, onResolutionChange, onDurationChange, onSoundChange]);
+
+  // Set Higgsfield family defaults
+  useEffect(() => {
+    if (isHiggsfield) {
+      onDurationChange(5);
+    }
+  }, [isHiggsfield, onDurationChange]);
+
+  // Set Wan family defaults
+  useEffect(() => {
+    if (isWan) {
+      onAspectRatioChange("16:9");
+      onResolutionChange("720p");
+      onDurationChange(5);
+    }
+  }, [isWan, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
   // Set Kling Motion Control (non-3.0) defaults
   useEffect(() => {
@@ -1071,6 +1125,34 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
+            {/* Higgsfield References Button - Start + End Frame */}
+            {isHiggsfield && (
+              <ReferencesControl
+                isOpen={higgsfieldReferencesOpen}
+                onOpenChange={setHiggsfieldReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setHiggsfieldFrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Wan References Button - Start + End Frame (both Optional) */}
+            {isWan && (
+              <ReferencesControl
+                isOpen={wanReferencesOpen}
+                onOpenChange={setWanReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setWanFrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
             {/* Google Veo 3.1 Lite References Button - opens Start/End Frame choice, then Assets picker */}
             {isVeo31Lite && (
               <ReferencesControl
@@ -1105,13 +1187,15 @@ export default function PromptBar(props: PromptBarProps) {
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
-                Kling Motion Control (non-3.0), Kling 2.5 Turbo/2.1, Kling 2.1 Master, and Grok Imagine (not in its chip row) */}
+                Kling Motion Control (non-3.0), Kling 2.5 Turbo/2.1, Kling 2.1 Master, Grok Imagine,
+                and Higgsfield (none of these show it in their chip row) */}
             {!isKling3MotionControl &&
               !isKling3OmniEdit &&
               !isKlingMotionControlNon3 &&
               !isKling25TurboOr21 &&
               !isKling21Master &&
-              !isGrokImagine && (
+              !isGrokImagine &&
+              !isHiggsfield && (
               isGeminiOmniFlash ? (
                 <GeminiAspectRatioControl
                   value={aspectRatio}
@@ -1180,13 +1264,19 @@ export default function PromptBar(props: PromptBarProps) {
                     if (open) setActivePromptPopover("aspectRatio");
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
-                  options={isHappyHorse ? ["16:9", "9:16", "1:1", "4:3", "3:4"] : undefined}
+                  options={
+                    isHappyHorse
+                      ? ["16:9", "9:16", "1:1", "4:3", "3:4"]
+                      : isWan
+                        ? ["16:9", "9:16", "4:3", "3:4", "1:1"]
+                        : undefined
+                  }
                 />
               )
             )}
 
-            {/* Resolution - Hidden for Gemini, Kling 2.6, Kling 2.1 Master, and OpenAI Sora 2 (not in their chip row) */}
-            {!isGeminiOmniFlash && !isKling2_6 && !isKling21Master && !isOpenAISora && (
+            {/* Resolution - Hidden for Gemini, Kling 2.6, Kling 2.1 Master, OpenAI Sora 2, and Higgsfield (not in their chip row) */}
+            {!isGeminiOmniFlash && !isKling2_6 && !isKling21Master && !isOpenAISora && !isHiggsfield && (
               <ResolutionPopover
                 value={isKling3Turbo ? kling3TurboSettings.resolution : resolution}
                 onChange={
@@ -1217,7 +1307,9 @@ export default function PromptBar(props: PromptBarProps) {
                           ? ["512p", "768p", "1080p"]
                           : isSeedance2Family
                             ? ["480p", "720p", "1080p", "4K"]
-                            : undefined
+                            : isWan
+                              ? ["720p", "1080p"]
+                              : undefined
                 }
               />
             )}
@@ -1286,6 +1378,7 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("duration");
                   else if (activePromptPopover === "duration") setActivePromptPopover(null);
                 }}
+                mode={isHiggsfield ? "buttons" : undefined}
               />
             )}
 
@@ -1299,6 +1392,19 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("bitrate");
                   else if (activePromptPopover === "bitrate") setActivePromptPopover(null);
                 }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Seed chip - Higgsfield family only, placed after Duration (before Sound) */}
+            {isHiggsfield && (
+              <SeedControl
+                locked={higgsfieldSeedLocked}
+                onLockedChange={setHiggsfieldSeedLocked}
+                seed={higgsfieldSeed}
+                onSeedChange={setHiggsfieldSeed}
+                isOpen={higgsfieldSeedOpen}
+                onOpenChange={setHiggsfieldSeedOpen}
                 portalContainer={portalRoot}
               />
             )}
@@ -1614,7 +1720,9 @@ export default function PromptBar(props: PromptBarProps) {
               !isKling25TurboOr21 &&
               !isKling21Master &&
               !isOpenAISora &&
-              !isGrokImagine && <BatchStepper value={batch} onChange={onBatchChange} />}
+              !isGrokImagine &&
+              !isHiggsfield &&
+              !isWan && <BatchStepper value={batch} onChange={onBatchChange} />}
 
             {isVideo &&
               !isGeminiOmniFlash &&
@@ -1742,6 +1850,69 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* Start Frame (mandatory) + End Frame (Optional) + General preset tile - Higgsfield family only */}
+            {isHiggsfield && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={higgsfieldFrames.startFrame}
+                  optional={false}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setHiggsfieldFrameMode("startFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setHiggsfieldFrames((s) => ({ ...s, startFrame: null }))}
+                />
+                <FrameCard
+                  label="End Frame"
+                  value={higgsfieldFrames.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setHiggsfieldFrameMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setHiggsfieldFrames((s) => ({ ...s, endFrame: null }))}
+                />
+                <FrameCard
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+                />
+              </>
+            )}
+
+            {/* Start/End Frame - Wan family only (both Optional) */}
+            {isWan && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={wanFrames.startFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setWanFrameMode("startFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setWanFrames((s) => ({ ...s, startFrame: null }))}
+                />
+                <FrameCard
+                  label="End Frame"
+                  value={wanFrames.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setWanFrameMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setWanFrames((s) => ({ ...s, endFrame: null }))}
+                />
+              </>
+            )}
+
             {/* Start/End Frame - Minimax Hailuo family only, placed after Sound.
                 The "2.3" family has Start Frame only (no End Frame); the "02"
                 family has both. Start Frame is mandatory (no "Optional" label)
@@ -1800,6 +1971,8 @@ export default function PromptBar(props: PromptBarProps) {
           setKlingOmniFrameMode(null);
           setKlingO1FrameMode(null);
           setKling21MasterFrameMode(null);
+          setHiggsfieldFrameMode(null);
+          setWanFrameMode(null);
         }}
         defaultTab={assetsPickerTab}
         mode={
@@ -1821,7 +1994,11 @@ export default function PromptBar(props: PromptBarProps) {
                           ? klingO1FrameMode
                           : isKling21Master && kling21MasterFrameMode
                             ? kling21MasterFrameMode
-                            : "default"
+                            : isHiggsfield && higgsfieldFrameMode
+                              ? higgsfieldFrameMode
+                              : isWan && wanFrameMode
+                                ? wanFrameMode
+                                : "default"
         }
         accept={
           isKling3Turbo || isVeo31Lite || isMinimaxHailuo
@@ -1890,7 +2067,21 @@ export default function PromptBar(props: PromptBarProps) {
                                         ? { ...s, startFrame: url }
                                         : { ...s, endFrame: url },
                                     )
-                                : undefined
+                                : isHiggsfield && higgsfieldFrameMode
+                                  ? (url) =>
+                                      setHiggsfieldFrames((s) =>
+                                        higgsfieldFrameMode === "startFrame"
+                                          ? { ...s, startFrame: url }
+                                          : { ...s, endFrame: url },
+                                      )
+                                  : isWan && wanFrameMode
+                                    ? (url) =>
+                                        setWanFrames((s) =>
+                                          wanFrameMode === "startFrame"
+                                            ? { ...s, startFrame: url }
+                                            : { ...s, endFrame: url },
+                                        )
+                                    : undefined
         }
       />
 

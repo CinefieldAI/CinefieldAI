@@ -12,6 +12,12 @@ interface DurationPopoverProps {
   /** Controlled open state — omit to keep the existing uncontrolled behavior. */
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Forces button-list vs. slider rendering, overriding the default
+   * length-based heuristic (needed when a 2-value array is a pair of
+   * discrete options rather than a min/max range, e.g. Higgsfield's 3s/5s).
+   */
+  mode?: "buttons" | "slider";
 }
 
 /** Shared h-7 control-pill style. */
@@ -25,6 +31,7 @@ export default function DurationPopover({
   portalContainer,
   isOpen,
   onOpenChange,
+  mode,
 }: DurationPopoverProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -34,6 +41,7 @@ export default function DurationPopover({
   };
   const min = Math.min(...durations);
   const max = Math.max(...durations);
+  const showButtons = mode ? mode === "buttons" : durations.length > 2;
 
   return (
     <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
@@ -55,7 +63,7 @@ export default function DurationPopover({
           align="start"
           sideOffset={8}
           className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto"
-          style={{ width: durations.length > 2 ? "220px" : "334px" }}
+          style={{ width: showButtons ? "220px" : "334px" }}
         >
           <div className="flex flex-col gap-3 rounded-xl p-2">
             <div>
@@ -63,7 +71,7 @@ export default function DurationPopover({
                 Duration
               </label>
             </div>
-            {durations.length > 2 ? (
+            {showButtons ? (
               <div className="space-y-1">
                 {durations.map((d) => {
                   const selected = d === value;
