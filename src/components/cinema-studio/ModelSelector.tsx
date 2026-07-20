@@ -19,10 +19,18 @@ import {
 import {
   IMAGE_MODEL_CATEGORIES,
   MODEL_CATEGORIES,
+  SEEDANCE_ICON,
   getModel,
   type ModelBadge,
   type ModelInfo,
 } from "./cinemaStudioData";
+
+/** The Seedance PNG has more transparent margin baked in than the other model
+ * icons, so it renders visibly smaller at the shared icon size — zoom it in
+ * specifically rather than resizing every model's icon. */
+function iconImgClassName(iconPath: string, base: string) {
+  return iconPath === SEEDANCE_ICON ? `${base} scale-150` : base;
+}
 
 /** Compact NEW/PREMIUM/EXCLUSIVE pill — reuses the app's existing lime accent (#D1FE17). */
 function VersionBadge({ badge }: { badge: ModelBadge }) {
@@ -114,9 +122,9 @@ function ImageRow({
         active ? "bg-white/5" : "hover:bg-white/5"
       } ${focused ? FOCUS_RING : ""}`}
     >
-      <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white">
+      <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
         {iconPath ? (
-          <img src={iconPath} alt="" className="size-10 object-cover" />
+          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-10 object-cover")} />
         ) : (
           Icon && <Icon className="size-10" />
         )}
@@ -169,9 +177,9 @@ function VideoFlatRow({
           : `border px-3 py-2.5 ${active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
       } ${focused ? FOCUS_RING : ""}`}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white">
+      <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
         {iconPath ? (
-          <img src={iconPath} alt="" className="size-6 object-cover" />
+          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
         ) : (
           Icon && <Icon className="size-6" />
         )}
@@ -294,9 +302,9 @@ function VideoParentRow({
           focused ? FOCUS_RING : ""
         }`}
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white">
+        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
           {iconPath ? (
-            <img src={iconPath} alt="" className="size-6 object-cover" />
+            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
           ) : (
             Icon && <Icon className="size-6" />
           )}
@@ -566,7 +574,13 @@ export default function ModelSelector({
               className="flex h-7 items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#d1fe17]"
             >
               {triggerIconPath ? (
-                <img src={triggerIconPath} alt="" className="h-5 w-5 object-cover" />
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
+                  <img
+                    src={triggerIconPath}
+                    alt=""
+                    className={iconImgClassName(triggerIconPath, "h-5 w-5 object-cover")}
+                  />
+                </span>
               ) : (
                 <TriggerIcon className="h-5 w-5" style={{ color: "#d1fe17" }} />
               )}
@@ -585,7 +599,13 @@ export default function ModelSelector({
               className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
             >
               {triggerIconPath ? (
-                <img src={triggerIconPath} alt="" className="h-5 w-5 object-cover" />
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
+                  <img
+                    src={triggerIconPath}
+                    alt=""
+                    className={iconImgClassName(triggerIconPath, "h-5 w-5 object-cover")}
+                  />
+                </span>
               ) : (
                 <TriggerIcon className="h-5 w-5" style={{ color: accent }} />
               )}

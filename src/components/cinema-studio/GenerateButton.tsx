@@ -4,6 +4,11 @@ interface GenerateButtonProps {
   creditCost: number;
   onGenerate: () => void;
   mode?: "image" | "video";
+  isLoading?: boolean;
+  /** Forces the yellow/lime accent regardless of mode — Cinema Studio 2.5 only,
+   * matches its real reference (yellow Generate button even in Video mode).
+   * Omitted for every other caller, preserving the existing mode-based behavior. */
+  accent?: "cyan" | "yellow";
 }
 
 function SparkleIcon() {
@@ -26,10 +31,12 @@ export default function GenerateButton({
   creditCost,
   onGenerate,
   mode = "video",
+  isLoading = false,
+  accent,
 }: GenerateButtonProps) {
-  const isImage = mode === "image";
+  const isImage = accent === "yellow" || (accent !== "cyan" && mode === "image");
 
-  // Image mode uses Higgsfield's yellow-green brand; video keeps turquoise.
+  // Image mode uses Higgsfield's yellow-green brand; video keeps turquoise. Cyan accent for Cinema Studio 2.5.
   const background = isImage
     ? "linear-gradient(135deg, #CDFF00 0%, #A6D400 100%)"
     : "linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%)";
@@ -42,6 +49,7 @@ export default function GenerateButton({
     <button
       type="button"
       onClick={onGenerate}
+      disabled={isLoading}
       aria-label="Generate"
       className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff] focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40"
       style={{
@@ -64,9 +72,9 @@ export default function GenerateButton({
       <span className="relative z-10 text-xs font-bold leading-[18px]">
         Generate
       </span>
-      <span className="relative z-10 flex h-4 items-center justify-center gap-0.5 text-[11px] font-semibold normal-case">
+      <span className={`relative z-10 flex h-4 items-center justify-center gap-0.5 text-[11px] font-semibold normal-case ${isLoading ? 'animate-spin' : ''}`}>
         <SparkleIcon />
-        {creditCost}
+        {isLoading ? null : creditCost}
       </span>
     </button>
   );

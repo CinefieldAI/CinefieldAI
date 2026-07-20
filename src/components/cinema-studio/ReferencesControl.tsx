@@ -26,7 +26,7 @@ function PlusIcon() {
 }
 
 /** Verbatim reference icon — frame with an arrow passing right through it — "As Start Frame". */
-function StartFrameIcon() {
+export function StartFrameIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
       <path
@@ -41,7 +41,7 @@ function StartFrameIcon() {
 }
 
 /** Verbatim reference icon — frame with an arrow passing left through it — "As End Frame". */
-function EndFrameIcon() {
+export function EndFrameIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
       <path

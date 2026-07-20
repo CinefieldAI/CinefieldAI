@@ -20,6 +20,9 @@ interface FrameCardProps {
   variant?: "frame" | "reference" | "general";
   /** "frame" variant only — hides the "Optional" label for mandatory slots (default true, matches existing behavior). */
   optional?: boolean;
+  /** Opt-in a11y for callers whose onOpenPicker toggles a dialog/panel open state (e.g. Seedance Pro Fast). Omitted for every pre-existing caller — no attribute is rendered unless passed. */
+  ariaHaspopup?: "dialog";
+  ariaExpanded?: boolean;
 }
 
 /** Verbatim reference icon — diagonal pencil-with-tip stroke (GENERAL tile's hover edit affordance). */
@@ -45,6 +48,8 @@ export default function FrameCard({
   onRemove,
   variant = "frame",
   optional = true,
+  ariaHaspopup,
+  ariaExpanded,
 }: FrameCardProps) {
   if (variant === "general") {
     return (
@@ -53,6 +58,8 @@ export default function FrameCard({
         data-panel-toggle
         onClick={onOpenPicker}
         aria-label={label}
+        aria-haspopup={ariaHaspopup}
+        aria-expanded={ariaExpanded}
         className="group relative flex h-[80px] w-[80px] shrink-0 flex-col items-start justify-between overflow-hidden rounded-xl bg-[#202020] p-1.5"
         style={{
           boxShadow:
@@ -123,6 +130,8 @@ export default function FrameCard({
         type="button"
         onClick={onOpenPicker}
         aria-label={label}
+        aria-haspopup={ariaHaspopup}
+        aria-expanded={ariaExpanded}
         className="relative flex h-full w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-white/10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_10px_rgba(0,0,0,0.35)] transition-colors hover:border-white/20"
         style={{
           backgroundImage: value

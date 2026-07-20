@@ -17,6 +17,7 @@ import AspectRatioDropdown from "./AspectRatioDropdown";
 import GeminiAspectRatioControl from "./GeminiAspectRatioControl";
 import Kling3AspectRatioControl from "./Kling3AspectRatioControl";
 import ReferencesControl from "./ReferencesControl";
+import Cinema25ReferencesPopover from "./Cinema25ReferencesPopover";
 import Kling3MultiShotControl from "./Kling3MultiShotControl";
 import KlingModeControl from "./KlingModeControl";
 import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
@@ -60,6 +61,7 @@ export interface PromptBarProps {
 
   creditCost: number;
   onGenerate: () => void;
+  isGenerating?: boolean;
 
   // Kling 3.0 Motion Control advanced prompt
   klingAdvancedPrompt: string;
@@ -78,6 +80,15 @@ export interface PromptBarProps {
       startFrame: string | null;
     }>
   >;
+
+  // Cinema Studio 2.5 — 3 reference slots (0=Reference, 1=Start Frame, 2=End
+  // Frame) shared between the composer's "+" button, the bottom-row Start/End
+  // Frame cards, and the Director Panel (state lives in the workspace, which
+  // renders the panel as a sibling of PromptBar).
+  cinema25References: (string | null)[];
+  onCinema25AssignReference: (slotIndex: number, url: string | null) => void;
+  cinema25ReferencesPopoverOpen: boolean;
+  onCinema25ReferencesPopoverOpenChange: (open: boolean) => void;
 }
 
 /** Verbatim reference icon — three sparkle stars + a pencil stroke (Kling 2.6's Enhance chip). */
@@ -107,8 +118,24 @@ function EnhanceIcon() {
   );
 }
 
-/** Generic "+" (add assets) and "@" (mention) input-action button pair, per live reference. */
-function PlusAtButtons({ onOpenPicker }: { onOpenPicker: () => void }) {
+/**
+ * Generic "+" (add assets) and "@" (mention) input-action button pair, per live reference.
+ * The "@" button is inert unless a caller passes onMentionClick (only Kling O1 Video's
+ * Elements mode currently does — see its isolated handleKlingO1ReferenceElementClick).
+ */
+function PlusAtButtons({
+  onOpenPicker,
+  onMentionClick,
+  mentionOpen = false,
+  mentionClassName,
+  mentionAriaLabel = "Mention",
+}: {
+  onOpenPicker: () => void;
+  onMentionClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  mentionOpen?: boolean;
+  mentionClassName?: string;
+  mentionAriaLabel?: string;
+}) {
   return (
     <>
       <button
@@ -122,9 +149,14 @@ function PlusAtButtons({ onOpenPicker }: { onOpenPicker: () => void }) {
       </button>
       <button
         type="button"
-        aria-label="Mention"
-        title="Mention"
-        className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+        onClick={onMentionClick}
+        aria-label={mentionAriaLabel}
+        title={mentionAriaLabel}
+        aria-haspopup={onMentionClick ? "dialog" : undefined}
+        aria-expanded={onMentionClick ? mentionOpen : undefined}
+        className={`flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors${
+          mentionClassName ? ` ${mentionClassName}` : ""
+        }`}
       >
         <AtSign className="size-4" />
       </button>
@@ -132,25 +164,40 @@ function PlusAtButtons({ onOpenPicker }: { onOpenPicker: () => void }) {
   );
 }
 
-/** "Auto settings" toggle switch, shared by Kling 3.0 Omni Edit and Kling O1 Video Edit. */
+/**
+ * Label + Radix-style switch toggle. Shared by Kling 3.0 Omni Edit / Kling O1
+ * Video Edit's "Auto settings" (default label, click-target unchanged) and
+ * Seedance 1.5 Pro's "Fixed Lens" (custom label, whole-row clickable).
+ */
 function AutoSettingsToggle({
   checked,
   onToggle,
+  label = "Auto settings",
+  wholeRowClickable = false,
 }: {
   checked: boolean;
   onToggle: () => void;
+  label?: string;
+  wholeRowClickable?: boolean;
 }) {
   return (
-    <div className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/[0.04] px-2 py-1">
+    <div
+      className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/[0.04] px-2 py-1"
+      onClick={wholeRowClickable ? onToggle : undefined}
+    >
       <span className="whitespace-nowrap px-1 text-xs font-semibold text-white">
-        Auto settings
+        {label}
       </span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        aria-label="Auto settings"
-        onClick={onToggle}
+        data-state={checked ? "on" : "off"}
+        aria-label={label}
+        onClick={(e) => {
+          if (wholeRowClickable) e.stopPropagation();
+          onToggle();
+        }}
         className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#00e5ff] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
           checked ? "bg-emerald-500" : "bg-white/20"
         }`}
@@ -298,6 +345,20 @@ export default function PromptBar(props: PromptBarProps) {
     "startFrame" | "endFrame" | null
   >(null);
 
+  // Minimax Hailuo 2.3 Fast + Minimax Hailuo 02 + Minimax Hailuo 2.3 — "+"
+  // References popover (reuses the existing minimaxFrames/minimaxFrameMode
+  // state above) and an Enhance toggle (replaces Sound for these models).
+  // Isolated per exact model id so switching between them never leaks a state.
+  const [minimaxReferencesOpen, setMinimaxReferencesOpen] = useState(false);
+  const [minimaxEnhance, setMinimaxEnhance] = useState<
+    Record<"minimax-2.3-fast" | "minimax-02" | "minimax-2.3", boolean>
+  >({ "minimax-2.3-fast": true, "minimax-02": true, "minimax-2.3": true });
+
+  // Cinema Studio 2.5 — Reference asset picker mode
+  const [cinema25ReferenceMode, setCinema25ReferenceMode] = useState<
+    "startFrame" | "endFrame" | "reference" | null
+  >(null);
+
   // Kling 3.0 Omni Edit — Auto settings toggle + single Video Reference slot.
   // aspectRatio/resolution/duration reuse the shared top-level state.
   const [omniEditAutoSettings, setOmniEditAutoSettings] = useState(true);
@@ -320,6 +381,10 @@ export default function PromptBar(props: PromptBarProps) {
   // Kling O1 Video — Mode (Frames/Elements), interactive (per live click-audit).
   const [klingO1Mode, setKlingO1Mode] = useState<"frames" | "elements">("frames");
   const [klingO1ReferencesOpen, setKlingO1ReferencesOpen] = useState(false);
+  // Kling O1 Video's "@" reference-element button — isolated open-state, does not
+  // reuse the Start/End Frame click path. Opens the shared Assets Picker on its
+  // Elements tab; toggles closed on a second click of the same button.
+  const [klingO1ReferenceElementOpen, setKlingO1ReferenceElementOpen] = useState(false);
 
   // Kling O1 Video Edit — Auto settings toggle + single Video Reference slot.
   const [o1VideoEditAutoSettings, setO1VideoEditAutoSettings] = useState(true);
@@ -370,6 +435,25 @@ export default function PromptBar(props: PromptBarProps) {
   // Seedance 2.0 family — Bitrate chip (High default / Standard).
   const [seedanceBitrate, setSeedanceBitrate] = useState("High");
 
+  // Seedance Pro Fast — Start Frame + General preset card. Isolated from the
+  // "Seedance 2.0" family above (different model, "seedance-pro-fast").
+  const [seedanceProFastStartFrame, setSeedanceProFastStartFrame] = useState<string | null>(null);
+  const [seedanceProFastPreset, setSeedanceProFastPreset] = useState("General");
+
+  // Seedance Pro ("seedance-pro") + Seedance 1.5 Pro ("seedance-1.5-pro") — Start
+  // Frame + General preset card. Keyed by exact model id so the two models never
+  // share a selection (switching models never overwrites the other's state).
+  const [seedanceProPanels, setSeedanceProPanels] = useState<
+    Record<"seedance-pro" | "seedance-1.5-pro", { startFrame: string | null; preset: string }>
+  >({
+    "seedance-pro": { startFrame: null, preset: "General" },
+    "seedance-1.5-pro": { startFrame: null, preset: "General" },
+  });
+
+  // Seedance 1.5 Pro only — Fixed Lens toggle (default On). Isolated from
+  // Seedance Pro, which keeps Batch + Sound and has no Fixed Lens control.
+  const [seedance15FixedLens, setSeedance15FixedLens] = useState(true);
+
   // Higgsfield family — Start/End Frame + Seed chip (Random by default).
   const [higgsfieldFrames, setHiggsfieldFrames] = useState<{
     startFrame: string | null;
@@ -419,6 +503,15 @@ export default function PromptBar(props: PromptBarProps) {
   const composerRef = useRef<HTMLDivElement>(null);
   const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
 
+  // Cinema Studio 2.5 — the main "+" button's References popover picks a
+  // slot (Reference/Start Frame/End Frame), then opens this hidden file
+  // input for that slot only. Does not use the global AssetsPickerModal.
+  const cinema25FileInputRef = useRef<HTMLInputElement>(null);
+  const [cinema25PendingSlot, setCinema25PendingSlot] = useState<number | null>(null);
+  // Cinema Studio 2.5 — General preset card (bottom composer row), separate
+  // from the Director Panel's 3 reference slots.
+  const [cinema25GeneralPreset, setCinema25GeneralPreset] = useState("General");
+
   const {
     prompt,
     onPromptChange,
@@ -442,6 +535,10 @@ export default function PromptBar(props: PromptBarProps) {
     onKlingAdvancedPromptChange,
     kling3TurboSettings,
     onKling3TurboSettingsChange,
+    cinema25References,
+    onCinema25AssignReference,
+    cinema25ReferencesPopoverOpen,
+    onCinema25ReferencesPopoverOpenChange,
   } = props;
 
   const isVideo = mode === "video";
@@ -459,6 +556,18 @@ export default function PromptBar(props: PromptBarProps) {
     model === "seedance-2.0" ||
     model === "seedance-2.0-mini" ||
     model === "seedance-2.0-fast";
+
+  // Seedance Pro Fast detection — a distinct model ("seedance-pro-fast") from
+  // the "Seedance 2.0" family above; do not conflate the two.
+  const isSeedanceProFast = model === "seedance-pro-fast";
+
+  // Seedance Pro / Seedance 1.5 Pro detection — exact model-id equality only
+  // (no substring matching), explicitly excludes "seedance-pro-fast" above.
+  const isSeedanceProOrPro15 = model === "seedance-pro" || model === "seedance-1.5-pro";
+  const seedanceProModelKey = model as "seedance-pro" | "seedance-1.5-pro";
+
+  // Seedance 1.5 Pro only (not Seedance Pro) — drops Batch/Sound, adds Fixed Lens.
+  const isSeedance15Pro = model === "seedance-1.5-pro";
 
   // Gemini Omni Flash detection
   const isGeminiOmniFlash = model === "gemini-omni-flash";
@@ -486,6 +595,25 @@ export default function PromptBar(props: PromptBarProps) {
 
   // Kling O1 Video detection (two ids sharing the same composer)
   const isKlingO1Video = model === "kling-2.6-max" || model === "kling-01-video";
+  const isKlingO1VideoElementsMode = isKlingO1Video && klingO1Mode === "elements";
+
+  // Kling O1 Video's "@" reference-element button — isolated click handler, does not
+  // reuse the Start/End Frame path or the "+" button. Opens the shared Assets Picker
+  // on its Elements tab; a second click while it's open (via this same button) closes it.
+  const handleKlingO1ReferenceElementClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (klingO1ReferenceElementOpen) {
+      setAssetsPickerOpen(false);
+      setKlingO1ReferenceElementOpen(false);
+    } else {
+      setAssetsPickerTab("elements");
+      setKlingO1ReferenceElementOpen(true);
+      setAssetsPickerOpen(true);
+    }
+  };
 
   // Kling O1 Video Edit detection
   const isKlingO1VideoEdit = model === "kling-o1-video-edit";
@@ -511,9 +639,9 @@ export default function PromptBar(props: PromptBarProps) {
   // HappyHorse detection
   const isHappyHorse = model === "happyhorse";
 
-  // Grok Imagine family (only "grok-1.5" is confirmed via live click-audit;
-  // "grok-base"/"grok-edit" are assumed to share the same composer)
-  const isGrokImagine = model === "grok-base" || model === "grok-1.5" || model === "grok-edit";
+  // Grok Imagine — "grok-1.5" and "grok-edit" were removed from the catalog per
+  // explicit request; only the base "Grok Imagine" model remains.
+  const isGrokImagine = model === "grok-base";
 
   // Higgsfield family (Lite/Standard/Turbo) — only "Lite" is confirmed via
   // live click-audit; the other two share identical catalog metadata (720p,
@@ -542,6 +670,18 @@ export default function PromptBar(props: PromptBarProps) {
   // the "02" family shows one, defaulting to 6s.
   const isMinimax23Family = model === "minimax-2.3-fast" || model === "minimax-2.3";
   const isMinimax02Family = model === "minimax-02-fast" || model === "minimax-02";
+
+  // Minimax Hailuo 2.3 Fast + Minimax Hailuo 02 only — exact model-id equality,
+  // explicitly excludes "minimax-2.3" (plain) and "minimax-02-fast".
+  const isMinimax23FastOnly = model === "minimax-2.3-fast";
+  const isMinimax02Only = model === "minimax-02";
+  const isMinimaxSimplified = isMinimax23FastOnly || isMinimax02Only;
+  const minimaxEnhanceModelKey = model as "minimax-2.3-fast" | "minimax-02" | "minimax-2.3";
+
+  // Minimax Hailuo 2.3 (plain) — same Aspect/Batch/Sound removal as above, per
+  // explicit follow-up request, but WITHOUT the "+" References popover or
+  // Enhance chip (not asked for on this model).
+  const isMinimax23PlainOnly = model === "minimax-2.3";
 
   // Set Gemini Omni Flash defaults
   useEffect(() => {
@@ -613,11 +753,11 @@ export default function PromptBar(props: PromptBarProps) {
     }
   }, [isKlingO1Video, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
-  // Set Kling 3.0 Turbo's Duration default (6s) — the isolated kling3TurboSettings
+  // Set Kling 3.0 Turbo's Duration default (3s) — the isolated kling3TurboSettings
   // doesn't cover duration, so this reuses the shared top-level duration state.
   useEffect(() => {
     if (isKling3Turbo) {
-      onDurationChange(6);
+      onDurationChange(3);
     }
   }, [isKling3Turbo, onDurationChange]);
 
@@ -785,8 +925,40 @@ export default function PromptBar(props: PromptBarProps) {
           )}
 
           <div className="flex flex-wrap items-center gap-1">
-            {/* Assets Picker Buttons - Cinema Studio 3.5, 3.0, and 2.5 */}
-            {(isCinema35 || isCinema30 || isCinema25) && (
+            {/* Cinema Studio 2.5 References Button - exactly 3 options (As
+                Reference / As Start Frame / As End Frame), not the shared
+                Assets Picker. Selecting an option opens a plain file input
+                for that one slot; the Director Panel (rendered above the
+                prompt bar) displays the 3 slots. */}
+            {isCinema25 && (
+              <Cinema25ReferencesPopover
+                isOpen={cinema25ReferencesPopoverOpen}
+                onOpenChange={onCinema25ReferencesPopoverOpenChange}
+                onSelect={(refMode) => {
+                  const slotIndex = refMode === "reference" ? 0 : refMode === "startFrame" ? 1 : 2;
+                  setCinema25PendingSlot(slotIndex);
+                  cinema25FileInputRef.current?.click();
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+            <input
+              ref={cinema25FileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && cinema25PendingSlot !== null) {
+                  onCinema25AssignReference(cinema25PendingSlot, URL.createObjectURL(file));
+                }
+                setCinema25PendingSlot(null);
+                e.target.value = "";
+              }}
+            />
+
+            {/* Assets Picker Buttons - Cinema Studio 3.5 and 3.0 only */}
+            {(isCinema35 || isCinema30) && (
               <>
                 <div className="flex items-center gap-0 rounded-lg bg-card">
                   <button
@@ -990,6 +1162,18 @@ export default function PromptBar(props: PromptBarProps) {
               </button>
             )}
 
+            {/* Cinema Studio 2.5 References Popover */}
+            {isCinema25 && (
+              <Cinema25ReferencesPopover
+                isOpen={props.cinema25ReferencesPopoverOpen ?? false}
+                onOpenChange={props.onCinema25ReferencesPopoverOpenChange ?? (() => {})}
+                onSelect={(mode) => {
+                  setCinema25ReferenceMode(mode === "reference" ? "reference" : mode === "startFrame" ? "startFrame" : "endFrame");
+                  setAssetsPickerOpen(true);
+                }}
+              />
+            )}
+
             {/* Kling 3.0 (plain) References Button - opens Start Frame choice, then Assets picker */}
             {isKling3 && (
               <ReferencesControl
@@ -1170,17 +1354,46 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* Minimax Hailuo 2.3 Fast / 02 / 2.3 References Button - reuses
+                the existing minimaxFrames/minimaxFrameMode state (shared with
+                the Start/End Frame FrameCard tiles below). 2.3 Fast and plain
+                2.3 have only "As Start Frame"; 02 has both. */}
+            {(isMinimaxSimplified || isMinimax23PlainOnly) && (
+              <ReferencesControl
+                isOpen={minimaxReferencesOpen}
+                onOpenChange={setMinimaxReferencesOpen}
+                onSelectReferenceMode={(refMode) => {
+                  setActivePromptPopover(null);
+                  setMinimaxFrameMode(refMode);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                portalContainer={portalRoot}
+                showEndFrame={!isMinimax23FastOnly && !isMinimax23PlainOnly}
+              />
+            )}
+
             {/* + / @ input actions - Kling 3.0 Omni Edit, Kling O1 Video Edit, and
-                Omni/O1 Video's Elements mode, per live reference */}
+                Omni/O1 Video's Elements mode, per live reference. Kling O1 Video's "@"
+                is the only wired mention button (see handleKlingO1ReferenceElementClick);
+                the others keep the prior inert "@" behavior untouched. */}
             {(isKling3OmniEdit ||
               isKlingO1VideoEdit ||
               (isKling3Omni && klingOmniMode === "elements") ||
-              (isKlingO1Video && klingO1Mode === "elements")) && (
+              isKlingO1VideoElementsMode) && (
               <PlusAtButtons
                 onOpenPicker={() => {
                   setAssetsPickerTab("uploads");
                   setAssetsPickerOpen(true);
                 }}
+                {...(isKlingO1VideoElementsMode
+                  ? {
+                      onMentionClick: handleKlingO1ReferenceElementClick,
+                      mentionOpen: klingO1ReferenceElementOpen,
+                      mentionClassName: "gen-panel-reference-element-button",
+                      mentionAriaLabel: "Add reference element",
+                    }
+                  : {})}
               />
             )}
 
@@ -1188,14 +1401,16 @@ export default function PromptBar(props: PromptBarProps) {
 
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
                 Kling Motion Control (non-3.0), Kling 2.5 Turbo/2.1, Kling 2.1 Master, Grok Imagine,
-                and Higgsfield (none of these show it in their chip row) */}
+                Higgsfield, and Minimax Hailuo 2.3 Fast/02/2.3 (none of these show it in their chip row) */}
             {!isKling3MotionControl &&
               !isKling3OmniEdit &&
               !isKlingMotionControlNon3 &&
               !isKling25TurboOr21 &&
               !isKling21Master &&
               !isGrokImagine &&
-              !isHiggsfield && (
+              !isHiggsfield &&
+              !isMinimaxSimplified &&
+              !isMinimax23PlainOnly && (
               isGeminiOmniFlash ? (
                 <GeminiAspectRatioControl
                   value={aspectRatio}
@@ -1291,7 +1506,9 @@ export default function PromptBar(props: PromptBarProps) {
                   else if (activePromptPopover === "resolution") setActivePromptPopover(null);
                 }}
                 options={
-                  isKling3 || isKling3Turbo || isKling3Omni
+                  isCinema25
+                    ? ["720p", "1080p"]
+                    : isKling3 || isKling3Turbo || isKling3Omni
                     ? ["720p", "1080p", "4K"]
                     : isVeo31Lite ||
                         isKlingO1Video ||
@@ -1310,22 +1527,6 @@ export default function PromptBar(props: PromptBarProps) {
                             : isWan
                               ? ["720p", "1080p"]
                               : undefined
-                }
-              />
-            )}
-
-            {/* Start Frame - Kling 3.0 Turbo only, placed after Resolution per spec */}
-            {isKling3Turbo && (
-              <FrameCard
-                label="Start Frame"
-                value={kling3TurboSettings.startFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() =>
-                  onKling3TurboSettingsChange((s) => ({ ...s, startFrame: null }))
                 }
               />
             )}
@@ -1367,7 +1568,8 @@ export default function PromptBar(props: PromptBarProps) {
               !isKling3 &&
               !isKling3OmniEdit &&
               !isKlingMotionControlNon3 &&
-              !isMinimax23Family && (
+              !isMinimax23Family &&
+              !isCinema25 && (
               <DurationPopover
                 value={duration}
                 durations={durations}
@@ -1382,8 +1584,9 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Bitrate chip - Seedance 2.0 family only, placed after Duration */}
-            {isSeedance2Family && (
+            {/* Bitrate chip - Seedance 2.0 family, placed after Duration. Excluded
+                for "seedance-2.0-mini" specifically per explicit request. */}
+            {isSeedance2Family && model !== "seedance-2.0-mini" && (
               <BitrateControl
                 value={seedanceBitrate}
                 onChange={setSeedanceBitrate}
@@ -1426,6 +1629,21 @@ export default function PromptBar(props: PromptBarProps) {
                   else if (activePromptPopover === "multiShot") setActivePromptPopover(null);
                 }}
                 portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Start Frame - Kling 3.0 (plain) — persistent tile, in addition to the References "+" popover */}
+            {isKling3 && (
+              <FrameCard
+                label="Start Frame"
+                value={kling3Extras.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKling3ReferenceMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKling3Extras((s) => ({ ...s, startFrame: null }))}
               />
             )}
 
@@ -1706,7 +1924,8 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Batch - Hidden for every Kling family model and Google Veo 3.1 Lite (no model list shows a batch stepper) */}
+            {/* Batch - Hidden for every Kling family model, Google Veo 3.1 Lite, Seedance 1.5 Pro,
+                and Minimax Hailuo 2.3 Fast/02/2.3 (no model list shows a batch stepper) */}
             {!isKling3MotionControl &&
               !isKling3 &&
               !isKling3Turbo &&
@@ -1722,7 +1941,10 @@ export default function PromptBar(props: PromptBarProps) {
               !isOpenAISora &&
               !isGrokImagine &&
               !isHiggsfield &&
-              !isWan && <BatchStepper value={batch} onChange={onBatchChange} />}
+              !isWan &&
+              !isSeedance15Pro &&
+              !isMinimaxSimplified &&
+              !isMinimax23PlainOnly && <BatchStepper value={batch} onChange={onBatchChange} />}
 
             {isVideo &&
               !isGeminiOmniFlash &&
@@ -1734,7 +1956,10 @@ export default function PromptBar(props: PromptBarProps) {
               !isKlingMotionControlNon3 &&
               !isOpenAISora &&
               !isHappyHorse &&
-              !isGrokImagine && (
+              !isGrokImagine &&
+              !isSeedance15Pro &&
+              !isMinimaxSimplified &&
+              !isMinimax23PlainOnly && (
               <button
                 type="button"
                 onClick={() => {
@@ -1758,6 +1983,45 @@ export default function PromptBar(props: PromptBarProps) {
                   <VolumeX className="size-3.5" />
                 )}
                 {sound ? "On" : "Off"}
+              </button>
+            )}
+
+            {/* Fixed Lens toggle - Seedance 1.5 Pro only, replaces Batch + Sound in this slot */}
+            {isSeedance15Pro && (
+              <AutoSettingsToggle
+                checked={seedance15FixedLens}
+                onToggle={() => setSeedance15FixedLens((v) => !v)}
+                label="Fixed Lens"
+                wholeRowClickable
+              />
+            )}
+
+            {/* Enhance chip - Minimax Hailuo 2.3 Fast / 02 / 2.3 only, replaces
+                Aspect Ratio/Batch/Sound in this slot. Isolated per model id.
+                2.3 (plain) gets a dynamic "Enhance: On/Off" aria-label per
+                explicit request; 2.3 Fast/02 keep their original static label
+                unchanged. */}
+            {(isMinimaxSimplified || isMinimax23PlainOnly) && (
+              <button
+                type="button"
+                onClick={() =>
+                  setMinimaxEnhance((s) => ({
+                    ...s,
+                    [minimaxEnhanceModelKey]: !s[minimaxEnhanceModelKey],
+                  }))
+                }
+                aria-label={
+                  isMinimax23PlainOnly
+                    ? `Enhance: ${minimaxEnhance[minimaxEnhanceModelKey] ? "On" : "Off"}`
+                    : "Toggle enhance"
+                }
+                aria-pressed={minimaxEnhance[minimaxEnhanceModelKey]}
+                className={`${PILL} ${
+                  minimaxEnhance[minimaxEnhanceModelKey] ? "text-[#00e5ff]" : "text-neutral-400"
+                }`}
+              >
+                <EnhanceIcon />
+                {minimaxEnhance[minimaxEnhanceModelKey] ? "On" : "Off"}
               </button>
             )}
 
@@ -1922,7 +2186,7 @@ export default function PromptBar(props: PromptBarProps) {
                 <FrameCard
                   label="Start Frame"
                   value={minimaxFrames.startFrame}
-                  optional={model === "minimax-2.3"}
+                  optional={model === "minimax-2.3" || isMinimax23FastOnly}
                   onOpenPicker={() => {
                     setActivePromptPopover(null);
                     setMinimaxFrameMode("startFrame");
@@ -1952,11 +2216,132 @@ export default function PromptBar(props: PromptBarProps) {
                 />
               </>
             )}
+
+            {/* Start Frame - Kling 3.0 Turbo only, moved to the far right (next to Generate) per explicit request */}
+            {isKling3Turbo && (
+              <FrameCard
+                label="Start Frame"
+                value={kling3TurboSettings.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() =>
+                  onKling3TurboSettingsChange((s) => ({ ...s, startFrame: null }))
+                }
+              />
+            )}
+
+            {/* Start Frame + End Frame + General - Cinema Studio 2.5 only. Start/End
+                Frame share the same 3-slot reference state as the Director Panel and
+                the "+" References popover (index 1 = Start Frame, 2 = End Frame). */}
+            {isCinema25 && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={cinema25References[1] ?? null}
+                  optional={false}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setCinema25PendingSlot(1);
+                    cinema25FileInputRef.current?.click();
+                  }}
+                  onRemove={() => onCinema25AssignReference(1, null)}
+                />
+                <FrameCard
+                  label="End Frame"
+                  value={cinema25References[2] ?? null}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setCinema25PendingSlot(2);
+                    cinema25FileInputRef.current?.click();
+                  }}
+                  onRemove={() => onCinema25AssignReference(2, null)}
+                />
+              </>
+            )}
+
+            {/* Start Frame + General - Seedance Pro Fast only. Mutually exclusive
+                overlays: opening one explicitly closes the other. */}
+            {isSeedanceProFast && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={seedanceProFastStartFrame}
+                  optional={false}
+                  ariaHaspopup="dialog"
+                  ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setMotionPresetsPanelOpen(false);
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setSeedanceProFastStartFrame(null)}
+                />
+                <FrameCard
+                  variant="general"
+                  label={seedanceProFastPreset}
+                  value={null}
+                  ariaHaspopup="dialog"
+                  ariaExpanded={motionPresetsPanelOpen}
+                  onOpenPicker={() => {
+                    setAssetsPickerOpen(false);
+                    setMotionPresetsPanelOpen(true);
+                  }}
+                />
+              </>
+            )}
+
+            {/* Start Frame + General - Seedance Pro and Seedance 1.5 Pro only
+                (never Seedance Pro Fast, handled separately above). State is
+                keyed per exact model id so the two never share a selection. */}
+            {isSeedanceProOrPro15 && (
+              <>
+                <FrameCard
+                  label="Start Frame"
+                  value={seedanceProPanels[seedanceProModelKey].startFrame}
+                  optional={false}
+                  ariaHaspopup="dialog"
+                  ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setMotionPresetsPanelOpen(false);
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() =>
+                    setSeedanceProPanels((s) => ({
+                      ...s,
+                      [seedanceProModelKey]: { ...s[seedanceProModelKey], startFrame: null },
+                    }))
+                  }
+                />
+                <FrameCard
+                  variant="general"
+                  label={seedanceProPanels[seedanceProModelKey].preset}
+                  value={null}
+                  ariaHaspopup="dialog"
+                  ariaExpanded={motionPresetsPanelOpen}
+                  onOpenPicker={() => {
+                    setAssetsPickerOpen(false);
+                    setMotionPresetsPanelOpen(true);
+                  }}
+                />
+              </>
+            )}
           </div>
         </div>
 
         {/* C — Generate */}
-        <GenerateButton creditCost={creditCost} onGenerate={onGenerate} mode={mode} />
+        <GenerateButton
+          creditCost={creditCost}
+          onGenerate={onGenerate}
+          mode={mode}
+          isLoading={props.isGenerating}
+          accent={isCinema25 ? "cyan" : undefined}
+        />
       </div>
 
       <AssetsPickerModal
@@ -1973,10 +2358,14 @@ export default function PromptBar(props: PromptBarProps) {
           setKling21MasterFrameMode(null);
           setHiggsfieldFrameMode(null);
           setWanFrameMode(null);
+          setKlingO1ReferenceElementOpen(false);
+          setCinema25ReferenceMode(null);
         }}
         defaultTab={assetsPickerTab}
         mode={
-          isKling3 && kling3ReferenceMode
+          isCinema25 && cinema25ReferenceMode
+            ? cinema25ReferenceMode === "reference" ? "startFrame" : cinema25ReferenceMode
+            : isKling3 && kling3ReferenceMode
             ? kling3ReferenceMode
             : isKling3Turbo
               ? "startFrame"
@@ -1998,17 +2387,26 @@ export default function PromptBar(props: PromptBarProps) {
                               ? higgsfieldFrameMode
                               : isWan && wanFrameMode
                                 ? wanFrameMode
-                                : "default"
+                                : isSeedanceProFast || isSeedanceProOrPro15
+                                  ? "startFrame"
+                                  : "default"
         }
         accept={
           isKling3Turbo || isVeo31Lite || isMinimaxHailuo
             ? "image/*"
             : isKling3OmniEdit || isKlingO1VideoEdit
               ? "video/*"
-              : undefined
+              : isSeedanceProFast || isSeedanceProOrPro15
+                ? "image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
+                : undefined
         }
         onSelectAsset={
-          isKling3 && kling3ReferenceMode
+          isCinema25 && cinema25ReferenceMode
+            ? (url) => {
+                const slotIndex = cinema25ReferenceMode === "reference" ? 0 : cinema25ReferenceMode === "startFrame" ? 1 : 2;
+                props.onCinema25AssignReference(slotIndex, url);
+              }
+            : isKling3 && kling3ReferenceMode
             ? (url) => {
                 setKling3Extras((s) =>
                   kling3ReferenceMode === "startFrame"
@@ -2081,7 +2479,18 @@ export default function PromptBar(props: PromptBarProps) {
                                             ? { ...s, startFrame: url }
                                             : { ...s, endFrame: url },
                                         )
-                                    : undefined
+                                    : isSeedanceProFast
+                                      ? (url) => setSeedanceProFastStartFrame(url)
+                                      : isSeedanceProOrPro15
+                                        ? (url) =>
+                                            setSeedanceProPanels((s) => ({
+                                              ...s,
+                                              [seedanceProModelKey]: {
+                                                ...s[seedanceProModelKey],
+                                                startFrame: url,
+                                              },
+                                            }))
+                                        : undefined
         }
       />
 
@@ -2100,7 +2509,30 @@ export default function PromptBar(props: PromptBarProps) {
       <MotionPresetsPanel
         isOpen={motionPresetsPanelOpen}
         onClose={() => setMotionPresetsPanelOpen(false)}
-        onSelectPreset={() => {}}
+        onSelectPreset={
+          isSeedanceProFast
+            ? (preset) => setSeedanceProFastPreset(preset)
+            : isSeedanceProOrPro15
+              ? (preset) =>
+                  setSeedanceProPanels((s) => ({
+                    ...s,
+                    [seedanceProModelKey]: { ...s[seedanceProModelKey], preset },
+                  }))
+              : isCinema25
+                ? (preset) => setCinema25GeneralPreset(preset)
+                : () => {}
+        }
+        {...(isSeedanceProFast
+          ? {
+              categories: ["All", "UGC", "Viral", "Commercial", "Effects"],
+              selectedPreset: seedanceProFastPreset,
+            }
+          : isSeedanceProOrPro15
+            ? {
+                categories: ["All", "UGC", "Viral", "Commercial", "Effects"],
+                selectedPreset: seedanceProPanels[seedanceProModelKey].preset,
+              }
+            : {})}
       />
 
       {/* Kling 3.0 Motion Control Modals and Panels (LOCKED) */}

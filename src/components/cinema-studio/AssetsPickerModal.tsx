@@ -66,6 +66,7 @@ export default function AssetsPickerModal({
       onClick={onClose}
     >
       <div
+        data-assets-picker="true"
         className="relative h-[600px] w-[800px] rounded-[24px] border border-white/10 bg-[rgba(24,26,30,0.95)] shadow-2xl backdrop-blur-[24px]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -74,7 +75,7 @@ export default function AssetsPickerModal({
           type="button"
           onClick={onClose}
           className="absolute right-4 top-4 z-10 rounded-lg p-2 text-neutral-400 hover:bg-white/10 hover:text-white transition-colors"
-          aria-label="Close"
+          aria-label="Close assets picker"
         >
           <X className="size-5" />
         </button>
@@ -87,7 +88,7 @@ export default function AssetsPickerModal({
 
         {/* Tabs */}
         <div className="flex border-b border-white/10">
-          {TABS.map((tab) => (
+          {(mode === "startFrame" || mode === "endFrame" ? TABS.filter(t => t.id === "uploads" || t.id === "imageGenerations" || t.id === "liked") : TABS).map((tab) => (
             <button
               key={tab.id}
               type="button"

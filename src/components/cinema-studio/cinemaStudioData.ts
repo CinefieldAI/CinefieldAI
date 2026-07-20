@@ -25,6 +25,9 @@ import {
 /** Neon turquoise brand accent — DO NOT CHANGE. */
 export const ACCENT = "#00e5ff";
 
+/** Seedance family icon (replaces the old Runway-branded PNG). */
+export const SEEDANCE_ICON = "/775d3617-427c-4cca-ae5c-db5ae6b1c64f-removebg-preview.png";
+
 /* ------------------------------------------------------------------ */
 /* Settings shape                                                      */
 /* ------------------------------------------------------------------ */
@@ -153,7 +156,6 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         defaultDuration: 8,
         baseCredits: 240,
         characterStyle: true,
-        badges: ["NEW"],
       },
       {
         id: "cinema-3.0",
@@ -182,18 +184,17 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
   {
     label: "Featured models",
     models: [
-      vfeat("seedance-2.0", "Seedance 2.0", "/Seedance_2.0_-_Runway.png", "4K", "4s-15s"),
-      vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s", ["NEW", "EXCLUSIVE"]),
-      vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", "/Seedance_2.0_-_Runway.png", "720p", "4s-15s"),
-      vfeat("gemini-omni-flash", "Gemini Omni Flash", "/Google_Veo_3.1.png", "720p", "4s-10s", ["NEW"]),
+      vfeat("seedance-2.0", "Seedance 2.0", SEEDANCE_ICON, "4K", "4s-15s"),
+      vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", SEEDANCE_ICON, "720p", "4s-15s"),
+      vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", SEEDANCE_ICON, "720p", "4s-15s"),
+      vfeat("gemini-omni-flash", "Gemini Omni Flash", "/Google_Veo_3.1.png", "720p", "4s-10s"),
       vfeat("kling-3.0", "Kling 3.0", "/Kling_3.0.png", "4K", "3s-15s", undefined, true),
-      vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", "/Kling_3.0.png", "1080p", "3s-15s", ["NEW"]),
+      vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", "/Kling_3.0.png", "1080p", "3s-15s"),
       vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", "/Kling_3.0.png", "1080p", "3s-30s"),
-      vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", ["NEW"], true),
+      vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", undefined, true),
       vfeat("grok-base", "Grok Imagine", "/Grok_Imagine_1.5.png", "720p", "1s-15s"),
-      vfeat("grok-1.5", "Grok Imagine 1.5", "/Grok_Imagine_1.5.png", "720p", "1s-15s", ["NEW"]),
-      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", ["NEW"], true),
-      vfeat("wan-2.7", "Wan 2.7", Wind, "1080p", "2s-15s", ["NEW"]),
+      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", undefined, true),
+      vfeat("wan-2.7", "Wan 2.7", Wind, "1080p", "2s-15s"),
     ],
   },
   {
@@ -206,9 +207,9 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "/Minimax_Hailuo_2.3.png",
         [
           vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "1080p", "6s-10s"),
-          vsub("minimax-2.3", "Minimax Hailuo 2.3", "1080p", "6s-10s", ["PREMIUM"]),
+          vsub("minimax-2.3", "Minimax Hailuo 2.3", "1080p", "6s-10s"),
           vsub("minimax-02-fast", "Minimax Hailuo 02 Fast", "512p", "6s-10s"),
-          vsub("minimax-02", "Minimax Hailuo 02", "1080p", "6s-10s", ["PREMIUM"]),
+          vsub("minimax-02", "Minimax Hailuo 02", "1080p", "6s-10s"),
         ],
       ),
       vparent(
@@ -218,25 +219,25 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "/Kling_3.0.png",
         [
           vsub("kling-3.0", "Kling 3.0", "4K", "3s-15s", undefined, true),
-          vsub("kling-3.0-turbo", "Kling 3.0 Turbo", "1080p", "3s-15s", ["NEW"], true),
-          vsub("kling-3.0-omni", "Kling 3.0 Omni", "4K", "3s-15s", ["PREMIUM", "EXCLUSIVE"]),
-          vsub("kling-3.0-mini", "Kling 3.0 Omni", "4K", "3s-15s", ["EXCLUSIVE"]),
+          vsub("kling-3.0-turbo", "Kling 3.0 Turbo", "1080p", "3s-15s", undefined, true),
+          vsub("kling-3.0-omni", "Kling 3.0 Omni", "4K", "3s-15s"),
+          vsub("kling-3.0-mini", "Kling 3.0 Omni", "4K", "3s-15s"),
           {
-            ...vsub("kling-3.0-omni-edit", "Kling 3.0 Omni Edit", "1080p", "3s-10s", ["EXCLUSIVE"]),
+            ...vsub("kling-3.0-omni-edit", "Kling 3.0 Omni Edit", "1080p", "3s-10s"),
             defaultDuration: 4,
           },
           vsub("kling-2.6", "Kling 2.6", "1080p", "5s-10s", undefined, true),
-          vsub("kling-2.6-max", "Kling O1 Video", "1080p", "5s-10s", ["PREMIUM"]),
-          vsub("kling-01-video", "Kling O1 Video", "1080p", "5s-10s", ["PREMIUM"]),
+          vsub("kling-2.6-max", "Kling O1 Video", "1080p", "5s-10s"),
+          vsub("kling-01-video", "Kling O1 Video", "1080p", "5s-10s"),
           {
-            ...vsub("kling-o1-video-edit", "Kling O1 Video Edit", "1080p", "3s-10s", ["PREMIUM"]),
+            ...vsub("kling-o1-video-edit", "Kling O1 Video Edit", "1080p", "3s-10s"),
             defaultDuration: 7,
           },
           vsub("kling-motion-control", "Kling Motion Control", "1080p", "3s-30s"),
           vsub("kling-3.0-motion-control", "Kling 3.0 Motion Control", "1080p", "3s-30s"),
           vsub("kling-2.5-turbo", "Kling 2.5 Turbo", "1080p", "5s-10s"),
-          vsub("kling-2.1", "Kling 2.1", "1080p", "5s-10s", ["PREMIUM"]),
-          vsub("kling-2.1-master", "Kling 2.1 Master", "1080p", "5s-10s", ["PREMIUM"]),
+          vsub("kling-2.1", "Kling 2.1", "1080p", "5s-10s"),
+          vsub("kling-2.1-master", "Kling 2.1 Master", "1080p", "5s-10s"),
         ],
       ),
       vparent(
@@ -245,12 +246,12 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Multi-shot video with sound generation",
         "/Sora_2.png",
         [
-          vsub("sora-2", "Sora 2", "720p", "4s-12s", ["PREMIUM"]),
-          vsub("sora-3.1-lite", "Sora 3.1 Lite", "720p", "6s-10s", ["NEW"]),
-          vsub("sora-2-pro", "Sora 2 Pro", "1080p", "4s-12s", ["PREMIUM"]),
-          vsub("sora-2-3.1-fast", "Sora 2 3.1 Fast", "1080p", "6s-10s", ["PREMIUM"]),
-          vsub("sora-2-max", "Sora 2 Max", "1080p", "4s-12s", ["PREMIUM"]),
-          vsub("sora-2-pro-max", "Sora 2 Pro Max", "1080p", "4s-12s", ["PREMIUM"]),
+          vsub("sora-2", "Sora 2", "720p", "4s-12s"),
+          vsub("sora-3.1-lite", "Sora 3.1 Lite", "720p", "6s-10s"),
+          vsub("sora-2-pro", "Sora 2 Pro", "1080p", "4s-12s"),
+          vsub("sora-2-3.1-fast", "Sora 2 3.1 Fast", "1080p", "6s-10s"),
+          vsub("sora-2-max", "Sora 2 Max", "1080p", "4s-12s"),
+          vsub("sora-2-pro-max", "Sora 2 Pro Max", "1080p", "4s-12s"),
         ],
       ),
       vparent(
@@ -259,10 +260,10 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Precision video with sound control",
         "/Google_Veo_3.1.png",
         [
-          vsub("veo-3.1", "Google Veo 3.1", "1080p", "4s-8s", ["PREMIUM"]),
-          vsub("veo-3.1-fast", "Google Veo 3.1 Fast", "1080p", "4s-8s", ["PREMIUM"]),
-          vsub("veo-3-fast", "Google Veo 3 Fast", "1080p", "4s-8s", ["PREMIUM"]),
-          vsub("veo-3", "Google Veo 3", "1080p", "4s-8s", ["PREMIUM"]),
+          vsub("veo-3.1", "Google Veo 3.1", "1080p", "4s-8s"),
+          vsub("veo-3.1-fast", "Google Veo 3.1 Fast", "1080p", "4s-8s"),
+          vsub("veo-3-fast", "Google Veo 3 Fast", "1080p", "4s-8s"),
+          vsub("veo-3", "Google Veo 3", "1080p", "4s-8s"),
         ],
       ),
       vparent(
@@ -271,9 +272,9 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Advanced camera controls and effect presets",
         Sparkles,
         [
-          vsub("higgsfield-lite", "Higgsfield Lite", "720p", "3s-5s", ["PREMIUM"]),
-          vsub("higgsfield-standard", "Higgsfield Standard", "720p", "3s-5s", ["PREMIUM"]),
-          vsub("higgsfield-turbo", "Higgsfield Turbo", "720p", "3s-5s", ["PREMIUM"]),
+          vsub("higgsfield-lite", "Higgsfield Lite", "720p", "3s-5s"),
+          vsub("higgsfield-standard", "Higgsfield Standard", "720p", "3s-5s"),
+          vsub("higgsfield-turbo", "Higgsfield Turbo", "720p", "3s-5s"),
         ],
       ),
       vparent(
@@ -282,11 +283,11 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Camera-controlled video with sound, more freedom",
         Wind,
         [
-          vsub("wan-2.7", "Wan 2.7", "1080p", "2s-15s", ["NEW"]),
-          vsub("wan-2.6", "Wan 2.6", "1080p", "5s-15s", ["NEW"]),
-          vsub("wan-2.5", "Wan 2.5", "1080p", "5s-10s", ["PREMIUM"], true),
-          vsub("wan-2.5-fast", "Wan 2.5 Fast", "1080p", "5s-10s", ["PREMIUM"], true),
-          vsub("wan-2.2", "Wan 2.2", "720p", "5s", ["PREMIUM"]),
+          vsub("wan-2.7", "Wan 2.7", "1080p", "2s-15s"),
+          vsub("wan-2.6", "Wan 2.6", "1080p", "5s-15s"),
+          vsub("wan-2.5", "Wan 2.5", "1080p", "5s-10s", undefined, true),
+          vsub("wan-2.5-fast", "Wan 2.5 Fast", "1080p", "5s-10s", undefined, true),
+          vsub("wan-2.2", "Wan 2.2", "720p", "5s"),
           vsub("wan-2.2-fast", "Wan 2.2 Fast", "720p", "5s"),
         ],
       ),
@@ -294,24 +295,14 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "seedance",
         "Seedance",
         "Cinematic, multi-shot video creation",
-        "/Seedance_2.0_-_Runway.png",
+        SEEDANCE_ICON,
         [
-          vsub("seedance-2.0-fast", "Seedance 2.0 Fast", "720p", "4s-15s"),
-          vsub("seedance-2.0-mini", "Seedance 2.0 Mini", "720p", "4s-15s", ["NEW", "EXCLUSIVE"]),
-          vsub("seedance-2.0", "Seedance 2.0", "4K", "4s-15s"),
-          vsub("seedance-1.5-pro", "Seedance 1.5 Pro", "720p", "4s-12s"),
-          vsub("seedance-pro", "Seedance Pro", "1080p", "5s-10s", ["PREMIUM"]),
-          vsub("seedance-pro-fast", "Seedance Pro Fast", "1080p", "5s-10s", ["PREMIUM"]),
-        ],
-      ),
-      vparent(
-        "grok-imagine",
-        "Grok Imagine",
-        "Perfect motion with advanced video control",
-        "/Grok_Imagine_1.5.png",
-        [
-          vsub("grok-1.5", "Grok Imagine 1.5", "720p", "1s-15s", ["NEW"]),
-          vsub("grok-edit", "Grok Imagine Edit", "720p", "1s-15s", ["NEW"]),
+          { ...vsub("seedance-2.0-fast", "Seedance 2.0 Fast", "720p", "4s-15s"), icon: SEEDANCE_ICON },
+          { ...vsub("seedance-2.0-mini", "Seedance 2.0 Mini", "720p", "4s-15s"), icon: SEEDANCE_ICON },
+          { ...vsub("seedance-2.0", "Seedance 2.0", "4K", "4s-15s"), icon: SEEDANCE_ICON },
+          { ...vsub("seedance-1.5-pro", "Seedance 1.5 Pro", "720p", "4s-12s"), icon: SEEDANCE_ICON },
+          { ...vsub("seedance-pro", "Seedance Pro", "1080p", "5s-10s"), icon: SEEDANCE_ICON },
+          { ...vsub("seedance-pro-fast", "Seedance Pro Fast", "1080p", "5s-10s"), icon: SEEDANCE_ICON },
         ],
       ),
       vparent(
@@ -320,7 +311,6 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "",
         Rabbit,
         [vsub("happyhorse", "HappyHorse", "1080p", "3s-15s")],
-        ["NEW"],
       ),
     ],
   },
@@ -344,7 +334,7 @@ const M = (
   resolution: opts.resolution ?? "2K",
   durations: [1],
   baseCredits: 1,
-  badges: opts.isNew ? ["NEW"] : undefined,
+  badges: undefined,
 });
 
 /** Each image model defined once; reused across Featured/All so selection syncs. */
