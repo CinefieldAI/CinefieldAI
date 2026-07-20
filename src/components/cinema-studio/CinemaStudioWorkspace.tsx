@@ -12,6 +12,7 @@ import GenrePanel from "./GenrePanel";
 import StyleModal from "./StyleModal";
 import CameraSettings from "./CameraSettings";
 import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
+import CinemaStudio25DirectorPanel from "./CinemaStudio25DirectorPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 import type { GenerateVideoRequest } from "@/lib/jobs";
@@ -54,9 +55,22 @@ export default function CinemaStudioWorkspace() {
   const [cinema3CameraMovement, setCinema3CameraMovement] = useState("Auto");
   const [cinema3SpeedRamp, setCinema3SpeedRamp] = useState("Auto");
 
+  // Cinema Studio 2.5 Director Panel settings — isolated from Cinema Studio 3.0's panel above.
+  const [cinema25DirectorPanelOpen, setCinema25DirectorPanelOpen] = useState(false);
+  const [cinema25References, setCinema25References] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+  ]);
+  const [cinema25ReferencesPopoverOpen, setCinema25ReferencesPopoverOpen] = useState(false);
+  const [cinema25MovementIndex, setCinema25MovementIndex] = useState(0);
+  const [cinema25SpeedRampIndex, setCinema25SpeedRampIndex] = useState(0);
+  const [cinema25SpeedRampPoints, setCinema25SpeedRampPoints] = useState([50, 50, 50, 50, 50]);
+
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedModel = getModel(model);
 
@@ -109,6 +123,7 @@ export default function CinemaStudioWorkspace() {
   // Genre/Style/Camera controls show only for Cinema Studio 3.5.
   const isCinema35 = selectedModel.id === "cinema-3.5";
   const isCinema30 = selectedModel.id === "cinema-3.0";
+  const isCinema25 = selectedModel.id === "cinema-2.5";
 
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
@@ -116,6 +131,7 @@ export default function CinemaStudioWorkspace() {
   // Generate video handler
   const handleGenerate = async () => {
     try {
+      setIsGenerating(true);
       const isKling3MotionControl = model === "kling-3.0-motion-control";
       const isKling3Turbo = model === "kling-3.0-turbo";
       const effectivePrompt = prompt || klingAdvancedPrompt;
@@ -168,6 +184,8 @@ export default function CinemaStudioWorkspace() {
     } catch (error) {
       console.error("Failed to generate video:", error);
       // toast.error("Failed to queue video generation");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -221,6 +239,32 @@ export default function CinemaStudioWorkspace() {
 
         {/* Mode toggle (left sidebar) + prompt bar + Cinema 3.0 Panel */}
         <div className="relative w-full">
+          {/* Cinema Studio 2.5 Director Panel - positioned above prompt bar */}
+          {isCinema25 && (
+            <div className="relative z-50 mx-auto w-full max-w-[1040px] mb-2">
+              <CinemaStudio25DirectorPanel
+                isOpen={cinema25DirectorPanelOpen}
+                onToggle={() => setCinema25DirectorPanelOpen((v) => !v)}
+                references={cinema25References}
+                onAssignReference={(slotIndex, url) =>
+                  setCinema25References((s) => {
+                    const next = [...s];
+                    next[slotIndex] = url;
+                    return next;
+                  })
+                }
+                movementIndex={cinema25MovementIndex}
+                onMovementIndexChange={setCinema25MovementIndex}
+                speedRampIndex={cinema25SpeedRampIndex}
+                onSpeedRampIndexChange={setCinema25SpeedRampIndex}
+                speedRampPoints={cinema25SpeedRampPoints}
+                onSpeedRampPointsChange={setCinema25SpeedRampPoints}
+                duration={duration}
+                onDurationChange={setDuration}
+              />
+            </div>
+          )}
+
           <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end justify-center gap-1" ref={promptBarWrapperRef}>
             <ModeToggle mode={mode} onChange={handleModeChange} />
             <PromptBar
@@ -253,10 +297,21 @@ export default function CinemaStudioWorkspace() {
               onSoundChange={setSound}
               creditCost={creditCost}
               onGenerate={handleGenerate}
+              isGenerating={isGenerating}
               klingAdvancedPrompt={klingAdvancedPrompt}
               onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
               kling3TurboSettings={kling3TurboSettings}
               onKling3TurboSettingsChange={setKling3TurboSettings}
+              cinema25References={cinema25References}
+              onCinema25AssignReference={(slotIndex, url) =>
+                setCinema25References((s) => {
+                  const next = [...s];
+                  next[slotIndex] = url;
+                  return next;
+                })
+              }
+              cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+              onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
             />
           </div>
 
