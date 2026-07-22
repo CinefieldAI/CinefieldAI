@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import * as Popover from "@radix-ui/react-popover";
 import {
   ChevronDown,
   Globe,
@@ -35,6 +36,17 @@ interface AudioComposerProps {
   /** Translate-mode reference video file name. */
   referenceVideo: string | null;
   onReferenceVideo: (name: string | null) => void;
+  /** Audio control values */
+  sampleRate: number;
+  onSampleRateChange: (value: number) => void;
+  speed: number;
+  onSpeedChange: (value: number) => void;
+  volume: number;
+  onVolumeChange: (value: number) => void;
+  pitch: number;
+  onPitchChange: (value: number) => void;
+  outputFormat: string;
+  onOutputFormatChange: (value: string) => void;
 }
 
 /** Retro vertical wave bars for the Choose Voice capsule (illuminate turquoise). */
@@ -63,8 +75,23 @@ export default function AudioComposer({
   onOpenLanguage,
   referenceVideo,
   onReferenceVideo,
+  sampleRate,
+  onSampleRateChange,
+  speed,
+  onSpeedChange,
+  volume,
+  onVolumeChange,
+  pitch,
+  onPitchChange,
+  outputFormat,
+  onOutputFormatChange,
 }: AudioComposerProps) {
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [sampleRateMenuOpen, setSampleRateMenuOpen] = useState(false);
+  const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
+  const [volumeMenuOpen, setVolumeMenuOpen] = useState(false);
+  const [pitchMenuOpen, setPitchMenuOpen] = useState(false);
+  const [outputFormatMenuOpen, setOutputFormatMenuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isTranslate = feature === 2;
@@ -268,6 +295,247 @@ export default function AudioComposer({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Audio controls row — Sample Rate, Speed, Volume, Pitch, Output Format */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Sample Rate */}
+            <Popover.Root open={sampleRateMenuOpen} onOpenChange={setSampleRateMenuOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                >
+                  {sampleRate / 1000}k Hz
+                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                className="z-50 w-40 overflow-hidden rounded-xl border border-white/10 p-1.5"
+                style={{
+                  background: "rgba(13,15,17,0.98)",
+                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
+                }}
+              >
+                <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">Sample Rate</div>
+                {[8000, 16000, 24000, 32000, 44100, 48000].map((rate) => (
+                  <button
+                    key={rate}
+                    type="button"
+                    onClick={() => {
+                      onSampleRateChange(rate);
+                      setSampleRateMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg p-2 text-left text-xs transition-colors"
+                    style={{
+                      background: sampleRate === rate ? "rgba(0,240,255,0.10)" : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (sampleRate !== rate) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (sampleRate !== rate) e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    <span className="text-white font-medium">{rate / 1000}k Hz</span>
+                    {sampleRate === rate && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1FE17]">
+                        <path d="M5 13.875 9.2 18 19 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </Popover.Content>
+            </Popover.Root>
+
+            {/* Speed */}
+            <Popover.Root open={speedMenuOpen} onOpenChange={setSpeedMenuOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                >
+                  {speed.toFixed(1)}x
+                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
+                style={{
+                  background: "rgba(13,15,17,0.98)",
+                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
+                }}
+              >
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+                    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M6.252 19.248a9.25 9.25 0 1 1 11.496 0" />
+                    <path fill="currentColor" d="M10.468 14.285a2 2 0 1 1 3.064-2.572c1.141 1.36 1.834 3.755 2.14 5.029a.449.449 0 0 1-.624.523c-1.201-.523-3.439-1.62-4.58-2.98" />
+                  </svg>
+                  <span className="text-xs font-semibold text-white">Speed</span>
+                </div>
+                <div className="flex items-center gap-2 px-2">
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={speed}
+                    onChange={(e) => onSpeedChange(Number(e.target.value))}
+                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((speed - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) ${((speed - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) 100%)`,
+                      border: "1px solid #424242",
+                    }}
+                  />
+                  <span className="text-xs font-semibold text-white min-w-[30px]">{speed.toFixed(1)}x</span>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+
+            {/* Volume */}
+            <Popover.Root open={volumeMenuOpen} onOpenChange={setVolumeMenuOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                >
+                  Vol
+                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
+                style={{
+                  background: "rgba(13,15,17,0.98)",
+                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
+                }}
+              >
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19.248 4.752A10.22 10.22 0 0 1 22.25 12c0 2.83-1.147 5.393-3.002 7.248M15.889 8.11a5.48 5.48 0 0 1 1.611 3.89 5.48 5.48 0 0 1-1.61 3.889M2.75 7.75h2.957a1 1 0 0 0 .54-.158L12.25 3.75v16.5l-6.004-3.842a1 1 0 0 0-.539-.158H2.75a1 1 0 0 1-1-1v-6.5a1 1 0 0 1 1-1" />
+                  </svg>
+                  <span className="text-xs font-semibold text-white">Volume</span>
+                </div>
+                <div className="flex items-center gap-2 px-2">
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={volume}
+                    onChange={(e) => onVolumeChange(Number(e.target.value))}
+                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((volume - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) ${((volume - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) 100%)`,
+                      border: "1px solid #424242",
+                    }}
+                  />
+                  <span className="text-xs font-semibold text-white min-w-[30px]">{volume.toFixed(1)}</span>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+
+            {/* Pitch */}
+            <Popover.Root open={pitchMenuOpen} onOpenChange={setPitchMenuOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                >
+                  {pitch >= 0 ? '+' : ''}{pitch}
+                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
+                style={{
+                  background: "rgba(13,15,17,0.98)",
+                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
+                }}
+              >
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+                    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M7.75 5.75v12.5m-4-7.5v2.5M12 9.75v4.5m4.25-6.5v8.5m4-5.5v2.5" />
+                  </svg>
+                  <span className="text-xs font-semibold text-white">Pitch</span>
+                </div>
+                <div className="flex items-center gap-2 px-2">
+                  <input
+                    type="range"
+                    min="-12"
+                    max="12"
+                    step="1"
+                    value={pitch}
+                    onChange={(e) => onPitchChange(Number(e.target.value))}
+                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((pitch + 12) / 24) * 100}%, rgba(255,255,255,0.05) ${((pitch + 12) / 24) * 100}%, rgba(255,255,255,0.05) 100%)`,
+                      border: "1px solid #424242",
+                    }}
+                  />
+                  <span className="text-xs font-semibold text-white min-w-[30px]">{pitch >= 0 ? '+' : ''}{pitch}</span>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+
+            {/* Output Format */}
+            <Popover.Root open={outputFormatMenuOpen} onOpenChange={setOutputFormatMenuOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                >
+                  {outputFormat}
+                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                className="z-50 w-40 overflow-hidden rounded-xl border border-white/10 p-1.5"
+                style={{
+                  background: "rgba(13,15,17,0.98)",
+                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
+                }}
+              >
+                <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">Output format</div>
+                {["mp3", "wav", "opus"].map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => {
+                      onOutputFormatChange(fmt);
+                      setOutputFormatMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg p-2 text-left text-xs transition-colors"
+                    style={{
+                      background: outputFormat === fmt ? "rgba(0,240,255,0.10)" : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (outputFormat !== fmt) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (outputFormat !== fmt) e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    <span className="text-white font-medium uppercase">{fmt}</span>
+                    {outputFormat === fmt && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1FE17]">
+                        <path d="M5 13.875 9.2 18 19 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </Popover.Content>
+            </Popover.Root>
           </div>
 
           {/* Choose Voice capsule — opens "Select or add a voice" modal */}

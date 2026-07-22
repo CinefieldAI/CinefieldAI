@@ -36,6 +36,13 @@ export default function CreateAudioWorkspace({ onBack }: CreateAudioWorkspacePro
   const [language, setLanguage] = useState("English");
   const [referenceVideo, setReferenceVideo] = useState<string | null>(null);
 
+  // Audio controls (sample rate, speed, volume, pitch, output format)
+  const [sampleRate, setSampleRate] = useState(24000);
+  const [speed, setSpeed] = useState(1.2);
+  const [volume, setVolume] = useState(1.0);
+  const [pitch, setPitch] = useState(-3);
+  const [outputFormat, setOutputFormat] = useState("mp3");
+
   // Feed view
   const [activeTab, setActiveTab] = useState<AudioTab>("all");
   const [layoutMode, setLayoutMode] = useState<AudioLayout>("list");
@@ -100,6 +107,16 @@ export default function CreateAudioWorkspace({ onBack }: CreateAudioWorkspacePro
         onOpenLanguage={() => setIsLanguageModalOpen(true)}
         referenceVideo={referenceVideo}
         onReferenceVideo={setReferenceVideo}
+        sampleRate={sampleRate}
+        onSampleRateChange={setSampleRate}
+        speed={speed}
+        onSpeedChange={setSpeed}
+        volume={volume}
+        onVolumeChange={setVolume}
+        pitch={pitch}
+        onPitchChange={setPitch}
+        outputFormat={outputFormat}
+        onOutputFormatChange={setOutputFormat}
       />
 
       {/* Centered overlays */}
