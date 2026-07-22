@@ -94,20 +94,34 @@ export default function AudioComposer({
   const [outputFormatMenuOpen, setOutputFormatMenuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
+  // standalone rotary selector uses).
+  const isVoiceover = feature === 0;
+  const isChangeVoice = feature === 1;
   const isTranslate = feature === 2;
+  const showReferenceVideo = isChangeVoice || isTranslate;
   const activeModel = AUDIO_MODELS[selectedModel];
   const ModelIcon = activeModel.icon;
+
+  const handleReferenceDrop = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) onReferenceVideo(file.name);
+  };
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div
-        className={`pointer-events-auto w-full ${
-          isTranslate ? "max-w-[1200px]" : "max-w-[1040px]"
+        className={`pointer-events-auto flex w-full items-end gap-2 ${
+          showReferenceVideo ? "max-w-[1200px]" : "max-w-[1040px]"
         }`}
       >
-        {/* Outer glass shell */}
+        {/* Standalone rotary mode selector — visually separate from the prompt bar */}
+        <RotarySelector value={feature} onChange={onFeatureChange} />
+
+        {/* Unified prompt bar — owns its own background/border/shadow */}
         <div
-          className="flex items-end gap-2 rounded-[22px] p-2"
+          className="flex min-w-0 flex-1 items-end gap-2 rounded-[22px] p-2"
           style={{
             background:
               "linear-gradient(115deg, rgba(0,229,255,0.10) 27%, rgba(219,219,219,0.10) 86%), rgba(15,17,19,0.96)",
@@ -117,11 +131,8 @@ export default function AudioComposer({
             WebkitBackdropFilter: "blur(20px)",
           }}
         >
-          {/* Rotary mode selector */}
-          <RotarySelector value={feature} onChange={onFeatureChange} />
-
-          {/* Translate-only: Reference Video drop slot (left of the prompt) */}
-          {isTranslate && (
+          {/* Change Voice / Translate: Reference Video drop slot */}
+          {showReferenceVideo && (
             <>
               <input
                 ref={fileRef}
@@ -135,13 +146,20 @@ export default function AudioComposer({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleReferenceDrop}
                 className="flex h-[120px] w-[150px] shrink-0 flex-col items-center justify-center gap-2 rounded-[18px] px-3 text-center transition-colors"
                 style={{
                   border: `1.5px dashed rgba(0,240,255,0.45)`,
                   background: "rgba(0,240,255,0.04)",
                 }}
               >
-                <Video className="h-5 w-5" style={{ color: NEON }} />
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: "rgba(0,0,0,0.4)" }}
+                >
+                  <Video className="h-4 w-4" style={{ color: NEON }} />
+                </span>
                 <span className="text-xs font-semibold text-white">
                   Reference Video
                 </span>
@@ -151,14 +169,33 @@ export default function AudioComposer({
                       {referenceVideo}
                     </span>
                   ) : (
-                    "Drop name of scene from files"
+                    "Drop here or Choose from files"
                   )}
                 </span>
               </button>
+
+              {/* Translate-only: target language chip → Choose Language modal */}
+              {isTranslate && (
+                <button
+                  type="button"
+                  onClick={onOpenLanguage}
+                  className="flex h-8 shrink-0 items-center gap-2 self-center rounded-lg px-2.5 text-xs font-semibold transition-colors"
+                  style={{
+                    border: "1px solid rgba(0,240,255,0.35)",
+                    background: "rgba(0,240,255,0.06)",
+                    color: NEON,
+                  }}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {language}
+                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                </button>
+              )}
             </>
           )}
 
-          {/* Prompt input + model pill (+ language chip in Translate) */}
+          {/* Voiceover: text prompt input + model selector */}
+          {isVoiceover && (
           <div className="relative flex h-[120px] min-w-0 flex-1 flex-col justify-between rounded-[18px] bg-white/[0.03] p-3">
             <textarea
               rows={2}
@@ -177,7 +214,7 @@ export default function AudioComposer({
                   className="inline-flex h-8 items-center gap-2 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
                 >
                   <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
-                    {selectedModel === 0 ? (
+                    {activeModel.title === "Eleven v3" ? (
                       <Image
                         src="/de397d3b-0644-47ac-a4fe-49d64ede48d3.png"
                         alt={activeModel.title}
@@ -276,26 +313,9 @@ export default function AudioComposer({
                   </>
                 )}
               </div>
-
-              {/* Translate-only: target language chip → Choose Language modal */}
-              {isTranslate && (
-                <button
-                  type="button"
-                  onClick={onOpenLanguage}
-                  className="inline-flex h-8 items-center gap-2 rounded-lg px-2.5 text-xs font-semibold transition-colors"
-                  style={{
-                    border: "1px solid rgba(0,240,255,0.35)",
-                    background: "rgba(0,240,255,0.06)",
-                    color: NEON,
-                  }}
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  {language}
-                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                </button>
-              )}
             </div>
           </div>
+          )}
 
           {/* Audio controls row — Sample Rate, Speed, Volume, Pitch, Output Format */}
           <div className="flex shrink-0 items-center gap-1.5">

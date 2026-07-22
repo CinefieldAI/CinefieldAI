@@ -27,6 +27,7 @@ import AudioMegaDropdown from "./AudioMegaDropdown";
 import CompactDropdown from "./CompactDropdown";
 import type { ImageFeatureKey } from "./imageDropdownData";
 import type { ActiveView, PanelKey } from "./panelData";
+import { AUDIO_FEATURES, AUDIO_MODELS, type AudioMode } from "./audioMenuData";
 import {
   COLLAB_ITEMS,
   MCP_CLI_ITEMS,
@@ -188,6 +189,16 @@ interface NavbarProps {
   onOpenVideoPanel: () => void;
   onOpenAudioPanel: () => void;
   onSetView: (view: ActiveView) => void;
+  /**
+   * Shared Audio mode/model — single source of truth also read by the
+   * bottom rotary selector on /audio/create. Optional so pages that don't
+   * surface the Audio workspace (Marketing Studio, Cinema Studio) can keep
+   * rendering Navbar without wiring this up.
+   */
+  audioMode?: AudioMode;
+  onAudioModeChange?: (mode: AudioMode) => void;
+  audioModelIndex?: number;
+  onAudioModelIndexChange?: (index: number) => void;
 }
 
 export default function Navbar({
@@ -196,6 +207,10 @@ export default function Navbar({
   onOpenVideoPanel,
   onOpenAudioPanel,
   onSetView,
+  audioMode,
+  onAudioModeChange,
+  audioModelIndex,
+  onAudioModelIndexChange,
 }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -223,6 +238,25 @@ export default function Navbar({
     } else {
       onOpenVideoPanel();
     }
+  };
+
+  // Audio: mega-dropdown rows carry only a title, so map it back to the
+  // shared AudioMode/model-index state before opening the workspace.
+  const activeAudioFeatureTitle = AUDIO_FEATURES.find(
+    (f) => f.mode === audioMode,
+  )?.title;
+  const activeAudioModelTitle = AUDIO_MODELS[audioModelIndex ?? 0]?.title;
+
+  const handleAudioFeatureSelect = (title: string) => {
+    const feature = AUDIO_FEATURES.find((f) => f.title === title);
+    if (feature) onAudioModeChange?.(feature.mode);
+    onOpenAudioPanel();
+  };
+
+  const handleAudioModelSelect = (title: string) => {
+    const index = AUDIO_MODELS.findIndex((m) => m.title === title);
+    if (index >= 0) onAudioModelIndexChange?.(index);
+    onOpenAudioPanel();
   };
 
   return (
@@ -295,8 +329,10 @@ export default function Navbar({
               </NavigationMenuTrigger>
               <NavigationMenuContent>
                 <AudioMegaDropdown
-                  onFeatureSelect={onOpenAudioPanel}
-                  onModelSelect={onOpenAudioPanel}
+                  onFeatureSelect={handleAudioFeatureSelect}
+                  onModelSelect={handleAudioModelSelect}
+                  activeFeatureTitle={activeAudioFeatureTitle}
+                  activeModelTitle={activeAudioModelTitle}
                 />
               </NavigationMenuContent>
             </NavigationMenuItem>

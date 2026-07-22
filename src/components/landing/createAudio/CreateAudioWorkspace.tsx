@@ -9,23 +9,41 @@ import AudioTopControls, {
   type AudioLayout,
   type AudioTab,
 } from "./AudioTopControls";
+import { AUDIO_MODE_ORDER, type AudioMode } from "../audioMenuData";
 
 interface CreateAudioWorkspaceProps {
   onBack: () => void;
+  /** Shared Audio mode — same state the top-nav Audio dropdown reads/writes. */
+  audioMode: AudioMode;
+  onAudioModeChange: (mode: AudioMode) => void;
+  /** Shared selected model index — same state the top-nav Audio dropdown reads/writes. */
+  audioModelIndex: number;
+  onAudioModelIndexChange: (index: number) => void;
 }
 
 let clipCounter = 0;
 
-export default function CreateAudioWorkspace({ onBack }: CreateAudioWorkspaceProps) {
+export default function CreateAudioWorkspace({
+  onBack,
+  audioMode,
+  onAudioModeChange,
+  audioModelIndex,
+  onAudioModelIndexChange,
+}: CreateAudioWorkspaceProps) {
   // Composer / generation
   const [script, setScript] = useState("");
-  // Rotary mode (0 Voiceover · 1 Change Voice · 2 Translate)
-  const [feature, setFeature] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [clips, setClips] = useState<AudioClip[]>([]);
 
-  // Active model for the in-prompt pill (defaults to Eleven v3)
-  const [selectedModel, setSelectedModel] = useState(0);
+  // Rotary mode (0 Voiceover · 1 Change Voice · 2 Translate) — derived from
+  // the shared AudioMode so the rotary selector, the top Audio panel, and
+  // the prompt bar all read one source of truth.
+  const feature = AUDIO_MODE_ORDER.indexOf(audioMode);
+  const setFeature = (index: number) => onAudioModeChange(AUDIO_MODE_ORDER[index]);
+
+  // Active model for the in-prompt pill — shared with the top Audio panel.
+  const selectedModel = audioModelIndex;
+  const setSelectedModel = onAudioModelIndexChange;
 
   // "Select or add a voice" modal + chosen voice
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);

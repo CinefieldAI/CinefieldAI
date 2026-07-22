@@ -5,6 +5,7 @@ import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
+import type { AudioMode } from "@/components/landing/audioMenuData";
 
 interface AppShellProps {
   initialView?: ActiveView;
@@ -13,6 +14,13 @@ interface AppShellProps {
 export default function AppShell({ initialView = "default" }: AppShellProps) {
   const [activePanel, setActivePanel] = useState<PanelKey | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>(initialView);
+
+  // Shared Audio mode/model — single source of truth for both the top-nav
+  // Audio mega-dropdown (Navbar) and the bottom rotary selector + prompt bar
+  // (CreateAudioWorkspace). Lives here since Navbar and the workspace are
+  // siblings that both need to read and write it.
+  const [audioMode, setAudioMode] = useState<AudioMode>("voiceover");
+  const [audioModelIndex, setAudioModelIndex] = useState(0);
 
   const openImagePanel = () => {
     setActivePanel("image");
@@ -43,12 +51,22 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
         onOpenVideoPanel={openVideoPanel}
         onOpenAudioPanel={openAudioPanel}
         onSetView={setView}
+        audioMode={audioMode}
+        onAudioModeChange={setAudioMode}
+        audioModelIndex={audioModelIndex}
+        onAudioModelIndexChange={setAudioModelIndex}
       />
       <SidePanel activePanel={activePanel} onClose={() => setActivePanel(null)} />
 
       <main className="flex-1">
         {activeView === "createAudio" && (
-          <CreateAudioWorkspace onBack={() => setActiveView("default")} />
+          <CreateAudioWorkspace
+            onBack={() => setActiveView("default")}
+            audioMode={audioMode}
+            onAudioModeChange={setAudioMode}
+            audioModelIndex={audioModelIndex}
+            onAudioModelIndexChange={setAudioModelIndex}
+          />
         )}
       </main>
     </div>
