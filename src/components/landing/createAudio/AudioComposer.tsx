@@ -6,7 +6,6 @@ import * as Popover from "@radix-ui/react-popover";
 import {
   Check,
   ChevronDown,
-  Globe,
   Image as ImageRefIcon,
   Loader2,
   Music2,
@@ -444,16 +443,14 @@ export default function AudioComposer({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
-      <div
-        className={`pointer-events-auto flex w-full items-end gap-2 ${
-          showReferenceVideo ? "max-w-[1200px]" : "max-w-[1040px]"
-        }`}
-      >
+      <div className="pointer-events-auto flex w-full max-w-[1040px] items-end gap-2">
         {/* Standalone rotary mode selector — visually separate from the prompt bar */}
         <RotarySelector value={feature} onChange={onFeatureChange} />
 
-        {/* Change Voice: dedicated dark-neutral bar — Reference Video (large) + Voice Preset + Generate only */}
-        {isChangeVoice && (
+        {/* Change Voice & Translate: dedicated dark-neutral bar — Reference Video
+            (large) + Voice Preset + Generate only. Translate no longer shows a
+            Language chip or the sample-rate/speed/volume/pitch/output row. */}
+        {showReferenceVideo && (
           <div
             className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[20px] border p-2"
             style={{
@@ -584,8 +581,8 @@ export default function AudioComposer({
           </div>
         )}
 
-        {/* Unified prompt bar — Voiceover / Translate only; dark-neutral surface (matches Change Voice) */}
-        {!isChangeVoice && (
+        {/* Unified prompt bar — Voiceover only; dark-neutral surface (matches Change Voice) */}
+        {isVoiceover && (
         <div
           className="flex min-w-0 flex-1 items-end gap-2 rounded-[22px] border p-2 transition-[height,width,background,border-radius,padding] duration-200"
           style={{
@@ -595,65 +592,6 @@ export default function AudioComposer({
               "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
           }}
         >
-          {/* Translate: Reference Video drop slot + language chip */}
-          {isTranslate && (
-            <>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) =>
-                  onReferenceVideo(e.target.files?.[0]?.name ?? null)
-                }
-              />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleReferenceDrop}
-                className="flex h-[120px] w-[150px] shrink-0 flex-col items-center justify-center gap-2 rounded-[18px] px-3 text-center transition-colors hover:bg-white/[0.06]"
-                style={{
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "rgba(255,255,255,0.04)",
-                }}
-              >
-                <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: "rgba(255,255,255,0.06)" }}
-                >
-                  <Video className="h-4 w-4 text-zinc-300" />
-                </span>
-                <span className="text-xs font-semibold text-white">
-                  Reference Video
-                </span>
-                <span className="text-[10px] leading-tight text-zinc-400">
-                  {referenceVideo ? (
-                    <span className="block truncate text-zinc-300">
-                      {referenceVideo}
-                    </span>
-                  ) : (
-                    "Drop here or Choose from files"
-                  )}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenLanguage}
-                className="flex h-8 shrink-0 items-center gap-2 self-center rounded-lg px-2.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09]"
-                style={{
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                }}
-              >
-                <Globe className="h-3.5 w-3.5" />
-                {language}
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </button>
-            </>
-          )}
-
           {/* Voiceover: text prompt input + model selector (shared by all six models) */}
           {isVoiceover && (
           <div className="relative flex h-[120px] min-w-0 flex-1 flex-col justify-between rounded-[18px] bg-white/[0.03] p-3">
@@ -973,68 +911,6 @@ export default function AudioComposer({
                   width={160}
                 />
               )}
-            </div>
-          )}
-
-          {/* Translate: its own generic Sample Rate/Speed/Volume/Pitch/Output row (unchanged) */}
-          {isTranslate && (
-            <div className="flex shrink-0 items-center gap-1.5">
-              <SelectPopover
-                open={translateSampleRateMenuOpen}
-                onOpenChange={setTranslateSampleRateMenuOpen}
-                triggerLabel={`${translateSampleRate / 1000}k Hz`}
-                header="Sample Rate"
-                options={SAMPLE_RATE_OPTIONS}
-                selected={String(translateSampleRate)}
-                onSelect={(v) => onTranslateSampleRateChange(Number(v))}
-                width={160}
-              />
-              <SliderPopover
-                open={translateSpeedMenuOpen}
-                onOpenChange={setTranslateSpeedMenuOpen}
-                label="Speed"
-                icon={SPEED_ICON}
-                value={translateSpeed}
-                onChange={onTranslateSpeedChange}
-                min={0.5}
-                max={2}
-                step={0.1}
-                format={(v) => `${v.toFixed(1)}x`}
-              />
-              <SliderPopover
-                open={translateVolumeMenuOpen}
-                onOpenChange={setTranslateVolumeMenuOpen}
-                label="Volume"
-                icon={VOLUME_ICON}
-                value={translateVolume}
-                onChange={onTranslateVolumeChange}
-                min={0.5}
-                max={2}
-                step={0.1}
-                format={(v) => v.toFixed(1)}
-              />
-              <SliderPopover
-                open={translatePitchMenuOpen}
-                onOpenChange={setTranslatePitchMenuOpen}
-                label="Pitch"
-                icon={PITCH_ICON}
-                value={translatePitch}
-                onChange={onTranslatePitchChange}
-                min={-12}
-                max={12}
-                step={1}
-                format={(v) => `${v >= 0 ? "+" : ""}${v}`}
-              />
-              <SelectPopover
-                open={translateOutputFormatMenuOpen}
-                onOpenChange={setTranslateOutputFormatMenuOpen}
-                triggerLabel={translateOutputFormat}
-                header="Output format"
-                options={OUTPUT_FORMAT_OPTIONS}
-                selected={translateOutputFormat}
-                onSelect={onTranslateOutputFormatChange}
-                width={160}
-              />
             </div>
           )}
 
