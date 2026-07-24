@@ -4,17 +4,36 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import * as Popover from "@radix-ui/react-popover";
 import {
+  Check,
   ChevronDown,
   Globe,
+  Image as ImageRefIcon,
   Loader2,
+  Music2,
+  Plus,
   Sparkles,
   Video,
 } from "lucide-react";
 import { AUDIO_MODELS } from "@/components/landing/audioMenuData";
+import {
+  VOICEOVER_MODEL_ORDER,
+  VOICEOVER_CAPABILITIES,
+  QWEN_LANGUAGES,
+  type SeedAudioSettings,
+  type QwenSettings,
+} from "./voiceoverModelConfig";
 import RotarySelector from "./RotarySelector";
 
-/** Neon turquoise brand accent (per 1:1 spec). */
+/** Neon turquoise brand accent (per 1:1 spec) — kept only on the Voice Preset card. */
 const NEON = "#00F0FF";
+
+/** Shared dark translucent popover surface used by every Voiceover popover. */
+const POPOVER_SURFACE = {
+  background: "rgba(28,30,32,0.95)",
+  backdropFilter: "blur(32px)",
+  WebkitBackdropFilter: "blur(32px)",
+  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.04)",
+};
 
 interface AudioComposerProps {
   feature: number;
@@ -27,26 +46,32 @@ interface AudioComposerProps {
   onChooseVoice: () => void;
   /** Currently selected voice name (shown on the Choose Voice card). */
   selectedVoiceLabel?: string;
-  /** Active model index for the in-prompt model pill. */
+  /** Active model index for the in-prompt model pill (shared with the top-nav Audio dropdown). */
   selectedModel: number;
   onSelectModel: (index: number) => void;
   /** Translate-mode target language + its picker. */
   language: string;
   onOpenLanguage: () => void;
-  /** Translate-mode reference video file name. */
+  /** Change Voice / Translate-mode reference video file name. */
   referenceVideo: string | null;
   onReferenceVideo: (name: string | null) => void;
-  /** Audio control values */
-  sampleRate: number;
-  onSampleRateChange: (value: number) => void;
-  speed: number;
-  onSpeedChange: (value: number) => void;
-  volume: number;
-  onVolumeChange: (value: number) => void;
-  pitch: number;
-  onPitchChange: (value: number) => void;
-  outputFormat: string;
-  onOutputFormatChange: (value: string) => void;
+  /** Translate mode's own generic Sample Rate/Speed/Volume/Pitch/Output row. */
+  translateSampleRate: number;
+  onTranslateSampleRateChange: (value: number) => void;
+  translateSpeed: number;
+  onTranslateSpeedChange: (value: number) => void;
+  translateVolume: number;
+  onTranslateVolumeChange: (value: number) => void;
+  translatePitch: number;
+  onTranslatePitchChange: (value: number) => void;
+  translateOutputFormat: string;
+  onTranslateOutputFormatChange: (value: string) => void;
+  /** Voiceover mode: Seed Audio 1.0's own settings. */
+  seedAudioSettings: SeedAudioSettings;
+  onSeedAudioSettingsChange: (value: SeedAudioSettings) => void;
+  /** Voiceover mode: Qwen Audio 3.0's own settings. */
+  qwenSettings: QwenSettings;
+  onQwenSettingsChange: (value: QwenSettings) => void;
 }
 
 /** Retro vertical wave bars for the Choose Voice capsule (illuminate turquoise). */
@@ -54,11 +79,235 @@ const PRESET_BARS = Array.from({ length: 22 }, (_, i) =>
   24 + Math.round(Math.abs(Math.sin(i * 0.8)) * 70),
 );
 
+/** Compact slider popover — reused for every model's Speed/Volume/Pitch control. */
+function SliderPopover({
+  open,
+  onOpenChange,
+  label,
+  icon,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  format,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  label: string;
+  icon: React.ReactNode;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          title={label}
+          className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+        >
+          {format(value)}
+          <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Content
+        side="top"
+        align="start"
+        sideOffset={8}
+        collisionPadding={12}
+        className="z-[100000] w-[220px] overflow-hidden rounded-xl border border-white/10 p-2"
+        style={POPOVER_SURFACE}
+      >
+        <div className="mb-2 flex items-center gap-2 px-2">
+          {icon}
+          <span className="text-xs font-semibold text-white">{label}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="ml-auto text-zinc-500">
+            <path
+              d="M10.75 11H12L12 16.25M21.25 12C21.25 17.1086 17.1086 21.25 12 21.25C6.89137 21.25 2.75 17.1086 2.75 12C2.75 6.89137 6.89137 2.75 12 2.75C17.1086 2.75 21.25 6.89137 21.25 12Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 7.375C11.6548 7.375 11.375 7.65482 11.375 8C11.375 8.34518 11.6548 8.625 12 8.625C12.3452 8.625 12.625 8.34518 12.625 8C12.625 7.65482 12.3452 7.375 12 7.375Z"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="0.25"
+            />
+          </svg>
+        </div>
+        <div className="flex items-center gap-2 px-2">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            aria-label={label}
+            aria-valuemin={min}
+            aria-valuemax={max}
+            aria-valuenow={value}
+            className="h-6 flex-1 cursor-pointer appearance-none rounded-md"
+            style={{
+              background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${pct}%, rgba(255,255,255,0.05) ${pct}%, rgba(255,255,255,0.05) 100%)`,
+              border: "1px solid #424242",
+            }}
+          />
+          <span className="min-w-[36px] text-xs font-semibold text-white">{format(value)}</span>
+        </div>
+      </Popover.Content>
+    </Popover.Root>
+  );
+}
+
+interface SelectOption {
+  value: string;
+  title: string;
+  subtitle?: string;
+}
+
+/** Compact dark option-list popover — reused for Sample Rate, Output format, and Qwen's Language. */
+function SelectPopover({
+  open,
+  onOpenChange,
+  triggerLabel,
+  header,
+  options,
+  selected,
+  onSelect,
+  width = 160,
+  maxHeight,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  triggerLabel: string;
+  header: string;
+  options: SelectOption[];
+  selected: string;
+  onSelect: (value: string) => void;
+  width?: number;
+  maxHeight?: number;
+}) {
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+        >
+          {triggerLabel}
+          <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Content
+        side="top"
+        align="start"
+        sideOffset={8}
+        collisionPadding={12}
+        className="z-[100000] overflow-y-auto rounded-xl border border-white/10 p-1.5"
+        style={{ ...POPOVER_SURFACE, width, maxHeight }}
+      >
+        <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">{header}</div>
+        {options.map((opt) => {
+          const active = opt.value === selected;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onSelect(opt.value);
+                onOpenChange(false);
+              }}
+              className="flex min-h-[36px] w-full items-center justify-between gap-2 rounded-lg p-2 text-left transition-colors"
+              style={{ background: active ? "rgba(255,255,255,0.08)" : "transparent" }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-white">{opt.title}</span>
+                {opt.subtitle && (
+                  <span className="block truncate text-xs text-zinc-500">{opt.subtitle}</span>
+                )}
+              </span>
+              {active && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 text-[#D1FE17]">
+                  <path
+                    d="M5 13.875 9.2 18 19 7"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              )}
+            </button>
+          );
+        })}
+      </Popover.Content>
+    </Popover.Root>
+  );
+}
+
+const SAMPLE_RATE_OPTIONS: SelectOption[] = [
+  { value: "8000", title: "8000 Hz", subtitle: "low / phone quality" },
+  { value: "16000", title: "16000 Hz", subtitle: "basic / voice calls" },
+  { value: "24000", title: "24000 Hz", subtitle: "default — fine for voice" },
+  { value: "32000", title: "32000 Hz", subtitle: "near-CD" },
+  { value: "44100", title: "44100 Hz", subtitle: "CD quality" },
+  { value: "48000", title: "48000 Hz", subtitle: "video / studio" },
+];
+
+const OUTPUT_FORMAT_OPTIONS: SelectOption[] = [
+  { value: "mp3", title: "mp3", subtitle: "small, default" },
+  { value: "wav", title: "wav", subtitle: "lossless" },
+  { value: "opus", title: "opus", subtitle: "web" },
+];
+
+const QWEN_LANGUAGE_OPTIONS: SelectOption[] = QWEN_LANGUAGES.map((l) => ({ value: l, title: l }));
+
+const SPEED_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M6.252 19.248a9.25 9.25 0 1 1 11.496 0" />
+    <path fill="currentColor" d="M10.468 14.285a2 2 0 1 1 3.064-2.572c1.141 1.36 1.834 3.755 2.14 5.029a.449.449 0 0 1-.624.523c-1.201-.523-3.439-1.62-4.58-2.98" />
+  </svg>
+);
+const VOLUME_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+    <path
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
+      d="M19.248 4.752A10.22 10.22 0 0 1 22.25 12c0 2.83-1.147 5.393-3.002 7.248M15.889 8.11a5.48 5.48 0 0 1 1.611 3.89 5.48 5.48 0 0 1-1.61 3.889M2.75 7.75h2.957a1 1 0 0 0 .54-.158L12.25 3.75v16.5l-6.004-3.842a1 1 0 0 0-.539-.158H2.75a1 1 0 0 1-1-1v-6.5a1 1 0 0 1 1-1"
+    />
+  </svg>
+);
+const PITCH_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
+    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M7.75 5.75v12.5m-4-7.5v2.5M12 9.75v4.5m4.25-6.5v8.5m4-5.5v2.5" />
+  </svg>
+);
+
 /**
  * Bottom floating composer bar for the Audio workspace — mirrors the real
  * Higgsfield layout: rotary mode selector → prompt (with model pill) → Choose
- * Voice capsule → Generate. In Translate mode a Reference Video drop slot is
- * inserted to the left of the prompt and a language picker appears.
+ * Voice capsule → Generate.
+ *
+ * Voiceover renders a fully model-capability-driven control row (six models,
+ * each with its own settings/ranges — see voiceoverModelConfig.ts). Change
+ * Voice and Translate keep their own previously-established layouts.
  */
 export default function AudioComposer({
   feature,
@@ -75,24 +324,40 @@ export default function AudioComposer({
   onOpenLanguage,
   referenceVideo,
   onReferenceVideo,
-  sampleRate,
-  onSampleRateChange,
-  speed,
-  onSpeedChange,
-  volume,
-  onVolumeChange,
-  pitch,
-  onPitchChange,
-  outputFormat,
-  onOutputFormatChange,
+  translateSampleRate,
+  onTranslateSampleRateChange,
+  translateSpeed,
+  onTranslateSpeedChange,
+  translateVolume,
+  onTranslateVolumeChange,
+  translatePitch,
+  onTranslatePitchChange,
+  translateOutputFormat,
+  onTranslateOutputFormatChange,
+  seedAudioSettings,
+  onSeedAudioSettingsChange,
+  qwenSettings,
+  onQwenSettingsChange,
 }: AudioComposerProps) {
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [addReferenceOpen, setAddReferenceOpen] = useState(false);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [sampleRateMenuOpen, setSampleRateMenuOpen] = useState(false);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [volumeMenuOpen, setVolumeMenuOpen] = useState(false);
   const [pitchMenuOpen, setPitchMenuOpen] = useState(false);
   const [outputFormatMenuOpen, setOutputFormatMenuOpen] = useState(false);
+
+  // Translate mode's own menu-open state (kept separate from Voiceover's above).
+  const [translateSampleRateMenuOpen, setTranslateSampleRateMenuOpen] = useState(false);
+  const [translateSpeedMenuOpen, setTranslateSpeedMenuOpen] = useState(false);
+  const [translateVolumeMenuOpen, setTranslateVolumeMenuOpen] = useState(false);
+  const [translatePitchMenuOpen, setTranslatePitchMenuOpen] = useState(false);
+  const [translateOutputFormatMenuOpen, setTranslateOutputFormatMenuOpen] = useState(false);
+
   const fileRef = useRef<HTMLInputElement>(null);
+  const audioRefInputRef = useRef<HTMLInputElement>(null);
+  const imageRefInputRef = useRef<HTMLInputElement>(null);
 
   // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
   // standalone rotary selector uses).
@@ -103,10 +368,78 @@ export default function AudioComposer({
   const activeModel = AUDIO_MODELS[selectedModel];
   const ModelIcon = activeModel.icon;
 
+  // Voiceover: capability-driven per-model controls.
+  const voiceoverModelId = VOICEOVER_MODEL_ORDER[selectedModel];
+  const capabilities = VOICEOVER_CAPABILITIES[voiceoverModelId];
+  const isSeedAudioModel = voiceoverModelId === "seed-audio-1";
+  const isQwenModel = voiceoverModelId === "qwen-audio-3";
+
+  const speedRange = capabilities.speedRange;
+  const volumeRange = capabilities.volumeRange;
+  const pitchRange = capabilities.pitchRange;
+
+  const speedValue = isSeedAudioModel ? seedAudioSettings.speed : isQwenModel ? qwenSettings.speed : 0;
+  const setSpeedValue = (v: number) => {
+    if (isSeedAudioModel) onSeedAudioSettingsChange({ ...seedAudioSettings, speed: v });
+    else if (isQwenModel) onQwenSettingsChange({ ...qwenSettings, speed: v });
+  };
+
+  const volumeValue = isSeedAudioModel ? seedAudioSettings.volume : isQwenModel ? qwenSettings.volume : 0;
+  const setVolumeValue = (v: number) => {
+    if (isSeedAudioModel) onSeedAudioSettingsChange({ ...seedAudioSettings, volume: v });
+    else if (isQwenModel) onQwenSettingsChange({ ...qwenSettings, volume: v });
+  };
+
+  const pitchValue = isSeedAudioModel ? seedAudioSettings.pitch : isQwenModel ? qwenSettings.pitch : 0;
+  const setPitchValue = (v: number) => {
+    if (isSeedAudioModel) onSeedAudioSettingsChange({ ...seedAudioSettings, pitch: v });
+    else if (isQwenModel) onQwenSettingsChange({ ...qwenSettings, pitch: v });
+  };
+
+  const outputFormatValue = isSeedAudioModel
+    ? seedAudioSettings.outputFormat
+    : isQwenModel
+      ? qwenSettings.outputFormat
+      : "mp3";
+  const setOutputFormatValue = (v: string) => {
+    if (isSeedAudioModel) onSeedAudioSettingsChange({ ...seedAudioSettings, outputFormat: v });
+    else if (isQwenModel) onQwenSettingsChange({ ...qwenSettings, outputFormat: v });
+  };
+
+  const hasAnyVoiceoverControls =
+    capabilities.supportsReferences ||
+    capabilities.supportsSampleRate ||
+    capabilities.supportsLanguage ||
+    capabilities.supportsSpeed ||
+    capabilities.supportsVolume ||
+    capabilities.supportsPitch ||
+    capabilities.supportsOutputFormat;
+
   const handleReferenceDrop = (e: React.DragEvent<HTMLButtonElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) onReferenceVideo(file.name);
+  };
+
+  const handleAddAudioReferences = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!files.length) return;
+    const remaining = Math.max(0, 3 - seedAudioSettings.audioReferences.length);
+    const names = files.slice(0, remaining).map((f) => f.name);
+    if (names.length) {
+      onSeedAudioSettingsChange({
+        ...seedAudioSettings,
+        audioReferences: [...seedAudioSettings.audioReferences, ...names],
+      });
+    }
+  };
+
+  const handleAddImageReference = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    onSeedAudioSettingsChange({ ...seedAudioSettings, imageReference: file.name });
   };
 
   return (
@@ -119,20 +452,151 @@ export default function AudioComposer({
         {/* Standalone rotary mode selector — visually separate from the prompt bar */}
         <RotarySelector value={feature} onChange={onFeatureChange} />
 
-        {/* Unified prompt bar — owns its own background/border/shadow */}
+        {/* Change Voice: dedicated dark-neutral bar — Reference Video (large) + Voice Preset + Generate only */}
+        {isChangeVoice && (
+          <div
+            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[20px] border p-2"
+            style={{
+              background: "rgba(20,21,23,0.96)",
+              borderColor: "rgba(255,255,255,0.08)",
+              boxShadow:
+                "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
+            }}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) =>
+                onReferenceVideo(e.target.files?.[0]?.name ?? null)
+              }
+            />
+            {/* Reference Video upload — large horizontal region, fills remaining width */}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleReferenceDrop}
+              aria-label="Upload reference video"
+              className="flex h-full min-w-0 flex-1 items-center gap-4 rounded-2xl px-6 text-left transition-colors hover:bg-white/[0.06]"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <span
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "rgba(255,255,255,0.06)" }}
+              >
+                <Video className="h-5 w-5 text-zinc-300" />
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-semibold text-white">
+                  Reference Video
+                </span>
+                <span className="truncate text-xs text-zinc-500">
+                  {referenceVideo ? (
+                    <span className="text-zinc-300">{referenceVideo}</span>
+                  ) : (
+                    "Drop here or Choose from files"
+                  )}
+                </span>
+              </span>
+            </button>
+
+            {/* Voice Preset — same height as the upload region */}
+            <button
+              type="button"
+              onClick={onChooseVoice}
+              className="group relative flex h-full w-[172px] shrink-0 flex-col overflow-hidden rounded-2xl border-2 border-black pt-3 text-left transition-all hover:brightness-110"
+              style={{
+                background: "linear-gradient(rgb(36,36,36), rgb(19,19,18), rgb(0,0,0))",
+                boxShadow:
+                  "rgb(39,41,44) 0px 0px 0px 1px, rgba(0,0,0,0.4) 0px -1px 0px 0px inset",
+              }}
+            >
+              <img
+                aria-hidden="true"
+                src="/asset/glare.svg"
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="flex w-full items-start justify-between gap-3 px-3">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <p className="text-[10px] font-semibold uppercase leading-none text-white/25">
+                    Voice Preset
+                  </p>
+                  <p
+                    className="truncate text-base font-black uppercase tracking-tight"
+                    style={{ color: NEON, textShadow: "0 0 16px rgba(0,240,255,0.4)" }}
+                  >
+                    {selectedVoiceLabel ?? "Choose Voice"}
+                  </p>
+                </div>
+                <svg viewBox="0 0 24 24" className="size-6 shrink-0 text-white" fill="none">
+                  <path
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                    d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22ZM10.7817 8.78296C10.4498 8.55666 10 8.79436 10 9.19607V14.8039C10 15.2056 10.4498 15.4433 10.7817 15.217L14.8941 12.4131C15.1852 12.2146 15.1852 11.7854 14.8941 11.5869L10.7817 8.78296Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </div>
+              <div className="pointer-events-none absolute bottom-0 left-3 right-3 h-6 overflow-hidden opacity-80">
+                <div className="flex h-full items-end justify-center gap-[3px]">
+                  {PRESET_BARS.map((h, i) => (
+                    <span
+                      key={i}
+                      className="w-[3px]"
+                      style={{
+                        height: `${h}%`,
+                        background: NEON,
+                        boxShadow: "0 0 6px rgba(0,240,255,0.7)",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </button>
+
+            {/* Generate — lime accent (only Change Voice; Voiceover/Translate keep their own button) */}
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={isGenerating}
+              className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                background: "linear-gradient(135deg, #D1FE17 0%, #A6D400 100%)",
+                boxShadow:
+                  "0 12px 24px rgba(209,254,23,0.25), inset 0px -3px 0px 0px #7f9c0c, inset 0px 1px 0px 0px #e8ff6b",
+              }}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Unified prompt bar — Voiceover / Translate only; dark-neutral surface (matches Change Voice) */}
+        {!isChangeVoice && (
         <div
-          className="flex min-w-0 flex-1 items-end gap-2 rounded-[22px] p-2"
+          className="flex min-w-0 flex-1 items-end gap-2 rounded-[22px] border p-2 transition-[height,width,background,border-radius,padding] duration-200"
           style={{
-            background:
-              "linear-gradient(115deg, rgba(0,229,255,0.10) 27%, rgba(219,219,219,0.10) 86%), rgba(15,17,19,0.96)",
+            background: "rgba(20,21,23,0.96)",
+            borderColor: "rgba(255,255,255,0.08)",
             boxShadow:
-              "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.06)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+              "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
           }}
         >
-          {/* Change Voice / Translate: Reference Video drop slot */}
-          {showReferenceVideo && (
+          {/* Translate: Reference Video drop slot + language chip */}
+          {isTranslate && (
             <>
               <input
                 ref={fileRef}
@@ -148,24 +612,24 @@ export default function AudioComposer({
                 onClick={() => fileRef.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleReferenceDrop}
-                className="flex h-[120px] w-[150px] shrink-0 flex-col items-center justify-center gap-2 rounded-[18px] px-3 text-center transition-colors"
+                className="flex h-[120px] w-[150px] shrink-0 flex-col items-center justify-center gap-2 rounded-[18px] px-3 text-center transition-colors hover:bg-white/[0.06]"
                 style={{
-                  border: `1.5px dashed rgba(0,240,255,0.45)`,
-                  background: "rgba(0,240,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.04)",
                 }}
               >
                 <span
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: "rgba(0,0,0,0.4)" }}
+                  style={{ background: "rgba(255,255,255,0.06)" }}
                 >
-                  <Video className="h-4 w-4" style={{ color: NEON }} />
+                  <Video className="h-4 w-4 text-zinc-300" />
                 </span>
                 <span className="text-xs font-semibold text-white">
                   Reference Video
                 </span>
                 <span className="text-[10px] leading-tight text-zinc-400">
                   {referenceVideo ? (
-                    <span className="block truncate" style={{ color: NEON }}>
+                    <span className="block truncate text-zinc-300">
                       {referenceVideo}
                     </span>
                   ) : (
@@ -174,44 +638,43 @@ export default function AudioComposer({
                 </span>
               </button>
 
-              {/* Translate-only: target language chip → Choose Language modal */}
-              {isTranslate && (
-                <button
-                  type="button"
-                  onClick={onOpenLanguage}
-                  className="flex h-8 shrink-0 items-center gap-2 self-center rounded-lg px-2.5 text-xs font-semibold transition-colors"
-                  style={{
-                    border: "1px solid rgba(0,240,255,0.35)",
-                    background: "rgba(0,240,255,0.06)",
-                    color: NEON,
-                  }}
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  {language}
-                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={onOpenLanguage}
+                className="flex h-8 shrink-0 items-center gap-2 self-center rounded-lg px-2.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09]"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                }}
+              >
+                <Globe className="h-3.5 w-3.5" />
+                {language}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </button>
             </>
           )}
 
-          {/* Voiceover: text prompt input + model selector */}
+          {/* Voiceover: text prompt input + model selector (shared by all six models) */}
           {isVoiceover && (
           <div className="relative flex h-[120px] min-w-0 flex-1 flex-col justify-between rounded-[18px] bg-white/[0.03] p-3">
             <textarea
               rows={2}
               value={script}
               onChange={(e) => onScriptChange(e.target.value)}
-              placeholder="Describe the sound you imagine…"
+              placeholder="Describe the sound you imagine..."
+              spellCheck
               className="min-h-0 flex-1 resize-none bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+              style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
             />
 
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               {/* Active model pill (bottom-left, dynamic) */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setModelMenuOpen((o) => !o)}
-                  className="inline-flex h-8 items-center gap-2 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+                  aria-expanded={modelMenuOpen}
+                  className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
                 >
                   <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
                     {activeModel.title === "Eleven v3" ? (
@@ -223,92 +686,95 @@ export default function AudioComposer({
                         className="h-full w-full object-contain"
                       />
                     ) : (
-                      <ModelIcon className="h-3.5 w-3.5" style={{ color: NEON }} />
+                      <ModelIcon className="h-3.5 w-3.5 text-zinc-300" />
                     )}
                   </span>
                   {activeModel.title}
                   <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
                 </button>
 
-                {/* Upward model dropdown */}
+                {/* Six-model selector popover */}
                 {modelMenuOpen && (
                   <>
                     <div
-                      className="fixed inset-0 z-40"
+                      className="fixed inset-0 z-[99999]"
                       onClick={() => setModelMenuOpen(false)}
                     />
                     <div
-                      className="absolute bottom-full left-0 z-50 mb-2 w-[260px] overflow-hidden rounded-xl border border-white/10 p-1.5"
-                      style={{
-                        background: "rgba(13,15,17,0.98)",
-                        boxShadow:
-                          "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                      }}
+                      className="absolute bottom-full left-0 z-[100000] mb-2 w-[300px] overflow-hidden rounded-2xl border border-white/10 p-1.5"
+                      style={POPOVER_SURFACE}
                     >
-                      {AUDIO_MODELS.map((model, i) => {
-                        const Icon = model.icon;
-                        const active = i === selectedModel;
-                        return (
-                          <button
-                            key={model.title}
-                            type="button"
-                            onClick={() => {
-                              onSelectModel(i);
-                              setModelMenuOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors"
-                            style={{
-                              background: active
-                                ? "rgba(0,240,255,0.10)"
-                                : "transparent",
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!active)
-                                e.currentTarget.style.background =
-                                  "rgba(255,255,255,0.05)";
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!active)
-                                e.currentTarget.style.background = "transparent";
-                            }}
-                          >
-                            <span
-                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                      {/* Decorative top glow */}
+                      <div
+                        className="pointer-events-none absolute inset-x-0 top-0 h-[37px]"
+                        style={{ background: "rgba(139,213,244,0.24)", filter: "blur(50px)" }}
+                      />
+                      <div className="relative flex flex-col gap-2">
+                        {AUDIO_MODELS.map((model, i) => {
+                          const Icon = model.icon;
+                          const active = i === selectedModel;
+                          return (
+                            <button
+                              key={model.title}
+                              type="button"
+                              onClick={() => {
+                                onSelectModel(i);
+                                setModelMenuOpen(false);
+                              }}
+                              className="flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors focus-visible:outline-none"
                               style={{
-                                background: active
-                                  ? "rgba(0,240,255,0.16)"
-                                  : "rgba(255,255,255,0.06)",
+                                background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!active)
+                                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!active)
+                                  e.currentTarget.style.background = "transparent";
                               }}
                             >
-                              <Icon
-                                className="h-3.5 w-3.5"
-                                style={{ color: active ? NEON : "#d4d4d8" }}
-                              />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5">
-                                <span className="truncate text-xs font-semibold text-white">
-                                  {model.title}
-                                </span>
-                                {model.badge && (
-                                  <span
-                                    className="rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
-                                    style={{
-                                      background: "rgba(0,240,255,0.18)",
-                                      color: NEON,
-                                    }}
-                                  >
-                                    {model.badge}
+                              <span
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                                style={{
+                                  background: active
+                                    ? "rgba(255,255,255,0.12)"
+                                    : "rgba(255,255,255,0.06)",
+                                }}
+                              >
+                                <Icon
+                                  className="h-4 w-4"
+                                  style={{ color: active ? "#ffffff" : "#d4d4d8" }}
+                                />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="truncate text-xs font-semibold text-white">
+                                    {model.title}
                                   </span>
-                                )}
+                                  {model.badge && (
+                                    <span
+                                      className="rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
+                                      style={{
+                                        background: "rgba(209,254,23,0.18)",
+                                        color: "#D1FE17",
+                                      }}
+                                    >
+                                      {model.badge}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="block truncate text-[10px] text-zinc-500">
+                                  {model.description}
+                                </span>
                               </span>
-                              <span className="block truncate text-[10px] text-zinc-500">
-                                {model.description}
+                              <span className="flex w-5 shrink-0 items-center justify-center">
+                                {active && <Check className="h-4 w-4 text-[#D1FE17]" />}
                               </span>
-                            </span>
-                          </button>
-                        );
-                      })}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </>
                 )}
@@ -317,246 +783,260 @@ export default function AudioComposer({
           </div>
           )}
 
-          {/* Audio controls row — Sample Rate, Speed, Volume, Pitch, Output Format */}
-          <div className="flex shrink-0 items-center gap-1.5">
-            {/* Sample Rate */}
-            <Popover.Root open={sampleRateMenuOpen} onOpenChange={setSampleRateMenuOpen}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
-                >
-                  {sampleRate / 1000}k Hz
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="top"
-                align="start"
-                className="z-50 w-40 overflow-hidden rounded-xl border border-white/10 p-1.5"
-                style={{
-                  background: "rgba(13,15,17,0.98)",
-                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                }}
-              >
-                <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">Sample Rate</div>
-                {[8000, 16000, 24000, 32000, 44100, 48000].map((rate) => (
-                  <button
-                    key={rate}
-                    type="button"
-                    onClick={() => {
-                      onSampleRateChange(rate);
-                      setSampleRateMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg p-2 text-left text-xs transition-colors"
-                    style={{
-                      background: sampleRate === rate ? "rgba(0,240,255,0.10)" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (sampleRate !== rate) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (sampleRate !== rate) e.currentTarget.style.background = "transparent";
-                    }}
+          {/* Voiceover: model-capability-driven controls — only what the selected model supports */}
+          {isVoiceover && hasAnyVoiceoverControls && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {capabilities.supportsReferences && (
+                <Popover.Root open={addReferenceOpen} onOpenChange={setAddReferenceOpen}>
+                  <Popover.Trigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Add image or audio reference"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.05] text-white transition-colors hover:bg-white/[0.09]"
+                      style={{ boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06)" }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </Popover.Trigger>
+                  <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className="z-[100000] w-64 overflow-hidden rounded-xl border border-white/10 px-2 pb-2 pt-2"
+                    style={POPOVER_SURFACE}
                   >
-                    <span className="text-white font-medium">{rate / 1000}k Hz</span>
-                    {sampleRate === rate && (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1FE17]">
-                        <path d="M5 13.875 9.2 18 19 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </Popover.Content>
-            </Popover.Root>
+                    <div className="px-2 pb-2">
+                      <p className="text-xs font-semibold text-white">Add Reference</p>
+                      <p className="text-[11px] text-zinc-500">Pick one source for the voice</p>
+                    </div>
 
-            {/* Speed */}
-            <Popover.Root open={speedMenuOpen} onOpenChange={setSpeedMenuOpen}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
-                >
-                  {speed.toFixed(1)}x
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="top"
-                align="start"
-                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
-                style={{
-                  background: "rgba(13,15,17,0.98)",
-                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                }}
-              >
-                <div className="mb-2 flex items-center gap-2 px-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
-                    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M6.252 19.248a9.25 9.25 0 1 1 11.496 0" />
-                    <path fill="currentColor" d="M10.468 14.285a2 2 0 1 1 3.064-2.572c1.141 1.36 1.834 3.755 2.14 5.029a.449.449 0 0 1-.624.523c-1.201-.523-3.439-1.62-4.58-2.98" />
-                  </svg>
-                  <span className="text-xs font-semibold text-white">Speed</span>
-                </div>
-                <div className="flex items-center gap-2 px-2">
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={speed}
-                    onChange={(e) => onSpeedChange(Number(e.target.value))}
-                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((speed - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) ${((speed - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) 100%)`,
-                      border: "1px solid #424242",
-                    }}
-                  />
-                  <span className="text-xs font-semibold text-white min-w-[30px]">{speed.toFixed(1)}x</span>
-                </div>
-              </Popover.Content>
-            </Popover.Root>
+                    <input
+                      ref={audioRefInputRef}
+                      type="file"
+                      accept="audio/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleAddAudioReferences}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => audioRefInputRef.current?.click()}
+                      disabled={seedAudioSettings.audioReferences.length >= 3}
+                      className="flex min-h-[60px] w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                        <Music2 className="h-4 w-4 text-zinc-300" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-white">Add audio</span>
+                          <span className="shrink-0 text-xs text-zinc-500">
+                            {seedAudioSettings.audioReferences.length}/3
+                          </span>
+                        </span>
+                        <span className="block truncate text-xs text-zinc-500">
+                          Clone a voice from a clip
+                        </span>
+                      </span>
+                    </button>
 
-            {/* Volume */}
-            <Popover.Root open={volumeMenuOpen} onOpenChange={setVolumeMenuOpen}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
-                >
-                  Vol
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="top"
-                align="start"
-                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
-                style={{
-                  background: "rgba(13,15,17,0.98)",
-                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                }}
-              >
-                <div className="mb-2 flex items-center gap-2 px-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19.248 4.752A10.22 10.22 0 0 1 22.25 12c0 2.83-1.147 5.393-3.002 7.248M15.889 8.11a5.48 5.48 0 0 1 1.611 3.89 5.48 5.48 0 0 1-1.61 3.889M2.75 7.75h2.957a1 1 0 0 0 .54-.158L12.25 3.75v16.5l-6.004-3.842a1 1 0 0 0-.539-.158H2.75a1 1 0 0 1-1-1v-6.5a1 1 0 0 1 1-1" />
-                  </svg>
-                  <span className="text-xs font-semibold text-white">Volume</span>
-                </div>
-                <div className="flex items-center gap-2 px-2">
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={volume}
-                    onChange={(e) => onVolumeChange(Number(e.target.value))}
-                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((volume - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) ${((volume - 0.5) / 1.5) * 100}%, rgba(255,255,255,0.05) 100%)`,
-                      border: "1px solid #424242",
-                    }}
-                  />
-                  <span className="text-xs font-semibold text-white min-w-[30px]">{volume.toFixed(1)}</span>
-                </div>
-              </Popover.Content>
-            </Popover.Root>
+                    <div className="relative my-1 flex items-center justify-center py-1">
+                      <div className="absolute inset-x-0 h-px bg-white/[0.08]" />
+                      <span
+                        className="relative rounded px-2 text-[10px] text-zinc-500"
+                        style={{ background: "rgba(28,30,32,0.95)" }}
+                      >
+                        or
+                      </span>
+                    </div>
 
-            {/* Pitch */}
-            <Popover.Root open={pitchMenuOpen} onOpenChange={setPitchMenuOpen}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
-                >
-                  {pitch >= 0 ? '+' : ''}{pitch}
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="top"
-                align="start"
-                className="z-50 w-[240px] overflow-hidden rounded-xl border border-white/10 p-2"
-                style={{
-                  background: "rgba(13,15,17,0.98)",
-                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                }}
-              >
-                <div className="mb-2 flex items-center gap-2 px-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-white">
-                    <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M7.75 5.75v12.5m-4-7.5v2.5M12 9.75v4.5m4.25-6.5v8.5m4-5.5v2.5" />
-                  </svg>
-                  <span className="text-xs font-semibold text-white">Pitch</span>
-                </div>
-                <div className="flex items-center gap-2 px-2">
-                  <input
-                    type="range"
-                    min="-12"
-                    max="12"
-                    step="1"
-                    value={pitch}
-                    onChange={(e) => onPitchChange(Number(e.target.value))}
-                    className="flex-1 h-6 appearance-none rounded-md cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) ${((pitch + 12) / 24) * 100}%, rgba(255,255,255,0.05) ${((pitch + 12) / 24) * 100}%, rgba(255,255,255,0.05) 100%)`,
-                      border: "1px solid #424242",
-                    }}
-                  />
-                  <span className="text-xs font-semibold text-white min-w-[30px]">{pitch >= 0 ? '+' : ''}{pitch}</span>
-                </div>
-              </Popover.Content>
-            </Popover.Root>
+                    <input
+                      ref={imageRefInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAddImageReference}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => imageRefInputRef.current?.click()}
+                      disabled={!!seedAudioSettings.imageReference}
+                      className="flex min-h-[60px] w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                        <ImageRefIcon className="h-4 w-4 text-zinc-300" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-white">Add image</span>
+                          <span className="shrink-0 text-xs text-zinc-500">
+                            {seedAudioSettings.imageReference ? 1 : 0}/1
+                          </span>
+                        </span>
+                        <span className="block truncate text-xs text-zinc-500">
+                          Shape the voice from an image
+                        </span>
+                      </span>
+                    </button>
+                  </Popover.Content>
+                </Popover.Root>
+              )}
 
-            {/* Output Format */}
-            <Popover.Root open={outputFormatMenuOpen} onOpenChange={setOutputFormatMenuOpen}>
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
-                >
-                  {outputFormat}
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="top"
-                align="start"
-                className="z-50 w-40 overflow-hidden rounded-xl border border-white/10 p-1.5"
-                style={{
-                  background: "rgba(13,15,17,0.98)",
-                  boxShadow: "0 16px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,240,255,0.06)",
-                }}
-              >
-                <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">Output format</div>
-                {["mp3", "wav", "opus"].map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    onClick={() => {
-                      onOutputFormatChange(fmt);
-                      setOutputFormatMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg p-2 text-left text-xs transition-colors"
-                    style={{
-                      background: outputFormat === fmt ? "rgba(0,240,255,0.10)" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (outputFormat !== fmt) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (outputFormat !== fmt) e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    <span className="text-white font-medium uppercase">{fmt}</span>
-                    {outputFormat === fmt && (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1FE17]">
-                        <path d="M5 13.875 9.2 18 19 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </Popover.Content>
-            </Popover.Root>
-          </div>
+              {capabilities.supportsSampleRate && (
+                <SelectPopover
+                  open={sampleRateMenuOpen}
+                  onOpenChange={setSampleRateMenuOpen}
+                  triggerLabel={`${seedAudioSettings.sampleRate / 1000}k Hz`}
+                  header="Sample Rate"
+                  options={SAMPLE_RATE_OPTIONS}
+                  selected={String(seedAudioSettings.sampleRate)}
+                  onSelect={(v) =>
+                    onSeedAudioSettingsChange({ ...seedAudioSettings, sampleRate: Number(v) })
+                  }
+                  width={160}
+                />
+              )}
+
+              {capabilities.supportsLanguage && (
+                <SelectPopover
+                  open={languageMenuOpen}
+                  onOpenChange={setLanguageMenuOpen}
+                  triggerLabel={qwenSettings.language}
+                  header="Language"
+                  options={QWEN_LANGUAGE_OPTIONS}
+                  selected={qwenSettings.language}
+                  onSelect={(v) => onQwenSettingsChange({ ...qwenSettings, language: v })}
+                  width={176}
+                  maxHeight={320}
+                />
+              )}
+
+              {capabilities.supportsSpeed && speedRange && (
+                <SliderPopover
+                  open={speedMenuOpen}
+                  onOpenChange={setSpeedMenuOpen}
+                  label="Speed"
+                  icon={SPEED_ICON}
+                  value={speedValue}
+                  onChange={setSpeedValue}
+                  min={speedRange.min}
+                  max={speedRange.max}
+                  step={speedRange.step}
+                  format={(v) => `${Number(v.toFixed(2))}x`}
+                />
+              )}
+
+              {capabilities.supportsVolume && volumeRange && (
+                <SliderPopover
+                  open={volumeMenuOpen}
+                  onOpenChange={setVolumeMenuOpen}
+                  label="Volume"
+                  icon={VOLUME_ICON}
+                  value={volumeValue}
+                  onChange={setVolumeValue}
+                  min={volumeRange.min}
+                  max={volumeRange.max}
+                  step={volumeRange.step}
+                  format={(v) => (volumeRange.max === 100 ? `${Math.round(v)}` : v.toFixed(1))}
+                />
+              )}
+
+              {capabilities.supportsPitch && pitchRange && (
+                <SliderPopover
+                  open={pitchMenuOpen}
+                  onOpenChange={setPitchMenuOpen}
+                  label="Pitch"
+                  icon={PITCH_ICON}
+                  value={pitchValue}
+                  onChange={setPitchValue}
+                  min={pitchRange.min}
+                  max={pitchRange.max}
+                  step={pitchRange.step}
+                  format={(v) =>
+                    pitchRange.max === 12
+                      ? `${v >= 0 ? "+" : ""}${v}`
+                      : v.toFixed(1)
+                  }
+                />
+              )}
+
+              {capabilities.supportsOutputFormat && (
+                <SelectPopover
+                  open={outputFormatMenuOpen}
+                  onOpenChange={setOutputFormatMenuOpen}
+                  triggerLabel={outputFormatValue}
+                  header="Output format"
+                  options={OUTPUT_FORMAT_OPTIONS}
+                  selected={outputFormatValue}
+                  onSelect={setOutputFormatValue}
+                  width={160}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Translate: its own generic Sample Rate/Speed/Volume/Pitch/Output row (unchanged) */}
+          {isTranslate && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <SelectPopover
+                open={translateSampleRateMenuOpen}
+                onOpenChange={setTranslateSampleRateMenuOpen}
+                triggerLabel={`${translateSampleRate / 1000}k Hz`}
+                header="Sample Rate"
+                options={SAMPLE_RATE_OPTIONS}
+                selected={String(translateSampleRate)}
+                onSelect={(v) => onTranslateSampleRateChange(Number(v))}
+                width={160}
+              />
+              <SliderPopover
+                open={translateSpeedMenuOpen}
+                onOpenChange={setTranslateSpeedMenuOpen}
+                label="Speed"
+                icon={SPEED_ICON}
+                value={translateSpeed}
+                onChange={onTranslateSpeedChange}
+                min={0.5}
+                max={2}
+                step={0.1}
+                format={(v) => `${v.toFixed(1)}x`}
+              />
+              <SliderPopover
+                open={translateVolumeMenuOpen}
+                onOpenChange={setTranslateVolumeMenuOpen}
+                label="Volume"
+                icon={VOLUME_ICON}
+                value={translateVolume}
+                onChange={onTranslateVolumeChange}
+                min={0.5}
+                max={2}
+                step={0.1}
+                format={(v) => v.toFixed(1)}
+              />
+              <SliderPopover
+                open={translatePitchMenuOpen}
+                onOpenChange={setTranslatePitchMenuOpen}
+                label="Pitch"
+                icon={PITCH_ICON}
+                value={translatePitch}
+                onChange={onTranslatePitchChange}
+                min={-12}
+                max={12}
+                step={1}
+                format={(v) => `${v >= 0 ? "+" : ""}${v}`}
+              />
+              <SelectPopover
+                open={translateOutputFormatMenuOpen}
+                onOpenChange={setTranslateOutputFormatMenuOpen}
+                triggerLabel={translateOutputFormat}
+                header="Output format"
+                options={OUTPUT_FORMAT_OPTIONS}
+                selected={translateOutputFormat}
+                onSelect={onTranslateOutputFormatChange}
+                width={160}
+              />
+            </div>
+          )}
 
           {/* Choose Voice capsule — opens "Select or add a voice" modal */}
           <button
@@ -614,12 +1094,17 @@ export default function AudioComposer({
             </div>
           </button>
 
-          {/* Generate (locked turquoise brand button) */}
+          {/* Generate — lime accent (matches Change Voice's Generate button) */}
           <button
             type="button"
             onClick={onGenerate}
             disabled={isGenerating}
-            className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] bg-magenta-500 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-magenta-500/30 transition-all hover:bg-magenta-600 hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              background: "linear-gradient(135deg, #D1FE17 0%, #A6D400 100%)",
+              boxShadow:
+                "0 12px 24px rgba(209,254,23,0.25), inset 0px -3px 0px 0px #7f9c0c, inset 0px 1px 0px 0px #e8ff6b",
+            }}
           >
             {isGenerating ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -631,6 +1116,7 @@ export default function AudioComposer({
             )}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

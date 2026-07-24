@@ -1,5 +1,6 @@
 import {
   AudioLines,
+  AudioWaveform,
   Languages,
   Mic,
   Mic2,
@@ -51,6 +52,11 @@ export const AUDIO_FEATURES: AudioFeature[] = [
   { mode: "translation", title: "Translation", description: "Translate speech in any video", icon: Languages },
 ];
 
+/**
+ * Order matches VOICEOVER_MODEL_ORDER in voiceoverModelConfig.ts — the two
+ * arrays are index-aligned so the shared numeric model index (used by the
+ * top-nav Audio dropdown) maps 1:1 onto a VoiceoverModel id.
+ */
 export const AUDIO_MODELS: AudioModel[] = [
   {
     title: "Seed Audio 1.0",
@@ -63,19 +69,24 @@ export const AUDIO_MODELS: AudioModel[] = [
     icon: AudioLines,
   },
   {
+    title: "Qwen Audio 3.0",
+    description: "Natural speech with voice, style, and emotion control",
+    icon: AudioWaveform,
+  },
+  {
     title: "MiniMax Speech 2.8 HD",
     description: "High-fidelity single-voice narration",
     icon: Mic2,
-  },
-  {
-    title: "VibeVoice",
-    description: "Long-form narration for audiobooks and podcasts",
-    icon: Music2,
   },
   {
     title: "Seed Speech",
     description: "Multilingual speech across 30+ languages",
     icon: Sparkles,
     badge: "NEW",
+  },
+  {
+    title: "VibeVoice",
+    description: "Long-form narration for audiobooks and podcasts",
+    icon: Music2,
   },
 ];

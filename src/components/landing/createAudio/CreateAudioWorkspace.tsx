@@ -10,6 +10,13 @@ import AudioTopControls, {
   type AudioTab,
 } from "./AudioTopControls";
 import { AUDIO_MODE_ORDER, type AudioMode } from "../audioMenuData";
+import {
+  VOICEOVER_MODEL_ORDER,
+  DEFAULT_SEED_AUDIO_SETTINGS,
+  DEFAULT_QWEN_SETTINGS,
+  type SeedAudioSettings,
+  type QwenSettings,
+} from "./voiceoverModelConfig";
 
 interface CreateAudioWorkspaceProps {
   onBack: () => void;
@@ -54,12 +61,22 @@ export default function CreateAudioWorkspace({
   const [language, setLanguage] = useState("English");
   const [referenceVideo, setReferenceVideo] = useState<string | null>(null);
 
-  // Audio controls (sample rate, speed, volume, pitch, output format)
-  const [sampleRate, setSampleRate] = useState(24000);
-  const [speed, setSpeed] = useState(1.2);
-  const [volume, setVolume] = useState(1.0);
-  const [pitch, setPitch] = useState(-3);
-  const [outputFormat, setOutputFormat] = useState("mp3");
+  // Translate mode's own Sample Rate/Speed/Volume/Pitch/Output row — kept
+  // generic and separate from Voiceover's per-model settings below (Translate
+  // isn't in scope for the Voiceover model-specific rework).
+  const [translateSampleRate, setTranslateSampleRate] = useState(24000);
+  const [translateSpeed, setTranslateSpeed] = useState(1.2);
+  const [translateVolume, setTranslateVolume] = useState(1.0);
+  const [translatePitch, setTranslatePitch] = useState(-3);
+  const [translateOutputFormat, setTranslateOutputFormat] = useState("mp3");
+
+  // Voiceover model-specific settings — kept in separate objects per model
+  // since e.g. Qwen's volume (0-100) and Seed Audio's volume (0.5-2) are
+  // incompatible ranges and must never bleed into each other on switch.
+  const [seedAudioSettings, setSeedAudioSettings] = useState<SeedAudioSettings>(
+    DEFAULT_SEED_AUDIO_SETTINGS,
+  );
+  const [qwenSettings, setQwenSettings] = useState<QwenSettings>(DEFAULT_QWEN_SETTINGS);
 
   // Feed view
   const [activeTab, setActiveTab] = useState<AudioTab>("all");
@@ -69,6 +86,45 @@ export default function CreateAudioWorkspace({
   const handleGenerate = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
+
+    // Build a model-aware payload: only the fields the selected Voiceover
+    // model actually supports are included (no Seed Audio image reference
+    // leaking into a Qwen request, no fake sample-rate field for Eleven v3,
+    // etc). There is no real generation API yet — this local mock just
+    // demonstrates the shape a future backend integration would receive.
+    const voiceoverModelId = VOICEOVER_MODEL_ORDER[selectedModel];
+    const voiceoverPayload =
+      feature === 0
+        ? {
+            model: voiceoverModelId,
+            prompt: script,
+            voicePresetId: selectedVoice,
+            ...(voiceoverModelId === "seed-audio-1"
+              ? {
+                  audioReferences: seedAudioSettings.audioReferences,
+                  imageReference: seedAudioSettings.imageReference,
+                  sampleRate: seedAudioSettings.sampleRate,
+                  speed: seedAudioSettings.speed,
+                  volume: seedAudioSettings.volume,
+                  pitch: seedAudioSettings.pitch,
+                  outputFormat: seedAudioSettings.outputFormat,
+                }
+              : {}),
+            ...(voiceoverModelId === "qwen-audio-3"
+              ? {
+                  language: qwenSettings.language,
+                  speed: qwenSettings.speed,
+                  volume: qwenSettings.volume,
+                  pitch: qwenSettings.pitch,
+                  outputFormat: qwenSettings.outputFormat,
+                }
+              : {}),
+          }
+        : null;
+    if (voiceoverPayload) {
+      console.log("Voiceover generation payload:", voiceoverPayload);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 1600));
     clipCounter += 1;
     setClips((prev) => [
@@ -125,16 +181,20 @@ export default function CreateAudioWorkspace({
         onOpenLanguage={() => setIsLanguageModalOpen(true)}
         referenceVideo={referenceVideo}
         onReferenceVideo={setReferenceVideo}
-        sampleRate={sampleRate}
-        onSampleRateChange={setSampleRate}
-        speed={speed}
-        onSpeedChange={setSpeed}
-        volume={volume}
-        onVolumeChange={setVolume}
-        pitch={pitch}
-        onPitchChange={setPitch}
-        outputFormat={outputFormat}
-        onOutputFormatChange={setOutputFormat}
+        translateSampleRate={translateSampleRate}
+        onTranslateSampleRateChange={setTranslateSampleRate}
+        translateSpeed={translateSpeed}
+        onTranslateSpeedChange={setTranslateSpeed}
+        translateVolume={translateVolume}
+        onTranslateVolumeChange={setTranslateVolume}
+        translatePitch={translatePitch}
+        onTranslatePitchChange={setTranslatePitch}
+        translateOutputFormat={translateOutputFormat}
+        onTranslateOutputFormatChange={setTranslateOutputFormat}
+        seedAudioSettings={seedAudioSettings}
+        onSeedAudioSettingsChange={setSeedAudioSettings}
+        qwenSettings={qwenSettings}
+        onQwenSettingsChange={setQwenSettings}
       />
 
       {/* Centered overlays */}
