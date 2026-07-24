@@ -276,6 +276,11 @@ export default function Navbar({
   const handleAudioModelSelect = (title: string) => {
     const index = AUDIO_MODELS.findIndex((m) => m.title === title);
     if (index >= 0) onAudioModelIndexChange?.(index);
+    // A model only lives in Voiceover mode, so picking one from the top menu
+    // also snaps the feature to Voiceover — otherwise (in Change Voice /
+    // Translate) the composer shows no model controls and nothing visibly
+    // changes. Mirrors how selecting a Feature updates the composer.
+    onAudioModeChange?.("voiceover");
     onOpenAudioPanel();
   };
 
