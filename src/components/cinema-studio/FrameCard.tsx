@@ -16,8 +16,11 @@ interface FrameCardProps {
    * "general" — Kling 2.6 / Kling O1 Video's GENERAL preset tile: solid
    * background (no local preset video asset exists yet), edit-pencil icon
    * on hover, label always visible. Not wired to a real presets panel yet.
+   * "cinema25" — Cinema Studio 2.5's Start/End Frame: plus circle top-left
+   * (+ "Optional" badge when optional), label bottom-left, gradient surface,
+   * value preview + remove. Matches the Higgsfield reference exactly.
    */
-  variant?: "frame" | "reference" | "general";
+  variant?: "frame" | "reference" | "general" | "cinema25";
   /** "frame" variant only — hides the "Optional" label for mandatory slots (default true, matches existing behavior). */
   optional?: boolean;
   /** Opt-in a11y for callers whose onOpenPicker toggles a dialog/panel open state (e.g. Seedance Pro Fast). Omitted for every pre-existing caller — no attribute is rendered unless passed. */
@@ -82,6 +85,70 @@ export default function FrameCard({
           {label}
         </p>
       </button>
+    );
+  }
+
+  if (variant === "cinema25") {
+    return (
+      <div className="group relative h-20 w-20 shrink-0">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onOpenPicker}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") onOpenPicker();
+          }}
+          aria-label={label}
+          aria-haspopup={ariaHaspopup}
+          aria-expanded={ariaExpanded}
+          className="relative flex h-20 w-20 cursor-pointer flex-col items-start justify-between overflow-clip rounded-xl p-1.5"
+          style={{
+            backgroundImage: value
+              ? `url(${value})`
+              : "linear-gradient(rgb(32,32,32) 0%, rgb(80,79,79) 100%)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            boxShadow:
+              "10px 34px 24px 0 rgba(0,0,0,0.08), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.12), 1px 3px 4px 0 rgba(0,0,0,0.32), 0 1px 2px 0 rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.04) inset",
+          }}
+        >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-50"
+            style={{ background: "linear-gradient(rgb(32,32,32) 34.513%, rgb(80,79,79) 157.89%)" }}
+          />
+          <div className="relative flex w-full shrink-0 items-center">
+            <span
+              className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white backdrop-blur-[3px]"
+              style={{ boxShadow: "rgba(185,185,185,0.35) 0px 0px 4px 0px inset" }}
+            >
+              <Plus className="size-3" />
+            </span>
+            {optional && (
+              <span className="px-2 text-[8px] font-semibold leading-none text-neutral-400">
+                Optional
+              </span>
+            )}
+          </div>
+          <p className="relative shrink-0 text-left text-[12px] font-bold uppercase leading-[14px] tracking-[-0.1px] text-white">
+            {label}
+          </p>
+        </div>
+
+        {value && onRemove && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            aria-label={`Remove ${label}`}
+            className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-[#0a0a0a] text-neutral-300 shadow ring-1 ring-white/10 transition-colors hover:text-white"
+          >
+            <X className="size-2.5" />
+          </button>
+        )}
+      </div>
     );
   }
 

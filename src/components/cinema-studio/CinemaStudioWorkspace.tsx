@@ -239,80 +239,124 @@ export default function CinemaStudioWorkspace() {
 
         {/* Mode toggle (left sidebar) + prompt bar + Cinema 3.0 Panel */}
         <div className="relative w-full">
-          {/* Cinema Studio 2.5 Director Panel - positioned above prompt bar */}
-          {isCinema25 && (
-            <div className="relative z-50 mx-auto w-full max-w-[1040px] mb-2">
-              <CinemaStudio25DirectorPanel
-                isOpen={cinema25DirectorPanelOpen}
-                onToggle={() => setCinema25DirectorPanelOpen((v) => !v)}
-                references={cinema25References}
-                onAssignReference={(slotIndex, url) =>
+          {/*
+            Composer row: ModeToggle is a fixed-width sibling, outside the
+            width-shared column. For Cinema Studio 2.5, Director Panel and
+            PromptBar live inside ONE flex-1 column (`generation-composer-stack`)
+            so they always inherit the exact same width — neither panel has its
+            own independent max-width, which is what caused the previous
+            misalignment (ModeToggle used to share the same max-w-[1040px] row
+            as PromptBar while Director Panel had that same max-width alone).
+          */}
+          <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end gap-2" ref={promptBarWrapperRef}>
+            <ModeToggle mode={mode} onChange={handleModeChange} />
+
+            {isCinema25 ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <CinemaStudio25DirectorPanel
+                  isOpen={cinema25DirectorPanelOpen}
+                  onToggle={() => setCinema25DirectorPanelOpen((v) => !v)}
+                  references={cinema25References}
+                  onAssignReference={(slotIndex, url) =>
+                    setCinema25References((s) => {
+                      const next = [...s];
+                      next[slotIndex] = url;
+                      return next;
+                    })
+                  }
+                  movementIndex={cinema25MovementIndex}
+                  onMovementIndexChange={setCinema25MovementIndex}
+                  speedRampIndex={cinema25SpeedRampIndex}
+                  onSpeedRampIndexChange={setCinema25SpeedRampIndex}
+                  speedRampPoints={cinema25SpeedRampPoints}
+                  onSpeedRampPointsChange={setCinema25SpeedRampPoints}
+                  duration={duration}
+                  onDurationChange={setDuration}
+                />
+                <PromptBar
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  mode={mode}
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
+                  resolution={resolution}
+                  onResolutionChange={setResolution}
+                  duration={duration}
+                  durations={selectedModel.durations}
+                  onDurationChange={setDuration}
+                  batch={batch}
+                  onBatchChange={setBatch}
+                  sound={sound}
+                  onSoundChange={setSound}
+                  creditCost={creditCost}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  klingAdvancedPrompt={klingAdvancedPrompt}
+                  onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+                  kling3TurboSettings={kling3TurboSettings}
+                  onKling3TurboSettingsChange={setKling3TurboSettings}
+                  cinema25References={cinema25References}
+                  onCinema25AssignReference={(slotIndex, url) =>
+                    setCinema25References((s) => {
+                      const next = [...s];
+                      next[slotIndex] = url;
+                      return next;
+                    })
+                  }
+                  cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+                  onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                />
+              </div>
+            ) : (
+              <PromptBar
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                model={model}
+                onModelChange={handleModelChange}
+                mode={mode}
+                aspectRatio={aspectRatio}
+                onAspectRatioChange={setAspectRatio}
+                resolution={resolution}
+                onResolutionChange={setResolution}
+                duration={duration}
+                durations={
+                  model === "gemini-omni-flash"
+                    ? [4, 6, 8, 10]
+                    : model === "kling-3.0-omni-edit" || model === "kling-o1-video-edit"
+                      ? [3, 4, 5, 6, 7, 8, 9, 10]
+                      : model === "sora-2" ||
+                          model === "sora-2-pro" ||
+                          model === "sora-2-max" ||
+                          model === "sora-2-pro-max"
+                        ? [4, 8, 12]
+                        : selectedModel.durations
+                }
+                onDurationChange={setDuration}
+                batch={batch}
+                onBatchChange={setBatch}
+                sound={sound}
+                onSoundChange={setSound}
+                creditCost={creditCost}
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+                klingAdvancedPrompt={klingAdvancedPrompt}
+                onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+                kling3TurboSettings={kling3TurboSettings}
+                onKling3TurboSettingsChange={setKling3TurboSettings}
+                cinema25References={cinema25References}
+                onCinema25AssignReference={(slotIndex, url) =>
                   setCinema25References((s) => {
                     const next = [...s];
                     next[slotIndex] = url;
                     return next;
                   })
                 }
-                movementIndex={cinema25MovementIndex}
-                onMovementIndexChange={setCinema25MovementIndex}
-                speedRampIndex={cinema25SpeedRampIndex}
-                onSpeedRampIndexChange={setCinema25SpeedRampIndex}
-                speedRampPoints={cinema25SpeedRampPoints}
-                onSpeedRampPointsChange={setCinema25SpeedRampPoints}
-                duration={duration}
-                onDurationChange={setDuration}
+                cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+                onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
               />
-            </div>
-          )}
-
-          <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end justify-center gap-1" ref={promptBarWrapperRef}>
-            <ModeToggle mode={mode} onChange={handleModeChange} />
-            <PromptBar
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              model={model}
-              onModelChange={handleModelChange}
-              mode={mode}
-              aspectRatio={aspectRatio}
-              onAspectRatioChange={setAspectRatio}
-              resolution={resolution}
-              onResolutionChange={setResolution}
-              duration={duration}
-              durations={
-                model === "gemini-omni-flash"
-                  ? [4, 6, 8, 10]
-                  : model === "kling-3.0-omni-edit" || model === "kling-o1-video-edit"
-                    ? [3, 4, 5, 6, 7, 8, 9, 10]
-                    : model === "sora-2" ||
-                        model === "sora-2-pro" ||
-                        model === "sora-2-max" ||
-                        model === "sora-2-pro-max"
-                      ? [4, 8, 12]
-                      : selectedModel.durations
-              }
-              onDurationChange={setDuration}
-              batch={batch}
-              onBatchChange={setBatch}
-              sound={sound}
-              onSoundChange={setSound}
-              creditCost={creditCost}
-              onGenerate={handleGenerate}
-              isGenerating={isGenerating}
-              klingAdvancedPrompt={klingAdvancedPrompt}
-              onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
-              kling3TurboSettings={kling3TurboSettings}
-              onKling3TurboSettingsChange={setKling3TurboSettings}
-              cinema25References={cinema25References}
-              onCinema25AssignReference={(slotIndex, url) =>
-                setCinema25References((s) => {
-                  const next = [...s];
-                  next[slotIndex] = url;
-                  return next;
-                })
-              }
-              cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
-              onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
-            />
+            )}
           </div>
 
           {/* Cinema Studio 3.0 Director's Panel - positioned above prompt bar */}

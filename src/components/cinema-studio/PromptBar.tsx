@@ -2239,6 +2239,7 @@ export default function PromptBar(props: PromptBarProps) {
             {isCinema25 && (
               <>
                 <FrameCard
+                  variant="cinema25"
                   label="Start Frame"
                   value={cinema25References[1] ?? null}
                   optional={false}
@@ -2250,6 +2251,7 @@ export default function PromptBar(props: PromptBarProps) {
                   onRemove={() => onCinema25AssignReference(1, null)}
                 />
                 <FrameCard
+                  variant="cinema25"
                   label="End Frame"
                   value={cinema25References[2] ?? null}
                   onOpenPicker={() => {
@@ -2340,7 +2342,7 @@ export default function PromptBar(props: PromptBarProps) {
           onGenerate={onGenerate}
           mode={mode}
           isLoading={props.isGenerating}
-          accent={isCinema25 ? "cyan" : undefined}
+          accent={isCinema25 ? "yellow" : undefined}
         />
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, UserPlus } from "lucide-react";
 import { useState, useRef } from "react";
 
 const MOVEMENT_OPTIONS = [
@@ -29,6 +29,47 @@ interface CinemaStudio25DirectorPanelProps {
   onDurationChange: (value: number) => void;
 }
 
+/** Compact up/down triangle (verbatim from the Higgsfield reference). */
+function Triangle({ down = false }: { down?: boolean }) {
+  return (
+    <svg
+      width="8"
+      height="5"
+      viewBox="0 0 8 5"
+      fill="none"
+      className={`size-1.5 shrink-0 ${down ? "rotate-180" : ""}`}
+    >
+      <path
+        d="M2.93989 0.284724L0.28568 2.93893C-0.326431 3.55104 0.107091 4.59766 0.972748 4.59766H6.28116C7.14681 4.59766 7.58034 3.55104 6.96822 2.93893L4.31402 0.284724C3.93456 -0.0947333 3.31934 -0.0947324 2.93989 0.284724Z"
+        fill="#898A8B"
+      />
+    </svg>
+  );
+}
+
+/** Vertical up/down stepper column with a divider between the two arrows. */
+function ArrowStepper({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center self-stretch border-l border-white/5 px-0.5">
+      <button
+        type="button"
+        onClick={onUp}
+        className="flex h-5 w-5 items-center justify-center text-white/50 transition-colors hover:text-white"
+      >
+        <Triangle />
+      </button>
+      <span className="my-0.5 h-px w-full bg-white/5" />
+      <button
+        type="button"
+        onClick={onDown}
+        className="flex h-5 w-5 items-center justify-center text-white/50 transition-colors hover:text-white"
+      >
+        <Triangle down />
+      </button>
+    </div>
+  );
+}
+
 export default function CinemaStudio25DirectorPanel({
   isOpen,
   onToggle,
@@ -47,6 +88,7 @@ export default function CinemaStudio25DirectorPanel({
   const svgRef = useRef<SVGSVGElement>(null);
 
   const movement = MOVEMENT_OPTIONS[movementIndex];
+  const durationFill = ((duration - 3) / 9) * 100;
 
   const handleSpeedPointDown = (index: number) => {
     setDraggedPointIndex(index);
@@ -69,66 +111,69 @@ export default function CinemaStudio25DirectorPanel({
   };
 
   return (
-    <div className="w-full mb-2">
-      {/* Collapsed header */}
-      {!isOpen && (
-        <button
-          onClick={onToggle}
-          className="flex items-center justify-between w-full h-7 px-3 py-1 rounded-2xl cursor-pointer transition-colors"
-          style={{ backgroundColor: "#272a2b" }}
-        >
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 24 24" className="size-5 flex-shrink-0 text-white/40" fill="none">
-              <path d="M4 6.75A2.75 2.75 0 0 1 6.75 4h10.5A2.75 2.75 0 0 1 20 6.75v10.5A2.75 2.75 0 0 1 17.25 20H6.75A2.75 2.75 0 0 1 4 17.25z" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M9 4v16M4 9h5" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-            <span className="text-sm font-semibold text-white/40">Director Panel</span>
-          </div>
-          <ChevronDown className="size-4 text-white/40 flex-shrink-0" />
-        </button>
-      )}
-
-      {/* Expanded panel */}
-      {isOpen && (
-        <div
-          className="w-full rounded-2xl border flex flex-col p-3 gap-2"
-          style={{
-            backgroundColor: "#272a2b",
-            borderColor: "rgba(217,217,217,0.04)",
-          }}
-        >
-          {/* Header row */}
-          <button
-            onClick={onToggle}
-            className="flex items-center justify-between w-full cursor-pointer"
+    <div
+      className="flex w-full min-w-0 flex-col rounded-2xl px-3 py-2"
+      style={{ backgroundColor: "#272a2b" }}
+    >
+      {/* Single shared header — collapsed & expanded respond via classes, no duplicate */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls="cinema25-director-content"
+        className={`flex w-full items-center justify-between gap-1 ${isOpen ? "mb-1.5" : ""}`}
+      >
+        <div className="flex min-w-0 items-center gap-1">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            className={`size-4 shrink-0 transition-colors ${isOpen ? "text-[#078AB6]" : "text-white/40"}`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <svg viewBox="0 0 24 24" className="size-5 flex-shrink-0 text-[#078AB6]" fill="none">
-                <path d="M4 6.75A2.75 2.75 0 0 1 6.75 4h10.5A2.75 2.75 0 0 1 20 6.75v10.5A2.75 2.75 0 0 1 17.25 20H6.75A2.75 2.75 0 0 1 4 17.25z" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M9 4v16M4 9h5" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
-              <div className="flex flex-col items-start min-w-0">
-                <span className="text-sm font-semibold text-[#078AB6]">Director Panel</span>
-                <span className="text-xs text-white/60">Control characters, speed, genres, and scene flow</span>
-              </div>
-            </div>
-            <ChevronDown className="size-4 text-[#078AB6] flex-shrink-0 rotate-180 transition-transform" />
-          </button>
+            <path
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M1.3335 3.83317C1.3335 3.18884 1.85583 2.6665 2.50016 2.6665H13.5002C14.1445 2.6665 14.6668 3.18884 14.6668 3.83317V12.1665C14.6668 12.8108 14.1445 13.3332 13.5002 13.3332H2.50016C1.85583 13.3332 1.3335 12.8108 1.3335 12.1665V3.83317ZM2.3335 3.83317C2.3335 3.74112 2.40812 3.6665 2.50016 3.6665H4.72359L4.25693 5.99984H2.3335V3.83317ZM13.6668 5.99984V3.83317C13.6668 3.74112 13.5922 3.6665 13.5002 3.6665H11.8905L11.3072 5.99984H13.6668ZM10.2764 5.99984L10.8598 3.6665H8.7434L8.27673 5.99984H10.2764ZM7.25693 5.99984L7.72359 3.6665H5.7434L5.27673 5.99984H7.25693Z"
+              fill="currentColor"
+            />
+          </svg>
+          <span
+            className={`text-xs font-medium leading-4 transition-colors ${isOpen ? "text-[#078AB6]" : "text-white/60"}`}
+          >
+            Director Panel
+          </span>
+          <span
+            className={`truncate text-xs leading-4 text-white/40 transition-opacity duration-200 ${isOpen ? "opacity-100" : "opacity-0"}`}
+          >
+            Control characters, speed, genres, and scene flow
+          </span>
+        </div>
+        <ChevronDown
+          className={`size-3.5 shrink-0 text-white/40 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
 
-          {/* Controls row (horizontal) */}
+      {/* Collapsible content — grid-rows animation (0fr collapsed → 1fr expanded) */}
+      <div
+        id="cinema25-director-content"
+        className="grid w-full transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+      >
+        <div className="min-h-0 overflow-hidden">
           <div
-            className="flex items-end gap-3 overflow-x-auto pb-2 px-1"
+            className="flex w-full items-center gap-3"
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
           >
-            {/* Reference slots */}
-            <div className="flex gap-1.5 flex-shrink-0">
+            {/* Reference / character slots */}
+            <div className="flex shrink-0 items-center gap-1.5">
               {[0, 1, 2].map((idx) => (
                 <button
                   key={idx}
+                  type="button"
                   onClick={() => onAssignReference(idx, "")}
-                  className="w-11 h-11 rounded-3xl flex-shrink-0 flex items-center justify-center transition-all hover:bg-white/10"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-white/10"
                   style={{
                     backgroundColor: references[idx] ? "transparent" : "rgba(255,255,255,0.05)",
                     border: "1px solid rgba(217,217,217,0.04)",
@@ -140,146 +185,172 @@ export default function CinemaStudio25DirectorPanel({
                   data-slot-index={idx}
                 >
                   {!references[idx] && idx === 0 && (
-                    <svg viewBox="0 0 24 24" className="size-4 text-white/60" fill="none">
-                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" />
-                    </svg>
+                    <UserPlus className="size-4 text-white/50" />
                   )}
                 </button>
               ))}
             </div>
 
-            {/* Movement control */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <video
-                key={movement.video}
-                src={movement.video}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-9 h-9 rounded-2xl object-cover flex-shrink-0"
-                style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+            {/* Movement — compact pill (video + label/value + stepper) */}
+            <div
+              className="flex shrink-0 items-center rounded-xl pl-1"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <div
+                className="relative mr-2 size-9 shrink-0 overflow-hidden rounded-lg"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.32)",
+                  boxShadow: "rgba(0,0,0,0.24) 2px -2px 4px -2px",
+                }}
+              >
+                <video
+                  key={movement.video}
+                  src={movement.video}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="absolute inset-0 size-full object-cover"
+                />
+              </div>
+              <div className="flex w-max flex-col gap-0.5 py-1.5">
+                <span className="text-[10px] font-semibold leading-3 text-white/50">Movement</span>
+                <div className="relative h-5 min-w-[40px] overflow-hidden">
+                  <span className="block max-w-[92px] truncate text-sm font-medium leading-5 text-white">
+                    {movement.name}
+                  </span>
+                </div>
+              </div>
+              <ArrowStepper
+                onUp={() =>
+                  onMovementIndexChange(
+                    (movementIndex - 1 + MOVEMENT_OPTIONS.length) % MOVEMENT_OPTIONS.length,
+                  )
+                }
+                onDown={() =>
+                  onMovementIndexChange((movementIndex + 1) % MOVEMENT_OPTIONS.length)
+                }
               />
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-white/60">Movement</span>
-                <span className="text-sm font-semibold text-white whitespace-nowrap">{movement.name}</span>
-              </div>
-              <div className="flex flex-col gap-1 flex-shrink-0">
-                <button
-                  onClick={() => onMovementIndexChange((movementIndex - 1 + MOVEMENT_OPTIONS.length) % MOVEMENT_OPTIONS.length)}
-                  className="w-5 h-5 text-white/60 hover:text-white transition-colors flex items-center justify-center"
-                >
-                  <ChevronDown className="size-4 rotate-180" />
-                </button>
-                <button
-                  onClick={() => onMovementIndexChange((movementIndex + 1) % MOVEMENT_OPTIONS.length)}
-                  className="w-5 h-5 text-white/60 hover:text-white transition-colors flex items-center justify-center"
-                >
-                  <ChevronDown className="size-4" />
-                </button>
-              </div>
             </div>
 
-            {/* Speed graph */}
-            <div
-              className="w-[132px] h-12 rounded-2xl flex-shrink-0 relative flex items-center justify-center"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(217,217,217,0.04)",
-              }}
-            >
-              <svg
-                ref={svgRef}
-                width="100%"
-                height="100%"
-                viewBox="0 0 132 48"
-                preserveAspectRatio="none"
-                className="w-full h-full p-1"
-                style={{ cursor: draggedPointIndex !== null ? "grabbing" : "grab" }}
-              >
-                {/* Polyline */}
-                <polyline
-                  points={speedRampPoints
-                    .map((val, i) => {
+            {/* Divider */}
+            <div className="h-8 w-px shrink-0 bg-white/10" />
+
+            {/* Speed graph (flex-1) + Speed ramp pill */}
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="min-w-[80px] flex-1">
+                <div
+                  className="relative w-full overflow-hidden rounded-xl border border-white/5"
+                  style={{ height: 48, background: "rgba(255,255,255,0.03)" }}
+                >
+                  <span
+                    className="absolute h-px bg-white/20"
+                    style={{ left: 10, right: 10, top: 23 }}
+                  />
+                  <svg
+                    ref={svgRef}
+                    width="100%"
+                    height="100%"
+                    viewBox="0 0 132 48"
+                    preserveAspectRatio="none"
+                    className="h-full w-full p-1"
+                    style={{ cursor: draggedPointIndex !== null ? "grabbing" : "grab" }}
+                  >
+                    <polyline
+                      points={speedRampPoints
+                        .map((val, i) => {
+                          const x = (i / (speedRampPoints.length - 1)) * 130 + 1;
+                          const y = 48 - (val / 100) * 46 - 1;
+                          return `${x},${y}`;
+                        })
+                        .join(" ")}
+                      stroke="#1CA5E2"
+                      strokeWidth="1.5"
+                      fill="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {speedRampPoints.map((val, i) => {
                       const x = (i / (speedRampPoints.length - 1)) * 130 + 1;
                       const y = 48 - (val / 100) * 46 - 1;
-                      return `${x},${y}`;
-                    })
-                    .join(" ")}
-                  stroke="#1CA5E2"
-                  strokeWidth="1.5"
-                  fill="none"
-                  vectorEffect="non-scaling-stroke"
-                />
-                {/* Points */}
-                {speedRampPoints.map((val, i) => {
-                  const x = (i / (speedRampPoints.length - 1)) * 130 + 1;
-                  const y = 48 - (val / 100) * 46 - 1;
-                  return (
-                    <g key={i}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="4"
-                        fill="#1CA5E2"
-                        style={{
-                          filter: "drop-shadow(0 0 4px rgba(28,165,226,0.4))",
-                          cursor: "ns-resize",
-                        }}
-                        onMouseDown={() => handleSpeedPointDown(i)}
-                      />
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-
-            {/* Speed Ramp control */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-white/60">Speed ramp</span>
-                <span className="text-sm font-semibold text-white whitespace-nowrap">{SPEED_RAMP_OPTIONS[speedRampIndex]}</span>
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r="4"
+                          fill="#1CA5E2"
+                          style={{
+                            filter: "drop-shadow(0 0 4px rgba(28,165,226,0.4))",
+                            cursor: "ns-resize",
+                          }}
+                          onMouseDown={() => handleSpeedPointDown(i)}
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
               </div>
-              <div className="flex flex-col gap-1 flex-shrink-0">
-                <button
-                  onClick={() => onSpeedRampIndexChange((speedRampIndex - 1 + SPEED_RAMP_OPTIONS.length) % SPEED_RAMP_OPTIONS.length)}
-                  className="w-5 h-5 text-white/60 hover:text-white transition-colors flex items-center justify-center"
-                >
-                  <ChevronDown className="size-4 rotate-180" />
-                </button>
-                <button
-                  onClick={() => onSpeedRampIndexChange((speedRampIndex + 1) % SPEED_RAMP_OPTIONS.length)}
-                  className="w-5 h-5 text-white/60 hover:text-white transition-colors flex items-center justify-center"
-                >
-                  <ChevronDown className="size-4" />
-                </button>
+
+              {/* Speed ramp — compact pill */}
+              <div
+                className="flex shrink-0 items-center rounded-xl pl-2.5"
+                style={{ background: "rgba(255,255,255,0.06)" }}
+              >
+                <div className="flex w-max flex-col gap-0.5 py-1.5">
+                  <span className="text-[10px] font-semibold leading-3 text-white/50">Speed ramp</span>
+                  <div className="relative h-5 min-w-[40px] overflow-hidden">
+                    <span className="block max-w-[80px] truncate text-sm font-medium leading-5 text-white">
+                      {SPEED_RAMP_OPTIONS[speedRampIndex]}
+                    </span>
+                  </div>
+                </div>
+                <ArrowStepper
+                  onUp={() =>
+                    onSpeedRampIndexChange(
+                      (speedRampIndex - 1 + SPEED_RAMP_OPTIONS.length) % SPEED_RAMP_OPTIONS.length,
+                    )
+                  }
+                  onDown={() =>
+                    onSpeedRampIndexChange((speedRampIndex + 1) % SPEED_RAMP_OPTIONS.length)
+                  }
+                />
               </div>
             </div>
 
-            {/* Duration slider */}
-            <div className="flex flex-col gap-1 flex-shrink-0">
-              <span className="text-xs text-white/60">Duration</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="3"
-                  max="12"
-                  value={duration}
-                  onChange={(e) => onDurationChange(Number(e.target.value))}
-                  className="w-[132px] h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #1CA5E2 0%, #1CA5E2 ${((duration - 3) / 9) * 100}%, rgba(255,255,255,0.1) ${((duration - 3) / 9) * 100}%, rgba(255,255,255,0.1) 100%)`,
-                  }}
-                  aria-label="Duration"
-                  aria-valuemin={3}
-                  aria-valuemax={12}
-                />
+            {/* Divider */}
+            <div className="h-8 w-px shrink-0 bg-white/10" />
+
+            {/* Duration — compact pill with inner label + fill (range overlaid) */}
+            <label
+              className="relative flex h-11 w-[132px] shrink-0 cursor-pointer items-center overflow-hidden rounded-xl"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <div
+                className="pointer-events-none absolute left-0 top-0 h-full"
+                style={{ width: `${durationFill}%`, background: "rgba(255,255,255,0.05)" }}
+              />
+              <input
+                type="range"
+                min={3}
+                max={12}
+                value={duration}
+                onChange={(e) => onDurationChange(Number(e.target.value))}
+                className="absolute inset-0 size-full cursor-pointer opacity-0"
+                aria-label="Duration"
+                aria-valuemin={3}
+                aria-valuemax={12}
+                aria-valuenow={duration}
+              />
+              <div className="pointer-events-none absolute left-0 top-0 flex h-full items-center pl-2.5">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-semibold leading-3 text-white/50">Duration</span>
+                  <span className="text-sm font-medium leading-5 text-white">{duration}s</span>
+                </div>
               </div>
-              <span className="text-sm font-semibold text-white text-center">{duration}s</span>
-            </div>
+            </label>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

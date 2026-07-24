@@ -36,7 +36,7 @@ export default function GenerateButton({
 }: GenerateButtonProps) {
   const isImage = accent === "yellow" || (accent !== "cyan" && mode === "image");
 
-  // Image mode uses Higgsfield's yellow-green brand; video keeps turquoise. Cyan accent for Cinema Studio 2.5.
+  // Image mode uses Higgsfield's yellow-green brand; video keeps turquoise. Cinema Studio 2.5 also forces the lime accent (accent="yellow"), matching its real reference.
   const background = isImage
     ? "linear-gradient(135deg, #CDFF00 0%, #A6D400 100%)"
     : "linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%)";
@@ -51,7 +51,7 @@ export default function GenerateButton({
       onClick={onGenerate}
       disabled={isLoading}
       aria-label="Generate"
-      className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff] focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40"
+      className={`relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40 ${isImage ? "focus:ring-[#CDFF00]" : "focus:ring-[#00e5ff]"}`}
       style={{
         width: 120,
         height: 80,
