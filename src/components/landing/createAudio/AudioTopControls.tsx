@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Heart, LayoutGrid, List } from "lucide-react";
+import { ArrowLeft, Heart } from "lucide-react";
 
 export type AudioTab = "all" | "liked";
 export type AudioLayout = "list" | "grid";
@@ -18,10 +18,6 @@ interface AudioTopControlsProps {
 export default function AudioTopControls({
   activeTab,
   onTabChange,
-  layout,
-  onLayoutChange,
-  density,
-  onDensityChange,
   onBack,
 }: AudioTopControlsProps) {
   return (
@@ -63,48 +59,6 @@ export default function AudioTopControls({
               fill={activeTab === "liked" ? "currentColor" : "none"}
             />
             Liked
-          </button>
-        </div>
-      </div>
-
-      {/* Right: density slider + layout toggle */}
-      <div className="pointer-events-auto flex items-center gap-3">
-        <div className="hidden h-8 items-center gap-2 rounded-[10px] bg-white/5 px-3 md:flex">
-          <input
-            type="range"
-            min={1}
-            max={4}
-            value={density}
-            onChange={(e) => onDensityChange(Number(e.target.value))}
-            aria-label="Grid density"
-            className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-white/15 accent-white/80"
-          />
-        </div>
-
-        <div className="flex items-center gap-1 rounded-[10px] bg-white/5 p-1">
-          <button
-            type="button"
-            onClick={() => onLayoutChange("list")}
-            aria-label="List layout"
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-              layout === "list"
-                ? "bg-white/10 text-white"
-                : "text-zinc-400 hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <List className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onLayoutChange("grid")}
-            aria-label="Grid layout"
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-              layout === "grid"
-                ? "bg-white/10 text-white"
-                : "text-zinc-400 hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <LayoutGrid className="h-4 w-4" />
           </button>
         </div>
       </div>

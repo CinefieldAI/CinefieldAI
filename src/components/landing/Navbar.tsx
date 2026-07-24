@@ -29,9 +29,7 @@ import type { ImageFeatureKey } from "./imageDropdownData";
 import type { ActiveView, PanelKey } from "./panelData";
 import { AUDIO_FEATURES, AUDIO_MODELS, type AudioMode } from "./audioMenuData";
 import {
-  COLLAB_ITEMS,
   MCP_CLI_ITEMS,
-  PLUGINS_ITEMS,
   SUPERCOMPUTER_ITEMS,
   type CompactItem,
 } from "./compactMenuData";
@@ -46,17 +44,11 @@ const LINKS_LEFT: NavLink[] = [{ label: "Explore", href: "/" }];
 const DROPDOWN_LINKS: { label: string; items: CompactItem[] }[] = [
   { label: "Supercomputer", items: SUPERCOMPUTER_ITEMS },
   { label: "MCP & CLI", items: MCP_CLI_ITEMS },
-  { label: "Collab", items: COLLAB_ITEMS },
-  { label: "Plugins", items: PLUGINS_ITEMS },
 ];
 
 const LINKS_RIGHT: NavLink[] = [
   { label: "Marketing Studio", href: "/marketing-studio/product" },
   { label: "Cinema Studio", href: "/generate" },
-  { label: "Originals", href: "/original-series" },
-  { label: "Canvas", href: "/canvas" },
-  { label: "AI Influencer", href: "/ai-influencer-studio" },
-  { label: "Apps", href: "/apps" },
 ];
 
 function CinefieldLogo() {
@@ -75,22 +67,6 @@ function CinefieldLogo() {
         className="h-9 w-9 rounded-xl object-cover drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]"
       />
     </Link>
-  );
-}
-
-function MicroDotCluster() {
-  return (
-    <span className="flex items-center gap-0.5">
-      <span className="h-1 w-1 animate-pulse rounded-full bg-magenta-400" />
-      <span
-        className="h-1 w-1 animate-pulse rounded-full bg-magenta-400"
-        style={{ animationDelay: "150ms" }}
-      />
-      <span
-        className="h-1 w-1 animate-pulse rounded-full bg-magenta-400"
-        style={{ animationDelay: "300ms" }}
-      />
-    </span>
   );
 }
 
@@ -126,6 +102,44 @@ function PricingUpgradeLink() {
         30% OFF
       </span>
     </a>
+  );
+}
+
+/**
+ * Logged-out top-right action group: Pricing (routes to /pricing) →
+ * separator → Login / Sign up. Login and Sign up currently just flip the
+ * local `isAuthenticated` demo flag in Navbar (no real backend exists yet),
+ * which reveals the previous authenticated controls (Search, Pricing pill,
+ * Assets, avatar) below — see the "authenticated" branch in Navbar's render.
+ */
+function PricingAction() {
+  return (
+    <Link
+      href="/pricing"
+      title="View Higgsfield AI pricing plans and subscription options"
+      className="relative hidden items-center gap-1.5 rounded-[10px] bg-white/5 px-3 h-9 text-sm font-medium text-white transition-colors hover:bg-white/10 active:bg-white/15 sm:flex"
+    >
+      <svg
+        className="size-4"
+        aria-hidden="true"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M6.56218 3.52331C6.89119 3.18855 7.34089 3 7.81027 3H16.186C16.6554 3 17.1051 3.18855 17.4341 3.52331L22.5881 8.76722C23.2614 9.45231 23.2567 10.5521 22.5774 11.2313L13.2356 20.5732C12.5521 21.2566 11.4441 21.2566 10.7607 20.5732L1.41881 11.2313C0.73957 10.5521 0.734815 9.45231 1.40816 8.76722L6.56218 3.52331ZM9.02845 7.21967C9.32135 7.51256 9.32135 7.98744 9.02845 8.28033L7.30878 10L9.02845 11.7197C9.32135 12.0126 9.32135 12.4874 9.02845 12.7803C8.73556 13.0732 8.26069 13.0732 7.96779 12.7803L5.71779 10.5303C5.4249 10.2374 5.4249 9.76256 5.71779 9.46967L7.96779 7.21967C8.26069 6.92678 8.73556 6.92678 9.02845 7.21967Z"
+          fill="currentColor"
+        />
+      </svg>
+      Pricing
+      <span className="absolute -top-2 -right-3 rounded-full bg-[radial-gradient(39.71%_136.54%_at_51.64%_117.31%,#33eaff_0%,#00b8cc_100%)] px-2 py-0.5 text-[10px] font-bold text-white shadow-lg shadow-magenta-500/30">
+        30% OFF
+      </span>
+    </Link>
   );
 }
 
@@ -213,6 +227,12 @@ export default function Navbar({
   onAudioModelIndexChange,
 }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Demo auth flag — no real backend exists yet. Logged-out shows
+  // Pricing/Login/Sign up; Login or Sign up flips this to reveal the
+  // previous authenticated controls (Search, Pricing pill, Assets, avatar).
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const handleLogin = () => setIsAuthenticated(true);
+  const handleSignUp = () => setIsAuthenticated(true);
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
@@ -341,7 +361,6 @@ export default function Navbar({
               <NavigationMenuItem key={link.label}>
                 <NavigationMenuTrigger>
                   {link.label}
-                  {link.label === "Supercomputer" && <MicroDotCluster />}
                 </NavigationMenuTrigger>
                 <NavigationMenuContent>
                   <CompactDropdown items={link.items} />
@@ -356,7 +375,6 @@ export default function Navbar({
                   className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-white"
                 >
                   {link.label}
-                  {link.label === "Supercomputer" && <MicroDotCluster />}
                 </NavigationMenuLink>
               </NavigationMenuItem>
             ))}
@@ -366,10 +384,38 @@ export default function Navbar({
 
       {/* Column 3: actions */}
       <div className="flex items-center justify-end gap-2.5">
-        <SearchButton />
-        <PricingUpgradeLink />
-        <AssetsButton />
-        <ProfileAvatar />
+        {isAuthenticated ? (
+          <>
+            <SearchButton />
+            <PricingUpgradeLink />
+            <AssetsButton />
+            <ProfileAvatar />
+          </>
+        ) : (
+          <div className="flex items-center">
+            <PricingAction />
+            <span
+              aria-hidden="true"
+              className="mx-2.5 hidden h-5 w-px bg-white/10 sm:block"
+            />
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleLogin}
+                className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={handleSignUp}
+                className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
+              >
+                Sign up
+              </button>
+            </div>
+          </div>
+        )}
 
         <button
           type="button"
