@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { X } from "lucide-react";
+import { LOCAL_MARKETING_VIDEOS } from "@/data/localMarketingVideos";
 
 export interface SettingItem {
   id: string;
@@ -25,57 +26,57 @@ const SETTING_ITEMS: SettingItem[] = [
     title: "Bedroom",
     description: "On bed or propped against pillows, soft window light. Unmade bed, cozy...",
     category: "Realistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/bedroom.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[0],
   },
   {
     id: "airplane-wing",
     title: "Airplane Wing",
     description: "Person sits on airplane wing mid-flight at altitude. Casual product review...",
     category: "Unrealistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/airplane-wing.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[1],
   },
   {
     id: "nature",
     title: "Nature",
     description: "Outdoors — trail, park, beach, or garden depending on product. Natural...",
     category: "Realistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/nature.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[2],
   },
   {
     id: "roofing",
     title: "Roofing",
     description: "Person on the edge of a skyscraper rooftop, city skyline stretched out...",
     category: "Unrealistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/roofing.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[3],
   },
   {
     id: "office",
     title: "Office",
     description: "Corporate setting with desks, computers, and professional background...",
     category: "Realistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/office.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[4],
   },
   {
     id: "underwater",
     title: "Underwater",
     description: "Submerged in crystal clear water with coral and marine life visible...",
     category: "Unrealistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/underwater.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[5],
   },
   {
     id: "kitchen",
     title: "Kitchen",
     description: "Modern kitchen with bright countertops and stainless steel appliances...",
     category: "Realistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/kitchen.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[6],
   },
   {
     id: "space",
     title: "Space",
     description: "Floating in outer space with planets and stars visible all around...",
     category: "Unrealistic",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/space.mp4"
-  }
+    videoUrl: LOCAL_MARKETING_VIDEOS[7],
+  },
 ];
 
 type SettingCategory = "All" | "Realistic" | "Unrealistic";

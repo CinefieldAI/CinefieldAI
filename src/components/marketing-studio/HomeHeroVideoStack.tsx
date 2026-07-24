@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { LOCAL_MARKETING_VIDEOS } from "@/data/localMarketingVideos";
 
 interface VideoCard {
   src: string;
-  poster: string;
   baseWidth: number;
   baseHeight: number;
   openTransform: string;
@@ -23,8 +23,7 @@ export default function HomeHeroVideoStack() {
 
   const videos: VideoCard[] = [
     {
-      src: "https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.mp4",
-      poster: "https://static.higgsfield.ai/ms-modes/ugc_gadget_saved_me.jpg",
+      src: LOCAL_MARKETING_VIDEOS[0],
       baseWidth: 178,
       baseHeight: 267,
       openTransform: "translateX(80px) translateY(24px) rotate(-8deg)",
@@ -32,8 +31,7 @@ export default function HomeHeroVideoStack() {
       zIndex: 1,
     },
     {
-      src: "https://d8j0ntlcm91z4.cloudfront.net/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742.mp4",
-      poster: "https://cdn.higgsfield.ai/user_3Cfdr00kbZ1hJCLpPQkaicInqxv/hf_20260603_150008_ee9cf142-7741-40e9-8076-897fb0947742_thumbnail.webp",
+      src: LOCAL_MARKETING_VIDEOS[1],
       baseWidth: 200,
       baseHeight: 300,
       openTransform: "translateX(136px) translateY(1px)",
@@ -42,8 +40,7 @@ export default function HomeHeroVideoStack() {
       isCenter: true,
     },
     {
-      src: "https://static.higgsfield.ai/marketing-studio-presets/ugc.mp4",
-      poster: "https://static.higgsfield.ai/marketing-studio-presets/ugc-thumbnail.webp",
+      src: LOCAL_MARKETING_VIDEOS[2],
       baseWidth: 178,
       baseHeight: 267,
       openTransform: "translateX(214px) translateY(24px) rotate(8deg)",
@@ -79,7 +76,6 @@ export default function HomeHeroVideoStack() {
           >
             <video
               src={video.src}
-              poster={video.poster}
               autoPlay
               loop
               muted

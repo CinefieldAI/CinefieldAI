@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { X } from "lucide-react";
+import { LOCAL_MARKETING_VIDEOS } from "@/data/localMarketingVideos";
 
 export interface HookItem {
   id: string;
@@ -25,64 +26,64 @@ const HOOK_ITEMS: HookItem[] = [
     title: "Product Hit",
     description: "Object flies into frame, hits subject. Brief reaction → pivot to product.",
     category: "Stunt",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/0376d63f-7fcb-4622-bdd0-4dc700d44cc6.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[0],
   },
   {
     id: "spicy",
     title: "Spicy",
     description: "",
     category: "Subtle",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/310818fe-e1af-4e3c-a8c2-3d4a3579365f.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[1],
   },
   {
     id: "interview",
     title: "Interview",
     description: "",
     category: "Subtle",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/913b0ed2-bbbb-4626-a491-e9335d250eaf.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[2],
   },
   {
     id: "random-object-mic",
     title: "Random Object Mic",
     description: "",
     category: "Stunt",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/381965b9-5d4b-4e6a-a9a1-be94a6cbb66d.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[3],
   },
   {
     id: "product-crash",
     title: "Product Crash",
     description: "",
     category: "Subtle",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/e106fdf3-b64d-4d85-867c-47fe5b9dc381.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[4],
   },
   {
     id: "blizzard",
     title: "Blizzard",
     description: "",
     category: "Stunt",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/b46b6584-a4c7-4228-8b51-927e1aebcfed.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[5],
   },
   {
     id: "camera-bump",
     title: "Camera Bump",
     description: "",
     category: "Subtle",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/868ca5a9-cf6f-460a-959b-76706deee95b.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[6],
   },
   {
     id: "product-dodge",
     title: "Product Dodge",
     description: "",
     category: "Stunt",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/81a3aed0-6db5-4c8f-9f56-8aab62e81b22.mp4"
+    videoUrl: LOCAL_MARKETING_VIDEOS[7],
   },
   {
     id: "epic-fail",
     title: "Epic Fail",
     description: "",
     category: "Subtle",
-    videoUrl: "https://cdn.higgsfield.ai/marketing_studio_setup/6b1698c1-5f82-4854-8a32-de3807618082.mp4"
-  }
+    videoUrl: LOCAL_MARKETING_VIDEOS[8],
+  },
 ];
 
 type HookCategory = "All" | "Stunt" | "Subtle";
