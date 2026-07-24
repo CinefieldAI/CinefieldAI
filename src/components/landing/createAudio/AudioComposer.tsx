@@ -452,7 +452,7 @@ export default function AudioComposer({
             Language chip or the sample-rate/speed/volume/pitch/output row. */}
         {showReferenceVideo && (
           <div
-            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[20px] border p-2"
+            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] border p-2"
             style={{
               background: "rgba(20,21,23,0.96)",
               borderColor: "rgba(255,255,255,0.08)",
@@ -502,11 +502,11 @@ export default function AudioComposer({
               </span>
             </button>
 
-            {/* Voice Preset — same height as the upload region */}
+            {/* Voice Preset — matches the Voiceover composer's card exactly */}
             <button
               type="button"
               onClick={onChooseVoice}
-              className="group relative flex h-full w-[172px] shrink-0 flex-col overflow-hidden rounded-2xl border-2 border-black pt-3 text-left transition-all hover:brightness-110"
+              className="group relative flex h-20 w-[172px] shrink-0 flex-col self-end overflow-hidden rounded-xl border-2 border-black pt-3 text-left transition-all hover:brightness-110"
               style={{
                 background: "linear-gradient(rgb(36,36,36), rgb(19,19,18), rgb(0,0,0))",
                 boxShadow:
@@ -557,12 +557,12 @@ export default function AudioComposer({
               </div>
             </button>
 
-            {/* Generate — lime accent (only Change Voice; Voiceover/Translate keep their own button) */}
+            {/* Generate — lime accent, matches the Voiceover composer's button exactly */}
             <button
               type="button"
               onClick={onGenerate}
               disabled={isGenerating}
-              className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 background: "linear-gradient(135deg, #D1FE17 0%, #A6D400 100%)",
                 boxShadow:
