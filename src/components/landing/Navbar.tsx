@@ -227,6 +227,13 @@ export default function Navbar({
   onAudioModelIndexChange,
 }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // One controlled open state for the desktop nav's mega-menus (Image, Video,
+  // Audio, Supercomputer, MCP & CLI). "" = closed, matches Radix's own
+  // closed-value convention. Needed so selecting a row inside the Audio menu
+  // (feature or model) can explicitly force it closed instead of relying on
+  // Radix's default hover/focus-driven open state, which never closes on a
+  // content click.
+  const [openNavItem, setOpenNavItem] = useState("");
   // Demo auth flag — no real backend exists yet. Logged-out shows
   // Pricing/Login/Sign up; Login or Sign up flips this to reveal the
   // previous authenticated controls (Search, Pricing pill, Assets, avatar).
@@ -271,6 +278,7 @@ export default function Navbar({
     const feature = AUDIO_FEATURES.find((f) => f.title === title);
     if (feature) onAudioModeChange?.(feature.mode);
     onOpenAudioPanel();
+    setOpenNavItem("");
   };
 
   const handleAudioModelSelect = (title: string) => {
@@ -282,6 +290,7 @@ export default function Navbar({
     // changes. Mirrors how selecting a Feature updates the composer.
     onAudioModeChange?.("voiceover");
     onOpenAudioPanel();
+    setOpenNavItem("");
   };
 
   return (
@@ -293,7 +302,11 @@ export default function Navbar({
 
       {/* Column 2: nav menu (md+) */}
       <div className="hidden min-w-0 items-center justify-center md:flex">
-        <NavigationMenu className="max-w-none justify-start">
+        <NavigationMenu
+          className="max-w-none justify-start"
+          value={openNavItem}
+          onValueChange={setOpenNavItem}
+        >
           <NavigationMenuList className="flex-nowrap gap-0.5 overflow-x-auto px-2 [scrollbar-width:none]">
             {LINKS_LEFT.map((link) => (
               <NavigationMenuItem key={link.label}>
