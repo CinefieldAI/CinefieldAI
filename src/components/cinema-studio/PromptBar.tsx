@@ -18,6 +18,7 @@ import GeminiAspectRatioControl from "./GeminiAspectRatioControl";
 import Kling3AspectRatioControl from "./Kling3AspectRatioControl";
 import ReferencesControl from "./ReferencesControl";
 import Cinema25ReferencesPopover from "./Cinema25ReferencesPopover";
+import Cinema25AssetsPicker, { type Cinema25PickerContext } from "./Cinema25AssetsPicker";
 import Kling3MultiShotControl from "./Kling3MultiShotControl";
 import KlingModeControl from "./KlingModeControl";
 import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
@@ -503,11 +504,19 @@ export default function PromptBar(props: PromptBarProps) {
   const composerRef = useRef<HTMLDivElement>(null);
   const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
 
-  // Cinema Studio 2.5 — the main "+" button's References popover picks a
-  // slot (Reference/Start Frame/End Frame), then opens this hidden file
-  // input for that slot only. Does not use the global AssetsPickerModal.
-  const cinema25FileInputRef = useRef<HTMLInputElement>(null);
-  const [cinema25PendingSlot, setCinema25PendingSlot] = useState<number | null>(null);
+  // Cinema Studio 2.5 — all five reference/frame entry points (As Reference /
+  // As Start Frame / As End Frame from the "+" popover, plus the Start Frame
+  // and End Frame cards) open ONE shared Cinema25AssetsPicker with a context
+  // that decides which slot the picked asset lands in (reference=0,
+  // startFrame=1, endFrame=2). Replaces the old per-slot hidden file input.
+  const [cinema25PickerOpen, setCinema25PickerOpen] = useState(false);
+  const [cinema25PickerContext, setCinema25PickerContext] =
+    useState<Cinema25PickerContext | null>(null);
+  const openCinema25Picker = (ctx: Cinema25PickerContext) => {
+    setActivePromptPopover(null);
+    setCinema25PickerContext(ctx);
+    setCinema25PickerOpen(true);
+  };
   // Cinema Studio 2.5 — General preset card (bottom composer row), separate
   // from the Director Panel's 3 reference slots.
   const [cinema25GeneralPreset, setCinema25GeneralPreset] = useState("General");
@@ -926,36 +935,18 @@ export default function PromptBar(props: PromptBarProps) {
 
           <div className="flex flex-wrap items-center gap-1">
             {/* Cinema Studio 2.5 References Button - exactly 3 options (As
-                Reference / As Start Frame / As End Frame), not the shared
-                Assets Picker. Selecting an option opens a plain file input
-                for that one slot; the Director Panel (rendered above the
-                prompt bar) displays the 3 slots. */}
+                Reference / As Start Frame / As End Frame). Each option opens
+                the one shared Cinema25AssetsPicker with the matching context;
+                the Director Panel (rendered above the prompt bar) displays the
+                3 slots. */}
             {isCinema25 && (
               <Cinema25ReferencesPopover
                 isOpen={cinema25ReferencesPopoverOpen}
                 onOpenChange={onCinema25ReferencesPopoverOpenChange}
-                onSelect={(refMode) => {
-                  const slotIndex = refMode === "reference" ? 0 : refMode === "startFrame" ? 1 : 2;
-                  setCinema25PendingSlot(slotIndex);
-                  cinema25FileInputRef.current?.click();
-                }}
+                onSelect={(refMode) => openCinema25Picker(refMode)}
                 portalContainer={portalRoot}
               />
             )}
-            <input
-              ref={cinema25FileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && cinema25PendingSlot !== null) {
-                  onCinema25AssignReference(cinema25PendingSlot, URL.createObjectURL(file));
-                }
-                setCinema25PendingSlot(null);
-                e.target.value = "";
-              }}
-            />
 
             {/* Assets Picker Buttons - Cinema Studio 3.5 and 3.0 only */}
             {(isCinema35 || isCinema30) && (
@@ -1160,18 +1151,6 @@ export default function PromptBar(props: PromptBarProps) {
               >
                 <Plus className="size-4" />
               </button>
-            )}
-
-            {/* Cinema Studio 2.5 References Popover */}
-            {isCinema25 && (
-              <Cinema25ReferencesPopover
-                isOpen={props.cinema25ReferencesPopoverOpen ?? false}
-                onOpenChange={props.onCinema25ReferencesPopoverOpenChange ?? (() => {})}
-                onSelect={(mode) => {
-                  setCinema25ReferenceMode(mode === "reference" ? "reference" : mode === "startFrame" ? "startFrame" : "endFrame");
-                  setAssetsPickerOpen(true);
-                }}
-              />
             )}
 
             {/* Kling 3.0 (plain) References Button - opens Start Frame choice, then Assets picker */}
@@ -2233,36 +2212,9 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Start Frame + End Frame + General - Cinema Studio 2.5 only. Start/End
-                Frame share the same 3-slot reference state as the Director Panel and
-                the "+" References popover (index 1 = Start Frame, 2 = End Frame). */}
-            {isCinema25 && (
-              <>
-                <FrameCard
-                  variant="cinema25"
-                  label="Start Frame"
-                  value={cinema25References[1] ?? null}
-                  optional={false}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setCinema25PendingSlot(1);
-                    cinema25FileInputRef.current?.click();
-                  }}
-                  onRemove={() => onCinema25AssignReference(1, null)}
-                />
-                <FrameCard
-                  variant="cinema25"
-                  label="End Frame"
-                  value={cinema25References[2] ?? null}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setCinema25PendingSlot(2);
-                    cinema25FileInputRef.current?.click();
-                  }}
-                  onRemove={() => onCinema25AssignReference(2, null)}
-                />
-              </>
-            )}
+            {/* Cinema Studio 2.5's Start/End Frame are NOT here — they live in
+                the far-right action group next to Generate (see below), matching
+                the Higgsfield reference. */}
 
             {/* Start Frame + General - Seedance Pro Fast only. Mutually exclusive
                 overlays: opening one explicitly closes the other. */}
@@ -2336,14 +2288,43 @@ export default function PromptBar(props: PromptBarProps) {
           </div>
         </div>
 
-        {/* C — Generate */}
-        <GenerateButton
-          creditCost={creditCost}
-          onGenerate={onGenerate}
-          mode={mode}
-          isLoading={props.isGenerating}
-          accent={isCinema25 ? "yellow" : undefined}
-        />
+        {/* C — Right action group.
+            Cinema Studio 2.5 groups Start Frame + End Frame + Generate at the
+            far-right edge (matches the Higgsfield reference). Every other model
+            keeps the bare, self-centered Generate button unchanged. */}
+        {isCinema25 ? (
+          <div className="flex h-20 shrink-0 items-stretch gap-1.5 self-end">
+            <FrameCard
+              variant="cinema25"
+              label="Start Frame"
+              value={cinema25References[1] ?? null}
+              optional={false}
+              onOpenPicker={() => openCinema25Picker("startFrame")}
+              onRemove={() => onCinema25AssignReference(1, null)}
+            />
+            <FrameCard
+              variant="cinema25"
+              label="End Frame"
+              value={cinema25References[2] ?? null}
+              onOpenPicker={() => openCinema25Picker("endFrame")}
+              onRemove={() => onCinema25AssignReference(2, null)}
+            />
+            <GenerateButton
+              creditCost={creditCost}
+              onGenerate={onGenerate}
+              mode={mode}
+              isLoading={props.isGenerating}
+              accent="yellow"
+            />
+          </div>
+        ) : (
+          <GenerateButton
+            creditCost={creditCost}
+            onGenerate={onGenerate}
+            mode={mode}
+            isLoading={props.isGenerating}
+          />
+        )}
       </div>
 
       <AssetsPickerModal
@@ -2494,6 +2475,25 @@ export default function PromptBar(props: PromptBarProps) {
                                             }))
                                         : undefined
         }
+      />
+
+      {/* Cinema Studio 2.5 — one shared Assets Picker for all five entry points
+          (As Reference / As Start Frame / As End Frame + the Start/End Frame
+          cards). The context decides the target slot: reference=0,
+          startFrame=1, endFrame=2. */}
+      <Cinema25AssetsPicker
+        isOpen={cinema25PickerOpen}
+        context={cinema25PickerContext}
+        onClose={() => setCinema25PickerOpen(false)}
+        onSelectAsset={(url) => {
+          const slotIndex =
+            cinema25PickerContext === "reference"
+              ? 0
+              : cinema25PickerContext === "startFrame"
+                ? 1
+                : 2;
+          onCinema25AssignReference(slotIndex, url);
+        }}
       />
 
       {/* "Turn sound off?" confirm — Google Veo 3.1 Lite only */}
