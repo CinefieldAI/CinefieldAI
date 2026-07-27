@@ -43,10 +43,10 @@ function AudioColumn({
               type="button"
               onClick={() => onSelect?.(item.title)}
               aria-pressed={active}
-              className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
+              className="group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-transparent p-2 text-left no-underline transition-colors hover:border-[#00e5ff]/20 hover:bg-white/[0.04] active:brightness-[.6]"
             >
-              <div className="grid size-12 shrink-0 items-center justify-center rounded-xl border border-transparent bg-[#23262a]">
-                <Icon className="size-6 text-zinc-300" />
+              <div className="grid size-12 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400 transition-colors group-hover:bg-magenta-500/10 group-hover:text-magenta-400">
+                <Icon className="size-6" />
               </div>
               <div className="grid min-w-0 auto-rows-min gap-1">
                 <span className="flex items-center gap-1.5">
@@ -82,14 +82,8 @@ export default function AudioMegaDropdown({
 }: AudioMegaDropdownProps) {
   return (
     <div
-      className="w-[732px] max-w-[92vw] overflow-y-auto rounded-[24px] border p-1"
-      style={{
-        maxHeight: "calc(100dvh - 100px)",
-        background: "#1c1e20",
-        borderColor: "rgba(255,255,255,0.06)",
-        boxShadow:
-          "0 20px 25px -5px rgba(0,0,0,0.30), 0 8px 10px -6px rgba(0,0,0,0.30)",
-      }}
+      className="w-[732px] max-w-[92vw] overflow-y-auto rounded-[24px] border border-white/[0.06] bg-[#1c1e20] p-1 shadow-2xl shadow-black/60"
+      style={{ maxHeight: "calc(100dvh - 100px)" }}
     >
       <div className="grid grid-flow-col-dense">
         <AudioColumn

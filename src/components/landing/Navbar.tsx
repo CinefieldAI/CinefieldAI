@@ -49,6 +49,8 @@ const DROPDOWN_LINKS: { label: string; items: CompactItem[] }[] = [
 const LINKS_RIGHT: NavLink[] = [
   { label: "Marketing Studio", href: "/marketing-studio/product" },
   { label: "Cinema Studio", href: "/generate" },
+  { label: "Shorts Studio", href: "/shorts-studio" },
+  { label: "Explainer", href: "/explainer" },
 ];
 
 function CinefieldLogo() {
