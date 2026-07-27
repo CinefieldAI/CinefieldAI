@@ -110,6 +110,8 @@ export interface SeedAudioSettings {
   audioReferences: string[];
   imageReference: string | null;
   sampleRate: number;
+  /** Sample Rate popup's Seed field (0-65535) — part of the generation payload. */
+  sampleRateSeed: number;
   speed: number;
   volume: number;
   pitch: number;
@@ -120,10 +122,11 @@ export const DEFAULT_SEED_AUDIO_SETTINGS: SeedAudioSettings = {
   audioReferences: [],
   imageReference: null,
   sampleRate: 24000,
+  sampleRateSeed: 0,
   speed: 1,
   volume: 1,
   pitch: 0,
-  outputFormat: "mp3",
+  outputFormat: "wav",
 };
 
 export interface QwenSettings {

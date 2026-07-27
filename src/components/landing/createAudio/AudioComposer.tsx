@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import * as Popover from "@radix-ui/react-popover";
 import {
@@ -109,7 +109,7 @@ function SliderPopover({
         <button
           type="button"
           title={label}
-          className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+          className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
         >
           {format(value)}
           <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
@@ -120,7 +120,7 @@ function SliderPopover({
         align="start"
         sideOffset={8}
         collisionPadding={12}
-        className="z-[100000] w-[220px] overflow-hidden rounded-xl border border-white/10 p-2"
+        className="z-[100000] w-[220px] overflow-hidden rounded-xl border border-white/10 p-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         style={POPOVER_SURFACE}
       >
         <div className="mb-2 flex items-center gap-2 px-2">
@@ -184,6 +184,8 @@ function SelectPopover({
   onSelect,
   width = 160,
   maxHeight,
+  seedValue,
+  onSeedChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -194,13 +196,18 @@ function SelectPopover({
   onSelect: (value: string) => void;
   width?: number;
   maxHeight?: number;
+  /** Sample Rate's bottom Seed field — omit for every other SelectPopover instance. */
+  seedValue?: number;
+  onSeedChange?: (value: number) => void;
 }) {
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
-          className="flex h-8 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
         >
           {triggerLabel}
           <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
@@ -211,7 +218,9 @@ function SelectPopover({
         align="start"
         sideOffset={8}
         collisionPadding={12}
-        className="z-[100000] overflow-y-auto rounded-xl border border-white/10 p-1.5"
+        role="listbox"
+        aria-label={header}
+        className="z-[100000] overflow-y-auto rounded-xl border border-white/10 p-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         style={{ ...POPOVER_SURFACE, width, maxHeight }}
       >
         <div className="mb-1 px-2 py-1 text-xs font-semibold text-zinc-400">{header}</div>
@@ -221,6 +230,8 @@ function SelectPopover({
             <button
               key={opt.value}
               type="button"
+              role="option"
+              aria-selected={active}
               onClick={() => {
                 onSelect(opt.value);
                 onOpenChange(false);
@@ -254,6 +265,24 @@ function SelectPopover({
             </button>
           );
         })}
+        {onSeedChange && (
+          <div className="mt-1 border-t border-white/[0.06] px-2 pt-2">
+            <label className="mb-1 block text-xs font-semibold text-zinc-400">Seed</label>
+            <input
+              type="number"
+              min={0}
+              max={65535}
+              step={1}
+              value={seedValue ?? 0}
+              onChange={(e) => {
+                const v = Math.min(65535, Math.max(0, Number(e.target.value) || 0));
+                onSeedChange(v);
+              }}
+              aria-label="Seed"
+              className="h-8 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 text-xs text-white focus:border-white/30 focus:outline-none"
+            />
+          </div>
+        )}
       </Popover.Content>
     </Popover.Root>
   );
@@ -262,15 +291,15 @@ function SelectPopover({
 const SAMPLE_RATE_OPTIONS: SelectOption[] = [
   { value: "8000", title: "8000 Hz", subtitle: "low / phone quality" },
   { value: "16000", title: "16000 Hz", subtitle: "basic / voice calls" },
+  { value: "22050", title: "22050 Hz", subtitle: "legacy audio" },
   { value: "24000", title: "24000 Hz", subtitle: "default — fine for voice" },
-  { value: "32000", title: "32000 Hz", subtitle: "near-CD" },
   { value: "44100", title: "44100 Hz", subtitle: "CD quality" },
   { value: "48000", title: "48000 Hz", subtitle: "video / studio" },
 ];
 
 const OUTPUT_FORMAT_OPTIONS: SelectOption[] = [
-  { value: "mp3", title: "mp3", subtitle: "small, default" },
-  { value: "wav", title: "wav", subtitle: "lossless" },
+  { value: "mp3", title: "mp3", subtitle: "small" },
+  { value: "wav", title: "wav", subtitle: "lossless, default" },
   { value: "opus", title: "opus", subtitle: "web" },
 ];
 
@@ -357,6 +386,18 @@ export default function AudioComposer({
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRefInputRef = useRef<HTMLInputElement>(null);
   const imageRefInputRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize the Voiceover textarea to its content — starts compact
+  // (24px), grows up to 220px, then scrolls internally. Never initializes
+  // at max height.
+  const autoResizePrompt = (el: HTMLTextAreaElement) => {
+    el.style.height = "24px";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  };
+  useEffect(() => {
+    if (promptRef.current) autoResizePrompt(promptRef.current);
+  }, [script]);
 
   // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
   // standalone rotary selector uses).
@@ -476,7 +517,7 @@ export default function AudioComposer({
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleReferenceDrop}
               aria-label="Upload reference video"
-              className="flex h-full min-w-0 flex-1 items-center gap-4 rounded-2xl px-6 text-left transition-colors hover:bg-white/[0.06]"
+              className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-2xl px-6 text-left transition-colors hover:bg-white/[0.06]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.08)",
@@ -581,10 +622,14 @@ export default function AudioComposer({
           </div>
         )}
 
-        {/* Unified prompt bar — Voiceover only; dark-neutral surface (matches Change Voice) */}
+        {/* Unified prompt bar — Voiceover only; dark-neutral surface (matches Change Voice).
+            Explicit h-[120px] (matching the Reference Video bar + rotary selector)
+            instead of letting p-2 add to a content-driven auto height — otherwise
+            this bar renders ~18px taller than its siblings and its top edge no
+            longer lines up with the left mode card / Reference Video bar. */}
         {isVoiceover && (
         <div
-          className="flex min-w-0 flex-1 items-end gap-2 rounded-[22px] border p-2 transition-[height,width,background,border-radius,padding] duration-200"
+          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] border p-2 transition-[height,width,background,border-radius,padding] duration-200"
           style={{
             background: "rgba(20,21,23,0.96)",
             borderColor: "rgba(255,255,255,0.08)",
@@ -592,145 +637,157 @@ export default function AudioComposer({
               "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
           }}
         >
-          {/* Voiceover: text prompt input + model selector (shared by all six models) */}
+          {/* Voiceover: text prompt input + model selector (shared by all six models) —
+              one continuous surface, no nested inner panel. min-height keeps it
+              visually aligned with the Voice Preset card / Generate button at rest,
+              while the textarea is free to grow the surface with real content. */}
           {isVoiceover && (
-          <div className="relative flex h-[120px] min-w-0 flex-1 flex-col justify-between rounded-[18px] bg-white/[0.03] p-3">
+          <div className="relative flex min-h-[120px] min-w-0 flex-1 flex-col p-3">
             <textarea
-              rows={2}
+              ref={promptRef}
+              rows={1}
               value={script}
-              onChange={(e) => onScriptChange(e.target.value)}
+              onChange={(e) => {
+                onScriptChange(e.target.value);
+                autoResizePrompt(e.currentTarget);
+              }}
               placeholder="Describe the sound you imagine..."
               spellCheck
-              className="min-h-0 flex-1 resize-none bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+              className="max-h-[220px] min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
               style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
             />
 
-            <div className="flex items-center gap-2">
-              {/* Active model pill (bottom-left, dynamic) */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setModelMenuOpen((o) => !o)}
-                  aria-expanded={modelMenuOpen}
-                  className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
-                >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
-                    {activeModel.title === "Eleven v3" ? (
-                      <Image
-                        src="/de397d3b-0644-47ac-a4fe-49d64ede48d3.png"
-                        alt={activeModel.title}
-                        width={16}
-                        height={16}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <ModelIcon className="h-3.5 w-3.5 text-zinc-300" />
-                    )}
-                  </span>
-                  {activeModel.title}
-                  <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
-                </button>
-
-                {/* Six-model selector popover */}
-                {modelMenuOpen && (
-                  <>
+            <div className="mt-auto flex h-8 min-w-0 shrink-0 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {/* Active model pill (bottom-left, dynamic) — a real Popover so the
+                  six-model list is a temporary, portal-rendered, collision-aware
+                  popup anchored to this trigger (never a page-level element). */}
+              <Popover.Root open={modelMenuOpen} onOpenChange={setModelMenuOpen}>
+                <Popover.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={modelMenuOpen}
+                    className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
+                      {activeModel.title === "Eleven v3" ? (
+                        <Image
+                          src="/de397d3b-0644-47ac-a4fe-49d64ede48d3.png"
+                          alt={activeModel.title}
+                          width={16}
+                          height={16}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <ModelIcon className="h-3.5 w-3.5 text-zinc-300" />
+                      )}
+                    </span>
+                    {activeModel.title}
+                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    role="listbox"
+                    aria-label="Audio model"
+                    className="z-[100000] w-[300px] overflow-hidden rounded-2xl border border-white/10 p-1.5"
+                    style={{
+                      ...POPOVER_SURFACE,
+                      maxHeight: "min(420px, var(--radix-popover-content-available-height, 420px))",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {/* Decorative top glow */}
                     <div
-                      className="fixed inset-0 z-[99999]"
-                      onClick={() => setModelMenuOpen(false)}
+                      className="pointer-events-none absolute inset-x-0 top-0 h-[37px]"
+                      style={{ background: "rgba(139,213,244,0.24)", filter: "blur(50px)" }}
                     />
-                    <div
-                      className="absolute bottom-full left-0 z-[100000] mb-2 w-[300px] overflow-hidden rounded-2xl border border-white/10 p-1.5"
-                      style={POPOVER_SURFACE}
-                    >
-                      {/* Decorative top glow */}
-                      <div
-                        className="pointer-events-none absolute inset-x-0 top-0 h-[37px]"
-                        style={{ background: "rgba(139,213,244,0.24)", filter: "blur(50px)" }}
-                      />
-                      <div className="relative flex flex-col gap-2">
-                        {AUDIO_MODELS.map((model, i) => {
-                          const Icon = model.icon;
-                          const active = i === selectedModel;
-                          return (
-                            <button
-                              key={model.title}
-                              type="button"
-                              onClick={() => {
-                                onSelectModel(i);
-                                setModelMenuOpen(false);
-                              }}
-                              className="flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors focus-visible:outline-none"
+                    <div className="relative flex flex-col gap-2">
+                      {AUDIO_MODELS.map((model, i) => {
+                        const Icon = model.icon;
+                        const active = i === selectedModel;
+                        return (
+                          <button
+                            key={model.title}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            onClick={() => {
+                              onSelectModel(i);
+                              setModelMenuOpen(false);
+                            }}
+                            className="flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors focus-visible:outline-none"
+                            style={{
+                              background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!active)
+                                e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!active)
+                                e.currentTarget.style.background = "transparent";
+                            }}
+                          >
+                            <span
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                               style={{
-                                background: active ? "rgba(255,255,255,0.08)" : "transparent",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!active)
-                                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!active)
-                                  e.currentTarget.style.background = "transparent";
+                                background: active
+                                  ? "rgba(255,255,255,0.12)"
+                                  : "rgba(255,255,255,0.06)",
                               }}
                             >
-                              <span
-                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                                style={{
-                                  background: active
-                                    ? "rgba(255,255,255,0.12)"
-                                    : "rgba(255,255,255,0.06)",
-                                }}
-                              >
-                                <Icon
-                                  className="h-4 w-4"
-                                  style={{ color: active ? "#ffffff" : "#d4d4d8" }}
-                                />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="truncate text-xs font-semibold text-white">
-                                    {model.title}
+                              <Icon
+                                className="h-4 w-4"
+                                style={{ color: active ? "#ffffff" : "#d4d4d8" }}
+                              />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-xs font-semibold text-white">
+                                  {model.title}
+                                </span>
+                                {model.badge && (
+                                  <span
+                                    className="rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
+                                    style={{
+                                      background: "rgba(209,254,23,0.18)",
+                                      color: "#D1FE17",
+                                    }}
+                                  >
+                                    {model.badge}
                                   </span>
-                                  {model.badge && (
-                                    <span
-                                      className="rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
-                                      style={{
-                                        background: "rgba(209,254,23,0.18)",
-                                        color: "#D1FE17",
-                                      }}
-                                    >
-                                      {model.badge}
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="block truncate text-[10px] text-zinc-500">
-                                  {model.description}
-                                </span>
+                                )}
                               </span>
-                              <span className="flex w-5 shrink-0 items-center justify-center">
-                                {active && <Check className="h-4 w-4 text-[#D1FE17]" />}
+                              <span className="block truncate text-[10px] text-zinc-500">
+                                {model.description}
                               </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                            </span>
+                            <span className="flex w-5 shrink-0 items-center justify-center">
+                              {active && <Check className="h-4 w-4 text-[#D1FE17]" />}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          )}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
 
-          {/* Voiceover: model-capability-driven controls — only what the selected model supports */}
-          {isVoiceover && hasAnyVoiceoverControls && (
-            <div className="flex shrink-0 items-center gap-1.5">
+              {/* Voiceover: model-capability-driven controls — only what the selected model supports */}
+              {hasAnyVoiceoverControls && (
+                <>
               {capabilities.supportsReferences && (
                 <Popover.Root open={addReferenceOpen} onOpenChange={setAddReferenceOpen}>
                   <Popover.Trigger asChild>
                     <button
                       type="button"
-                      aria-label="Add image or audio reference"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.05] text-white transition-colors hover:bg-white/[0.09]"
+                      aria-label="Add audio reference"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-white transition-colors hover:bg-white/[0.09]"
                       style={{ boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06)" }}
                     >
                       <Plus className="h-4 w-4" />
@@ -741,7 +798,7 @@ export default function AudioComposer({
                     align="start"
                     sideOffset={8}
                     collisionPadding={12}
-                    className="z-[100000] w-64 overflow-hidden rounded-xl border border-white/10 px-2 pb-2 pt-2"
+                    className="z-[100000] w-64 overflow-hidden rounded-xl border border-white/10 px-2 pb-2 pt-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                     style={POPOVER_SURFACE}
                   >
                     <div className="px-2 pb-2">
@@ -825,14 +882,18 @@ export default function AudioComposer({
                 <SelectPopover
                   open={sampleRateMenuOpen}
                   onOpenChange={setSampleRateMenuOpen}
-                  triggerLabel={`${seedAudioSettings.sampleRate / 1000}k Hz`}
+                  triggerLabel={`${seedAudioSettings.sampleRate} Hz`}
                   header="Sample Rate"
                   options={SAMPLE_RATE_OPTIONS}
                   selected={String(seedAudioSettings.sampleRate)}
                   onSelect={(v) =>
                     onSeedAudioSettingsChange({ ...seedAudioSettings, sampleRate: Number(v) })
                   }
-                  width={160}
+                  width={176}
+                  seedValue={seedAudioSettings.sampleRateSeed}
+                  onSeedChange={(v) =>
+                    onSeedAudioSettingsChange({ ...seedAudioSettings, sampleRateSeed: v })
+                  }
                 />
               )}
 
@@ -911,7 +972,10 @@ export default function AudioComposer({
                   width={160}
                 />
               )}
+                </>
+              )}
             </div>
+          </div>
           )}
 
           {/* Choose Voice capsule — opens "Select or add a voice" modal */}

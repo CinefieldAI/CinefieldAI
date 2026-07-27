@@ -82,7 +82,6 @@ export const AUDIO_MODELS: AudioModel[] = [
     title: "Seed Speech",
     description: "Multilingual speech across 30+ languages",
     icon: Sparkles,
-    badge: "NEW",
   },
   {
     title: "VibeVoice",
