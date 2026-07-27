@@ -4,6 +4,7 @@ import { useState } from "react";
 import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
+import CreateImageWorkspace from "@/components/landing/createImage/CreateImageWorkspace";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
 import type { AudioMode } from "@/components/landing/audioMenuData";
 
@@ -59,6 +60,9 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
       <SidePanel activePanel={activePanel} onClose={() => setActivePanel(null)} />
 
       <main className="flex-1">
+        {activeView === "createImage" && (
+          <CreateImageWorkspace onBack={() => setActiveView("default")} />
+        )}
         {activeView === "createAudio" && (
           <CreateAudioWorkspace
             onBack={() => setActiveView("default")}

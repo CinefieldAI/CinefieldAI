@@ -62,7 +62,7 @@ function AudioColumn({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-white">
+                    <span className="model-title">
                       {item.title}
                     </span>
                     {item.badge && <Badge variant="new">{item.badge}</Badge>}
