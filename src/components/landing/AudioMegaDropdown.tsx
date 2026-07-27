@@ -1,8 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   AUDIO_FEATURES,
   AUDIO_MODELS,
@@ -31,53 +29,48 @@ function AudioColumn({
   onSelect?: (title: string) => void;
 }) {
   return (
-    <div className="p-3">
+    <section className="min-w-[18rem] p-2 pt-3 first-of-type:pr-0 last-of-type:pl-0">
       <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
         {title}
       </p>
-      <div className="flex flex-col">
-        {items.map((item, idx) => {
+      <div className="grid auto-rows-min gap-0.5">
+        {items.map((item) => {
           const Icon = item.icon;
           const active = item.title === activeTitle;
           return (
-            <Fragment key={item.title}>
-              <button
-                type="button"
-                onClick={() => onSelect?.(item.title)}
-                aria-pressed={active}
-                className={`group flex w-full items-start gap-3 rounded-lg border px-2.5 py-2.5 text-left transition-colors ${
-                  active
-                    ? "border-[#00e5ff]/30 bg-[#00e5ff]/[0.06]"
-                    : "border-transparent hover:border-[#00e5ff]/20 hover:bg-white/[0.04]"
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                    active
-                      ? "bg-[#00e5ff]/10 text-[#00F0FF]"
-                      : "bg-white/5 text-zinc-400 group-hover:bg-magenta-500/10 group-hover:text-magenta-400"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="model-title">
-                      {item.title}
-                    </span>
-                    {item.badge && <Badge variant="new">{item.badge}</Badge>}
+            <button
+              key={item.title}
+              type="button"
+              onClick={() => onSelect?.(item.title)}
+              aria-pressed={active}
+              className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
+            >
+              <div className="grid size-12 shrink-0 items-center justify-center rounded-xl border border-transparent bg-[#23262a]">
+                <Icon className="size-6 text-zinc-300" />
+              </div>
+              <div className="grid min-w-0 auto-rows-min gap-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="model-title truncate text-sm font-medium leading-5 text-white">
+                    {item.title}
                   </span>
-                  <span className="block truncate text-xs text-zinc-500">
-                    {item.description}
-                  </span>
+                  {item.badge && <Badge variant="new">{item.badge}</Badge>}
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ background: "rgb(209,254,23)" }}
+                    />
+                  )}
                 </span>
-              </button>
-              {idx < items.length - 1 && <Separator className="my-0.5" />}
-            </Fragment>
+                <span className="truncate text-sm leading-5 text-[#898a8b]">
+                  {item.description}
+                </span>
+              </div>
+            </button>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -88,22 +81,29 @@ export default function AudioMegaDropdown({
   activeModelTitle,
 }: AudioMegaDropdownProps) {
   return (
-    <div className="w-[560px] max-w-[92vw] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0B0B0C] shadow-2xl shadow-black/60">
-      <div className="grid grid-cols-2">
+    <div
+      className="w-[732px] max-w-[92vw] overflow-y-auto rounded-[24px] border p-1"
+      style={{
+        maxHeight: "calc(100dvh - 100px)",
+        background: "#1c1e20",
+        borderColor: "rgba(255,255,255,0.06)",
+        boxShadow:
+          "0 20px 25px -5px rgba(0,0,0,0.30), 0 8px 10px -6px rgba(0,0,0,0.30)",
+      }}
+    >
+      <div className="grid grid-flow-col-dense">
         <AudioColumn
           title="Features"
           items={AUDIO_FEATURES}
           activeTitle={activeFeatureTitle}
           onSelect={onFeatureSelect}
         />
-        <div className="border-l border-white/[0.06]">
-          <AudioColumn
-            title="Models"
-            items={AUDIO_MODELS}
-            activeTitle={activeModelTitle}
-            onSelect={onModelSelect}
-          />
-        </div>
+        <AudioColumn
+          title="Models"
+          items={AUDIO_MODELS}
+          activeTitle={activeModelTitle}
+          onSelect={onModelSelect}
+        />
       </div>
     </div>
   );

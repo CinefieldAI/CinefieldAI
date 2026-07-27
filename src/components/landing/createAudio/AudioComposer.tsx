@@ -493,7 +493,7 @@ export default function AudioComposer({
             Language chip or the sample-rate/speed/volume/pitch/output row. */}
         {showReferenceVideo && (
           <div
-            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] border p-2"
+            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] border px-2"
             style={{
               background: "rgba(20,21,23,0.96)",
               borderColor: "rgba(255,255,255,0.08)",
@@ -629,7 +629,7 @@ export default function AudioComposer({
             longer lines up with the left mode card / Reference Video bar. */}
         {isVoiceover && (
         <div
-          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] border p-2 transition-[height,width,background,border-radius,padding] duration-200"
+          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] border px-2 transition-[height,width,background,border-radius,padding] duration-200"
           style={{
             background: "rgba(20,21,23,0.96)",
             borderColor: "rgba(255,255,255,0.08)",
