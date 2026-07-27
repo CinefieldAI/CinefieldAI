@@ -1484,6 +1484,8 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("resolution");
                   else if (activePromptPopover === "resolution") setActivePromptPopover(null);
                 }}
+                width={isCinema35 ? 120 : undefined}
+                collisionPadding={isCinema35 ? 12 : undefined}
                 options={
                   isCinema25
                     ? ["720p", "1080p"]
@@ -1560,6 +1562,9 @@ export default function PromptBar(props: PromptBarProps) {
                   else if (activePromptPopover === "duration") setActivePromptPopover(null);
                 }}
                 mode={isHiggsfield ? "buttons" : undefined}
+                align={isCinema35 ? "center" : undefined}
+                width={isCinema35 ? 200 : undefined}
+                collisionPadding={isCinema35 ? 12 : undefined}
               />
             )}
 

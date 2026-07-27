@@ -17,10 +17,10 @@ import {
   UserRound,
   Users,
   Wand2,
-  Wind,
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import WanIcon from "./icons/WanIcon";
 
 /** Neon turquoise brand accent — DO NOT CHANGE. */
 export const ACCENT = "#00e5ff";
@@ -152,8 +152,8 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         description: "Camera selection and style presets",
         icon: Clapperboard,
         resolution: "4K",
-        durations: [4, 8, 15, 24],
-        defaultDuration: 8,
+        durations: [4, 15],
+        defaultDuration: 10,
         baseCredits: 240,
         characterStyle: true,
       },
@@ -194,7 +194,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
       vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", undefined, true),
       vfeat("grok-base", "Grok Imagine", "/Grok_Imagine_1.5.png", "720p", "1s-15s"),
       vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", undefined, true),
-      vfeat("wan-2.7", "Wan 2.7", Wind, "1080p", "2s-15s"),
+      vfeat("wan-2.7", "Wan 2.7", WanIcon, "1080p", "2s-15s"),
     ],
   },
   {
@@ -281,7 +281,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "wan",
         "Wan",
         "Camera-controlled video with sound, more freedom",
-        Wind,
+        WanIcon,
         [
           vsub("wan-2.7", "Wan 2.7", "1080p", "2s-15s"),
           vsub("wan-2.6", "Wan 2.6", "1080p", "5s-15s"),
@@ -334,7 +334,7 @@ const M = (
   resolution: opts.resolution ?? "2K",
   durations: [1],
   baseCredits: 1,
-  badges: undefined,
+  badges: opts.isNew ? ["NEW"] : undefined,
 });
 
 /** Each image model defined once; reused across Featured/All so selection syncs. */
@@ -347,8 +347,10 @@ const IM = {
   soulCinema: M("higgsfield-soul-cinema", "Higgsfield Soul Cinema", "Cinema-grade visual creation", Sparkles),
   gpt2: M("gpt-image-2", "GPT Image 2", "4K images with near-perfect text rendering", "/GPT_Image_-_OpenAI.png", { resolution: "4K", isNew: true }),
   seedream45: M("seedream-4-5", "Seedream 4.5", "ByteDance's next-gen 4K image-editing model", BarChart3, { resolution: "4K" }),
+  seedream5pro: M("seedream-5-pro", "Seedream 5.0 Pro", "Logically consistent images with intelligent visual reasoning", BarChart3, { isNew: true }),
   nanoPro: M("nano-banana-pro", "Nano Banana Pro", "Google's flagship generation model", "/Nano_Banana.png"),
   nano2: M("nano-banana-2", "Nano Banana 2", "Pro quality at Flash speed", "/Nano_Banana.png", { isNew: true }),
+  nano2lite: M("nano-banana-2-lite", "Nano Banana 2 Lite", "Lightweight image generation at speed", "/Nano_Banana.png", { isNew: true }),
   recraft: M("recraft-v4-1", "Recraft V4.1", "Photorealistic and expressive image generation", "/Recraft_V4.1.png", { isNew: true }),
   auto: M("auto", "Auto", "The best model for any prompt, chosen for you", Wand2),
   soul: M("higgsfield-soul", "Higgsfield Soul", "Ultra-realistic fashion visuals", Sparkles),
@@ -382,8 +384,10 @@ export const IMAGE_MODEL_CATEGORIES: ModelCategory[] = [
       IM.soulCinema,
       IM.gpt2,
       IM.seedream45,
+      IM.seedream5pro,
       IM.nanoPro,
       IM.nano2,
+      IM.nano2lite,
       IM.recraft,
     ],
   },
@@ -399,7 +403,9 @@ export const IMAGE_MODEL_CATEGORIES: ModelCategory[] = [
       IM.gpt,
       IM.nanoPro,
       IM.nano2,
+      IM.nano2lite,
       IM.nano,
+      IM.seedream5pro,
       IM.seedream5lite,
       IM.seedream45,
       IM.seedream4,
