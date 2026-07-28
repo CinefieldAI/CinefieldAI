@@ -13,6 +13,19 @@ import AttachmentPreview from "@/components/landing/createImage/AttachmentPrevie
 import type { ReferenceAttachment } from "@/components/landing/createImage/createImageData";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import {
+  GoogleIcon,
+  GrokIcon,
+  OpenAIIcon,
+  OpenAISoraIcon,
+  SeedanceIcon,
+  SeedreamIcon,
+  KlingIcon,
+  RecraftIcon,
+  FluxIcon,
+  MultiReferenceIcon,
+} from "@/components/cinema-studio/icons/ProviderIcons";
+import WanIcon from "@/components/cinema-studio/icons/WanIcon";
+import {
   getCapabilities,
   type AspectRatioChoice,
 } from "@/components/landing/createImage/imageModelCapabilities";
@@ -29,22 +42,66 @@ import {
 } from "@/components/landing/createImage/ModelCapabilityControls";
 
 const MODEL_ICONS: Record<string, string> = {
-  openai: "🤖",
-  seedream: "🌈",
-  google: "G",
+  seedream: "•",
 };
 
-/** Renders a model's selector icon — a real lucide icon for models that
- *  define one (Cinematic Locations' lime location pin), falling back to
- *  the plain glyph avatar used by every other model. */
-function ModelIcon({ icon, className }: { icon: string; className?: string }) {
+/** Active-state color for the currently selected provider/model — applied
+ *  to the icon, its container border/tint/glow, and the trigger button. */
+const SELECTED_ACTIVE = "#D97757";
+
+/** Exact supplied brand SVGs, one per provider — never a letter/emoji
+ *  substitute, never a third-party icon set. */
+const PROVIDER_ICONS: Record<
+  string,
+  React.ForwardRefExoticComponent<React.SVGProps<SVGSVGElement>>
+> = {
+  google: GoogleIcon,
+  grok: GrokIcon,
+  openai: OpenAIIcon,
+  sora: OpenAISoraIcon,
+  seedance: SeedanceIcon,
+  seedream: SeedreamIcon,
+  kling: KlingIcon,
+  recraft: RecraftIcon,
+  flux: FluxIcon,
+  "multi-reference": MultiReferenceIcon,
+  wan: WanIcon,
+};
+
+/** Renders a model's selector icon — the exact supplied brand SVG for
+ *  every provider in PROVIDER_ICONS, a real lucide icon for Cinematic
+ *  Locations' lime pin, falling back to the plain glyph avatar only for
+ *  models that don't yet have a distinct brand icon (Seedream). */
+function ModelIcon({
+  icon,
+  className,
+  active,
+}: {
+  icon: string;
+  className?: string;
+  active?: boolean;
+}) {
   if (icon === "pin") {
-    return <MapPin className={className} style={{ color: "rgb(209,254,23)" }} />;
+    return <MapPin className={className} style={{ color: SELECTED_ACTIVE }} />;
   }
-  return <>{MODEL_ICONS[icon as keyof typeof MODEL_ICONS] || "•"}</>;
+  const Provider = PROVIDER_ICONS[icon];
+  if (Provider) {
+    return (
+      <Provider
+        className={className}
+        aria-hidden="true"
+        style={{ color: active ? SELECTED_ACTIVE : "#8a8a8a" }}
+      />
+    );
+  }
+  return (
+    <span className={className} style={active ? { color: SELECTED_ACTIVE } : undefined}>
+      {MODEL_ICONS[icon as keyof typeof MODEL_ICONS] || "•"}
+    </span>
+  );
 }
 
-const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
+const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 /** Width/height pairs for every ratio string used across IMAGE_MODEL_CONFIGS,
  *  reusing the same icon-drawing convention as the createImage capability
@@ -88,7 +145,7 @@ const FEATURED_MODELS_LIST: ModelListItem[] = [
   { id: "nano-banana-pro", label: "Nano Banana Pro", description: "Google's flagship generation model", icon: "google" },
   { id: "nano-banana-2", label: "Nano Banana 2", description: "Pro quality at Flash speed", icon: "google" },
   { id: "nano-banana-2-lite", label: "Nano Banana 2 Lite", description: "Lightweight image generation at speed", icon: "google" },
-  { id: "recraft-v4-1", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "google" },
+  { id: "recraft-v4-1", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "recraft" },
 ];
 
 const ALL_MODELS_LIST: ModelListItem[] = [
@@ -99,20 +156,20 @@ const ALL_MODELS_LIST: ModelListItem[] = [
   { id: "higgsfield-character-swap", label: "Higgsfield Character Swap", description: "Seamless character swapping", icon: "google" },
   { id: "seedream-4-0", label: "Seedream 4.0", description: "ByteDance's advanced image editing model", icon: "seedream" },
   { id: "gpt-image-1-5", label: "GPT Image 1.5", description: "True-color precision rendering", icon: "openai" },
-  { id: "grok-imagine", label: "Grok Imagine", description: "Versatile image styles by xAI", icon: "google" },
-  { id: "recraft-v4-1-alt", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "google" },
-  { id: "recraft-v4-1-utility", label: "Recraft V4.1 Utility", description: "Simple scenes with flat, even lighting", icon: "google" },
+  { id: "grok-imagine", label: "Grok Imagine", description: "Versatile image styles by xAI", icon: "grok" },
+  { id: "recraft-v4-1-alt", label: "Recraft V4.1", description: "Photorealistic and expressive image generation", icon: "recraft" },
+  { id: "recraft-v4-1-utility", label: "Recraft V4.1 Utility", description: "Simple scenes with flat, even lighting", icon: "recraft" },
   { id: "z-image", label: "Z-Image", description: "Instant lifelike portraits", icon: "google" },
-  { id: "kling-o1", label: "Kling O1", description: "Kling's Photorealistic Image Model", icon: "google" },
-  { id: "flux-2-pro", label: "FLUX.2 Pro", description: "Speed-optimized detail", icon: "google" },
-  { id: "flux-2-flex", label: "FLUX.2 Flex", description: "Next-gen image generation", icon: "google" },
-  { id: "flux-2-max", label: "FLUX.2 Max", description: "Ultimate precision and speed", icon: "google" },
-  { id: "flux-kontext-max", label: "Flux Kontext Max", description: "Edit with accuracy", icon: "google" },
+  { id: "kling-o1", label: "Kling O1", description: "Kling's Photorealistic Image Model", icon: "kling" },
+  { id: "flux-2-pro", label: "FLUX.2 Pro", description: "Speed-optimized detail", icon: "flux" },
+  { id: "flux-2-flex", label: "FLUX.2 Flex", description: "Next-gen image generation", icon: "flux" },
+  { id: "flux-2-max", label: "FLUX.2 Max", description: "Ultimate precision and speed", icon: "flux" },
+  { id: "flux-kontext-max", label: "Flux Kontext Max", description: "Edit with accuracy", icon: "flux" },
   { id: "gpt-image", label: "GPT Image", description: "Versatile text-to-image AI", icon: "openai" },
-  { id: "multi-reference", label: "Multi Reference", description: "Multiple edits in one shot", icon: "google" },
+  { id: "multi-reference", label: "Multi Reference", description: "Multiple edits in one shot", icon: "multi-reference" },
   { id: "seedream-5-lite", label: "Seedream 5.0 Lite", description: "Intelligent visual reasoning", icon: "seedream" },
   { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", icon: "seedream" },
-  { id: "wan-2-2", label: "WAN 2.2", description: "High-fidelity cinematic visuals", icon: "google" },
+  { id: "wan-2-2", label: "WAN 2.2", description: "High-fidelity cinematic visuals", icon: "wan" },
 ];
 
 interface ImageFormProps {
@@ -156,52 +213,71 @@ function ModelSelectorDropdown({
           m.label.toLowerCase().includes(modelSearch) ||
           m.description.toLowerCase().includes(modelSearch),
       )
-      .map((model) => (
-        <button
-          key={model.id}
-          onClick={() => onSelect(model.id)}
-          className={`w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
-            modelParam === model.id ? "bg-white/5" : ""
-          }`}
-        >
-          <div className="size-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mr-2 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
-            {model.icon === "pin" ? (
-              <ModelIcon icon={model.icon} className="size-4" />
-            ) : (
-              <span
-                className={`text-sm font-bold ${
-                  modelParam === model.id ? "text-[#00e5ff]" : "text-neutral-500"
-                }`}
-              >
-                {MODEL_ICONS[model.icon as keyof typeof MODEL_ICONS] || "•"}
-              </span>
+      .map((model) => {
+        const isSelected = modelParam === model.id;
+        return (
+          <button
+            key={model.id}
+            onClick={() => onSelect(model.id)}
+            role="option"
+            aria-selected={isSelected}
+            aria-label={model.label}
+            className={`w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
+              isSelected
+                ? "bg-[rgba(217,119,87,0.10)] ring-1 ring-inset ring-[rgba(217,119,87,0.45)] shadow-[0_0_12px_rgba(217,119,87,0.12)]"
+                : ""
+            }`}
+          >
+            <div
+              className="size-10 rounded-lg flex items-center justify-center shrink-0 mr-2"
+              style={
+                isSelected
+                  ? {
+                      background: "rgba(217,119,87,0.10)",
+                      border: "1px solid rgba(217,119,87,0.45)",
+                      boxShadow:
+                        "inset 0px 2px 3px 0px rgba(255,255,255,0.03), 0 0 12px rgba(217,119,87,0.20)",
+                    }
+                  : {
+                      background: "rgba(255,255,255,0.05)",
+                      boxShadow: "inset 0px 2px 3px 0px rgba(255,255,255,0.03)",
+                    }
+              }
+            >
+              <ModelIcon icon={model.icon} className="size-4" active={isSelected} />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="model-title">{model.label}</span>
+                {model.badge && (
+                  <span className="font-grotesk text-sm inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
+                    {model.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-neutral-400">{model.description}</span>
+            </div>
+            {isSelected && (
+              <div className="size-5 shrink-0 flex items-center justify-center">
+                <Check className="size-4" style={{ color: "#D97757" }} />
+              </div>
             )}
-          </div>
-          <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="model-title">{model.label}</span>
-              {model.badge && (
-                <span className="font-grotesk text-sm inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
-                  {model.badge}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] text-neutral-400">{model.description}</span>
-          </div>
-          {modelParam === model.id && (
-            <div className="size-5 shrink-0 flex items-center justify-center">
-              <Check className="size-4 text-[#00e5ff]" />
-            </div>
-          )}
-        </button>
-      ));
+          </button>
+        );
+      });
 
   return (
     <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
       <Popover.Trigger asChild>
-        <button type="button" className={PILL}>
-          <span className="size-4 text-neutral-400 flex items-center justify-center text-xs">
-            <ModelIcon icon={config.icon} className="size-4" />
+        <button
+          type="button"
+          className={PILL}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-label={`Model: ${config.label}`}
+        >
+          <span className="size-4 flex items-center justify-center text-xs">
+            <ModelIcon icon={config.icon} className="size-4" active />
           </span>
           <span>{config.label}</span>
           <ChevronDown className="size-3 text-neutral-500" />
@@ -454,7 +530,7 @@ export default function ImageForm({
     <div
       className={
         embedded
-          ? "relative min-w-0 flex-1"
+          ? "relative h-[116px] min-h-[116px] min-w-0 flex-1"
           : "fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-7xl px-4 z-50"
       }
     >
@@ -486,14 +562,26 @@ export default function ImageForm({
       )}
 
       <div
-        className="flex min-w-0 flex-1 items-stretch gap-3 rounded-[24px] p-3"
+        className="flex min-w-0 flex-1 items-stretch rounded-[24px] p-1"
         style={{
           minHeight: 116,
-          maxHeight: 400,
-          ...PROMPT_BAR_SURFACE,
+          height: 116,
+          background: "#141414",
+          border: "1px solid rgba(255,255,255,0.025)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025), 0 12px 26px rgba(0,0,0,0.45)",
         }}
       >
-        {/* Prompt input + controls */}
+        {/* Gray prompt surface — matches Higgsfield's chassis(flat, thin)
+            → surface(gradient) nesting; the flat outer frame above is the
+            near-black chassis, this is the lighter surface inside it. */}
+        <div
+          className="flex min-w-0 flex-1 items-stretch gap-3 rounded-[20px] p-3"
+          style={PROMPT_BAR_SURFACE}
+        >
+        {/* Prompt input + controls. The prompt text box is flex-1 (grows to
+            match the Generate button's height, per Higgsfield's real markup);
+            the control row below it is mt-auto so it always stays pinned to
+            the bottom regardless of how tall the input grows. */}
         <form className="flex min-w-0 flex-1 flex-col gap-2">
           {/* Attachment preview */}
           {attachments.length > 0 && (
@@ -503,13 +591,14 @@ export default function ImageForm({
             <AttachmentPreview attachments={elementReferences} onRemove={removeElementReference} />
           )}
 
-          {/* Prompt row */}
-          <div className="flex gap-2 min-w-0">
+          {/* Prompt row — flex-1 so it grows to match the Generate button's
+              height (Higgsfield's real markup makes the textarea flex-1). */}
+          <div className="flex flex-1 gap-2 min-w-0">
             {!capabilities && config.showUpload && (
               <button
                 type="button"
                 onClick={openUploadsPicker}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-card shrink-0 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-card shrink-0 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
               >
                 <Plus className="size-3.5" />
               </button>
@@ -529,7 +618,8 @@ export default function ImageForm({
             </div>
           </div>
 
-          {/* Controls row */}
+          {/* Controls row — mt-auto keeps it pinned to the bottom while the
+              flex-1 prompt row above grows to fill the available height. */}
           {capabilities ? (
             <div className="mt-auto flex h-7 min-w-0 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {config.label === "Cinematic Locations" && (
@@ -841,7 +931,7 @@ export default function ImageForm({
                   <EnhancementToggle
                     enabled={enhancementEnabled}
                     onToggle={() => setEnhancementEnabled((v) => !v)}
-                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? SELECTED_ACTIVE : undefined }} />}
                   />
                 </>
               )}
@@ -884,7 +974,7 @@ export default function ImageForm({
                   <EnhancementToggle
                     enabled={enhancementEnabled}
                     onToggle={() => setEnhancementEnabled((v) => !v)}
-                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? SELECTED_ACTIVE : undefined }} />}
                   />
                   <LabeledToggle
                     label="Color transfer"
@@ -1251,12 +1341,12 @@ export default function ImageForm({
                               setIsQualityOpen(false);
                             }}
                             className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
-                              opt === quality ? "bg-[#00e5ff]/10 text-[#00e5ff]" : "text-neutral-300 hover:bg-[#1e1e1e]"
+                              opt === quality ? "bg-[#D97757]/10 text-[#D97757]" : "text-neutral-300 hover:bg-[#1e1e1e]"
                             }`}
                           >
                             {opt}
                             {config.premiumQualityOptions?.includes(opt) && (
-                              <span className="ml-1 text-[10px] text-[#00e5ff]">Pro</span>
+                              <span className="ml-1 text-[10px] text-[#D97757]">Pro</span>
                             )}
                           </button>
                         ))}
@@ -1327,12 +1417,12 @@ export default function ImageForm({
         <button
           type="submit"
           aria-label="Generate"
-          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#00e5ff] focus:ring-offset-2 focus:ring-offset-black"
+          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#D97757] focus:ring-offset-2 focus:ring-offset-black"
           style={{
             width: 120,
             height: 80,
-            background: "linear-gradient(135deg, #CDFF00 0%, #A6D400 100%)",
-            boxShadow: "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #829B19, inset 0px -2px 0px 0px #829B19, inset 0px 1px 0px 0px #CDFF00",
+            background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
+            boxShadow: "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #8A4A32, inset 0px -2px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
             textShadow: "rgba(255,255,255,0.45) 0px 0px 8px",
           }}
         >
@@ -1340,7 +1430,7 @@ export default function ImageForm({
             aria-hidden
             className="pointer-events-none absolute left-[39px] top-[36px] h-[136px] w-[76px] rounded-[50%] mix-blend-plus-lighter blur-[41.5px]"
             style={{
-              background: "#CDFF00",
+              background: "#D97757",
               transform: "rotate(102.79deg) skewX(0.89deg)",
             }}
           />
@@ -1350,6 +1440,7 @@ export default function ImageForm({
             {config.generateCredits}
           </span>
         </button>
+        </div>
       </div>
 
       <input

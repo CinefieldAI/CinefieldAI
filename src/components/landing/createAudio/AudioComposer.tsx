@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import * as Popover from "@radix-ui/react-popover";
 import {
   Check,
@@ -37,6 +36,10 @@ const MAX_PROMPT_HEIGHT = 420;
 const PROMPT_VIEWPORT_SAFE_OFFSET = 160;
 const PROMPT_RESIZE_STEP = 16;
 const PROMPT_SINGLE_LINE_SCROLL_HEIGHT = 40;
+const DEFAULT_COMPOSER_WIDTH = 1040;
+const MAX_COMPOSER_WIDTH = 1180;
+const COMPOSER_VIEWPORT_GUTTER = 32;
+const COMPOSER_RESIZE_STEP = 24;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -48,6 +51,11 @@ const getViewportSafePromptHeight = () =>
         MIN_PROMPT_HEIGHT,
         Math.min(MAX_PROMPT_HEIGHT, window.innerHeight - PROMPT_VIEWPORT_SAFE_OFFSET),
       );
+
+const getViewportSafeComposerWidth = () =>
+  typeof window === "undefined"
+    ? MAX_COMPOSER_WIDTH
+    : Math.min(MAX_COMPOSER_WIDTH, Math.max(320, window.innerWidth - COMPOSER_VIEWPORT_GUTTER));
 
 /** Shared dark translucent popover surface used by every Voiceover popover. */
 const POPOVER_SURFACE = {
@@ -402,6 +410,9 @@ export default function AudioComposer({
   const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_PROMPT_HEIGHT);
   const [hasManualHeight, setHasManualHeight] = useState(false);
   const [isResizingPrompt, setIsResizingPrompt] = useState(false);
+  const [composerWidth, setComposerWidth] = useState(DEFAULT_COMPOSER_WIDTH);
+  const [maxComposerWidth, setMaxComposerWidth] = useState(MAX_COMPOSER_WIDTH);
+  const [isResizingComposerWidth, setIsResizingComposerWidth] = useState(false);
 
   // Translate mode's own menu-open state (kept separate from Voiceover's above).
   const [translateSampleRateMenuOpen, setTranslateSampleRateMenuOpen] = useState(false);
@@ -419,6 +430,10 @@ export default function AudioComposer({
   const pendingHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
   const contentRequiredHeightRef = useRef(MIN_PROMPT_HEIGHT);
   const manualPromptHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
+  const composerWidthStartRef = useRef({
+    pointerX: 0,
+    width: DEFAULT_COMPOSER_WIDTH,
+  });
 
   useEffect(() => {
     const updateMaximum = () => {
@@ -429,6 +444,10 @@ export default function AudioComposer({
         nextMaximum,
       );
       setPromptHeight((current) => Math.min(current, nextMaximum));
+
+      const nextMaximumWidth = getViewportSafeComposerWidth();
+      setMaxComposerWidth(nextMaximumWidth);
+      setComposerWidth((current) => Math.min(current, nextMaximumWidth));
     };
     updateMaximum();
     window.addEventListener("resize", updateMaximum);
@@ -559,6 +578,75 @@ export default function AudioComposer({
     [maxPromptHeight, promptHeight, resetPromptHeight],
   );
 
+  const handleComposerWidthPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.currentTarget.focus();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      composerWidthStartRef.current = {
+        pointerX: event.clientX,
+        width: composerWidth,
+      };
+      setIsResizingComposerWidth(true);
+      document.body.style.userSelect = "none";
+    },
+    [composerWidth],
+  );
+
+  const handleComposerWidthPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      const minimum = Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth);
+      setComposerWidth(
+        clamp(
+          composerWidthStartRef.current.width +
+            event.clientX -
+            composerWidthStartRef.current.pointerX,
+          minimum,
+          maxComposerWidth,
+        ),
+      );
+    },
+    [maxComposerWidth],
+  );
+
+  const finishComposerWidthResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      setIsResizingComposerWidth(false);
+      document.body.style.userSelect = "";
+    },
+    [],
+  );
+
+  const resetComposerWidth = useCallback(() => {
+    setComposerWidth(Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth));
+  }, [maxComposerWidth]);
+
+  const handleComposerWidthKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const minimum = Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth);
+      let nextWidth: number | null = null;
+
+      if (event.key === "ArrowRight") nextWidth = composerWidth + COMPOSER_RESIZE_STEP;
+      if (event.key === "ArrowLeft") nextWidth = composerWidth - COMPOSER_RESIZE_STEP;
+      if (event.key === "Home") nextWidth = minimum;
+      if (event.key === "End") nextWidth = maxComposerWidth;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        resetComposerWidth();
+        return;
+      }
+      if (nextWidth === null) return;
+
+      event.preventDefault();
+      setComposerWidth(clamp(nextWidth, minimum, maxComposerWidth));
+    },
+    [composerWidth, maxComposerWidth, resetComposerWidth],
+  );
+
   // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
   // standalone rotary selector uses).
   const isVoiceover = feature === 0;
@@ -644,7 +732,39 @@ export default function AudioComposer({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
-      <div className="pointer-events-auto flex w-full max-w-[1040px] items-end gap-2">
+      <div
+        className={`pointer-events-auto relative flex w-full items-end gap-2 ${
+          isResizingComposerWidth ? "" : "transition-[max-width] duration-150 ease-out"
+        }`}
+        style={{ maxWidth: composerWidth }}
+      >
+        {isVoiceover && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize audio composer width"
+            aria-valuemin={Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth)}
+            aria-valuemax={maxComposerWidth}
+            aria-valuenow={Math.round(composerWidth)}
+            tabIndex={0}
+            onPointerDown={handleComposerWidthPointerDown}
+            onPointerMove={handleComposerWidthPointerMove}
+            onPointerUp={finishComposerWidthResize}
+            onPointerCancel={finishComposerWidthResize}
+            onDoubleClick={resetComposerWidth}
+            onKeyDown={handleComposerWidthKeyDown}
+            className="group absolute -right-2 top-1/2 z-20 flex h-14 w-4 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center focus-visible:outline-none"
+          >
+            <span
+              aria-hidden
+              className={`h-10 w-1 rounded-full transition-colors ${
+                isResizingComposerWidth
+                  ? "bg-white/35"
+                  : "bg-white/0 group-hover:bg-white/20 group-focus-visible:bg-white/25"
+              }`}
+            />
+          </div>
+        )}
         {/* Standalone rotary mode selector — visually separate from the prompt bar */}
         <RotarySelector value={feature} onChange={onFeatureChange} />
 
@@ -816,7 +936,6 @@ export default function AudioComposer({
           {isVoiceover && (
           <div
             className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col self-stretch overflow-hidden rounded-2xl p-3"
-            style={PROMPT_BAR_PANEL_SURFACE}
           >
             <div
               role="separator"
@@ -867,12 +986,10 @@ export default function AudioComposer({
                     className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
                   >
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
-                      {activeModel.title === "Eleven v3" ? (
-                        <Image
-                          src="/de397d3b-0644-47ac-a4fe-49d64ede48d3.png"
-                          alt={activeModel.title}
-                          width={16}
-                          height={16}
+                      {activeModel.iconSrc ? (
+                        <img
+                          src={activeModel.iconSrc}
+                          alt=""
                           className="h-full w-full object-contain"
                         />
                       ) : (
@@ -919,7 +1036,10 @@ export default function AudioComposer({
                             }}
                             className="flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors focus-visible:outline-none"
                             style={{
-                              background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                              background: active ? "rgba(217,119,87,0.10)" : "transparent",
+                              boxShadow: active
+                                ? "inset 0 0 0 1px rgba(217,119,87,0.45)"
+                                : "none",
                             }}
                             onMouseEnter={(e) => {
                               if (!active)
@@ -934,14 +1054,26 @@ export default function AudioComposer({
                               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                               style={{
                                 background: active
-                                  ? "rgba(255,255,255,0.12)"
+                                  ? "rgba(217,119,87,0.10)"
                                   : "rgba(255,255,255,0.06)",
+                                boxShadow: active
+                                  ? "0 0 12px rgba(217,119,87,0.20), inset 0 2px 3px rgba(255,255,255,0.03)"
+                                  : "inset 0 2px 3px rgba(255,255,255,0.03)",
                               }}
                             >
-                              <Icon
-                                className="h-4 w-4"
-                                style={{ color: active ? "#ffffff" : "#d4d4d8" }}
-                              />
+                              {model.iconSrc ? (
+                                <img
+                                  src={model.iconSrc}
+                                  alt=""
+                                  className="h-4 w-4 object-contain"
+                                />
+                              ) : (
+                                <Icon
+                                  className="h-4 w-4"
+                                  style={{ color: active ? "#D97757" : "#d4d4d8" }}
+                                  aria-hidden="true"
+                                />
+                              )}
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5">
@@ -965,7 +1097,7 @@ export default function AudioComposer({
                               </span>
                             </span>
                             <span className="flex w-5 shrink-0 items-center justify-center">
-                              {active && <Check className="h-4 w-4 text-[#D1FE17]" />}
+                              {active && <Check className="h-4 w-4 text-[#D97757]" />}
                             </span>
                           </button>
                         );

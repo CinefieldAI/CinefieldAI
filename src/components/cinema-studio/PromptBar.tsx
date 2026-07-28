@@ -27,7 +27,6 @@ import SoundOffConfirmDialog from "./SoundOffConfirmDialog";
 import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
 import AssetsPickerModal from "./AssetsPickerModal";
-import KlingPromptDisabled from "./KlingPromptDisabled";
 import KlingAdvancedSettingsPanel from "./KlingAdvancedSettingsPanel";
 import KlingMotionModal from "./KlingMotionModal";
 import KlingCharacterPanel from "./KlingCharacterPanel";
@@ -145,7 +144,7 @@ function PlusAtButtons({
         onClick={onOpenPicker}
         aria-label="Add assets"
         title="Add assets"
-        className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
       >
         <Plus className="size-4" />
       </button>
@@ -156,7 +155,7 @@ function PlusAtButtons({
         title={mentionAriaLabel}
         aria-haspopup={onMentionClick ? "dialog" : undefined}
         aria-expanded={onMentionClick ? mentionOpen : undefined}
-        className={`flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors${
+        className={`flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors${
           mentionClassName ? ` ${mentionClassName}` : ""
         }`}
       >
@@ -200,7 +199,7 @@ function AutoSettingsToggle({
           if (wholeRowClickable) e.stopPropagation();
           onToggle();
         }}
-        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#00e5ff] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#D97757] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
           checked ? "bg-emerald-500" : "bg-white/20"
         }`}
       >
@@ -217,7 +216,7 @@ function AutoSettingsToggle({
 
 /** Shared h-7 control-pill style. */
 const PILL =
-  "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
+  "flex h-7 items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
@@ -288,7 +287,7 @@ function PromptInput({
       aria-label="Prompt"
       data-placeholder={placeholder}
       onInput={(e) => onChange(e.currentTarget.textContent ?? "")}
-      className="max-h-[80px] min-h-[24px] overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
+      className="max-h-[80px] min-h-[24px] flex-1 overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
     />
   );
 }
@@ -914,18 +913,28 @@ export default function PromptBar(props: PromptBarProps) {
       />
       <div
         ref={composerRef}
-        className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] p-3 opacity-100"
+        className="flex h-[116px] min-h-[116px] min-w-0 flex-1 items-stretch rounded-[24px] p-1 opacity-100"
         style={{
           minHeight: 116,
-          maxHeight: 400,
-          ...PROMPT_BAR_SURFACE,
+          height: 116,
+          background: "#141414",
+          border: "1px solid rgba(255,255,255,0.025)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025), 0 12px 26px rgba(0,0,0,0.45)",
         }}
       >
-        {/* Prompt input + controls */}
-        <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          {isKling3MotionControl || isKlingMotionControlNon3 ? (
-            <KlingPromptDisabled />
-          ) : (
+        {/* Gray prompt surface — matches Higgsfield's chassis(flat, thin)
+            → surface(gradient) nesting; the flat outer frame above is the
+            near-black chassis, this is the lighter surface inside it. */}
+        <div
+          className="prompt-main-surface relative flex min-w-0 flex-1 items-stretch gap-1 rounded-[20px] p-3"
+          style={PROMPT_BAR_SURFACE}
+        >
+        {/* Prompt input + controls. The prompt input itself is flex-1 (grows
+            to match the Generate button's height, per Higgsfield's real
+            markup); the control row below it is mt-auto so it always stays
+            pinned to the bottom regardless of how tall the input grows. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {!isKling3MotionControl && !isKlingMotionControlNon3 && (
             <PromptInput
               value={prompt}
               onChange={onPromptChange}
@@ -933,7 +942,7 @@ export default function PromptBar(props: PromptBarProps) {
             />
           )}
 
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
             {/* Cinema Studio 2.5 References Button - exactly 3 options (As
                 Reference / As Start Frame / As End Frame). Each option opens
                 the one shared Cinema25AssetsPicker with the matching context;
@@ -951,7 +960,7 @@ export default function PromptBar(props: PromptBarProps) {
             {/* Assets Picker Buttons - Cinema Studio 3.5 and 3.0 only */}
             {(isCinema35 || isCinema30) && (
               <>
-                <div className="flex items-center gap-0 rounded-lg bg-card">
+                <div className="flex items-center gap-0 rounded-lg bg-[rgba(255,255,255,0.05)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -1045,7 +1054,7 @@ export default function PromptBar(props: PromptBarProps) {
                           width="20"
                           height="20"
                           viewBox="0 0 20 20"
-                          className="size-5 text-[#00e5ff]"
+                          className="size-5 text-[#D97757]"
                         >
                           <path
                             fillRule="evenodd"
@@ -1073,7 +1082,7 @@ export default function PromptBar(props: PromptBarProps) {
                           width="20"
                           height="20"
                           viewBox="0 0 20 20"
-                          className="size-5 text-[#00e5ff]"
+                          className="size-5 text-[#D97757]"
                         >
                           <path
                             fillRule="evenodd"
@@ -1091,7 +1100,7 @@ export default function PromptBar(props: PromptBarProps) {
 
             {/* Seedance 2.0 Family Controls - Plus and Mention Buttons */}
             {isSeedance2Family && (
-              <div className="flex items-center gap-0 rounded-lg bg-card">
+              <div className="flex items-center gap-0 rounded-lg bg-[rgba(255,255,255,0.05)]">
                 <button
                   type="button"
                   onClick={() => {
@@ -1147,7 +1156,7 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 aria-label="Add assets"
                 title="Add assets"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
               >
                 <Plus className="size-4" />
               </button>
@@ -1282,7 +1291,7 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 aria-label="Add assets"
                 title="Add assets"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
               >
                 <Plus className="size-4" />
               </button>
@@ -1616,21 +1625,6 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Start Frame - Kling 3.0 (plain) — persistent tile, in addition to the References "+" popover */}
-            {isKling3 && (
-              <FrameCard
-                label="Start Frame"
-                value={kling3Extras.startFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setKling3ReferenceMode("startFrame");
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setKling3Extras((s) => ({ ...s, startFrame: null }))}
-              />
-            )}
-
             {/* Multi-shot - Kling 3.0 Omni, Elements mode only (hidden in Frames mode per live click-audit) */}
             {isKling3Omni && klingOmniMode === "elements" && (
               <Kling3MultiShotControl
@@ -1693,7 +1687,7 @@ export default function PromptBar(props: PromptBarProps) {
                 onClick={() => setKling26Enhance((v) => !v)}
                 aria-label="Toggle enhance"
                 aria-pressed={kling26Enhance}
-                className={`${PILL} ${kling26Enhance ? "text-[#00e5ff]" : "text-neutral-400"}`}
+                className={`${PILL} ${kling26Enhance ? "text-[#D97757]" : "text-neutral-400"}`}
               >
                 <EnhanceIcon />
                 {kling26Enhance ? "On" : "Off"}
@@ -1958,7 +1952,7 @@ export default function PromptBar(props: PromptBarProps) {
                 aria-label="Toggle sound"
                 aria-pressed={sound}
                 className={`${PILL} ${
-                  sound ? "text-[#00e5ff]" : "text-neutral-400"
+                  sound ? "text-[#D97757]" : "text-neutral-400"
                 }`}
               >
                 {sound ? (
@@ -2001,7 +1995,7 @@ export default function PromptBar(props: PromptBarProps) {
                 }
                 aria-pressed={minimaxEnhance[minimaxEnhanceModelKey]}
                 className={`${PILL} ${
-                  minimaxEnhance[minimaxEnhanceModelKey] ? "text-[#00e5ff]" : "text-neutral-400"
+                  minimaxEnhance[minimaxEnhanceModelKey] ? "text-[#D97757]" : "text-neutral-400"
                 }`}
               >
                 <EnhanceIcon />
@@ -2016,7 +2010,7 @@ export default function PromptBar(props: PromptBarProps) {
                 onClick={() => setKling26AudioVoice((v) => !v)}
                 aria-label="Toggle audio voice"
                 aria-pressed={kling26AudioVoice}
-                className={`${PILL} ${kling26AudioVoice ? "text-[#00e5ff]" : "text-neutral-400"}`}
+                className={`${PILL} ${kling26AudioVoice ? "text-[#D97757]" : "text-neutral-400"}`}
               >
                 {kling26AudioVoice ? (
                   <Volume2 className="size-3.5" />
@@ -2294,32 +2288,64 @@ export default function PromptBar(props: PromptBarProps) {
         </div>
 
         {/* C — Right action group.
-            Cinema Studio 2.5 groups Start Frame + End Frame + Generate at the
-            far-right edge (matches the Higgsfield reference). Every other model
-            keeps the bare, self-centered Generate button unchanged. */}
-        {isCinema25 ? (
+            Cinema Studio 2.5 and Kling 3.0 keep their frame cards immediately
+            to the left of Generate. The group is shrink-0 so Generate stays
+            pinned to the far-right edge while the left controls flex. */}
+        {isCinema25 || isKling3 ? (
           <div className="flex h-20 shrink-0 items-stretch gap-1.5 self-end">
-            <FrameCard
-              variant="cinema25"
-              label="Start Frame"
-              value={cinema25References[1] ?? null}
-              optional={false}
-              onOpenPicker={() => openCinema25Picker("startFrame")}
-              onRemove={() => onCinema25AssignReference(1, null)}
-            />
-            <FrameCard
-              variant="cinema25"
-              label="End Frame"
-              value={cinema25References[2] ?? null}
-              onOpenPicker={() => openCinema25Picker("endFrame")}
-              onRemove={() => onCinema25AssignReference(2, null)}
-            />
+            {isCinema25 ? (
+              <>
+                <FrameCard
+                  variant="cinema25"
+                  label="Start Frame"
+                  value={cinema25References[1] ?? null}
+                  optional={false}
+                  onOpenPicker={() => openCinema25Picker("startFrame")}
+                  onRemove={() => onCinema25AssignReference(1, null)}
+                />
+                <FrameCard
+                  variant="cinema25"
+                  label="End Frame"
+                  value={cinema25References[2] ?? null}
+                  optional={false}
+                  onOpenPicker={() => openCinema25Picker("endFrame")}
+                  onRemove={() => onCinema25AssignReference(2, null)}
+                />
+              </>
+            ) : (
+              <>
+                <FrameCard
+                  variant="cinema25"
+                  label="Start Frame"
+                  value={kling3Extras.startFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setKling3ReferenceMode("startFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setKling3Extras((s) => ({ ...s, startFrame: null }))}
+                />
+                <FrameCard
+                  variant="cinema25"
+                  label="End Frame"
+                  value={kling3Extras.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setKling3ReferenceMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setKling3Extras((s) => ({ ...s, endFrame: null }))}
+                />
+              </>
+            )}
             <GenerateButton
               creditCost={creditCost}
               onGenerate={onGenerate}
               mode={mode}
               isLoading={props.isGenerating}
-              accent="yellow"
+              accent={isCinema25 ? "yellow" : undefined}
             />
           </div>
         ) : (
@@ -2330,6 +2356,7 @@ export default function PromptBar(props: PromptBarProps) {
             isLoading={props.isGenerating}
           />
         )}
+        </div>
       </div>
 
       <AssetsPickerModal
