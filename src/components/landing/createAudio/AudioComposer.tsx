@@ -23,8 +23,8 @@ import {
 } from "./voiceoverModelConfig";
 import RotarySelector from "./RotarySelector";
 import {
+  PROMPT_BAR_OUTER_SHELL,
   PROMPT_BAR_SURFACE_TRANSLUCENT,
-  PROMPT_BAR_CAVITY_SURFACE,
   PROMPT_BAR_PANEL_SURFACE,
 } from "@/lib/promptBarChassis";
 
@@ -498,8 +498,8 @@ export default function AudioComposer({
             Language chip or the sample-rate/speed/volume/pitch/output row. */}
         {showReferenceVideo && (
           <div
-            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] px-2"
-            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
+            className="flex h-[120px] min-w-0 flex-1 items-stretch rounded-[24px] p-1"
+            style={PROMPT_BAR_OUTER_SHELL}
           >
             <input
               ref={fileRef}
@@ -510,42 +510,44 @@ export default function AudioComposer({
                 onReferenceVideo(e.target.files?.[0]?.name ?? null)
               }
             />
-            {/* Machined recess (cavity) around the Reference Video panel —
-                a visibly darker channel between the chassis and the panel. */}
+            {/* Gray prompt surface — same chassis(flat, thin) → surface(gradient)
+                nesting as the Cinema Studio prompt bars, so Audio matches them
+                instead of being one flat slab. */}
             <div
-              className="flex h-full min-w-0 flex-1 rounded-2xl p-2"
-              style={PROMPT_BAR_CAVITY_SURFACE}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-[20px] p-2"
+              style={PROMPT_BAR_SURFACE_TRANSLUCENT}
             >
-              {/* Reference Video upload — large horizontal region, fills remaining width */}
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleReferenceDrop}
-                aria-label="Upload reference video"
-                className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-xl px-6 text-left transition-all hover:brightness-125"
-                style={PROMPT_BAR_PANEL_SURFACE}
+            {/* Reference Video upload — sits directly on the gray surface
+                (no separate dark frame layer); matches the reference, which
+                shows only a very subtle inset ring, not a visible dark gap. */}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleReferenceDrop}
+              aria-label="Upload reference video"
+              className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-2xl px-6 text-left transition-all hover:brightness-125"
+              style={PROMPT_BAR_PANEL_SURFACE}
+            >
+              <span
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "rgba(255,255,255,0.06)" }}
               >
-                <span
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: "rgba(255,255,255,0.06)" }}
-                >
-                  <Video className="h-5 w-5 text-zinc-300" />
+                <Video className="h-5 w-5 text-zinc-300" />
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-semibold text-white">
+                  Reference Video
                 </span>
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-white">
-                    Reference Video
-                  </span>
-                  <span className="truncate text-xs text-zinc-500">
-                    {referenceVideo ? (
-                      <span className="text-zinc-300">{referenceVideo}</span>
-                    ) : (
-                      "Drop here or Choose from files"
-                    )}
-                  </span>
+                <span className="truncate text-xs text-zinc-500">
+                  {referenceVideo ? (
+                    <span className="text-zinc-300">{referenceVideo}</span>
+                  ) : (
+                    "Drop here or Choose from files"
+                  )}
                 </span>
-              </button>
-            </div>
+              </span>
+            </button>
 
             {/* Voice Preset — matches the Voiceover composer's card exactly */}
             <button
@@ -570,7 +572,7 @@ export default function AudioComposer({
                     Voice Preset
                   </p>
                   <p
-                    className="truncate text-base font-black uppercase tracking-tight"
+                    className="truncate font-mono text-base font-bold uppercase tracking-wider"
                     style={{ color: NEON, textShadow: "0 0 16px rgba(0,240,255,0.4)" }}
                   >
                     {selectedVoiceLabel ?? "Choose Voice"}
@@ -602,16 +604,19 @@ export default function AudioComposer({
               </div>
             </button>
 
-            {/* Generate — lime accent, matches the Voiceover composer's button exactly */}
+            {/* Generate — orange accent, matching the other audio modes.
+                h-full (not a hardcoded px height) so it always fits the gray
+                surface's actual height and never overflows past the chassis
+                edge, regardless of the chassis/surface padding used. */}
             <button
               type="button"
               onClick={onGenerate}
               disabled={isGenerating}
-              className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               style={{
-                background: "linear-gradient(135deg, #D1FE17 0%, #A6D400 100%)",
+                background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
                 boxShadow:
-                  "0 12px 24px rgba(209,254,23,0.25), inset 0px -3px 0px 0px #7f9c0c, inset 0px 1px 0px 0px #e8ff6b",
+                  "0 12px 24px rgba(217,119,87,0.25), inset 0px -3px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
               }}
             >
               {isGenerating ? (
@@ -623,6 +628,7 @@ export default function AudioComposer({
                 </>
               )}
             </button>
+            </div>
           </div>
         )}
 
@@ -633,15 +639,26 @@ export default function AudioComposer({
             longer lines up with the left mode card / Reference Video bar. */}
         {isVoiceover && (
         <div
-          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] px-2 transition-[height,width,background,border-radius,padding] duration-200"
-          style={PROMPT_BAR_SURFACE_TRANSLUCENT}
+          className="flex h-[120px] min-w-0 flex-1 items-stretch rounded-[24px] p-1 transition-[height,width,background,border-radius,padding] duration-200"
+          style={PROMPT_BAR_OUTER_SHELL}
         >
-          {/* Voiceover: text prompt input + model selector (shared by all six models) —
-              one continuous surface, no nested inner panel. min-height keeps it
-              visually aligned with the Voice Preset card / Generate button at rest,
-              while the textarea is free to grow the surface with real content. */}
+          {/* Gray prompt surface — same chassis(flat, thin) → surface(gradient)
+              nesting as Change Voice/Translate and the Cinema Studio prompt bars. */}
+          <div
+            className="flex min-w-0 flex-1 items-end gap-2 rounded-[20px] p-2"
+            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
+          >
+          {/* Voiceover: text prompt input + model selector (shared by all six models).
+              No extra inner frame here — the chassis→gray-surface layering
+              above already provides the depth; this box is just the plain
+              panel surface. min-height keeps it visually aligned with the
+              Voice Preset card / Generate button at rest, while the textarea
+              is free to grow the surface with real content. */}
           {isVoiceover && (
-          <div className="relative flex min-h-[120px] min-w-0 flex-1 flex-col p-3">
+          <div
+            className="relative flex h-full min-h-[104px] min-w-0 flex-1 flex-col self-stretch rounded-2xl p-3"
+            style={PROMPT_BAR_PANEL_SURFACE}
+          >
             <textarea
               ref={promptRef}
               rows={1}
@@ -1000,7 +1017,7 @@ export default function AudioComposer({
                   Voice Preset
                 </p>
                 <p
-                  className="truncate text-base font-black uppercase tracking-tight"
+                  className="truncate font-mono text-base font-bold uppercase tracking-wider"
                   style={{ color: NEON, textShadow: "0 0 16px rgba(0,240,255,0.4)" }}
                 >
                   {selectedVoiceLabel ?? "Choose Voice"}
@@ -1033,16 +1050,18 @@ export default function AudioComposer({
             </div>
           </button>
 
-          {/* Generate — lime accent (matches Change Voice's Generate button) */}
+          {/* Generate — orange accent, matching the other audio modes.
+              h-full so it always fits the gray surface's actual height and
+              never overflows past the chassis edge. */}
           <button
             type="button"
             onClick={onGenerate}
             disabled={isGenerating}
-            className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{
-              background: "linear-gradient(135deg, #D1FE17 0%, #A6D400 100%)",
+              background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
               boxShadow:
-                "0 12px 24px rgba(209,254,23,0.25), inset 0px -3px 0px 0px #7f9c0c, inset 0px 1px 0px 0px #e8ff6b",
+                "0 12px 24px rgba(217,119,87,0.25), inset 0px -3px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
             }}
           >
             {isGenerating ? (
@@ -1054,6 +1073,7 @@ export default function AudioComposer({
               </>
             )}
           </button>
+          </div>
         </div>
         )}
       </div>
