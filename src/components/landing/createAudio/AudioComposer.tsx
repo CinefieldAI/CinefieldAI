@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import * as Popover from "@radix-ui/react-popover";
 import {
@@ -30,6 +30,24 @@ import {
 
 /** Neon turquoise brand accent (per 1:1 spec) — kept only on the Voice Preset card. */
 const NEON = "#00F0FF";
+
+const MIN_PROMPT_HEIGHT = 120;
+const DEFAULT_PROMPT_HEIGHT = 120;
+const MAX_PROMPT_HEIGHT = 420;
+const PROMPT_VIEWPORT_SAFE_OFFSET = 160;
+const PROMPT_RESIZE_STEP = 16;
+const PROMPT_SINGLE_LINE_SCROLL_HEIGHT = 40;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const getViewportSafePromptHeight = () =>
+  typeof window === "undefined"
+    ? MAX_PROMPT_HEIGHT
+    : Math.max(
+        MIN_PROMPT_HEIGHT,
+        Math.min(MAX_PROMPT_HEIGHT, window.innerHeight - PROMPT_VIEWPORT_SAFE_OFFSET),
+      );
 
 /** Shared dark translucent popover surface used by every Voiceover popover. */
 const POPOVER_SURFACE = {
@@ -380,6 +398,10 @@ export default function AudioComposer({
   const [volumeMenuOpen, setVolumeMenuOpen] = useState(false);
   const [pitchMenuOpen, setPitchMenuOpen] = useState(false);
   const [outputFormatMenuOpen, setOutputFormatMenuOpen] = useState(false);
+  const [promptHeight, setPromptHeight] = useState(DEFAULT_PROMPT_HEIGHT);
+  const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_PROMPT_HEIGHT);
+  const [hasManualHeight, setHasManualHeight] = useState(false);
+  const [isResizingPrompt, setIsResizingPrompt] = useState(false);
 
   // Translate mode's own menu-open state (kept separate from Voiceover's above).
   const [translateSampleRateMenuOpen, setTranslateSampleRateMenuOpen] = useState(false);
@@ -392,17 +414,150 @@ export default function AudioComposer({
   const audioRefInputRef = useRef<HTMLInputElement>(null);
   const imageRefInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const resizeStartRef = useRef({ pointerY: 0, height: DEFAULT_PROMPT_HEIGHT });
+  const resizeFrameRef = useRef<number | null>(null);
+  const pendingHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
+  const contentRequiredHeightRef = useRef(MIN_PROMPT_HEIGHT);
+  const manualPromptHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
 
-  // Auto-resize the Voiceover textarea to its content — starts compact
-  // (24px), grows up to 220px, then scrolls internally. Never initializes
-  // at max height.
-  const autoResizePrompt = (el: HTMLTextAreaElement) => {
-    el.style.height = "24px";
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
-  };
   useEffect(() => {
-    if (promptRef.current) autoResizePrompt(promptRef.current);
-  }, [script]);
+    const updateMaximum = () => {
+      const nextMaximum = getViewportSafePromptHeight();
+      setMaxPromptHeight(nextMaximum);
+      manualPromptHeightRef.current = Math.min(
+        manualPromptHeightRef.current,
+        nextMaximum,
+      );
+      setPromptHeight((current) => Math.min(current, nextMaximum));
+    };
+    updateMaximum();
+    window.addEventListener("resize", updateMaximum);
+    return () => window.removeEventListener("resize", updateMaximum);
+  }, []);
+
+  // Content can temporarily exceed the user's chosen height, then returns to
+  // that manual baseline when text is removed.
+  useEffect(() => {
+    const textarea = promptRef.current;
+    if (!textarea) return;
+
+    textarea.style.flex = "none";
+    textarea.style.height = "0px";
+    const contentHeight = Math.max(PROMPT_SINGLE_LINE_SCROLL_HEIGHT, textarea.scrollHeight);
+    textarea.style.flex = "";
+    textarea.style.height = "100%";
+
+    const requiredHeight = clamp(
+      DEFAULT_PROMPT_HEIGHT + contentHeight - PROMPT_SINGLE_LINE_SCROLL_HEIGHT,
+      MIN_PROMPT_HEIGHT,
+      maxPromptHeight,
+    );
+    contentRequiredHeightRef.current = requiredHeight;
+    setPromptHeight(
+      hasManualHeight
+        ? Math.max(manualPromptHeightRef.current, requiredHeight)
+        : requiredHeight,
+    );
+  }, [script, hasManualHeight, maxPromptHeight]);
+
+  useEffect(
+    () => () => {
+      if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
+      document.body.style.userSelect = "";
+    },
+    [],
+  );
+
+  const commitPendingPromptHeight = useCallback(() => {
+    resizeFrameRef.current = null;
+    setPromptHeight(pendingHeightRef.current);
+  }, []);
+
+  const schedulePromptHeight = useCallback(
+    (nextHeight: number) => {
+      pendingHeightRef.current = nextHeight;
+      if (resizeFrameRef.current === null) {
+        resizeFrameRef.current = requestAnimationFrame(commitPendingPromptHeight);
+      }
+    },
+    [commitPendingPromptHeight],
+  );
+
+  const handleResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.currentTarget.focus();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      resizeStartRef.current = { pointerY: event.clientY, height: promptHeight };
+      pendingHeightRef.current = promptHeight;
+      setIsResizingPrompt(true);
+      setHasManualHeight(true);
+      document.body.style.userSelect = "none";
+    },
+    [promptHeight],
+  );
+
+  const handleResizePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      const minimum = Math.max(MIN_PROMPT_HEIGHT, contentRequiredHeightRef.current);
+      const nextHeight = clamp(
+        resizeStartRef.current.height + resizeStartRef.current.pointerY - event.clientY,
+        minimum,
+        maxPromptHeight,
+      );
+      manualPromptHeightRef.current = nextHeight;
+      schedulePromptHeight(nextHeight);
+    },
+    [maxPromptHeight, schedulePromptHeight],
+  );
+
+  const finishPromptResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (resizeFrameRef.current !== null) {
+        cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+        setPromptHeight(pendingHeightRef.current);
+      }
+      setIsResizingPrompt(false);
+      document.body.style.userSelect = "";
+    },
+    [],
+  );
+
+  const resetPromptHeight = useCallback(() => {
+    manualPromptHeightRef.current = DEFAULT_PROMPT_HEIGHT;
+    setHasManualHeight(false);
+    setPromptHeight(Math.max(DEFAULT_PROMPT_HEIGHT, contentRequiredHeightRef.current));
+  }, []);
+
+  const handleResizeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const minimum = Math.max(MIN_PROMPT_HEIGHT, contentRequiredHeightRef.current);
+      let nextHeight: number | null = null;
+
+      if (event.key === "ArrowUp") nextHeight = promptHeight + PROMPT_RESIZE_STEP;
+      if (event.key === "ArrowDown") nextHeight = promptHeight - PROMPT_RESIZE_STEP;
+      if (event.key === "Home") nextHeight = minimum;
+      if (event.key === "End") nextHeight = maxPromptHeight;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        resetPromptHeight();
+        return;
+      }
+      if (nextHeight === null) return;
+
+      event.preventDefault();
+      const clampedHeight = clamp(nextHeight, minimum, maxPromptHeight);
+      manualPromptHeightRef.current = clampedHeight;
+      setHasManualHeight(true);
+      setPromptHeight(clampedHeight);
+    },
+    [maxPromptHeight, promptHeight, resetPromptHeight],
+  );
 
   // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
   // standalone rotary selector uses).
@@ -639,13 +794,17 @@ export default function AudioComposer({
             longer lines up with the left mode card / Reference Video bar. */}
         {isVoiceover && (
         <div
-          className="flex h-[120px] min-w-0 flex-1 items-stretch rounded-[24px] p-1 transition-[height,width,background,border-radius,padding] duration-200"
-          style={PROMPT_BAR_OUTER_SHELL}
+          className={`flex min-w-0 flex-1 items-stretch rounded-[24px] p-1 ${
+            isResizingPrompt
+              ? ""
+              : "transition-[height,width,background,border-radius,padding] duration-150 ease-out"
+          }`}
+          style={{ ...PROMPT_BAR_OUTER_SHELL, height: promptHeight }}
         >
           {/* Gray prompt surface — same chassis(flat, thin) → surface(gradient)
               nesting as Change Voice/Translate and the Cinema Studio prompt bars. */}
           <div
-            className="flex min-w-0 flex-1 items-end gap-2 rounded-[20px] p-2"
+            className="flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2"
             style={PROMPT_BAR_SURFACE_TRANSLUCENT}
           >
           {/* Voiceover: text prompt input + model selector (shared by all six models).
@@ -656,20 +815,42 @@ export default function AudioComposer({
               is free to grow the surface with real content. */}
           {isVoiceover && (
           <div
-            className="relative flex h-full min-h-[104px] min-w-0 flex-1 flex-col self-stretch rounded-2xl p-3"
+            className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col self-stretch overflow-hidden rounded-2xl p-3"
             style={PROMPT_BAR_PANEL_SURFACE}
           >
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize audio prompt"
+              aria-valuemin={MIN_PROMPT_HEIGHT}
+              aria-valuemax={maxPromptHeight}
+              aria-valuenow={Math.round(promptHeight)}
+              tabIndex={0}
+              onPointerDown={handleResizePointerDown}
+              onPointerMove={handleResizePointerMove}
+              onPointerUp={finishPromptResize}
+              onPointerCancel={finishPromptResize}
+              onDoubleClick={resetPromptHeight}
+              onKeyDown={handleResizeKeyDown}
+              className="group absolute inset-x-0 top-0 z-10 flex h-4 cursor-ns-resize touch-none items-start justify-center pt-1 focus-visible:outline-none"
+            >
+              <span
+                aria-hidden
+                className={`h-1 w-12 rounded-full transition-colors ${
+                  isResizingPrompt
+                    ? "bg-white/35"
+                    : "bg-white/10 group-hover:bg-white/25 group-focus-visible:bg-white/25"
+                }`}
+              />
+            </div>
             <textarea
               ref={promptRef}
               rows={1}
               value={script}
-              onChange={(e) => {
-                onScriptChange(e.target.value);
-                autoResizePrompt(e.currentTarget);
-              }}
+              onChange={(e) => onScriptChange(e.target.value)}
               placeholder="Describe the sound you imagine..."
               spellCheck
-              className="max-h-[220px] min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+              className="min-h-0 w-full flex-1 resize-none overflow-y-auto bg-transparent pt-1 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
               style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
             />
 
@@ -1057,7 +1238,7 @@ export default function AudioComposer({
             type="button"
             onClick={onGenerate}
             disabled={isGenerating}
-            className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-20 w-[120px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
               boxShadow:
