@@ -37,6 +37,7 @@ import KlingCharacterCard from "./KlingCharacterCard";
 import MotionPresetsPanel from "./MotionPresetsPanel";
 import BitrateControl from "./BitrateControl";
 import SeedControl from "./SeedControl";
+import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 
 export interface PromptBarProps {
   prompt: string;
@@ -913,12 +914,11 @@ export default function PromptBar(props: PromptBarProps) {
       />
       <div
         ref={composerRef}
-        className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3 opacity-100"
+        className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] p-3 opacity-100"
         style={{
           minHeight: 116,
           maxHeight: 400,
-          boxShadow:
-            "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
+          ...PROMPT_BAR_SURFACE,
         }}
       >
         {/* Prompt input + controls */}

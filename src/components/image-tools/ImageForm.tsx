@@ -2,9 +2,31 @@
 
 import { useState, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { ChevronDown, Plus, Search, Check } from "lucide-react";
-import { IMAGE_MODEL_CONFIGS } from "@/lib/imageModelConfig";
+import { ChevronDown, MapPin, Palette, Plus, Search, Check, Wand2 } from "lucide-react";
+import { IMAGE_MODEL_CONFIGS, type ImageModelConfig } from "@/lib/imageModelConfig";
 import { useRouter, useSearchParams } from "next/navigation";
+import Cinema25AssetsPicker from "@/components/cinema-studio/Cinema25AssetsPicker";
+import ColorTransferPanel, { type ColorTransferSwatch } from "./ColorTransferPopover";
+import CharacterCardPopover from "./CharacterCardPopover";
+import SoulGeneralCard from "./SoulGeneralCard";
+import AttachmentPreview from "@/components/landing/createImage/AttachmentPreview";
+import type { ReferenceAttachment } from "@/components/landing/createImage/createImageData";
+import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
+import {
+  getCapabilities,
+  type AspectRatioChoice,
+} from "@/components/landing/createImage/imageModelCapabilities";
+import {
+  AspectRatioPopover,
+  AssetsButtonGroup,
+  BatchSizeCounter,
+  EnhancementToggle,
+  LabeledToggle,
+  QualityPopover,
+  ResolutionPopover,
+  SettingsPopover,
+  type FluxFlexSettings,
+} from "@/components/landing/createImage/ModelCapabilityControls";
 
 const MODEL_ICONS: Record<string, string> = {
   openai: "🤖",
@@ -12,7 +34,41 @@ const MODEL_ICONS: Record<string, string> = {
   google: "G",
 };
 
+/** Renders a model's selector icon — a real lucide icon for models that
+ *  define one (Cinematic Locations' lime location pin), falling back to
+ *  the plain glyph avatar used by every other model. */
+function ModelIcon({ icon, className }: { icon: string; className?: string }) {
+  if (icon === "pin") {
+    return <MapPin className={className} style={{ color: "rgb(209,254,23)" }} />;
+  }
+  return <>{MODEL_ICONS[icon as keyof typeof MODEL_ICONS] || "•"}</>;
+}
+
 const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
+
+/** Width/height pairs for every ratio string used across IMAGE_MODEL_CONFIGS,
+ *  reusing the same icon-drawing convention as the createImage capability
+ *  system's AspectRatioChoice. */
+const RATIO_DIMENSIONS: Record<string, { width: number; height: number }> = {
+  Auto: { width: 16, height: 16 },
+  "1:1": { width: 16, height: 16 },
+  "3:4": { width: 15, height: 20 },
+  "4:3": { width: 20, height: 15 },
+  "9:16": { width: 12, height: 21 },
+  "16:9": { width: 21, height: 12 },
+  "2:3": { width: 14, height: 21 },
+  "3:2": { width: 21, height: 14 },
+  "5:4": { width: 20, height: 16 },
+  "4:5": { width: 16, height: 20 },
+  "21:9": { width: 24, height: 10 },
+};
+
+function toRatioChoices(values: string[]): AspectRatioChoice[] {
+  return values.map((value) => ({
+    value,
+    ...(RATIO_DIMENSIONS[value] ?? { width: 16, height: 16 }),
+  }));
+}
 
 type ModelListItem = {
   id: string;
@@ -23,9 +79,11 @@ type ModelListItem = {
 };
 
 const FEATURED_MODELS_LIST: ModelListItem[] = [
+  { id: "cinematic-locations", label: "Cinematic Locations", description: "Rich environments with cinematic lighting", icon: "pin" },
   { id: "higgsfield-soul-2", label: "Higgsfield Soul 2.0", description: "Next generation ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-soul-cinema", label: "Higgsfield Soul Cinema", description: "Cinema-grade visual creation", icon: "google" },
   { id: "gpt-image-2", label: "GPT Image 2", description: "4K images with near-perfect text rendering", icon: "openai" },
+  { id: "seedream-5-pro", label: "Seedream 5.0 Pro", description: "Logically consistent images with intelligent visual reasoning", icon: "seedream" },
   { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", icon: "seedream" },
   { id: "nano-banana-pro", label: "Nano Banana Pro", description: "Google's flagship generation model", icon: "google" },
   { id: "nano-banana-2", label: "Nano Banana 2", description: "Pro quality at Flash speed", icon: "google" },
@@ -34,6 +92,7 @@ const FEATURED_MODELS_LIST: ModelListItem[] = [
 ];
 
 const ALL_MODELS_LIST: ModelListItem[] = [
+  { id: "auto", label: "Auto", description: "Automatically pick the best model for your prompt", icon: "google" },
   { id: "nano-banana", label: "Nano Banana", description: "Google's standard generation model", icon: "google" },
   { id: "higgsfield-soul", label: "Higgsfield Soul", description: "Ultra-realistic fashion visuals", icon: "google" },
   { id: "higgsfield-face-swap", label: "Higgsfield Face Swap", description: "Seamless face swapping", icon: "google" },
@@ -51,20 +110,199 @@ const ALL_MODELS_LIST: ModelListItem[] = [
   { id: "flux-kontext-max", label: "Flux Kontext Max", description: "Edit with accuracy", icon: "google" },
   { id: "gpt-image", label: "GPT Image", description: "Versatile text-to-image AI", icon: "openai" },
   { id: "multi-reference", label: "Multi Reference", description: "Multiple edits in one shot", icon: "google" },
-  { id: "reve", label: "Reve", description: "Advanced image editing model", icon: "google" },
-  { id: "seedream-5-lite", label: "Seedream 5.0 lite", description: "Intelligent visual reasoning", icon: "seedream" },
+  { id: "seedream-5-lite", label: "Seedream 5.0 Lite", description: "Intelligent visual reasoning", icon: "seedream" },
+  { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", icon: "seedream" },
   { id: "wan-2-2", label: "WAN 2.2", description: "High-fidelity cinematic visuals", icon: "google" },
 ];
 
 interface ImageFormProps {
   isDrawOpen?: boolean;
   onDrawOpen?: (open: boolean) => void;
+  /** Embeds ImageForm with an externally-controlled model (e.g. Cinema
+   *  Studio's Image mode) instead of the page's own ?model= query param. */
+  externalModel?: string;
+  onExternalModelChange?: (id: string) => void;
+  /** Renders as a normal flex-1 block instead of the page's own fixed
+   *  bottom-of-viewport bar — used when embedding inside another layout
+   *  (e.g. Cinema Studio's ModeToggle + composer row) that already
+   *  positions the whole row itself. */
+  embedded?: boolean;
 }
 
-export default function ImageForm({ onDrawOpen }: ImageFormProps) {
+/** The shared model-selector dropdown — same trigger, same Featured/All
+ *  Models + search list, reused unchanged by every model (capability-driven
+ *  and legacy alike) so there is exactly one selector implementation. */
+function ModelSelectorDropdown({
+  config,
+  modelParam,
+  isOpen,
+  setIsOpen,
+  modelSearch,
+  setModelSearch,
+  onSelect,
+}: {
+  config: ImageModelConfig;
+  modelParam: string;
+  isOpen: boolean;
+  setIsOpen: (v: boolean) => void;
+  modelSearch: string;
+  setModelSearch: (v: string) => void;
+  onSelect: (id: string) => void;
+}) {
+  const renderList = (list: ModelListItem[]) =>
+    list
+      .filter(
+        (m) =>
+          m.label.toLowerCase().includes(modelSearch) ||
+          m.description.toLowerCase().includes(modelSearch),
+      )
+      .map((model) => (
+        <button
+          key={model.id}
+          onClick={() => onSelect(model.id)}
+          className={`w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
+            modelParam === model.id ? "bg-white/5" : ""
+          }`}
+        >
+          <div className="size-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mr-2 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
+            {model.icon === "pin" ? (
+              <ModelIcon icon={model.icon} className="size-4" />
+            ) : (
+              <span
+                className={`text-sm font-bold ${
+                  modelParam === model.id ? "text-[#00e5ff]" : "text-neutral-500"
+                }`}
+              >
+                {MODEL_ICONS[model.icon as keyof typeof MODEL_ICONS] || "•"}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="model-title">{model.label}</span>
+              {model.badge && (
+                <span className="font-grotesk text-sm inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
+                  {model.badge}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-neutral-400">{model.description}</span>
+          </div>
+          {modelParam === model.id && (
+            <div className="size-5 shrink-0 flex items-center justify-center">
+              <Check className="size-4 text-[#00e5ff]" />
+            </div>
+          )}
+        </button>
+      ));
+
+  return (
+    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Popover.Trigger asChild>
+        <button type="button" className={PILL}>
+          <span className="size-4 text-neutral-400 flex items-center justify-center text-xs">
+            <ModelIcon icon={config.icon} className="size-4" />
+          </span>
+          <span>{config.label}</span>
+          <ChevronDown className="size-3 text-neutral-500" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={12}
+          className="outline-none z-[100000] rounded-2xl shadow-none border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] flex flex-col p-0 overflow-hidden"
+        >
+          <div className="relative rounded-2xl flex flex-col overflow-hidden w-screen h-screen md:h-[602px] md:w-[402px]">
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                width: "100%",
+                height: "37px",
+                borderRadius: "317px",
+                background: "rgba(139, 213, 244, 0.24)",
+                filter: "blur(50px)",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "35%",
+                width: "100%",
+                height: "37px",
+                borderRadius: "317px",
+                background: "rgba(139, 213, 244, 0.24)",
+                filter: "blur(50px)",
+                pointerEvents: "none",
+              }}
+            />
+
+            <label className="relative z-10 px-3 py-2 flex items-center gap-2 min-h-[41px] h-[41px] border-b border-white/10 cursor-text">
+              <Search className="size-4 text-neutral-500" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value.toLowerCase())}
+                className="text-sm flex-1 outline-none bg-transparent text-white placeholder-neutral-500"
+              />
+            </label>
+
+            <div className="relative overflow-hidden min-h-0 flex flex-col flex-1">
+              <div
+                className="absolute z-10 pointer-events-none select-none top-0 left-0 w-full opacity-100 transition-opacity"
+                style={{
+                  height: "12px",
+                  background: "linear-gradient(rgba(19, 21, 23, 0.898) 0%, rgba(19, 21, 23, 0) 100%)",
+                }}
+              />
+
+              <div className="hide-scrollbar min-h-0 overflow-y-auto h-full">
+                <div>
+                  <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
+                    <span className="text-xs font-medium text-neutral-500 flex-1">Featured models</span>
+                  </div>
+                  <div className="px-3 flex flex-col gap-1">{renderList(FEATURED_MODELS_LIST)}</div>
+                </div>
+
+                <div className="mt-2">
+                  <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
+                    <span className="text-xs font-medium text-neutral-500 flex-1">All models</span>
+                  </div>
+                  <div className="px-3 flex flex-col gap-1 pb-4">{renderList(ALL_MODELS_LIST)}</div>
+                </div>
+              </div>
+
+              <div
+                className="absolute pointer-events-none select-none bottom-0 left-0 w-full opacity-100 transition-opacity"
+                style={{
+                  height: "12px",
+                  background: "linear-gradient(rgba(19, 21, 23, 0) 0%, rgba(19, 21, 23, 0.898) 100%)",
+                }}
+              />
+            </div>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+export default function ImageForm({
+  onDrawOpen,
+  externalModel,
+  onExternalModelChange,
+  embedded,
+}: ImageFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const modelParam = searchParams.get("model") || "nano-banana-pro";
+  // When embedded (e.g. inside Cinema Studio's Image mode), the model is
+  // controlled externally so selecting one never navigates away from the
+  // host page — otherwise this falls back to the page's own ?model= param.
+  const modelParam = externalModel ?? searchParams.get("model") ?? "nano-banana-pro";
   const config = IMAGE_MODEL_CONFIGS[modelParam];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,12 +311,87 @@ export default function ImageForm({ onDrawOpen }: ImageFormProps) {
   const [, setPrompt] = useState("");
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [isQualityOpen, setIsQualityOpen] = useState(false);
-  const [isAspectOpen, setIsAspectOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
   const [quality, setQuality] = useState(config?.defaultQuality ?? "");
   const [aspectRatio, setAspectRatio] = useState(config?.defaultAspectRatio ?? "Auto");
   const [count, setCount] = useState(config?.defaultCount ?? 1);
+
+  // Capability-driven state — mirrors /image/create's PromptComposer.tsx so
+  // GPT Image 2 / Higgsfield Soul Cinema / WAN 2.2 / Multi Reference / Flux
+  // Kontext Max / FLUX.2 Max / FLUX.2 Pro / FLUX.2 Flex behave identically on
+  // this page. Kept separate from the legacy state above.
+  const capabilities = getCapabilities(config?.label ?? "");
+  const [gptQuality, setGptQuality] = useState("High");
+  const [modelQuality, setModelQuality] = useState(capabilities?.defaultQuality ?? "Pro");
+  const [modelResolution, setModelResolution] = useState(capabilities?.defaultResolution ?? "2K");
+  const [modelAspectRatio, setModelAspectRatio] = useState(capabilities?.defaultAspectRatio ?? "16:9");
+  const [modelBatch, setModelBatch] = useState(capabilities?.defaultBatchSize ?? 1);
+  const [enhancementEnabled, setEnhancementEnabled] = useState(capabilities?.defaultEnhancement ?? true);
+  const [vectorMode, setVectorMode] = useState(capabilities?.defaultVectorMode ?? false);
+  const [colorTransferOpen, setColorTransferOpen] = useState(false);
+  // Higgsfield Soul 2.0 only — General style selection, local state until a
+  // real preset backend exists.
+  const [soulGeneralSelected, setSoulGeneralSelected] = useState(false);
+  // Keyed by model id so Cinematic Locations' Color Transfer selection never
+  // overwrites Recraft V4.1 / Recraft V4.1 Utility's (and vice versa) even
+  // though all three share the exact same ColorTransferPanel component.
+  const [colorTransferByModel, setColorTransferByModel] = useState<
+    Record<string, { swatches: ColorTransferSwatch[]; selectedId: string | null }>
+  >({});
+  const colorTransferState = colorTransferByModel[modelParam] ?? { swatches: [], selectedId: null };
+  const colorTransferSwatches = colorTransferState.swatches;
+  const colorTransferSelectedId = colorTransferState.selectedId;
+  const colorTransfer = colorTransferSelectedId !== null;
+  const updateColorTransferForModel = (
+    updates: Partial<{ swatches: ColorTransferSwatch[]; selectedId: string | null }>,
+  ) => {
+    setColorTransferByModel((prev) => ({
+      ...prev,
+      [modelParam]: { ...(prev[modelParam] ?? { swatches: [], selectedId: null }), ...updates },
+    }));
+  };
+  const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexSettings>({
+    strength: 50,
+    guidance: 50,
+  });
+  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
+  const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
+  // Which tab the shared Assets Picker opens on: the plus button always
+  // wants Uploads, the @ element-reference button wants Elements.
+  const [assetsPickerElementsMode, setAssetsPickerElementsMode] = useState(false);
+  const openUploadsPicker = () => {
+    setAssetsPickerElementsMode(false);
+    setAssetsPickerOpen(true);
+  };
+  const openElementsPicker = () => {
+    setAssetsPickerElementsMode(true);
+    setAssetsPickerOpen(true);
+  };
+  const [attachments, setAttachments] = useState<ReferenceAttachment[]>([]);
+  // Element references are a distinct reference type from uploaded/generated
+  // image attachments, kept per-model so Seedream 4.5 and Seedream 5.0 Lite
+  // never share or overwrite each other's selections.
+  const [elementReferencesByModel, setElementReferencesByModel] = useState<
+    Record<string, ReferenceAttachment[]>
+  >({});
+  const elementReferences = elementReferencesByModel[modelParam] ?? [];
+
+  // Reset per-model defaults whenever the model changes (route param) so no
+  // stale control values leak between models — same pattern as PromptComposer.
+  const [prevModelForReset, setPrevModelForReset] = useState(modelParam);
+  if (modelParam !== prevModelForReset) {
+    setPrevModelForReset(modelParam);
+    if (capabilities) {
+      setModelQuality(capabilities.defaultQuality ?? "Pro");
+      setModelResolution(capabilities.defaultResolution ?? "2K");
+      setModelAspectRatio(capabilities.defaultAspectRatio ?? "16:9");
+      setModelBatch(capabilities.defaultBatchSize ?? 1);
+      setEnhancementEnabled(capabilities.defaultEnhancement ?? true);
+      setVectorMode(capabilities.defaultVectorMode ?? false);
+    }
+    setOpenPopoverId(null);
+  }
 
   if (!config) return null;
 
@@ -94,27 +407,108 @@ export default function ImageForm({ onDrawOpen }: ImageFormProps) {
       setCount(1);
     }
     setIsModelOpen(false);
-    router.push(`/generate/image?model=${modelId}`);
+    if (onExternalModelChange) {
+      onExternalModelChange(modelId);
+    } else {
+      router.push(`/generate/image?model=${modelId}`);
+    }
+  };
+
+  const attachmentCounter = attachments.length;
+  const addAssetFromPicker = (url: string) => {
+    setAttachments((prev) => [
+      ...prev,
+      { id: `att-${attachmentCounter + 1}`, url, name: "Selected asset", loading: false },
+    ]);
+  };
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => {
+      const found = prev.find((a) => a.id === id);
+      if (found?.url) URL.revokeObjectURL(found.url);
+      return prev.filter((a) => a.id !== id);
+    });
+  };
+
+  const addElementFromPicker = (url: string) => {
+    setElementReferencesByModel((prev) => {
+      const existing = prev[modelParam] ?? [];
+      return {
+        ...prev,
+        [modelParam]: [
+          ...existing,
+          { id: `element-${existing.length + 1}`, url, name: "Selected element", loading: false },
+        ],
+      };
+    });
+  };
+  const removeElementReference = (id: string) => {
+    setElementReferencesByModel((prev) => {
+      const existing = prev[modelParam] ?? [];
+      const found = existing.find((a) => a.id === id);
+      if (found?.url) URL.revokeObjectURL(found.url);
+      return { ...prev, [modelParam]: existing.filter((a) => a.id !== id) };
+    });
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-7xl px-4 z-50">
+    <div
+      className={
+        embedded
+          ? "relative min-w-0 flex-1"
+          : "fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-7xl px-4 z-50"
+      }
+    >
+      {/* Recraft V4.1 Utility — single decorative centered utility shell,
+          purely visual (pointer-events-none), never duplicated. */}
+      {modelParam === "recraft-v4-1-utility" && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-0.5 z-10 transition-opacity duration-200"
+          style={{
+            borderRadius: "20px",
+            left: "calc(50% + 38px)",
+            right: "auto",
+            maxWidth: "calc(100% - 76px)",
+            width: "800px",
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div
+            className="absolute left-0 right-0 overflow-hidden"
+            style={{
+              bottom: "calc(100% - 30px)",
+              borderTopLeftRadius: "20px",
+              borderTopRightRadius: "20px",
+              background: "linear-gradient(180deg, rgba(209,254,23,0.08), rgba(209,254,23,0))",
+            }}
+          />
+        </div>
+      )}
+
       <div
-        className="flex min-w-0 flex-1 items-stretch gap-3 rounded-[24px] bg-[#1a1d1f] p-3"
+        className="flex min-w-0 flex-1 items-stretch gap-3 rounded-[24px] p-3"
         style={{
           minHeight: 116,
           maxHeight: 400,
-          boxShadow: "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
+          ...PROMPT_BAR_SURFACE,
         }}
       >
         {/* Prompt input + controls */}
-        <form className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+        <form className="flex min-w-0 flex-1 flex-col gap-2">
+          {/* Attachment preview */}
+          {attachments.length > 0 && (
+            <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+          )}
+          {elementReferences.length > 0 && (
+            <AttachmentPreview attachments={elementReferences} onRemove={removeElementReference} />
+          )}
+
           {/* Prompt row */}
           <div className="flex gap-2 min-w-0">
-            {config.showUpload && (
+            {!capabilities && config.showUpload && (
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openUploadsPicker}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-card shrink-0 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
               >
                 <Plus className="size-3.5" />
@@ -136,286 +530,798 @@ export default function ImageForm({ onDrawOpen }: ImageFormProps) {
           </div>
 
           {/* Controls row */}
-          <div className="flex flex-wrap items-center gap-1">
-            {/* Model Selector */}
-            <Popover.Root open={isModelOpen} onOpenChange={setIsModelOpen}>
-              <Popover.Trigger asChild>
-                <button type="button" className={PILL}>
-                  <span className="size-3.5 text-neutral-400 flex items-center justify-center text-xs">
-                    {MODEL_ICONS[config.icon]}
-                  </span>
-                  <span>{config.label}</span>
-                  <ChevronDown className="size-3 text-neutral-500" />
-                </button>
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Content
-                  side="top"
-                  align="start"
-                  sideOffset={12}
-                  className="outline-none z-[100000] rounded-2xl shadow-none border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] flex flex-col p-0 overflow-hidden"
-                >
-                  <div className="relative rounded-2xl flex flex-col overflow-hidden max-w-[344px] max-h-[40rem] w-screen h-screen md:w-auto md:h-auto">
-                    {/* Top glow */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        width: "100%",
-                        height: "37px",
-                        borderRadius: "317px",
-                        background: "rgba(139, 213, 244, 0.24)",
-                        filter: "blur(50px)",
-                        pointerEvents: "none",
-                      }}
+          {capabilities ? (
+            <div className="mt-auto flex h-7 min-w-0 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {config.label === "Cinematic Locations" && (
+                <>
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      detailed
+                      lime
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
                     />
+                  )}
+                  <BatchSizeCounter
+                    value={modelBatch}
+                    onChange={setModelBatch}
+                    max={capabilities.maxBatchSize ?? 4}
+                  />
+                  <LabeledToggle
+                    label="Color transfer"
+                    enabled={colorTransfer}
+                    onToggle={() => setColorTransferOpen(true)}
+                    icon={<Palette className="h-3.5 w-3.5 opacity-60" />}
+                    badge="New"
+                    hideSwitch
+                  />
+                </>
+              )}
 
-                    {/* Bottom glow */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: "35%",
-                        width: "100%",
-                        height: "37px",
-                        borderRadius: "317px",
-                        background: "rgba(139, 213, 244, 0.24)",
-                        filter: "blur(50px)",
-                        pointerEvents: "none",
-                      }}
+              {config.label === "GPT Image 2" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
                     />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      large
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <QualityPopover
+                    value={gptQuality}
+                    onChange={setGptQuality}
+                    id="quality"
+                    openId={openPopoverId}
+                    onOpenIdChange={setOpenPopoverId}
+                  />
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      detailed
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
 
-                    {/* Search bar */}
-                    <label className="relative z-10 px-3 py-2 flex items-center gap-2 min-h-[41px] h-[41px] border-b border-white/10 cursor-text">
-                      <Search className="size-4 text-neutral-500" />
-                      <input
-                        type="text"
-                        placeholder="Search..."
-                        value={modelSearch}
-                        onChange={(e) => setModelSearch(e.target.value.toLowerCase())}
-                        className="text-sm flex-1 outline-none bg-transparent text-white placeholder-neutral-500"
-                      />
-                    </label>
+              {config.label === "Higgsfield Soul Cinema" && (
+                <>
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      compactWidth
+                      lime
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
 
-                    {/* Scrollable content */}
-                    <div className="relative overflow-hidden min-h-0 flex flex-col flex-1">
-                      {/* Top fade gradient */}
-                      <div
-                        className="absolute z-10 pointer-events-none select-none top-0 left-0 w-full opacity-100 transition-opacity"
-                        style={{
-                          height: "12px",
-                          background: "linear-gradient(rgba(19, 21, 23, 0.898) 0%, rgba(19, 21, 23, 0) 100%)",
-                        }}
-                      />
+              {(config.label === "Multi Reference" ||
+                config.label === "Flux Kontext Max" ||
+                config.label === "FLUX.2 Max") && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  <EnhancementToggle
+                    enabled={enhancementEnabled}
+                    onToggle={() => setEnhancementEnabled((v) => !v)}
+                  />
+                </>
+              )}
 
-                      <div className="hide-scrollbar min-h-0 overflow-y-auto h-full">
-                        {/* Featured Models Section */}
-                        <div>
-                          <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
-                            <span className="text-xs font-medium text-neutral-500 flex-1">Featured models</span>
-                          </div>
-                          <div className="px-3 flex flex-col gap-1">
-                            {FEATURED_MODELS_LIST.filter(
-                              (m) =>
-                                m.label.toLowerCase().includes(modelSearch) ||
-                                m.description.toLowerCase().includes(modelSearch)
-                            ).map((model) => (
-                              <button
-                                key={model.id}
-                                onClick={() => handleModelSelect(model.id)}
-                                className={`w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
-                                  modelParam === model.id ? "bg-white/5" : ""
-                                }`}
-                              >
-                                <div className="size-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mr-2 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
-                                  <span
-                                    className={`text-sm font-bold ${
-                                      modelParam === model.id ? "text-[#00e5ff]" : "text-neutral-500"
-                                    }`}
-                                  >
-                                    {MODEL_ICONS[model.icon as keyof typeof MODEL_ICONS] || "•"}
-                                  </span>
-                                </div>
-                                <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium text-white">{model.label}</span>
-                                    {model.badge && (
-                                      <span className="font-grotesk text-[10px] inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
-                                        {model.badge}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-neutral-400">{model.description}</span>
-                                </div>
-                                {modelParam === model.id && (
-                                  <div className="size-5 shrink-0 flex items-center justify-center">
-                                    <Check className="size-4 text-[#00e5ff]" />
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+              {config.label === "FLUX.2 Pro" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      detailed
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
 
-                        {/* All Models Section */}
-                        <div className="mt-2">
-                          <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
-                            <span className="text-xs font-medium text-neutral-500 flex-1">All models</span>
-                          </div>
-                          <div className="px-3 flex flex-col gap-1 pb-4">
-                            {ALL_MODELS_LIST.filter(
-                              (m) =>
-                                m.label.toLowerCase().includes(modelSearch) ||
-                                m.description.toLowerCase().includes(modelSearch)
-                            ).map((model) => (
-                              <button
-                                key={model.id}
-                                onClick={() => handleModelSelect(model.id)}
-                                className={`w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
-                                  modelParam === model.id ? "bg-white/5" : ""
-                                }`}
-                              >
-                                <div className="size-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mr-2 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
-                                  <span
-                                    className={`text-sm font-bold ${
-                                      modelParam === model.id ? "text-[#00e5ff]" : "text-neutral-500"
-                                    }`}
-                                  >
-                                    {MODEL_ICONS[model.icon as keyof typeof MODEL_ICONS] || "•"}
-                                  </span>
-                                </div>
-                                <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium text-white">{model.label}</span>
-                                    {model.badge && (
-                                      <span className="font-grotesk text-[10px] inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
-                                        {model.badge}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-neutral-400">{model.description}</span>
-                                </div>
-                                {modelParam === model.id && (
-                                  <div className="size-5 shrink-0 flex items-center justify-center">
-                                    <Check className="size-4 text-[#00e5ff]" />
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+              {config.label === "FLUX.2 Flex" && (
+                <>
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  <SettingsPopover
+                    settings={fluxFlexSettings}
+                    onChange={setFluxFlexSettings}
+                    id="settings"
+                    openId={openPopoverId}
+                    onOpenIdChange={setOpenPopoverId}
+                  />
+                </>
+              )}
 
-                      {/* Bottom fade gradient */}
-                      <div
-                        className="absolute pointer-events-none select-none bottom-0 left-0 w-full opacity-100 transition-opacity"
-                        style={{
-                          height: "12px",
-                          background: "linear-gradient(rgba(19, 21, 23, 0) 0%, rgba(19, 21, 23, 0.898) 100%)",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </Popover.Content>
-              </Popover.Portal>
-            </Popover.Root>
+              {(config.label === "Recraft V4.1 Utility" || config.label === "Recraft V4.1") && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.qualityOptions && (
+                    <QualityPopover
+                      value={modelQuality}
+                      onChange={setModelQuality}
+                      options={capabilities.qualityOptions}
+                      id="quality"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  <LabeledToggle label="Vector mode" enabled={vectorMode} onToggle={() => setVectorMode((v) => !v)} />
+                  <LabeledToggle
+                    label="Color transfer"
+                    enabled={colorTransfer}
+                    onToggle={() => setColorTransferOpen(true)}
+                  />
+                </>
+              )}
 
-            {/* Quality Selector */}
-            {config.qualityOptions.length > 0 && (
-              <Popover.Root open={isQualityOpen} onOpenChange={setIsQualityOpen}>
-                <Popover.Trigger asChild>
-                  <button type="button" className={PILL}>
-                    {quality}
-                  </button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content side="top" align="center" sideOffset={8} className="z-[100000] bg-transparent">
-                    <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a] p-1 shadow-xl">
-                      {config.qualityOptions.map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => {
-                            setQuality(opt);
-                            setIsQualityOpen(false);
-                          }}
-                          className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
-                            opt === quality ? "bg-[#00e5ff]/10 text-[#00e5ff]" : "text-neutral-300 hover:bg-[#1e1e1e]"
-                          }`}
-                        >
-                          {opt}
-                          {config.premiumQualityOptions?.includes(opt) && (
-                            <span className="ml-1 text-[10px] text-[#00e5ff]">Pro</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-            )}
+              {config.label === "WAN 2.2" && (
+                <>
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <EnhancementToggle
+                    enabled={enhancementEnabled}
+                    onToggle={() => setEnhancementEnabled((v) => !v)}
+                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                  />
+                </>
+              )}
 
-            {/* Aspect Ratio Selector */}
-            <Popover.Root open={isAspectOpen} onOpenChange={setIsAspectOpen}>
-              <Popover.Trigger asChild>
-                <button type="button" className={PILL}>
-                  {aspectRatio}
-                </button>
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Content side="top" align="center" sideOffset={8} className="z-[100000] bg-transparent">
-                  <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a] p-1 shadow-xl">
-                    {config.aspectRatioOptions.map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        onClick={() => {
-                          setAspectRatio(ratio);
-                          setIsAspectOpen(false);
-                        }}
-                        className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
-                          ratio === aspectRatio ? "bg-[#00e5ff]/10 text-[#00e5ff]" : "text-neutral-300 hover:bg-[#1e1e1e]"
-                        }`}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
-                </Popover.Content>
-              </Popover.Portal>
-            </Popover.Root>
+              {config.label === "Higgsfield Soul 2.0" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  <EnhancementToggle
+                    enabled={enhancementEnabled}
+                    onToggle={() => setEnhancementEnabled((v) => !v)}
+                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                  />
+                  <LabeledToggle
+                    label="Color transfer"
+                    enabled={colorTransfer}
+                    onToggle={() => setColorTransferOpen(true)}
+                    icon={<Palette className="h-3.5 w-3.5 opacity-60" />}
+                    badge="New"
+                    hideSwitch
+                  />
+                </>
+              )}
 
-            {/* Count Control */}
-            <div className={PILL}>
-              <button
-                type="button"
-                onClick={() => setCount(Math.max(1, count - 1))}
-                disabled={count <= 1}
-                className="flex size-4 items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-40"
-              >
-                <span className="text-xs font-bold">−</span>
-              </button>
-              <span className="w-6 text-center font-semibold tabular-nums text-white text-xs">
-                {count}/{config.maxCount}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCount(Math.min(config.maxCount, count + 1))}
-                disabled={count >= config.maxCount}
-                className="flex size-4 items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-40"
-              >
-                <span className="text-xs font-bold">+</span>
-              </button>
+              {config.label === "Grok Imagine" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      compactWidth
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  {capabilities.qualityOptions && (
+                    <QualityPopover
+                      value={modelQuality}
+                      onChange={setModelQuality}
+                      options={capabilities.qualityOptions}
+                      id="quality"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                </>
+              )}
+
+              {config.label === "Seedream 4.0" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.qualityOptions && (
+                    <QualityPopover
+                      value={modelQuality}
+                      onChange={setModelQuality}
+                      options={capabilities.qualityOptions}
+                      id="quality"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
+
+              {config.label === "Seedream 4.5" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
+                    />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
+
+              {config.label === "Seedream 5.0 Lite" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
+                    />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      compactWidth
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
+
+              {config.label === "Seedream 5.0 Pro" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
+                    />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      detailed
+                      label="QUALITY"
+                      compactWidth
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
+
+              {(config.label === "Nano Banana Pro" || config.label === "Nano Banana 2") && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
+                    />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  {capabilities.resolutionOptions && (
+                    <ResolutionPopover
+                      value={modelResolution}
+                      onChange={setModelResolution}
+                      options={capabilities.resolutionOptions}
+                      id="resolution"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
+
+              {config.label === "Nano Banana 2 Lite" && (
+                <>
+                  {capabilities.assetUpload && (
+                    <AssetsButtonGroup
+                      onOpenPicker={openUploadsPicker}
+                      onOpenElementsPicker={openElementsPicker}
+                    />
+                  )}
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                  {capabilities.qualityOptions && (
+                    <QualityPopover
+                      value={modelQuality}
+                      onChange={setModelQuality}
+                      options={capabilities.qualityOptions}
+                      id="quality"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                </>
+              )}
+
+              {config.label === "Z-Image" && (
+                <>
+                  <ModelSelectorDropdown
+                    config={config}
+                    modelParam={modelParam}
+                    isOpen={isModelOpen}
+                    setIsOpen={setIsModelOpen}
+                    modelSearch={modelSearch}
+                    setModelSearch={setModelSearch}
+                    onSelect={handleModelSelect}
+                  />
+                  {capabilities.aspectRatioOptions && (
+                    <AspectRatioPopover
+                      value={modelAspectRatio}
+                      onChange={setModelAspectRatio}
+                      options={capabilities.aspectRatioOptions}
+                      id="aspectRatio"
+                      openId={openPopoverId}
+                      onOpenIdChange={setOpenPopoverId}
+                    />
+                  )}
+                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                </>
+              )}
             </div>
+          ) : (
+            <div className="mt-auto flex flex-wrap items-center gap-1">
+              {/* Model Selector */}
+              <ModelSelectorDropdown
+                config={config}
+                modelParam={modelParam}
+                isOpen={isModelOpen}
+                setIsOpen={setIsModelOpen}
+                modelSearch={modelSearch}
+                setModelSearch={setModelSearch}
+                onSelect={handleModelSelect}
+              />
 
-            {/* Draw Button */}
-            {config.showDraw && (
-              <button type="button" onClick={() => onDrawOpen?.(true)} className={PILL}>
-                <span>✏️</span>
-                <span>Draw</span>
-              </button>
-            )}
-          </div>
+              {/* Quality Selector */}
+              {config.qualityOptions.length > 0 && (
+                <Popover.Root open={isQualityOpen} onOpenChange={setIsQualityOpen}>
+                  <Popover.Trigger asChild>
+                    <button type="button" className={PILL}>
+                      {quality}
+                    </button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content side="top" align="center" sideOffset={8} className="z-[100000] bg-transparent">
+                      <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a] p-1 shadow-xl">
+                        {config.qualityOptions.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              setQuality(opt);
+                              setIsQualityOpen(false);
+                            }}
+                            className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition-colors ${
+                              opt === quality ? "bg-[#00e5ff]/10 text-[#00e5ff]" : "text-neutral-300 hover:bg-[#1e1e1e]"
+                            }`}
+                          >
+                            {opt}
+                            {config.premiumQualityOptions?.includes(opt) && (
+                              <span className="ml-1 text-[10px] text-[#00e5ff]">Pro</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+              )}
+
+              {/* Aspect Ratio Selector — shared 200px Higgsfield-style popup,
+                  replacing the old narrow black text-only dropdown. */}
+              <AspectRatioPopover
+                value={aspectRatio}
+                onChange={setAspectRatio}
+                options={toRatioChoices(config.aspectRatioOptions)}
+                id="legacyAspectRatio"
+                openId={openPopoverId}
+                onOpenIdChange={setOpenPopoverId}
+              />
+
+              {/* Count Control */}
+              <div className={PILL}>
+                <button
+                  type="button"
+                  onClick={() => setCount(Math.max(1, count - 1))}
+                  disabled={count <= 1}
+                  className="flex size-4 items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-40"
+                >
+                  <span className="text-xs font-bold">−</span>
+                </button>
+                <span className="w-6 text-center font-semibold tabular-nums text-white text-xs">
+                  {count}/{config.maxCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCount(Math.min(config.maxCount, count + 1))}
+                  disabled={count >= config.maxCount}
+                  className="flex size-4 items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-40"
+                >
+                  <span className="text-xs font-bold">+</span>
+                </button>
+              </div>
+
+              {/* Draw Button */}
+              {config.showDraw && (
+                <button type="button" onClick={() => onDrawOpen?.(true)} className={PILL}>
+                  <span>✏️</span>
+                  <span>Draw</span>
+                </button>
+              )}
+            </div>
+          )}
         </form>
+
+        {/* Soul 2.0 Character + General cards — sit beside Generate, never
+            inside the compact bottom control row. */}
+        {capabilities?.characterCards && (
+          <div className="flex shrink-0 items-center gap-2 self-center">
+            <CharacterCardPopover />
+            <SoulGeneralCard
+              selected={soulGeneralSelected}
+              onToggle={() => setSoulGeneralSelected((v) => !v)}
+            />
+          </div>
+        )}
 
         {/* Generate Button */}
         <button
@@ -453,6 +1359,27 @@ export default function ImageForm({ onDrawOpen }: ImageFormProps) {
         multiple
         accept=".jpg,.jpeg,.png,.webp"
         className="sr-only"
+      />
+
+      <Cinema25AssetsPicker
+        isOpen={assetsPickerOpen}
+        onClose={() => setAssetsPickerOpen(false)}
+        context="reference"
+        onSelectAsset={assetsPickerElementsMode ? addElementFromPicker : addAssetFromPicker}
+        showElementsTab={assetsPickerElementsMode}
+        initialTab={assetsPickerElementsMode ? "elements" : "uploads"}
+      />
+
+      <ColorTransferPanel
+        isOpen={colorTransferOpen}
+        onClose={() => setColorTransferOpen(false)}
+        swatches={colorTransferSwatches}
+        onAddSwatch={(swatch) => updateColorTransferForModel({ swatches: [...colorTransferSwatches, swatch] })}
+        onRemoveSwatch={(id) =>
+          updateColorTransferForModel({ swatches: colorTransferSwatches.filter((s) => s.id !== id) })
+        }
+        selectedId={colorTransferSelectedId}
+        onSelect={(id) => updateColorTransferForModel({ selectedId: id })}
       />
     </div>
   );

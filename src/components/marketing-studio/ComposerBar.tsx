@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, ChevronDown, Settings } from "lucide-react";
+import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import { UploadedMedia } from "./MediaAttachPanel";
 import { HookItem } from "./HookPanel";
 import { SettingItem } from "./SettingPanel";
@@ -78,7 +79,10 @@ export default function ComposerBar({
       </div>
 
       {/* MAIN COMPOSER BAR - ONE CONNECTED HORIZONTAL UNIT */}
-      <div className="relative flex h-[116px] flex-1 items-stretch rounded-[24px] border border-white/10 bg-[#24262b] p-3 shadow-[0_8px_0_rgba(0,0,0,0.25),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+      <div
+        className="relative flex h-[116px] flex-1 items-stretch rounded-[24px] p-3"
+        style={PROMPT_BAR_SURFACE}
+      >
         {/* LEFT: PLUS BUTTON + PROMPT INPUT */}
         <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
           {/* Top Row: Plus + Textarea */}

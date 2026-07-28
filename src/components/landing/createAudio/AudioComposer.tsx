@@ -22,6 +22,11 @@ import {
   type QwenSettings,
 } from "./voiceoverModelConfig";
 import RotarySelector from "./RotarySelector";
+import {
+  PROMPT_BAR_SURFACE_TRANSLUCENT,
+  PROMPT_BAR_CAVITY_SURFACE,
+  PROMPT_BAR_PANEL_SURFACE,
+} from "@/lib/promptBarChassis";
 
 /** Neon turquoise brand accent (per 1:1 spec) — kept only on the Voice Preset card. */
 const NEON = "#00F0FF";
@@ -493,13 +498,8 @@ export default function AudioComposer({
             Language chip or the sample-rate/speed/volume/pitch/output row. */}
         {showReferenceVideo && (
           <div
-            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] border px-2"
-            style={{
-              background: "rgba(20,21,23,0.96)",
-              borderColor: "rgba(255,255,255,0.08)",
-              boxShadow:
-                "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
-            }}
+            className="flex h-[120px] min-w-0 flex-1 items-center gap-2 rounded-[22px] px-2"
+            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
           >
             <input
               ref={fileRef}
@@ -510,38 +510,42 @@ export default function AudioComposer({
                 onReferenceVideo(e.target.files?.[0]?.name ?? null)
               }
             />
-            {/* Reference Video upload — large horizontal region, fills remaining width */}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleReferenceDrop}
-              aria-label="Upload reference video"
-              className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-2xl px-6 text-left transition-colors hover:bg-white/[0.06]"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
+            {/* Machined recess (cavity) around the Reference Video panel —
+                a visibly darker channel between the chassis and the panel. */}
+            <div
+              className="flex h-full min-w-0 flex-1 rounded-2xl p-2"
+              style={PROMPT_BAR_CAVITY_SURFACE}
             >
-              <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-                style={{ background: "rgba(255,255,255,0.06)" }}
+              {/* Reference Video upload — large horizontal region, fills remaining width */}
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleReferenceDrop}
+                aria-label="Upload reference video"
+                className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-xl px-6 text-left transition-all hover:brightness-125"
+                style={PROMPT_BAR_PANEL_SURFACE}
               >
-                <Video className="h-5 w-5 text-zinc-300" />
-              </span>
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-sm font-semibold text-white">
-                  Reference Video
+                <span
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
+                >
+                  <Video className="h-5 w-5 text-zinc-300" />
                 </span>
-                <span className="truncate text-xs text-zinc-500">
-                  {referenceVideo ? (
-                    <span className="text-zinc-300">{referenceVideo}</span>
-                  ) : (
-                    "Drop here or Choose from files"
-                  )}
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-sm font-semibold text-white">
+                    Reference Video
+                  </span>
+                  <span className="truncate text-xs text-zinc-500">
+                    {referenceVideo ? (
+                      <span className="text-zinc-300">{referenceVideo}</span>
+                    ) : (
+                      "Drop here or Choose from files"
+                    )}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
 
             {/* Voice Preset — matches the Voiceover composer's card exactly */}
             <button
@@ -629,13 +633,8 @@ export default function AudioComposer({
             longer lines up with the left mode card / Reference Video bar. */}
         {isVoiceover && (
         <div
-          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] border px-2 transition-[height,width,background,border-radius,padding] duration-200"
-          style={{
-            background: "rgba(20,21,23,0.96)",
-            borderColor: "rgba(255,255,255,0.08)",
-            boxShadow:
-              "0 12px 28px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.04)",
-          }}
+          className="flex h-[120px] min-w-0 flex-1 items-end gap-2 rounded-[22px] px-2 transition-[height,width,background,border-radius,padding] duration-200"
+          style={PROMPT_BAR_SURFACE_TRANSLUCENT}
         >
           {/* Voiceover: text prompt input + model selector (shared by all six models) —
               one continuous surface, no nested inner panel. min-height keeps it

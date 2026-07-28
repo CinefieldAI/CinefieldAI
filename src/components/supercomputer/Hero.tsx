@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, ChevronDown } from "lucide-react";
 import ModelSelectorDropdown from "./ModelSelectorDropdown";
+import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 
 const PLACEHOLDERS = [
   "Make product shots for my campaign",
@@ -169,10 +170,8 @@ export default function Hero() {
         <div className="w-full max-w-[39.1875rem] mt-1">
           <div className="composer-beam">
             <div
-              className="relative bg-[rgba(35,38,42,0.75)] backdrop-blur-[20px] rounded-[24px] p-3 border border-[rgba(255,255,255,0.05)] flex min-h-[84px] flex-col gap-1"
-              style={{
-                boxShadow: "0 2px 4px -0.5px rgba(0,0,0,0.12), inset 0 2px 3px 0 rgba(255,255,255,0.05)",
-              }}
+              className="relative rounded-[24px] p-3 flex min-h-[84px] flex-col gap-1"
+              style={PROMPT_BAR_SURFACE}
             >
               {/* Input + Placeholder */}
               <div className="relative flex w-full flex-1 items-start px-1 pt-1">
@@ -255,7 +254,7 @@ export default function Hero() {
                     padding: "0 4px",
                     borderRadius: "2px",
                     fontWeight: 700,
-                    fontSize: "10px",
+                    fontSize: "14px",
                     color: "white",
                     marginLeft: "4px",
                   }}>
