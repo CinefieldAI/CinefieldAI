@@ -34,7 +34,7 @@ export default function CapabilityCard({
           {/* LOCKED badge */}
           <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 border border-white/20 backdrop-blur-sm">
             <Lock className="w-3 h-3 text-white/70" />
-            <span className="text-[10px] font-bold text-white/70 uppercase">Locked</span>
+            <span className="text-sm font-bold text-white/70 uppercase">Locked</span>
           </div>
         </div>
 
@@ -111,7 +111,7 @@ export default function CapabilityCard({
                 </div>
 
                 {/* Generate Button */}
-                <button className="w-full px-6 py-3 rounded-xl bg-[#85f02d] hover:bg-[#99ff33] text-[#0a0a0a] font-bold transition-colors">
+                <button className="w-full px-6 py-3 rounded-xl bg-[#D97757] hover:bg-[#e08a6c] text-black font-bold transition-colors">
                   Generate
                 </button>
               </div>

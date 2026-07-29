@@ -2,6 +2,8 @@
 
 import { Plus, ChevronDown, Settings } from "lucide-react";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
+import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
 import { HookItem } from "./HookPanel";
 import { SettingItem } from "./SettingPanel";
@@ -26,8 +28,16 @@ interface ComposerBarProps {
   onProductCardClick: () => void;
   onAvatarCardClick: () => void;
   onGenerate: () => void;
+  resizeWidth: number;
+  resizeHeight: number;
+  resizeController: PromptSurfaceResizeController;
   isSticky?: boolean;
 }
+
+export const MARKETING_COMPOSER_DEFAULT_WIDTH = 980;
+export const MARKETING_COMPOSER_DEFAULT_HEIGHT = 116;
+export const MARKETING_COMPOSER_MAX_WIDTH = 1180;
+export const MARKETING_COMPOSER_MAX_HEIGHT = 420;
 
 export default function ComposerBar({
   prompt,
@@ -49,9 +59,29 @@ export default function ComposerBar({
   onProductCardClick,
   onAvatarCardClick,
   onGenerate,
+  resizeWidth,
+  resizeHeight,
+  resizeController,
 }: ComposerBarProps) {
   return (
-    <div className="mx-auto flex w-[min(980px,calc(100vw-32px))] items-stretch gap-2">
+    <div
+      className={`relative mx-auto h-[116px] flex-none ${
+        resizeController.isResizing
+          ? ""
+          : "transition-[width,transform] duration-150 ease-out"
+      }`}
+      style={{
+        width: resizeWidth,
+        transform: `translateX(${Math.max(
+          0,
+          resizeWidth - MARKETING_COMPOSER_DEFAULT_WIDTH,
+        ) / 2}px)`,
+      }}
+    >
+      <div
+        className="absolute inset-x-0 bottom-0 flex items-end gap-2"
+        style={{ height: resizeHeight }}
+      >
       {/* LEFT PRODUCT/APP SELECTOR */}
       <div className="h-[116px] w-[70px] rounded-[22px] bg-[#23252b] border border-white/10 p-1 flex flex-col gap-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
         <button
@@ -80,9 +110,21 @@ export default function ComposerBar({
 
       {/* MAIN COMPOSER BAR - ONE CONNECTED HORIZONTAL UNIT */}
       <div
-        className="relative flex h-[116px] flex-1 items-stretch rounded-[24px] p-3"
-        style={PROMPT_BAR_SURFACE}
+        className={`relative flex min-w-0 flex-1 items-stretch rounded-[24px] p-3 ${
+          resizeController.isResizing
+            ? ""
+            : "transition-[height] duration-150 ease-out"
+        }`}
+        style={{ ...PROMPT_BAR_SURFACE, height: resizeHeight }}
       >
+        <PromptResizeHandles
+          verticalHandleProps={resizeController.verticalHandleProps}
+          cornerHandleProps={resizeController.cornerHandleProps}
+          isResizing={resizeController.isResizing}
+          verticalLabel="Resize marketing prompt height"
+          cornerLabel="Resize marketing prompt width and height"
+        />
+
         {/* LEFT: PLUS BUTTON + PROMPT INPUT */}
         <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
           {/* Top Row: Plus + Textarea */}
@@ -142,7 +184,7 @@ export default function ComposerBar({
         </div>
 
         {/* RIGHT: PRODUCT TILE + AVATAR TILE + ATTACHED MEDIA + GENERATE */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-end gap-2">
           {/* PRODUCT TILE */}
           <button
             onClick={onProductCardClick}
@@ -184,12 +226,13 @@ export default function ComposerBar({
           {/* GENERATE BUTTON */}
           <button
             onClick={onGenerate}
-            className="h-20 w-[120px] rounded-xl bg-[linear-gradient(135deg,#1fffd0_0%,#00c8ff_100%)] hover:opacity-90 text-black flex flex-col items-center justify-center font-bold text-sm transition-opacity"
+            className="h-20 w-[120px] rounded-xl bg-[linear-gradient(135deg,#D97757_0%,#B85A3E_100%)] hover:opacity-90 text-black flex flex-col items-center justify-center font-bold text-sm transition-opacity"
           >
             <span>GENERATE</span>
             <div className="text-[10px] mt-1">✦ 156 130</div>
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

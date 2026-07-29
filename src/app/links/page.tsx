@@ -15,10 +15,8 @@ interface HubLink {
 const LINKS: HubLink[] = [
   { href: "/", title: "Ana Sayfa", description: "CINEFIELD landing / AppShell" },
   { href: "/audio/create", title: "Audio Create", description: "Voiceover · Change Voice · Translate composer" },
-  { href: "/generate", title: "Cinema Studio", description: "Video generation (default Cinema 3.5)" },
+  { href: "/generate", title: "Cinema Studio", description: "Video generation (default Cinema 3.5); Image toggle for 26-model image generation" },
   { href: "/generate?model=cinema-2.5", title: "Cinema Studio 2.5", description: "Director Panel + prompt bar" },
-  { href: "/generate/image", title: "Image Generate", description: "20-model image generation" },
-  { href: "/image/create", title: "Image Create", description: "Image creation workspace" },
   { href: "/video/create", title: "Video Create", description: "Video creation workspace" },
   { href: "/marketing-studio/product", title: "Marketing Studio", description: "Product → video ad composer" },
   { href: "/supercomputer", title: "Supercomputer", description: "DeepSeek beam composer" },

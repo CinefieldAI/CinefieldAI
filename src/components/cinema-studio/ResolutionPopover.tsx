@@ -14,6 +14,11 @@ interface ResolutionPopoverProps {
   portalContainer?: HTMLElement | null;
   /** Overrides the default option list (e.g. Kling 3.0 only supports 720p/1080p/4K). */
   options?: string[];
+  /** Overrides the default 180px popup width — Cinema Studio 3.5 uses a
+   *  compact 120px. */
+  width?: number;
+  /** Radix collision padding — defaults to 0 (existing behavior). */
+  collisionPadding?: number;
 }
 
 export default function ResolutionPopover({
@@ -23,6 +28,8 @@ export default function ResolutionPopover({
   isOpen,
   portalContainer,
   options = DEFAULT_RESOLUTION_OPTIONS,
+  width = 180,
+  collisionPadding = 0,
 }: ResolutionPopoverProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -52,7 +59,11 @@ export default function ResolutionPopover({
           side="top"
           align="center"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[180px] pointer-events-auto"
+          collisionPadding={collisionPadding}
+          role="listbox"
+          aria-label="Resolution"
+          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto"
+          style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >
           <div className="px-3 py-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">

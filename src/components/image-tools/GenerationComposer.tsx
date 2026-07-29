@@ -292,7 +292,7 @@ export default function GenerationComposer() {
 
           <button
             type="submit"
-            className="h-10 px-6 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-colors text-sm"
+            className="h-10 px-6 rounded-xl bg-[#D97757] text-black font-semibold hover:bg-[#e08a6c] transition-colors text-sm"
           >
             Generate
           </button>
@@ -324,7 +324,7 @@ function ModelItemButton({
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className="text-xs font-medium text-white leading-tight">
+        <h4 className="model-title">
           {model.label}
         </h4>
         <p className="text-[10px] text-zinc-500 truncate">{model.description}</p>

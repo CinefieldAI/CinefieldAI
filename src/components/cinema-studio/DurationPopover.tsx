@@ -18,6 +18,15 @@ interface DurationPopoverProps {
    * discrete options rather than a min/max range, e.g. Higgsfield's 3s/5s).
    */
   mode?: "buttons" | "slider";
+  /** Popover alignment relative to the trigger — defaults to "start" to
+   *  preserve every existing caller's behavior; Cinema Studio 3.5 uses
+   *  "center" so the popup sits centered above its trigger. */
+  align?: "start" | "center" | "end";
+  /** Overrides the computed width (220px buttons / 334px slider) — Cinema
+   *  Studio 3.5 uses a stable 200px regardless of mode. */
+  width?: number;
+  /** Radix collision padding — defaults to 0 (existing behavior). */
+  collisionPadding?: number;
 }
 
 /** Shared h-7 control-pill style. */
@@ -32,6 +41,9 @@ export default function DurationPopover({
   isOpen,
   onOpenChange,
   mode,
+  align = "start",
+  width,
+  collisionPadding = 0,
 }: DurationPopoverProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
@@ -49,6 +61,7 @@ export default function DurationPopover({
         <button
           type="button"
           aria-label="Duration"
+          aria-haspopup="dialog"
           aria-expanded={controlledOpen}
           className={PILL}
         >
@@ -60,10 +73,11 @@ export default function DurationPopover({
       <Popover.Portal container={portalContainer}>
         <Popover.Content
           side="top"
-          align="start"
+          align={align}
           sideOffset={8}
+          collisionPadding={collisionPadding}
           className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto"
-          style={{ width: showButtons ? "220px" : "334px" }}
+          style={{ width: width ?? (showButtons ? "220px" : "334px") }}
         >
           <div className="flex flex-col gap-3 rounded-xl p-2">
             <div>

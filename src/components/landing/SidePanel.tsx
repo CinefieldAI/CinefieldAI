@@ -450,7 +450,7 @@ export default function SidePanel({ activePanel, onClose }: SidePanelProps) {
             footer={
               <button
                 type="button"
-                className="w-full rounded-full bg-gradient-to-r from-magenta-500 to-magenta-600 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+                className="w-full rounded-full bg-gradient-to-r from-[#D97757] to-[#B85A3E] py-2.5 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
               >
                 Generate Image
               </button>
@@ -470,7 +470,7 @@ export default function SidePanel({ activePanel, onClose }: SidePanelProps) {
               <div className="space-y-3">
                 <button
                   type="button"
-                  className="w-full rounded-full bg-gradient-to-r from-magenta-500 to-magenta-600 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+                  className="w-full rounded-full bg-gradient-to-r from-[#D97757] to-[#B85A3E] py-2.5 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
                 >
                   Generate Video
                 </button>
@@ -497,7 +497,7 @@ export default function SidePanel({ activePanel, onClose }: SidePanelProps) {
             footer={
               <button
                 type="button"
-                className="w-full rounded-full bg-gradient-to-r from-magenta-500 to-magenta-600 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+                className="w-full rounded-full bg-gradient-to-r from-[#D97757] to-[#B85A3E] py-2.5 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
               >
                 Generate Lipsync
               </button>

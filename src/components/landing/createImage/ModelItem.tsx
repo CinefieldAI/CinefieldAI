@@ -44,7 +44,7 @@ export default function ModelItem({ model, isSelected, onSelect }: ModelItemProp
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-white">
+        <span className="model-title block truncate">
           {model.name}
         </span>
         <span className="block truncate text-xs text-zinc-500">{model.description}</span>

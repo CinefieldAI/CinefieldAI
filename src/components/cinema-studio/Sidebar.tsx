@@ -83,11 +83,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex h-11 items-center justify-between px-1.5">
         <div className="flex min-w-0 items-center gap-2">
           <Image
-            src="/10d90591-1bbe-4cf6-9753-aa2faa93afbf.png"
+            src="/b1459dcb-c6e3-4060-b155-466a24ced9de.png"
             alt="CINEFIELD"
             width={28}
             height={28}
-            className="size-7 shrink-0 rounded-lg object-cover drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]"
+            className="size-7 shrink-0 rounded-lg object-cover drop-shadow-[0_0_8px_rgba(217,119,87,0.5)]"
           />
           {!collapsed && (
             <span className="truncate text-sm font-semibold text-white">

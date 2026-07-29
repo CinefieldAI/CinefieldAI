@@ -21,6 +21,8 @@ import {
   type QwenSettings,
 } from "./voiceoverModelConfig";
 import RotarySelector from "./RotarySelector";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import {
   PROMPT_BAR_OUTER_SHELL,
   PROMPT_BAR_SURFACE_TRANSLUCENT,
@@ -39,7 +41,6 @@ const PROMPT_SINGLE_LINE_SCROLL_HEIGHT = 40;
 const DEFAULT_COMPOSER_WIDTH = 1040;
 const MAX_COMPOSER_WIDTH = 1180;
 const COMPOSER_VIEWPORT_GUTTER = 32;
-const COMPOSER_RESIZE_STEP = 24;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -55,7 +56,20 @@ const getViewportSafePromptHeight = () =>
 const getViewportSafeComposerWidth = () =>
   typeof window === "undefined"
     ? MAX_COMPOSER_WIDTH
-    : Math.min(MAX_COMPOSER_WIDTH, Math.max(320, window.innerWidth - COMPOSER_VIEWPORT_GUTTER));
+    : (() => {
+        const defaultViewportWidth = Math.min(
+          DEFAULT_COMPOSER_WIDTH,
+          window.innerWidth - COMPOSER_VIEWPORT_GUTTER,
+        );
+        const anchoredLeft = (window.innerWidth - defaultViewportWidth) / 2;
+        return Math.min(
+          MAX_COMPOSER_WIDTH,
+          Math.max(
+            320,
+            window.innerWidth - anchoredLeft - COMPOSER_VIEWPORT_GUTTER / 2,
+          ),
+        );
+      })();
 
 /** Shared dark translucent popover surface used by every Voiceover popover. */
 const POPOVER_SURFACE = {
@@ -409,10 +423,8 @@ export default function AudioComposer({
   const [promptHeight, setPromptHeight] = useState(DEFAULT_PROMPT_HEIGHT);
   const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_PROMPT_HEIGHT);
   const [hasManualHeight, setHasManualHeight] = useState(false);
-  const [isResizingPrompt, setIsResizingPrompt] = useState(false);
   const [composerWidth, setComposerWidth] = useState(DEFAULT_COMPOSER_WIDTH);
   const [maxComposerWidth, setMaxComposerWidth] = useState(MAX_COMPOSER_WIDTH);
-  const [isResizingComposerWidth, setIsResizingComposerWidth] = useState(false);
 
   // Translate mode's own menu-open state (kept separate from Voiceover's above).
   const [translateSampleRateMenuOpen, setTranslateSampleRateMenuOpen] = useState(false);
@@ -425,15 +437,8 @@ export default function AudioComposer({
   const audioRefInputRef = useRef<HTMLInputElement>(null);
   const imageRefInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
-  const resizeStartRef = useRef({ pointerY: 0, height: DEFAULT_PROMPT_HEIGHT });
-  const resizeFrameRef = useRef<number | null>(null);
-  const pendingHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
   const contentRequiredHeightRef = useRef(MIN_PROMPT_HEIGHT);
   const manualPromptHeightRef = useRef(DEFAULT_PROMPT_HEIGHT);
-  const composerWidthStartRef = useRef({
-    pointerX: 0,
-    width: DEFAULT_COMPOSER_WIDTH,
-  });
 
   useEffect(() => {
     const updateMaximum = () => {
@@ -479,173 +484,35 @@ export default function AudioComposer({
     );
   }, [script, hasManualHeight, maxPromptHeight]);
 
-  useEffect(
-    () => () => {
-      if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
-      document.body.style.userSelect = "";
-    },
-    [],
-  );
-
-  const commitPendingPromptHeight = useCallback(() => {
-    resizeFrameRef.current = null;
-    setPromptHeight(pendingHeightRef.current);
+  const setPromptHeightFromCorner = useCallback((nextHeight: number) => {
+    manualPromptHeightRef.current = nextHeight;
+    setHasManualHeight(true);
+    setPromptHeight(nextHeight);
   }, []);
 
-  const schedulePromptHeight = useCallback(
-    (nextHeight: number) => {
-      pendingHeightRef.current = nextHeight;
-      if (resizeFrameRef.current === null) {
-        resizeFrameRef.current = requestAnimationFrame(commitPendingPromptHeight);
-      }
-    },
-    [commitPendingPromptHeight],
-  );
-
-  const handleResizePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.currentTarget.focus();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      resizeStartRef.current = { pointerY: event.clientY, height: promptHeight };
-      pendingHeightRef.current = promptHeight;
-      setIsResizingPrompt(true);
-      setHasManualHeight(true);
-      document.body.style.userSelect = "none";
-    },
-    [promptHeight],
-  );
-
-  const handleResizePointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-      const minimum = Math.max(MIN_PROMPT_HEIGHT, contentRequiredHeightRef.current);
-      const nextHeight = clamp(
-        resizeStartRef.current.height + resizeStartRef.current.pointerY - event.clientY,
-        minimum,
-        maxPromptHeight,
-      );
+  const handleCornerManualResize = useCallback(
+    (_nextWidth: number, nextHeight: number) => {
       manualPromptHeightRef.current = nextHeight;
-      schedulePromptHeight(nextHeight);
-    },
-    [maxPromptHeight, schedulePromptHeight],
-  );
-
-  const finishPromptResize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-      if (resizeFrameRef.current !== null) {
-        cancelAnimationFrame(resizeFrameRef.current);
-        resizeFrameRef.current = null;
-        setPromptHeight(pendingHeightRef.current);
-      }
-      setIsResizingPrompt(false);
-      document.body.style.userSelect = "";
-    },
-    [],
-  );
-
-  const resetPromptHeight = useCallback(() => {
-    manualPromptHeightRef.current = DEFAULT_PROMPT_HEIGHT;
-    setHasManualHeight(false);
-    setPromptHeight(Math.max(DEFAULT_PROMPT_HEIGHT, contentRequiredHeightRef.current));
-  }, []);
-
-  const handleResizeKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const minimum = Math.max(MIN_PROMPT_HEIGHT, contentRequiredHeightRef.current);
-      let nextHeight: number | null = null;
-
-      if (event.key === "ArrowUp") nextHeight = promptHeight + PROMPT_RESIZE_STEP;
-      if (event.key === "ArrowDown") nextHeight = promptHeight - PROMPT_RESIZE_STEP;
-      if (event.key === "Home") nextHeight = minimum;
-      if (event.key === "End") nextHeight = maxPromptHeight;
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        resetPromptHeight();
-        return;
-      }
-      if (nextHeight === null) return;
-
-      event.preventDefault();
-      const clampedHeight = clamp(nextHeight, minimum, maxPromptHeight);
-      manualPromptHeightRef.current = clampedHeight;
       setHasManualHeight(true);
-      setPromptHeight(clampedHeight);
-    },
-    [maxPromptHeight, promptHeight, resetPromptHeight],
-  );
-
-  const handleComposerWidthPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.currentTarget.focus();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      composerWidthStartRef.current = {
-        pointerX: event.clientX,
-        width: composerWidth,
-      };
-      setIsResizingComposerWidth(true);
-      document.body.style.userSelect = "none";
-    },
-    [composerWidth],
-  );
-
-  const handleComposerWidthPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-      const minimum = Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth);
-      setComposerWidth(
-        clamp(
-          composerWidthStartRef.current.width +
-            event.clientX -
-            composerWidthStartRef.current.pointerX,
-          minimum,
-          maxComposerWidth,
-        ),
-      );
-    },
-    [maxComposerWidth],
-  );
-
-  const finishComposerWidthResize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-      setIsResizingComposerWidth(false);
-      document.body.style.userSelect = "";
     },
     [],
   );
 
-  const resetComposerWidth = useCallback(() => {
-    setComposerWidth(Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth));
-  }, [maxComposerWidth]);
-
-  const handleComposerWidthKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const minimum = Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth);
-      let nextWidth: number | null = null;
-
-      if (event.key === "ArrowRight") nextWidth = composerWidth + COMPOSER_RESIZE_STEP;
-      if (event.key === "ArrowLeft") nextWidth = composerWidth - COMPOSER_RESIZE_STEP;
-      if (event.key === "Home") nextWidth = minimum;
-      if (event.key === "End") nextWidth = maxComposerWidth;
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        resetComposerWidth();
-        return;
-      }
-      if (nextWidth === null) return;
-
-      event.preventDefault();
-      setComposerWidth(clamp(nextWidth, minimum, maxComposerWidth));
-    },
-    [composerWidth, maxComposerWidth, resetComposerWidth],
-  );
+  const audioCornerResize = usePromptSurfaceResize({
+    width: composerWidth,
+    height: promptHeight,
+    minWidth: Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth),
+    maxWidth: maxComposerWidth,
+    minHeight: Math.max(MIN_PROMPT_HEIGHT, contentRequiredHeightRef.current),
+    maxHeight: maxPromptHeight,
+    defaultWidth: DEFAULT_COMPOSER_WIDTH,
+    defaultHeight: DEFAULT_PROMPT_HEIGHT,
+    setWidth: setComposerWidth,
+    setHeight: setPromptHeightFromCorner,
+    storageKey: "audioPromptDimensions",
+    step: PROMPT_RESIZE_STEP,
+    onManualResize: handleCornerManualResize,
+  });
 
   // feature: 0 Voiceover · 1 Change Voice · 2 Translate (same index the
   // standalone rotary selector uses).
@@ -734,48 +601,48 @@ export default function AudioComposer({
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div
         className={`pointer-events-auto relative flex w-full items-end gap-2 ${
-          isResizingComposerWidth ? "" : "transition-[max-width] duration-150 ease-out"
+          audioCornerResize.isResizing
+            ? ""
+            : "transition-[max-width,transform] duration-150 ease-out"
         }`}
-        style={{ maxWidth: composerWidth }}
+        style={{
+          maxWidth: composerWidth,
+          transform: `translateX(${Math.max(
+            0,
+            composerWidth - Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth),
+          ) / 2}px)`,
+        }}
       >
-        {isVoiceover && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize audio composer width"
-            aria-valuemin={Math.min(DEFAULT_COMPOSER_WIDTH, maxComposerWidth)}
-            aria-valuemax={maxComposerWidth}
-            aria-valuenow={Math.round(composerWidth)}
-            tabIndex={0}
-            onPointerDown={handleComposerWidthPointerDown}
-            onPointerMove={handleComposerWidthPointerMove}
-            onPointerUp={finishComposerWidthResize}
-            onPointerCancel={finishComposerWidthResize}
-            onDoubleClick={resetComposerWidth}
-            onKeyDown={handleComposerWidthKeyDown}
-            className="group absolute -right-2 top-1/2 z-20 flex h-14 w-4 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center focus-visible:outline-none"
-          >
-            <span
-              aria-hidden
-              className={`h-10 w-1 rounded-full transition-colors ${
-                isResizingComposerWidth
-                  ? "bg-white/35"
-                  : "bg-white/0 group-hover:bg-white/20 group-focus-visible:bg-white/25"
-              }`}
-            />
-          </div>
-        )}
         {/* Standalone rotary mode selector — visually separate from the prompt bar */}
         <RotarySelector value={feature} onChange={onFeatureChange} />
+
+        {/* One persistent resizable shell for every Audio mode. Only the
+            controls inside this surface change when the rotary mode changes. */}
+        <div
+          className={`relative flex min-w-0 flex-1 items-stretch rounded-[24px] p-1 ${
+            audioCornerResize.isResizing
+              ? ""
+              : "transition-[height,width,background,border-radius,padding] duration-150 ease-out"
+          }`}
+          style={{ ...PROMPT_BAR_OUTER_SHELL, height: promptHeight }}
+        >
+          <div
+            className="relative flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2"
+            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
+          >
+            <PromptResizeHandles
+              verticalHandleProps={audioCornerResize.verticalHandleProps}
+              cornerHandleProps={audioCornerResize.cornerHandleProps}
+              isResizing={audioCornerResize.isResizing}
+              verticalLabel="Resize audio prompt height"
+              cornerLabel="Resize audio prompt width and height"
+            />
 
         {/* Change Voice & Translate: dedicated dark-neutral bar — Reference Video
             (large) + Voice Preset + Generate only. Translate no longer shows a
             Language chip or the sample-rate/speed/volume/pitch/output row. */}
         {showReferenceVideo && (
-          <div
-            className="flex h-[120px] min-w-0 flex-1 items-stretch rounded-[24px] p-1"
-            style={PROMPT_BAR_OUTER_SHELL}
-          >
+          <>
             <input
               ref={fileRef}
               type="file"
@@ -785,13 +652,6 @@ export default function AudioComposer({
                 onReferenceVideo(e.target.files?.[0]?.name ?? null)
               }
             />
-            {/* Gray prompt surface — same chassis(flat, thin) → surface(gradient)
-                nesting as the Cinema Studio prompt bars, so Audio matches them
-                instead of being one flat slab. */}
-            <div
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[20px] p-2"
-              style={PROMPT_BAR_SURFACE_TRANSLUCENT}
-            >
             {/* Reference Video upload — sits directly on the gray surface
                 (no separate dark frame layer); matches the reference, which
                 shows only a very subtle inset ring, not a visible dark gap. */}
@@ -903,30 +763,12 @@ export default function AudioComposer({
                 </>
               )}
             </button>
-            </div>
-          </div>
+          </>
         )}
 
-        {/* Unified prompt bar — Voiceover only; dark-neutral surface (matches Change Voice).
-            Explicit h-[120px] (matching the Reference Video bar + rotary selector)
-            instead of letting p-2 add to a content-driven auto height — otherwise
-            this bar renders ~18px taller than its siblings and its top edge no
-            longer lines up with the left mode card / Reference Video bar. */}
+        {/* Voiceover controls live inside the same persistent Audio shell. */}
         {isVoiceover && (
-        <div
-          className={`flex min-w-0 flex-1 items-stretch rounded-[24px] p-1 ${
-            isResizingPrompt
-              ? ""
-              : "transition-[height,width,background,border-radius,padding] duration-150 ease-out"
-          }`}
-          style={{ ...PROMPT_BAR_OUTER_SHELL, height: promptHeight }}
-        >
-          {/* Gray prompt surface — same chassis(flat, thin) → surface(gradient)
-              nesting as Change Voice/Translate and the Cinema Studio prompt bars. */}
-          <div
-            className="flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2"
-            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
-          >
+        <>
           {/* Voiceover: text prompt input + model selector (shared by all six models).
               No extra inner frame here — the chassis→gray-surface layering
               above already provides the depth; this box is just the plain
@@ -937,31 +779,6 @@ export default function AudioComposer({
           <div
             className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col self-stretch overflow-hidden rounded-2xl p-3"
           >
-            <div
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="Resize audio prompt"
-              aria-valuemin={MIN_PROMPT_HEIGHT}
-              aria-valuemax={maxPromptHeight}
-              aria-valuenow={Math.round(promptHeight)}
-              tabIndex={0}
-              onPointerDown={handleResizePointerDown}
-              onPointerMove={handleResizePointerMove}
-              onPointerUp={finishPromptResize}
-              onPointerCancel={finishPromptResize}
-              onDoubleClick={resetPromptHeight}
-              onKeyDown={handleResizeKeyDown}
-              className="group absolute inset-x-0 top-0 z-10 flex h-4 cursor-ns-resize touch-none items-start justify-center pt-1 focus-visible:outline-none"
-            >
-              <span
-                aria-hidden
-                className={`h-1 w-12 rounded-full transition-colors ${
-                  isResizingPrompt
-                    ? "bg-white/35"
-                    : "bg-white/10 group-hover:bg-white/25 group-focus-visible:bg-white/25"
-                }`}
-              />
-            </div>
             <textarea
               ref={promptRef}
               rows={1}
@@ -1386,9 +1203,10 @@ export default function AudioComposer({
               </>
             )}
           </button>
+          </>
+        )}
           </div>
         </div>
-        )}
       </div>
     </div>
   );

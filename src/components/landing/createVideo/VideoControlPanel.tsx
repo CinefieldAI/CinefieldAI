@@ -188,7 +188,7 @@ export default function VideoControlPanel({
           type="button"
           onClick={onGenerate}
           disabled={isGenerating}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-magenta-500 py-3 text-sm font-semibold text-white shadow-lg shadow-magenta-500/30 transition-all hover:bg-magenta-600 disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#D97757] py-3 text-sm font-semibold text-black shadow-lg shadow-[#D97757]/30 transition-all hover:bg-[#e08a6c] disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isGenerating ? (
             <>

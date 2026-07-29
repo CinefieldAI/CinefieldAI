@@ -38,6 +38,7 @@ export interface AudioModel {
   title: string;
   description: string;
   icon: LucideIcon;
+  iconSrc?: string;
   badge?: "NEW";
 }
 
@@ -62,30 +63,42 @@ export const AUDIO_MODELS: AudioModel[] = [
     title: "Seed Audio 1.0",
     description: "Multi-speaker scenes with speech and ambience",
     icon: Waves,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/seed-speech.svg",
   },
   {
     title: "Eleven v3",
     description: "Emotion and delivery control via inline tags",
     icon: AudioLines,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/elevenlabs.svg",
   },
   {
     title: "Qwen Audio 3.0",
     description: "Natural speech with voice, style, and emotion control",
     icon: AudioWaveform,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/qwen-audio.svg",
   },
   {
     title: "MiniMax Speech 2.8 HD",
     description: "High-fidelity single-voice narration",
     icon: Mic2,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/minimax.svg",
   },
   {
     title: "Seed Speech",
     description: "Multilingual speech across 30+ languages",
     icon: Sparkles,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/seed-speech.svg",
   },
   {
     title: "VibeVoice",
     description: "Long-form narration for audiobooks and podcasts",
     icon: Music2,
+    iconSrc:
+      "https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1920,quality=85/speech/vibevoice.svg",
   },
 ];

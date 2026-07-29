@@ -426,7 +426,7 @@ export default function NanoBananaProDrawPanel({
           </button>
           <button
             type="submit"
-            className="flex items-center justify-center gap-2 h-10 rounded-xl bg-[#CDFF00] text-black font-semibold text-caption-l min-w-36 lg:min-w-44 hover:brightness-90 transition-all"
+            className="flex items-center justify-center gap-2 h-10 rounded-xl bg-[#D97757] text-black font-semibold text-caption-l min-w-36 lg:min-w-44 hover:brightness-90 transition-all"
           >
             <span>✨</span>
             <span className="hidden sm:inline">Generate Image</span>

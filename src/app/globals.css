@@ -10,7 +10,7 @@
   --card-foreground: #f5f5f5;
   --popover: #0b0b0c;
   --popover-foreground: #f5f5f5;
-  --primary: #00e5ff;
+  --primary: #D97757;
   --primary-foreground: #ffffff;
   --secondary: #1a1a1c;
   --secondary-foreground: #f5f5f5;
@@ -22,7 +22,7 @@
   --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.1);
-  --ring: #00e5ff;
+  --ring: #D97757;
   --radius: 0.65rem;
 }
 
@@ -36,7 +36,7 @@
      existing utility classes flip color without per-file renames. */
   --color-magenta-300: #66efff;
   --color-magenta-400: #33eaff;
-  --color-magenta-500: #00e5ff;
+  --color-magenta-500: #D97757;
   --color-magenta-600: #00b8cc;
   --color-magenta-700: #008c9e;
 
@@ -104,3 +104,91 @@ body {
 [data-slot="navigation-menu-viewport"][data-state="closed"] {
   animation: nm-out 160ms ease-in;
 }
+
+/* Referenced by className="hide-scrollbar" across the app (image model
+   selectors, assets picker grids, etc.) — hides the scrollbar while keeping
+   the element scrollable. */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Higgsfield-exact model-title typography — applied alongside each model
+   list item's existing layout classes (truncate, block, etc). Matches
+   Higgsfield's model list pixel-for-pixel: Inter Variable 12px/16px,
+   weight 500, 0 tracking, pure white, no transform/shadow/underline. */
+.model-title {
+  font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0px;
+  color: #ffffff;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  font-style: normal;
+  text-shadow: none;
+  text-transform: none;
+}
+
+/* Frame tiles are selected by model-specific branches in the compact control
+   row, but visually belong to the fixed right action zone. Anchoring them to
+   the prompt surface prevents an 80px tile from increasing the 28px row
+   height or spilling below the composer. Generate occupies the final 120px. */
+.prompt-control-row > [data-prompt-frame-card] {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  margin: 0;
+  transform: translateY(-50%);
+}
+.prompt-control-row > [data-prompt-frame-card]:not(:has(~ [data-prompt-frame-card])) {
+  right: 138px;
+}
+.prompt-control-row > [data-prompt-frame-card]:has(~ [data-prompt-frame-card]):not(:has(~ [data-prompt-frame-card] ~ [data-prompt-frame-card])) {
+  right: 224px;
+}
+.prompt-control-row > [data-prompt-frame-card]:has(~ [data-prompt-frame-card] ~ [data-prompt-frame-card]) {
+  right: 310px;
+}
+.prompt-control-row:has(> [data-prompt-frame-card]) {
+  padding-right: 86px;
+}
+.prompt-control-row:has(> [data-prompt-frame-card] ~ [data-prompt-frame-card]) {
+  padding-right: 172px;
+}
+.prompt-control-row:has(> [data-prompt-frame-card] ~ [data-prompt-frame-card] ~ [data-prompt-frame-card]) {
+  padding-right: 258px;
+}
+
+/* Keep every legacy utility-based active state on the same orange brand
+   color, including controls that still use Tailwind color utilities. */
+.bg-emerald-500,
+.bg-green-500,
+.bg-lime-400,
+.bg-lime-500 { background-color: #D97757 !important; }
+.text-emerald-400,
+.text-emerald-500,
+.text-green-400,
+.text-green-500,
+.text-cyan-400,
+.text-cyan-500,
+.text-lime-300,
+.text-lime-400,
+.text-lime-500 { color: #D97757 !important; }
+.border-emerald-400,
+.border-emerald-500,
+.border-green-400,
+.border-green-500,
+.border-cyan-400,
+.border-cyan-500,
+.border-lime-400,
+.border-lime-500 { border-color: #D97757 !important; }

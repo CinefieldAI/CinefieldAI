@@ -200,7 +200,7 @@ export default function ModelSelectorDropdown({ onClose }: Props) {
         <IconBox icon={model.icon} src={model.iconSrc} />
         <span className="flex flex-1 flex-col items-start gap-0.5 overflow-hidden min-w-0">
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate text-base font-medium text-white">{model.name}</span>
+            <span className="model-title truncate">{model.name}</span>
             {model.info && <InfoIcon />}
           </span>
           <span className="truncate text-sm font-medium text-[#828282]">{model.description}</span>

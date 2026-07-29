@@ -179,7 +179,7 @@ export default function ImageGenerationForm({
             <button
               onClick={handleGenerate}
               disabled={!prompt.trim()}
-              className="h-12 px-8 rounded-lg bg-[#E61E8F] hover:bg-[#d41a7f] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm flex items-center gap-2 transition-all hover:shadow-lg hover:shadow-[#E61E8F]/30"
+              className="h-12 px-8 rounded-lg bg-[#D97757] hover:bg-[#e08a6c] disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold text-sm flex items-center gap-2 transition-all hover:shadow-lg hover:shadow-[#D97757]/30"
             >
               <Sparkles className="h-4 w-4" />
               Generate

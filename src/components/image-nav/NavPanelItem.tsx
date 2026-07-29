@@ -49,9 +49,9 @@ export default function NavPanelItem({
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">{title}</h3>
+          <h3 className="model-title">{title}</h3>
           {badge && (
-            <span className="rounded-full bg-magenta-500/20 px-2 py-0.5 text-[10px] font-semibold text-magenta-300">
+            <span className="rounded-full bg-magenta-500/20 px-2 py-0.5 text-sm font-semibold text-magenta-300">
               {badge}
             </span>
           )}

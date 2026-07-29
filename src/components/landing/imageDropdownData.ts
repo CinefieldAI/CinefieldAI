@@ -11,10 +11,22 @@ import {
   Repeat,
   Shirt,
   Shuffle,
+  Sparkles,
   Users,
   Video,
   type LucideIcon,
 } from "lucide-react";
+import type { ElementType } from "react";
+import {
+  FluxIcon,
+  GoogleIcon,
+  GrokIcon,
+  OpenAIIcon,
+  RecraftIcon,
+  SeedreamIcon,
+  TopazIcon,
+} from "@/components/cinema-studio/icons/ProviderIcons";
+import WanIcon from "@/components/cinema-studio/icons/WanIcon";
 
 export type ImageFeatureKey =
   | "create"
@@ -136,27 +148,53 @@ export const IMAGE_FEATURES: ImageFeature[] = [
 export interface ImageModel {
   name: string;
   meta: string;
-  /** Optional custom icon image (public path). Falls back to the name initial. */
-  icon?: string;
+  icon: ElementType | string;
 }
 
 export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
-  { name: "Higgsfield Soul 2.0", meta: "Photoreal portrait engine" },
-  { name: "Higgsfield Soul Cinema", meta: "Cinematic character stills" },
-  { name: "Higgsfield Popcorn", meta: "Fun, stylized quick-gen" },
-  { name: "GPT Image 2", meta: "OpenAI · general purpose" },
-  { name: "Recraft V4.1", meta: "Vector & raster design" },
-  { name: "Nano Banana 2", meta: "Fast iteration drafts" },
+  {
+    name: "Higgsfield Soul 2.0",
+    meta: "Photoreal portrait engine",
+    icon: Sparkles,
+  },
+  {
+    name: "Higgsfield Soul Cinema",
+    meta: "Cinematic character stills",
+    icon: Sparkles,
+  },
+  {
+    name: "Higgsfield Popcorn",
+    meta: "Fun, stylized quick-gen",
+    icon: Sparkles,
+  },
+  { name: "GPT Image 2", meta: "OpenAI · general purpose", icon: OpenAIIcon },
+  { name: "Recraft V4.1", meta: "Vector & raster design", icon: RecraftIcon },
+  { name: "Nano Banana 2", meta: "Fast iteration drafts", icon: GoogleIcon },
   {
     name: "Nano Banana Pro",
     meta: "High-fidelity drafts",
-    icon: "/de397d3b-0644-47ac-a4fe-49d64ede48d3.png",
+    icon: GoogleIcon,
   },
-  { name: "Seedream 5.0 lite", meta: "Lightweight diffusion" },
-  { name: "GPT Image 1.5", meta: "OpenAI · balanced quality" },
-  { name: "Grok Imagine", meta: "xAI · expressive generation" },
-  { name: "FLUX.2", meta: "Black Forest Labs · photoreal" },
-  { name: "Reve", meta: "Editorial-grade rendering" },
-  { name: "Z-Image", meta: "Compact high-speed model" },
-  { name: "Topaz", meta: "Upscale & restoration" },
+  {
+    name: "Seedream 5.0 lite",
+    meta: "Lightweight diffusion",
+    icon: SeedreamIcon,
+  },
+  {
+    name: "GPT Image 1.5",
+    meta: "OpenAI · balanced quality",
+    icon: OpenAIIcon,
+  },
+  {
+    name: "Grok Imagine",
+    meta: "xAI · expressive generation",
+    icon: GrokIcon,
+  },
+  {
+    name: "FLUX.2",
+    meta: "Black Forest Labs · photoreal",
+    icon: FluxIcon,
+  },
+  { name: "Z-Image", meta: "Compact high-speed model", icon: WanIcon },
+  { name: "Topaz", meta: "Upscale & restoration", icon: TopazIcon },
 ];

@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
-import Sidebar from "./Sidebar";
+import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
 import HeroBanner from "./HeroBanner";
 import ControlButtons from "./ControlButtons";
 import ModeToggle from "./ModeToggle";
@@ -14,6 +14,9 @@ import CameraSettings from "./CameraSettings";
 import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import CinemaStudio25DirectorPanel from "./CinemaStudio25DirectorPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
+import ImageForm from "@/components/image-tools/ImageForm";
+import HeroSection from "@/components/image-tools/HeroSection";
+import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 import type { GenerateVideoRequest } from "@/lib/jobs";
 
@@ -29,6 +32,13 @@ export default function CinemaStudioWorkspace() {
   const [model, setModel] = useState(() => {
     return searchParams.get("model") || "cinema-3.5";
   });
+  // Image mode — reuses /generate/image's own HeroSection + ImageForm
+  // wholesale (same model list, popovers, capability system) instead of a
+  // Cinema-Studio-specific composer. Kept independent from `model` (video)
+  // since the two systems use different model-id schemes.
+  const [imageModel, setImageModel] = useState("nano-banana-pro");
+  const [isDrawOpen, setIsDrawOpen] = useState(false);
+
   const [genre, setGenre] = useState<string | undefined>();
   const [style, setStyle] = useState<NonNullable<CinemaStudioSettings["style"]>>({});
   const [camera, setCamera] = useState<NonNullable<CinemaStudioSettings["camera"]>>({});
@@ -69,7 +79,6 @@ export default function CinemaStudioWorkspace() {
 
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedModel = getModel(model);
@@ -206,18 +215,31 @@ export default function CinemaStudioWorkspace() {
         onSetView={noop}
       />
 
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
-      <main
-        className={`mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[1320px] flex-col items-center gap-2 px-4 pb-12 pt-[18vh] transition-[padding] duration-300 ease-out ${
-          sidebarCollapsed ? "md:pl-[68px]" : "md:pl-[247px]"
-        }`}
-      >
-        {/* Hero */}
-        <div className="mb-10">
-          <HeroBanner />
+      <CinemaStudioHoverSidebar />
+      <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[1320px] flex-col items-center gap-2 px-4 pb-12 pt-[18vh] md:pl-[68px]">
+        {/* Keep both mode heroes in the same grid cell so their shared slot
+            always reserves the larger height and cannot push the composer. */}
+        <div className="mb-10 grid w-full">
+          <div
+            className={`col-start-1 row-start-1 ${
+              mode === "image"
+                ? "visible opacity-100"
+                : "invisible pointer-events-none opacity-0"
+            }`}
+            aria-hidden={mode !== "image"}
+          >
+            <HeroSection selectedModel={imageModel} />
+          </div>
+          <div
+            className={`col-start-1 row-start-1 ${
+              mode === "video"
+                ? "visible opacity-100"
+                : "invisible pointer-events-none opacity-0"
+            }`}
+            aria-hidden={mode !== "video"}
+          >
+            <HeroBanner />
+          </div>
         </div>
 
         {/* Control buttons — Cinema Studio 3.5 only. Reserve the row height in every mode. */}
@@ -251,7 +273,15 @@ export default function CinemaStudioWorkspace() {
           <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end gap-2" ref={promptBarWrapperRef}>
             <ModeToggle mode={mode} onChange={handleModeChange} />
 
-            {isCinema25 ? (
+            {mode === "image" ? (
+              <ImageForm
+                embedded
+                externalModel={imageModel}
+                onExternalModelChange={setImageModel}
+                isDrawOpen={isDrawOpen}
+                onDrawOpen={setIsDrawOpen}
+              />
+            ) : isCinema25 ? (
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <CinemaStudio25DirectorPanel
                   isOpen={cinema25DirectorPanelOpen}
@@ -408,6 +438,10 @@ export default function CinemaStudioWorkspace() {
         </>
       )}
 
+      {/* Nano Banana Pro's Draw workspace overlay — same as /generate/image. */}
+      {mode === "image" && imageModel === "nano-banana-pro" && (
+        <NanoBananaProDrawWorkspace isOpen={isDrawOpen} onClose={() => setIsDrawOpen(false)} />
+      )}
     </div>
   );
 }

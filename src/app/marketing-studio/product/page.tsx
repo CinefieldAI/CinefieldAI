@@ -14,7 +14,13 @@ import AppPanel from "@/components/marketing-studio/AppPanel";
 import YourAppModal from "@/components/marketing-studio/YourAppModal";
 import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
 import MarketingStudioSidebar from "@/components/marketing-studio/MarketingStudioSidebar";
-import ComposerBar from "@/components/marketing-studio/ComposerBar";
+import ComposerBar, {
+  MARKETING_COMPOSER_DEFAULT_HEIGHT,
+  MARKETING_COMPOSER_DEFAULT_WIDTH,
+  MARKETING_COMPOSER_MAX_HEIGHT,
+  MARKETING_COMPOSER_MAX_WIDTH,
+} from "@/components/marketing-studio/ComposerBar";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
 
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
@@ -62,6 +68,53 @@ export default function MarketingStudioProduct() {
   // Composer wrapper ref for sticky behavior
   const composerWrapperRef = useRef<HTMLDivElement>(null);
   const [showStickyComposer, setShowStickyComposer] = useState(false);
+  const [composerWidth, setComposerWidth] = useState(
+    MARKETING_COMPOSER_DEFAULT_WIDTH,
+  );
+  const [composerHeight, setComposerHeight] = useState(
+    MARKETING_COMPOSER_DEFAULT_HEIGHT,
+  );
+  const [maxComposerWidth, setMaxComposerWidth] = useState(
+    MARKETING_COMPOSER_MAX_WIDTH,
+  );
+  const [maxComposerHeight, setMaxComposerHeight] = useState(
+    MARKETING_COMPOSER_MAX_HEIGHT,
+  );
+
+  useEffect(() => {
+    const updateComposerBounds = () => {
+      setMaxComposerWidth(
+        Math.max(
+          320,
+          Math.min(MARKETING_COMPOSER_MAX_WIDTH, window.innerWidth - 32),
+        ),
+      );
+      setMaxComposerHeight(
+        Math.max(
+          MARKETING_COMPOSER_DEFAULT_HEIGHT,
+          Math.min(MARKETING_COMPOSER_MAX_HEIGHT, window.innerHeight - 160),
+        ),
+      );
+    };
+
+    updateComposerBounds();
+    window.addEventListener("resize", updateComposerBounds);
+    return () => window.removeEventListener("resize", updateComposerBounds);
+  }, []);
+
+  const composerResize = usePromptSurfaceResize({
+    width: composerWidth,
+    height: composerHeight,
+    minWidth: Math.min(MARKETING_COMPOSER_DEFAULT_WIDTH, maxComposerWidth),
+    maxWidth: maxComposerWidth,
+    minHeight: MARKETING_COMPOSER_DEFAULT_HEIGHT,
+    maxHeight: maxComposerHeight,
+    defaultWidth: MARKETING_COMPOSER_DEFAULT_WIDTH,
+    defaultHeight: MARKETING_COMPOSER_DEFAULT_HEIGHT,
+    setWidth: setComposerWidth,
+    setHeight: setComposerHeight,
+    storageKey: "marketingPromptDimensions",
+  });
 
   // Filter and search
   const filteredCards = useMemo(() => {
@@ -330,6 +383,9 @@ export default function MarketingStudioProduct() {
                       onProductCardClick={handleProductCardClick}
                       onAvatarCardClick={handleAvatarCardClick}
                       onGenerate={handleGenerate}
+                      resizeWidth={composerWidth}
+                      resizeHeight={composerHeight}
+                      resizeController={composerResize}
                     />
                   </div>
 
@@ -420,6 +476,9 @@ export default function MarketingStudioProduct() {
                   onProductCardClick={handleProductCardClick}
                   onAvatarCardClick={handleAvatarCardClick}
                   onGenerate={handleGenerate}
+                  resizeWidth={composerWidth}
+                  resizeHeight={composerHeight}
+                  resizeController={composerResize}
                 />
               </div>
             </div>

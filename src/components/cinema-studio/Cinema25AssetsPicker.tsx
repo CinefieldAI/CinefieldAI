@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { X, SlidersHorizontal, Plus, Images, Heart } from "lucide-react";
+import { X, SlidersHorizontal, Plus, Images, Heart, Pin, Search, Sparkles } from "lucide-react";
 
 /** Which target the picked asset gets assigned to. */
 export type Cinema25PickerContext = "reference" | "startFrame" | "endFrame";
 
-type Tab = "uploads" | "imageGenerations" | "liked";
+type Tab = "uploads" | "elements" | "imageGenerations" | "liked";
 
-const TABS: { id: Tab; label: string }[] = [
+const BASE_TABS: { id: Tab; label: string }[] = [
   { id: "uploads", label: "Uploads" },
+  { id: "imageGenerations", label: "Image Generations" },
+  { id: "liked", label: "Liked" },
+];
+
+const TABS_WITH_ELEMENTS: { id: Tab; label: string }[] = [
+  { id: "uploads", label: "Uploads" },
+  { id: "elements", label: "Elements" },
   { id: "imageGenerations", label: "Image Generations" },
   { id: "liked", label: "Liked" },
 ];
@@ -24,6 +31,13 @@ interface Cinema25AssetsPickerProps {
   context: Cinema25PickerContext | null;
   /** Called with an object URL when an asset is selected/uploaded. */
   onSelectAsset: (url: string) => void;
+  /** Adds the Elements tab (@ element-reference entry points only). */
+  showElementsTab?: boolean;
+  /** Tab selected when the picker opens — defaults to "uploads". */
+  initialTab?: Tab;
+  /** Elements tab's "Create Element" button — isolated callback until a real
+   *  element-creation flow exists in the project. */
+  onCreateElement?: () => void;
 }
 
 /**
@@ -37,14 +51,23 @@ export default function Cinema25AssetsPicker({
   onClose,
   context,
   onSelectAsset,
+  showElementsTab = false,
+  initialTab = "uploads",
+  onCreateElement,
 }: Cinema25AssetsPickerProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("uploads");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [elementSearch, setElementSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tabs = showElementsTab ? TABS_WITH_ELEMENTS : BASE_TABS;
 
-  // Reset to the Uploads tab each time the picker is opened.
-  useEffect(() => {
-    if (isOpen) setActiveTab("uploads");
-  }, [isOpen]);
+  // Reset to the requested tab each time the picker opens (adjusting state
+  // during render on the open-transition, same pattern used elsewhere in
+  // this codebase for per-model control resets).
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) setActiveTab(initialTab);
+  }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,7 +100,7 @@ export default function Cinema25AssetsPicker({
             {/* Header: tabs + close */}
             <div className="flex w-full items-center gap-3 px-2 py-1">
               <div className="hide-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-                {TABS.map((tab) => {
+                {tabs.map((tab) => {
                   const active = activeTab === tab.id;
                   return (
                     <button
@@ -149,6 +172,95 @@ export default function Cinema25AssetsPicker({
                     {/* Empty state */}
                     <div className="flex items-center justify-center py-10">
                       <p className="text-[12px] text-white/40">No uploads found</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "elements" && (
+                <div className="flex h-full min-h-0">
+                  {/* Sidebar */}
+                  <div className="hide-scrollbar flex w-[200px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-white/5 p-2">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-xl bg-white/10 px-2 py-1.5 text-left"
+                    >
+                      <span
+                        className="flex size-6 shrink-0 items-center justify-center rounded-md"
+                        style={{ background: "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)" }}
+                      >
+                        <Sparkles className="size-3.5 text-white" />
+                      </span>
+                      <span className="truncate text-[14px] font-medium text-white">My Elements</span>
+                    </button>
+
+                    <div className="flex flex-col gap-1">
+                      <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                        Pinned
+                      </p>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left text-white/80 transition-colors hover:bg-white/5"
+                      >
+                        <Pin className="size-3.5 shrink-0 text-white/50" />
+                        <span className="truncate text-[13px]">All Pinned</span>
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                        Projects
+                      </p>
+                      <p className="px-2 text-[12px] text-white/40">No projects found</p>
+                    </div>
+                  </div>
+
+                  {/* Main content */}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-white/5 p-2">
+                      <span className="px-1 text-[12px] font-semibold leading-4 text-white/60">
+                        My Elements
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="flex h-7 items-center gap-1.5 rounded-[10px] bg-white/5 px-2 text-[12px] font-medium text-white transition-colors hover:bg-white/10"
+                        >
+                          <SlidersHorizontal className="size-4" />
+                          Filter
+                        </button>
+                        <label className="flex h-7 w-[120px] shrink-0 items-center gap-1.5 rounded-[10px] bg-white/5 px-2">
+                          <Search className="size-3.5 shrink-0 text-white/50" />
+                          <input
+                            type="text"
+                            value={elementSearch}
+                            onChange={(e) => setElementSearch(e.target.value)}
+                            placeholder="Search"
+                            className="w-full bg-transparent text-[12px] text-white placeholder-white/40 outline-none"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                      <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+                        <span
+                          className="mb-2 flex size-12 items-center justify-center rounded-xl bg-white/5 shadow-[inset_0_2px_3px_0_rgba(255,255,255,0.03),0_4px_12px_rgba(0,0,0,0.24)]"
+                        >
+                          <Sparkles className="size-5 text-white/70" />
+                        </span>
+                        <p className="text-[16px] font-semibold text-white">No elements yet</p>
+                        <p className="max-w-[264px] text-[12px] font-medium text-white/40">
+                          Reuse your characters, locations, and props across every generation
+                        </p>
+                        <button
+                          type="button"
+                          onClick={onCreateElement}
+                          className="mt-6 flex h-8 items-center rounded-xl bg-white px-3 text-[12px] font-semibold text-[#181a1e] transition-opacity hover:opacity-90"
+                        >
+                          Create Element
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

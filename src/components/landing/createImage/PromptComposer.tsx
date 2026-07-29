@@ -1055,7 +1055,7 @@ export default function PromptComposer({
         <button
           type="submit"
           disabled={isGenerating}
-          className="flex h-full min-h-[104px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[22px] bg-[#00e5ff] px-3 text-white shadow-[0_18px_44px_rgba(0,229,255,0.32),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-[180ms] ease-out hover:bg-[#33eaff] hover:brightness-105 hover:shadow-[0_22px_56px_rgba(0,229,255,0.45),inset_0_1px_0_rgba(255,255,255,0.22)] active:scale-[0.98] active:bg-[#00b8cc] active:duration-100 disabled:cursor-not-allowed disabled:opacity-80"
+          className="flex h-full min-h-[104px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[22px] bg-[#D97757] px-3 text-white shadow-[0_18px_44px_rgba(217,119,87,0.32),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-[180ms] ease-out hover:bg-[#e08a6c] hover:brightness-105 hover:shadow-[0_22px_56px_rgba(217,119,87,0.45),inset_0_1px_0_rgba(255,255,255,0.22)] active:scale-[0.98] active:bg-[#B85A3E] active:duration-100 disabled:cursor-not-allowed disabled:opacity-80"
         >
           <span
             key={isGenerating ? "loading" : "idle"}

@@ -7,9 +7,11 @@ export interface CreateImageModel {
 }
 
 export const FEATURED_MODELS: CreateImageModel[] = [
+  { name: "Auto", description: "Automatically pick the best model for your prompt" },
   { name: "Higgsfield Soul 2.0", description: "Photoreal portrait engine", badge: "TOP" },
   { name: "Higgsfield Soul Cinema", description: "Cinematic character stills" },
   { name: "GPT Image 2", description: "OpenAI · general purpose" },
+  { name: "Seedream 5.0 Pro", description: "Logically consistent images", badge: "NEW" },
   { name: "Seedream 4.5", description: "Balanced quality & speed" },
   {
     name: "Nano Banana Pro",
@@ -18,7 +20,9 @@ export const FEATURED_MODELS: CreateImageModel[] = [
     icon: "/de397d3b-0644-47ac-a4fe-49d64ede48d3.png",
   },
   { name: "Nano Banana 2", description: "Fast iteration drafts" },
+  { name: "Nano Banana 2 Lite", description: "Lightweight generation at speed", badge: "NEW" },
   { name: "Recraft V4.1", description: "Vector & raster design" },
+  { name: "WAN 2.2", description: "Fast stylized motion stills" },
 ];
 
 export const ALL_MODELS: CreateImageModel[] = [
@@ -29,19 +33,20 @@ export const ALL_MODELS: CreateImageModel[] = [
   { name: "Seedream 4.0", description: "Lightweight diffusion" },
   { name: "GPT Image 1.5", description: "OpenAI · balanced quality" },
   { name: "Grok Imagine", description: "xAI · expressive generation" },
-  { name: "Recraft V4.1", description: "Vector & raster design" },
-  { name: "Recraft V4.1 Utility", description: "Icon & asset generation" },
+  {
+    name: "Recraft V4.1 Utility",
+    description: "Icon & asset generation",
+    icon: "/Recraft_V4.1.png",
+  },
   { name: "Z-Image", description: "Compact high-speed model" },
   { name: "Kling O1", description: "Advanced image editing" },
-  { name: "FLUX.2 Pro", description: "Black Forest Labs · photoreal" },
-  { name: "FLUX.2 Flex", description: "Flexible aspect & control" },
-  { name: "FLUX.2 Max", description: "Maximum fidelity render" },
-  { name: "Flux Kontext Max", description: "Context-aware editing" },
+  { name: "FLUX.2 Pro", description: "Black Forest Labs · photoreal", icon: "/FLUX.2.png" },
+  { name: "FLUX.2 Flex", description: "Flexible aspect & control", icon: "/FLUX.2.png" },
+  { name: "FLUX.2 Max", description: "Maximum fidelity render", icon: "/FLUX.2.png" },
+  { name: "Flux Kontext Max", description: "Context-aware editing", icon: "/FLUX.2.png" },
   { name: "GPT Image", description: "OpenAI · general purpose" },
   { name: "Multi Reference", description: "Blend multiple reference images" },
-  { name: "Reve", description: "Editorial-grade rendering" },
   { name: "Seedream 5.0 Lite", description: "Lightweight diffusion" },
-  { name: "WAN 2.2", description: "Fast stylized motion stills" },
 ];
 
 export interface AspectRatioOption {

@@ -110,6 +110,7 @@ export default function MarketingStudioSidebar({
     <motion.aside
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
+      initial={false}
       animate={{ width: isExpanded ? "15rem" : "3.05rem" }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className={cn(

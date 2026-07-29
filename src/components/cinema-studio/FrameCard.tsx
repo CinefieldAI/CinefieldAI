@@ -43,6 +43,61 @@ function EditIcon() {
   );
 }
 
+function ExactFrameSurface({
+  label,
+  value,
+  onOpenPicker,
+  onRemove,
+  optional,
+  ariaHaspopup,
+  ariaExpanded,
+}: Pick<FrameCardProps, "label" | "value" | "onOpenPicker" | "onRemove" | "optional" | "ariaHaspopup" | "ariaExpanded">) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      data-prompt-frame-card
+      onClick={onOpenPicker}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onOpenPicker();
+      }}
+      aria-label={label}
+      aria-haspopup={ariaHaspopup}
+      aria-expanded={ariaExpanded}
+      className="size-[80px] rounded-xl p-1.5 flex flex-col items-start justify-between overflow-clip relative cursor-pointer group shrink-0"
+      style={{
+        background: value
+          ? `url(${value}) center / cover no-repeat`
+          : "linear-gradient(rgb(32, 32, 32) 0%, rgb(80, 79, 79) 100%)",
+        boxShadow:
+          "rgba(0, 0, 0, 0.08) 10px 34px 24px 0px, rgba(0, 0, 0, 0.01) 8px 21px 6px 0px, rgba(0, 0, 0, 0.12) 3px 7px 5px 0px, rgba(0, 0, 0, 0.32) 1px 3px 4px 0px, rgba(0, 0, 0, 0.32) 0px 1px 2px 0px, rgba(255, 255, 255, 0.04) 0px 0px 0px 1px inset",
+      }}
+    >
+      <div aria-hidden="true" className="absolute inset-0 rounded-xl pointer-events-none opacity-0 transition-opacity duration-200 group-hover:opacity-50" style={{ background: "linear-gradient(rgb(32, 32, 32) 34.513%, rgb(80, 79, 79) 157.89%)" }} />
+      <div className="flex items-start w-full shrink-0 relative">
+        <div className="bg-black/10 flex items-center rounded-full shrink-0">
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={(e) => { e.stopPropagation(); onOpenPicker(); }}
+            className="size-5 flex items-center justify-center rounded-full border border-[rgba(197,197,197,0.3)] bg-white/[0.04] text-white shadow-[inset_0_0_4px_rgba(185,185,185,0.35)] backdrop-blur-[3px]"
+            aria-label={`Add ${label}`}
+          >
+            <Plus className="size-3" />
+          </button>
+          {optional && <span className="px-2 text-[8px] font-semibold leading-2 text-icon-secondary">Optional</span>}
+        </div>
+      </div>
+      <p className="font-grotesk text-[12px] font-bold leading-[14px] uppercase tracking-[-0.1px] text-white relative shrink-0">{label}</p>
+      {value && onRemove && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label={`Remove ${label}`} className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-[#0a0a0a] text-neutral-300 shadow ring-1 ring-white/10 hover:text-white">
+          <X className="size-2.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Generic 80x80 optional reference card (Kling 3.0 Turbo's Start Frame, Google Veo 3.1 Lite's Start/End Frame, Kling 3.0 Omni Edit's Video Reference, Kling 2.6 / O1 Video's GENERAL preset tile). */
 export default function FrameCard({
   label,
@@ -58,6 +113,7 @@ export default function FrameCard({
     return (
       <button
         type="button"
+        data-prompt-frame-card
         data-panel-toggle
         onClick={onOpenPicker}
         aria-label={label}
@@ -89,67 +145,7 @@ export default function FrameCard({
   }
 
   if (variant === "cinema25") {
-    return (
-      <div className="group relative h-20 w-20 shrink-0">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={onOpenPicker}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") onOpenPicker();
-          }}
-          aria-label={label}
-          aria-haspopup={ariaHaspopup}
-          aria-expanded={ariaExpanded}
-          className="relative flex h-20 w-20 cursor-pointer flex-col items-start justify-between overflow-clip rounded-xl p-1.5"
-          style={{
-            backgroundImage: value
-              ? `url(${value})`
-              : "linear-gradient(rgb(32,32,32) 0%, rgb(80,79,79) 100%)",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            boxShadow:
-              "10px 34px 24px 0 rgba(0,0,0,0.08), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.12), 1px 3px 4px 0 rgba(0,0,0,0.32), 0 1px 2px 0 rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.04) inset",
-          }}
-        >
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-50"
-            style={{ background: "linear-gradient(rgb(32,32,32) 34.513%, rgb(80,79,79) 157.89%)" }}
-          />
-          <div className="relative flex w-full shrink-0 items-center">
-            <span
-              className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white backdrop-blur-[3px]"
-              style={{ boxShadow: "rgba(185,185,185,0.35) 0px 0px 4px 0px inset" }}
-            >
-              <Plus className="size-3" />
-            </span>
-            {optional && (
-              <span className="px-2 text-[8px] font-semibold leading-none text-neutral-400">
-                Optional
-              </span>
-            )}
-          </div>
-          <p className="relative shrink-0 text-left text-[12px] font-bold uppercase leading-[14px] tracking-[-0.1px] text-white">
-            {label}
-          </p>
-        </div>
-
-        {value && onRemove && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            aria-label={`Remove ${label}`}
-            className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-[#0a0a0a] text-neutral-300 shadow ring-1 ring-white/10 transition-colors hover:text-white"
-          >
-            <X className="size-2.5" />
-          </button>
-        )}
-      </div>
-    );
+    return <ExactFrameSurface label={label} value={value} onOpenPicker={onOpenPicker} onRemove={onRemove} optional={optional} ariaHaspopup={ariaHaspopup} ariaExpanded={ariaExpanded} />;
   }
 
   if (variant === "reference") {
@@ -157,6 +153,7 @@ export default function FrameCard({
       <div
         role="button"
         tabIndex={0}
+        data-prompt-frame-card
         onClick={onOpenPicker}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onOpenPicker();
@@ -192,61 +189,6 @@ export default function FrameCard({
   }
 
   return (
-    <div className="group relative h-[80px] w-[80px] shrink-0">
-      <button
-        type="button"
-        onClick={onOpenPicker}
-        aria-label={label}
-        aria-haspopup={ariaHaspopup}
-        aria-expanded={ariaExpanded}
-        className="relative flex h-full w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-white/10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_10px_rgba(0,0,0,0.35)] transition-colors hover:border-white/20"
-        style={{
-          backgroundImage: value
-            ? `url(${value})`
-            : "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.2) 100%)",
-          backgroundColor: "#131517",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        {!value && (
-          <>
-            <span className="flex size-5 items-center justify-center rounded-full bg-white/10 text-white">
-              <Plus className="size-3" />
-            </span>
-            {optional && (
-              <span className="text-[9px] font-medium leading-tight text-neutral-400">
-                Optional
-              </span>
-            )}
-            <span className="text-[9px] font-semibold uppercase leading-tight tracking-wide text-neutral-300">
-              {label}
-            </span>
-          </>
-        )}
-
-        {value && (
-          <span className="absolute inset-0 flex items-end justify-center bg-black/0 pb-1 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-white">
-              Change
-            </span>
-          </span>
-        )}
-      </button>
-
-      {value && onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          aria-label={`Remove ${label}`}
-          className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-[#0a0a0a] text-neutral-300 shadow ring-1 ring-white/10 transition-colors hover:text-white"
-        >
-          <X className="size-2.5" />
-        </button>
-      )}
-    </div>
+    <ExactFrameSurface label={label} value={value} onOpenPicker={onOpenPicker} onRemove={onRemove} optional={optional} ariaHaspopup={ariaHaspopup} ariaExpanded={ariaExpanded} />
   );
 }

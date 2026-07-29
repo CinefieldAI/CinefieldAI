@@ -11,9 +11,16 @@ import { ALL_MODELS, FEATURED_MODELS } from "./createImageData";
 interface ModelSelectorProps {
   selected: string;
   onSelect: (name: string) => void;
+  /**
+   * "large" renders the 40px GPT Image 2 style trigger; "mini" renders the
+   * 28px lime-accented chip shared by every other capability-driven model
+   * row (Soul Cinema, WAN 2.2, Multi Reference, ...); default is the 36px
+   * compact pill used by the legacy generic control row.
+   */
+  size?: "compact" | "large" | "mini";
 }
 
-export default function ModelSelector({ selected, onSelect }: ModelSelectorProps) {
+export default function ModelSelector({ selected, onSelect, size = "compact" }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const selectedIcon = [...FEATURED_MODELS, ...ALL_MODELS].find(
     (m) => m.name === selected,
@@ -45,36 +52,75 @@ export default function ModelSelector({ selected, onSelect }: ModelSelectorProps
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-all duration-[160ms] ease-out hover:-translate-y-px active:scale-[0.98] active:duration-100 ${
-          open
-            ? "border-[rgba(0,229,255,0.55)] bg-[rgba(0,229,255,0.12)] text-white"
-            : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.055)] text-[rgba(255,255,255,0.78)] hover:border-[rgba(255,255,255,0.14)] hover:bg-[rgba(255,255,255,0.09)] hover:text-[rgba(255,255,255,0.95)]"
-        }`}
-      >
-        {selectedIcon ? (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white">
-            <Image
-              src={selectedIcon}
-              alt={selected}
-              width={20}
-              height={20}
-              className="h-full w-full object-cover"
-            />
-          </span>
-        ) : (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-magenta-500 to-magenta-600 text-[10px] font-semibold text-white">
-            {selected.charAt(0)}
-          </span>
-        )}
-        <span className="max-w-[150px] truncate">{selected}</span>
-        <ChevronUp
-          className={`h-3.5 w-3.5 shrink-0 opacity-75 transition-transform ${open ? "" : "rotate-180"}`}
-        />
-      </button>
+      {size === "mini" ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-white/5 px-2 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 active:bg-white/20 ${
+            open ? "bg-white/10" : ""
+          }`}
+        >
+          {selectedIcon ? (
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[4px]"
+              style={{ boxShadow: "0 0 0 1px rgba(209,254,23,0.35)" }}
+            >
+              <Image
+                src={selectedIcon}
+                alt={selected}
+                width={16}
+                height={16}
+                className="h-full w-full object-cover"
+              />
+            </span>
+          ) : (
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] text-[9px] font-bold"
+              style={{ background: "rgba(209,254,23,0.15)", color: "rgb(209,254,23)" }}
+            >
+              {selected.charAt(0)}
+            </span>
+          )}
+          <span className="max-w-[120px] truncate">{selected}</span>
+          <ChevronUp
+            className={`h-3.5 w-3.5 shrink-0 opacity-60 transition-transform ${open ? "" : "rotate-180"}`}
+          />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border text-[13px] font-medium transition-all duration-[160ms] ease-out hover:-translate-y-px active:scale-[0.98] active:duration-100 ${
+            size === "large" ? "h-10 px-3" : "h-9 rounded-full px-3"
+          } ${
+            open
+              ? "border-[rgba(0,229,255,0.55)] bg-[rgba(0,229,255,0.12)] text-white"
+              : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.055)] text-[rgba(255,255,255,0.78)] hover:border-[rgba(255,255,255,0.14)] hover:bg-[rgba(255,255,255,0.09)] hover:text-[rgba(255,255,255,0.95)]"
+          }`}
+        >
+          {selectedIcon ? (
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white">
+              <Image
+                src={selectedIcon}
+                alt={selected}
+                width={20}
+                height={20}
+                className="h-full w-full object-cover"
+              />
+            </span>
+          ) : (
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-magenta-500 to-magenta-600 text-[10px] font-semibold text-white">
+              {selected.charAt(0)}
+            </span>
+          )}
+          <span className="max-w-[150px] truncate">{selected}</span>
+          <ChevronUp
+            className={`h-3.5 w-3.5 shrink-0 opacity-75 transition-transform ${open ? "" : "rotate-180"}`}
+          />
+        </button>
+      )}
 
       <AnimatePresence>
         {open && (

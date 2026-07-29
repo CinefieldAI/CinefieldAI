@@ -29,7 +29,7 @@ function GridBlock({
 }) {
   return (
     <div className="flex-1">
-      <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-zinc-300">
+      <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-sm font-semibold text-zinc-300">
         <Icon className="h-3.5 w-3.5 text-lime-300" />
         {badge}
       </span>

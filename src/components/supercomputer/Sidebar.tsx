@@ -91,7 +91,7 @@ function NavButton({
         <>
           <span className="flex-1 text-left truncate">{label}</span>
           {badge && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#85f02d] text-[#0a0a0a]">
+            <span className="px-1.5 py-0.5 rounded text-sm font-bold bg-[#85f02d] text-[#0a0a0a]">
               {badge}
             </span>
           )}

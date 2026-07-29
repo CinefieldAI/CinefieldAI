@@ -16,6 +16,17 @@ import {
   Wand2,
   type LucideIcon,
 } from "lucide-react";
+import type { ElementType } from "react";
+import {
+  GoogleIcon,
+  GrokIcon,
+  HappyHorseIcon,
+  KlingIcon,
+  MinimaxIcon,
+  OpenAISoraIcon,
+  SeedanceIcon,
+} from "@/components/cinema-studio/icons/ProviderIcons";
+import WanIcon from "@/components/cinema-studio/icons/WanIcon";
 
 export interface VideoFeature {
   title: string;
@@ -79,36 +90,79 @@ export const VIDEO_FEATURES: VideoFeature[] = [
 export interface VideoModel {
   name: string;
   meta: string;
+  icon: ElementType;
   badge?: "TOP" | "NEW";
 }
 
 export const VIDEO_DROPDOWN_MODELS: VideoModel[] = [
-  { name: "Seedance 2.0 4K", meta: "Native 4K video generation", badge: "TOP" },
-  { name: "Kling 3.0", meta: "Cinematic videos with audio", badge: "TOP" },
+  {
+    name: "Seedance 2.0 4K",
+    meta: "Native 4K video generation",
+    icon: SeedanceIcon,
+    badge: "TOP",
+  },
+  {
+    name: "Kling 3.0",
+    meta: "Cinematic videos with audio",
+    icon: KlingIcon,
+    badge: "TOP",
+  },
   {
     name: "Kling 3.0 Turbo",
     meta: "Faster 3.0 generation with native audio",
+    icon: KlingIcon,
     badge: "NEW",
   },
   {
     name: "Kling 3.0 Motion Control",
     meta: "Transfer motion from video to image",
+    icon: KlingIcon,
   },
-  { name: "Kling 01 Edit", meta: "Advanced video editing" },
-  { name: "Sora 2", meta: "OpenAI's most advanced video model" },
-  { name: "Google Veo 3.1 Lite", meta: "Fast video generation by Google" },
-  { name: "Google Veo 3.1", meta: "Advanced AI video with sound" },
-  { name: "HappyHorse", meta: "Alibaba's #1 ranked video and audio model" },
+  { name: "Kling 01 Edit", meta: "Advanced video editing", icon: KlingIcon },
+  {
+    name: "Sora 2",
+    meta: "OpenAI's most advanced video model",
+    icon: OpenAISoraIcon,
+  },
+  {
+    name: "Google Veo 3.1 Lite",
+    meta: "Fast video generation by Google",
+    icon: GoogleIcon,
+  },
+  {
+    name: "Google Veo 3.1",
+    meta: "Advanced AI video with sound",
+    icon: GoogleIcon,
+  },
+  {
+    name: "HappyHorse",
+    meta: "Alibaba's #1 ranked video and audio model",
+    icon: HappyHorseIcon,
+  },
   {
     name: "Grok Imagine 1.5",
     meta: "Cinematic videos with synchronized audio",
+    icon: GrokIcon,
     badge: "NEW",
   },
   {
     name: "Wan 2.7",
     meta: "AI video generation with first and end frame control",
+    icon: WanIcon,
   },
-  { name: "Minimax Hailuo 2.3", meta: "Fastest high-dynamic video" },
-  { name: "Seedance 1.5 Pro", meta: "Pro-grade audio-visual sync" },
-  { name: "Higgsfield DOP", meta: "VFX and camera control" },
+  {
+    name: "Minimax Hailuo 2.3",
+    meta: "Fastest high-dynamic video",
+    icon: MinimaxIcon,
+  },
+  {
+    name: "Seedance 1.5 Pro",
+    meta: "Pro-grade audio-visual sync",
+    icon: SeedanceIcon,
+  },
+  {
+    name: "Higgsfield DOP",
+    meta: "VFX and camera control",
+    icon: Clapperboard,
+  },
 ];

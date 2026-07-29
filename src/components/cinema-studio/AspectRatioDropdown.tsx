@@ -15,15 +15,20 @@ interface AspectRatioDropdownProps {
   options?: string[];
 }
 
-/** Small rectangle preview shaped to the option's aspect ratio. */
-function ShapeIcon({ shape }: { shape: [number, number] }) {
+/** Small rectangle preview shaped to the option's aspect ratio — thin outline
+ *  only, no filled background box, matching the shared createImage ratio icon. */
+function ShapeIcon({ shape, active }: { shape: [number, number]; active?: boolean }) {
   const [w, h] = shape;
-  const scale = 22 / Math.max(w, h);
+  const scale = 20 / Math.max(w, h);
   return (
-    <span className="flex h-6 w-8 shrink-0 items-center justify-center rounded-sm border border-white/20 bg-white/10">
+    <span className="flex h-6 w-8 shrink-0 items-center justify-center">
       <span
-        className="rounded-[1px] border border-white/30 bg-white/20"
-        style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
+        className="rounded-[2px] border-[1.5px]"
+        style={{
+          width: Math.round(w * scale),
+          height: Math.round(h * scale),
+          borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
+        }}
       />
     </span>
   );
@@ -72,7 +77,7 @@ export default function AspectRatioDropdown({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px] pointer-events-auto"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1b1d20] shadow-[0_8px_30px_rgba(0,0,0,0.55)] p-1 w-[220px] pointer-events-auto"
         >
           {visibleOptions.map((opt) => {
             const selected = opt.value === value;
@@ -88,11 +93,11 @@ export default function AspectRatioDropdown({
                 }}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
                   selected
-                    ? "bg-[#131517]"
-                    : "hover:bg-[#131517]"
+                    ? "bg-[#25282c]"
+                    : "hover:bg-[#25282c]"
                 }`}
               >
-                <ShapeIcon shape={opt.shape} />
+                <ShapeIcon shape={opt.shape} active={selected} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-white">
                     {opt.value}
@@ -101,7 +106,7 @@ export default function AspectRatioDropdown({
                     {opt.description}
                   </span>
                 </span>
-                {selected && <Check className="size-4 shrink-0 text-[#00e5ff]" />}
+                {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>
             );
           })}

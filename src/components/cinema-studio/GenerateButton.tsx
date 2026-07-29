@@ -34,16 +34,12 @@ export default function GenerateButton({
   isLoading = false,
   accent,
 }: GenerateButtonProps) {
-  const isImage = accent === "yellow" || (accent !== "cyan" && mode === "image");
-
-  // Image mode uses Higgsfield's yellow-green brand; video keeps turquoise. Cinema Studio 2.5 also forces the lime accent (accent="yellow"), matching its real reference.
-  const background = isImage
-    ? "linear-gradient(135deg, #CDFF00 0%, #A6D400 100%)"
-    : "linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%)";
-  const boxShadow = isImage
-    ? "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #829B19, inset 0px -2px 0px 0px #829B19, inset 0px 1px 0px 0px #CDFF00"
-    : "10px 34px 24px 0 rgba(0,0,0,0.15), inset 0px -3px 0px 0px #0099aa, inset 0px 1px 0px 0px #00e5ff";
-  const glow = isImage ? "#CDFF00" : "#00e5ff";
+  // Single brand accent everywhere — Generate is always #D97757 regardless
+  // of mode (no more lime for Image, cyan for Video, yellow for Cinema 2.5).
+  const background = "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)";
+  const boxShadow =
+    "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #8A4A32, inset 0px -2px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C";
+  const glow = "#D97757";
 
   return (
     <button
@@ -51,7 +47,7 @@ export default function GenerateButton({
       onClick={onGenerate}
       disabled={isLoading}
       aria-label="Generate"
-      className={`relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-40 ${isImage ? "focus:ring-[#CDFF00]" : "focus:ring-[#00e5ff]"}`}
+      className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#D97757] disabled:cursor-not-allowed disabled:opacity-40"
       style={{
         width: 120,
         height: 80,

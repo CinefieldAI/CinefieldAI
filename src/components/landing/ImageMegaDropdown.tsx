@@ -39,7 +39,7 @@ export default function ImageMegaDropdown({
                   </div>
                   <div className="grid min-w-0 auto-rows-min gap-1">
                     <span className="flex items-center gap-1.5">
-                      <span className="model-title truncate text-sm font-medium leading-5 text-white">
+                      <span className="truncate text-sm font-semibold leading-5 text-white">
                         {feature.title}
                       </span>
                       {feature.badge && (
@@ -48,7 +48,7 @@ export default function ImageMegaDropdown({
                         </Badge>
                       )}
                     </span>
-                    <span className="truncate text-sm leading-5 text-[#898a8b]">
+                    <span className="truncate text-xs font-medium leading-5 text-zinc-400">
                       {feature.description}
                     </span>
                   </div>
@@ -64,38 +64,39 @@ export default function ImageMegaDropdown({
             Models
           </p>
           <div className="grid auto-rows-min gap-0.5">
-            {IMAGE_DROPDOWN_MODELS.map((model) => (
-              <button
-                key={model.name}
-                type="button"
-                onClick={() => onModelSelect(model.name)}
-                className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
-              >
-                <div className="grid size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#23262a]">
-                  {model.icon ? (
-                    <Image
-                      src={model.icon}
-                      alt={model.name}
-                      width={24}
-                      height={24}
-                      className="size-6 object-contain"
-                    />
-                  ) : (
-                    <span className="text-xs font-semibold text-zinc-300">
-                      {model.name.charAt(0)}
+            {IMAGE_DROPDOWN_MODELS.map((model) => {
+              const Icon = typeof model.icon === "string" ? null : model.icon;
+              return (
+                <button
+                  key={model.name}
+                  type="button"
+                  onClick={() => onModelSelect(model.name)}
+                  className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
+                >
+                  <div className="grid size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#23262a]">
+                    {typeof model.icon === "string" ? (
+                      <Image
+                        src={model.icon}
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="size-6 object-contain"
+                      />
+                    ) : (
+                      Icon && <Icon className="size-6 text-zinc-300" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="grid min-w-0 auto-rows-min gap-1">
+                    <span className="truncate text-sm font-semibold leading-5 text-white">
+                      {model.name}
                     </span>
-                  )}
-                </div>
-                <div className="grid min-w-0 auto-rows-min gap-1">
-                  <span className="model-title truncate text-sm font-medium leading-5 text-white">
-                    {model.name}
-                  </span>
-                  <span className="truncate text-sm leading-5 text-[#898a8b]">
-                    {model.meta}
-                  </span>
-                </div>
-              </button>
-            ))}
+                    <span className="truncate text-xs font-medium leading-5 text-zinc-400">
+                      {model.meta}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       </div>

@@ -256,9 +256,11 @@ function ModelRow({
 
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-center gap-2">
-          <h4 className="text-xs font-medium text-white">{model.name}</h4>
+          <h4 className="text-sm font-semibold leading-5 text-white">
+            {model.name}
+          </h4>
           {model.badge && (
-            <span className="text-[10px] font-bold uppercase bg-[#E61E8F] text-white px-1.5 py-0.5 rounded-sm">
+            <span className="text-sm font-bold uppercase bg-[#E61E8F] text-white px-1.5 py-0.5 rounded-sm">
               {model.badge}
             </span>
           )}

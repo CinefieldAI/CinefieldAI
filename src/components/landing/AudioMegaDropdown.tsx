@@ -36,6 +36,7 @@ function AudioColumn({
       <div className="grid auto-rows-min gap-0.5">
         {items.map((item) => {
           const Icon = item.icon;
+          const iconSrc = "iconSrc" in item ? item.iconSrc : undefined;
           const active = item.title === activeTitle;
           return (
             <button
@@ -43,14 +44,23 @@ function AudioColumn({
               type="button"
               onClick={() => onSelect?.(item.title)}
               aria-pressed={active}
-              className="group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-transparent p-2 text-left no-underline transition-colors hover:border-[#00e5ff]/20 hover:bg-white/[0.04] active:brightness-[.6]"
+              className="group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-transparent p-2 text-left no-underline transition-colors hover:border-[#D97757]/25 hover:bg-white/[0.04] active:brightness-[.6]"
             >
-              <div className="grid size-12 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400 transition-colors group-hover:bg-magenta-500/10 group-hover:text-magenta-400">
-                <Icon className="size-6" />
+              <div className="grid size-12 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-300 transition-colors group-hover:bg-[#D97757]/10 group-hover:text-[#D97757]">
+                {iconSrc ? (
+                  <img
+                    src={iconSrc}
+                    alt=""
+                    className="size-6 object-contain"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Icon className="size-6" />
+                )}
               </div>
               <div className="grid min-w-0 auto-rows-min gap-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="model-title truncate text-sm font-medium leading-5 text-white">
+                  <span className="truncate text-sm font-semibold leading-5 text-white">
                     {item.title}
                   </span>
                   {item.badge && <Badge variant="new">{item.badge}</Badge>}
@@ -58,11 +68,11 @@ function AudioColumn({
                     <span
                       aria-hidden
                       className="size-1.5 shrink-0 rounded-full"
-                      style={{ background: "rgb(209,254,23)" }}
+                      style={{ background: "#D97757" }}
                     />
                   )}
                 </span>
-                <span className="truncate text-sm leading-5 text-[#898a8b]">
+                <span className="truncate text-xs font-medium leading-5 text-zinc-400">
                   {item.description}
                 </span>
               </div>

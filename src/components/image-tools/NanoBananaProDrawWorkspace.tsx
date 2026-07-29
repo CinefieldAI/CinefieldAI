@@ -233,7 +233,7 @@ export default function NanoBananaProDrawWorkspace({
 
                             {/* Text column */}
                             <div className="flex flex-col min-w-0 flex-1">
-                              <div className="text-xs font-medium text-white">{model.label}</div>
+                              <div className="model-title">{model.label}</div>
                               <div className="text-[10px] text-white/50 truncate">{model.description}</div>
                             </div>
 
@@ -303,7 +303,7 @@ export default function NanoBananaProDrawWorkspace({
             </div>
 
             {/* Center-right: Generate button (compact) */}
-            <button className="flex items-center justify-center gap-2 h-10 rounded-lg bg-[#CDFF00] text-black font-semibold text-sm px-3 hover:brightness-90 transition-all whitespace-nowrap">
+            <button className="flex items-center justify-center gap-2 h-10 rounded-lg bg-[#D97757] text-black font-semibold text-sm px-3 hover:brightness-90 transition-all whitespace-nowrap">
               <span>✨</span>
               <span>Generate Image</span>
               <span className="text-xs font-bold">+1</span>

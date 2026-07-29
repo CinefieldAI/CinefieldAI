@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Film,
   ImageIcon,
@@ -61,12 +62,12 @@ function CinefieldLogo() {
       className="flex shrink-0 items-center"
     >
       <Image
-        src="/10d90591-1bbe-4cf6-9753-aa2faa93afbf.png"
+        src="/b1459dcb-c6e3-4060-b155-466a24ced9de.png"
         alt="CINEFIELD"
         width={36}
         height={36}
         priority
-        className="h-9 w-9 rounded-xl object-cover drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]"
+        className="h-9 w-9 rounded-xl object-cover drop-shadow-[0_0_8px_rgba(217,119,87,0.5)]"
       />
     </Link>
   );
@@ -228,6 +229,8 @@ export default function Navbar({
   audioModelIndex,
   onAudioModelIndexChange,
 }: NavbarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   // One controlled open state for the desktop nav's mega-menus (Image, Video,
   // Audio, Supercomputer, MCP & CLI). "" = closed, matches Radix's own
@@ -262,11 +265,19 @@ export default function Navbar({
   };
 
   const handleVideoFeatureSelect = (title: string) => {
-    if (title === "Canvas") {
+    if (title === "Create Video") {
+      setOpenNavItem("");
+      router.push("/video/create");
+    } else if (title === "Canvas") {
       onSetView("canvas");
     } else {
       onOpenVideoPanel();
     }
+  };
+
+  const handleVideoModelSelect = (name: string) => {
+    setOpenNavItem("");
+    router.push(`/video/create?model=${encodeURIComponent(name)}`);
   };
 
   // Audio: mega-dropdown rows carry only a title, so map it back to the
@@ -314,7 +325,9 @@ export default function Navbar({
               <NavigationMenuItem key={link.label}>
                 <NavigationMenuLink
                   href={link.href}
-                  className="rounded-full px-3 py-1.5 text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-white"
+                  className={
+                    pathname === link.href ? "text-[#D97757]" : undefined
+                  }
                 >
                   {link.label}
                 </NavigationMenuLink>
@@ -325,10 +338,12 @@ export default function Navbar({
             <NavigationMenuItem>
               <NavigationMenuTrigger
                 className={
-                  activePanel === "image" ? "bg-white/10 text-white" : undefined
+                  activePanel === "image"
+                    ? "bg-white/10 text-[#D97757]"
+                    : undefined
                 }
               >
-                <ImageIcon className="h-3.5 w-3.5" />
+                <ImageIcon className="size-4" />
                 Image
               </NavigationMenuTrigger>
               <NavigationMenuContent>
@@ -343,16 +358,19 @@ export default function Navbar({
             <NavigationMenuItem>
               <NavigationMenuTrigger
                 className={
-                  activePanel === "video" ? "bg-white/10 text-white" : undefined
+                  activePanel === "video" ||
+                  pathname.startsWith("/video/")
+                    ? "bg-white/10 text-[#D97757]"
+                    : undefined
                 }
               >
-                <Film className="h-3.5 w-3.5" />
+                <Film className="size-4" />
                 Video
               </NavigationMenuTrigger>
               <NavigationMenuContent>
                 <VideoMegaDropdown
                   onFeatureSelect={handleVideoFeatureSelect}
-                  onModelSelect={onOpenVideoPanel}
+                  onModelSelect={handleVideoModelSelect}
                 />
               </NavigationMenuContent>
             </NavigationMenuItem>
@@ -361,10 +379,13 @@ export default function Navbar({
             <NavigationMenuItem>
               <NavigationMenuTrigger
                 className={
-                  activePanel === "audio" ? "bg-white/10 text-white" : undefined
+                  activePanel === "audio" ||
+                  pathname.startsWith("/audio/")
+                    ? "bg-white/10 text-[#D97757]"
+                    : undefined
                 }
               >
-                <Music2 className="h-3.5 w-3.5" />
+                <Music2 className="size-4" />
                 Audio
               </NavigationMenuTrigger>
               <NavigationMenuContent>
@@ -379,7 +400,14 @@ export default function Navbar({
 
             {DROPDOWN_LINKS.map((link) => (
               <NavigationMenuItem key={link.label}>
-                <NavigationMenuTrigger>
+                <NavigationMenuTrigger
+                  className={
+                    link.label === "Supercomputer" &&
+                    pathname.startsWith("/supercomputer")
+                      ? "bg-white/10 text-[#D97757]"
+                      : undefined
+                  }
+                >
                   {link.label}
                 </NavigationMenuTrigger>
                 <NavigationMenuContent>
@@ -392,7 +420,9 @@ export default function Navbar({
               <NavigationMenuItem key={link.label}>
                 <NavigationMenuLink
                   href={link.href}
-                  className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-white"
+                  className={
+                    pathname === link.href ? "text-[#D97757]" : undefined
+                  }
                 >
                   {link.label}
                 </NavigationMenuLink>
@@ -474,8 +504,8 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => {
-                onOpenVideoPanel();
                 setMobileOpen(false);
+                router.push("/video/create");
               }}
               className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-sm text-zinc-200"
             >

@@ -100,7 +100,7 @@ export default function ImageComposer({
             <button
               onClick={handleGenerate}
               disabled={!prompt.trim()}
-              className="flex items-center gap-2 rounded-xl bg-magenta-500 px-6 py-2.5 font-medium text-white transition-all hover:bg-magenta-600 hover:shadow-lg hover:shadow-magenta-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-magenta-500 disabled:hover:shadow-none"
+              className="flex items-center gap-2 rounded-xl bg-[#D97757] px-6 py-2.5 font-medium text-black transition-all hover:bg-[#e08a6c] hover:shadow-lg hover:shadow-[#D97757]/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#D97757] disabled:hover:shadow-none"
             >
               <span>Generate</span>
               <Send className="h-4 w-4" />

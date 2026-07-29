@@ -1,5 +1,5 @@
-import AppShell from "@/components/landing/AppShell";
+import StandaloneVideoPage from "@/components/video/StandaloneVideoPage";
 
 export default function CreateVideoPage() {
-  return <AppShell initialView="createVideo" />;
+  return <StandaloneVideoPage />;
 }

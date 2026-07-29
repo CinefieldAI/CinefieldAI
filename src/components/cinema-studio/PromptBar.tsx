@@ -23,6 +23,8 @@ import Kling3MultiShotControl from "./Kling3MultiShotControl";
 import KlingModeControl from "./KlingModeControl";
 import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
 import FrameCard from "./FrameCard";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import SoundOffConfirmDialog from "./SoundOffConfirmDialog";
 import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
@@ -37,6 +39,12 @@ import MotionPresetsPanel from "./MotionPresetsPanel";
 import BitrateControl from "./BitrateControl";
 import SeedControl from "./SeedControl";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
+
+const DEFAULT_GENERATE_PROMPT_WIDTH = 960;
+const MAX_GENERATE_PROMPT_WIDTH = 1100;
+const DEFAULT_GENERATE_PROMPT_HEIGHT = 116;
+const MAX_GENERATE_PROMPT_HEIGHT = 360;
+const GENERATE_VIEWPORT_GUTTER = 16;
 
 export interface PromptBarProps {
   prompt: string;
@@ -287,7 +295,7 @@ function PromptInput({
       aria-label="Prompt"
       data-placeholder={placeholder}
       onInput={(e) => onChange(e.currentTarget.textContent ?? "")}
-      className="max-h-[80px] min-h-[24px] flex-1 overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
+      className="min-h-[24px] flex-1 overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
     />
   );
 }
@@ -502,6 +510,10 @@ export default function PromptBar(props: PromptBarProps) {
 
   const panelRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const [promptWidth, setPromptWidth] = useState(DEFAULT_GENERATE_PROMPT_WIDTH);
+  const [promptHeight, setPromptHeight] = useState(DEFAULT_GENERATE_PROMPT_HEIGHT);
+  const [maxPromptWidth, setMaxPromptWidth] = useState(MAX_GENERATE_PROMPT_WIDTH);
+  const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_GENERATE_PROMPT_HEIGHT);
   const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
 
   // Cinema Studio 2.5 — all five reference/frame entry points (As Reference /
@@ -885,6 +897,46 @@ export default function PromptBar(props: PromptBarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [isCustomMultishotOpen]);
 
+  useEffect(() => {
+    const updateResizeBounds = () => {
+      const left = composerRef.current?.getBoundingClientRect().left ?? GENERATE_VIEWPORT_GUTTER;
+      const nextMaxWidth = Math.max(
+        320,
+        Math.min(
+          MAX_GENERATE_PROMPT_WIDTH,
+          window.innerWidth - left - GENERATE_VIEWPORT_GUTTER,
+        ),
+      );
+      const nextMaxHeight = Math.max(
+        DEFAULT_GENERATE_PROMPT_HEIGHT,
+        Math.min(MAX_GENERATE_PROMPT_HEIGHT, window.innerHeight - 160),
+      );
+      setMaxPromptWidth(nextMaxWidth);
+      setMaxPromptHeight(nextMaxHeight);
+    };
+
+    const frame = requestAnimationFrame(updateResizeBounds);
+    window.addEventListener("resize", updateResizeBounds);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateResizeBounds);
+    };
+  }, []);
+
+  const promptResize = usePromptSurfaceResize({
+    width: promptWidth,
+    height: promptHeight,
+    minWidth: Math.min(DEFAULT_GENERATE_PROMPT_WIDTH, maxPromptWidth),
+    maxWidth: maxPromptWidth,
+    minHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+    maxHeight: maxPromptHeight,
+    defaultWidth: DEFAULT_GENERATE_PROMPT_WIDTH,
+    defaultHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+    setWidth: setPromptWidth,
+    setHeight: setPromptHeight,
+    storageKey: "generatePromptDimensions",
+  });
+
   // Track composer position for portal rendering
   useEffect(() => {
     if (!isCustomMultishotOpen || !composerRef.current) return;
@@ -912,11 +964,23 @@ export default function PromptBar(props: PromptBarProps) {
         className="pointer-events-none fixed left-0 top-0 z-[100000]"
       />
       <div
-        ref={composerRef}
-        className="flex h-[116px] min-h-[116px] min-w-0 flex-1 items-stretch rounded-[24px] p-1 opacity-100"
+        className={`relative min-w-0 flex-none ${
+          promptResize.isResizing ? "" : "transition-[width] duration-150 ease-out"
+        }`}
         style={{
-          minHeight: 116,
-          height: 116,
+          width: promptWidth,
+          height: DEFAULT_GENERATE_PROMPT_HEIGHT,
+        }}
+      >
+      <div
+        ref={composerRef}
+        className={`absolute inset-x-0 bottom-0 flex min-w-0 items-stretch rounded-[24px] p-1 opacity-100 ${
+          promptResize.isResizing ? "" : "transition-[height] duration-150 ease-out"
+        }`}
+        style={{
+          minHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+          width: "100%",
+          height: promptHeight,
           background: "#141414",
           border: "1px solid rgba(255,255,255,0.025)",
           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025), 0 12px 26px rgba(0,0,0,0.45)",
@@ -929,6 +993,13 @@ export default function PromptBar(props: PromptBarProps) {
           className="prompt-main-surface relative flex min-w-0 flex-1 items-stretch gap-1 rounded-[20px] p-3"
           style={PROMPT_BAR_SURFACE}
         >
+        <PromptResizeHandles
+          verticalHandleProps={promptResize.verticalHandleProps}
+          cornerHandleProps={promptResize.cornerHandleProps}
+          isResizing={promptResize.isResizing}
+          verticalLabel="Resize generate prompt height"
+          cornerLabel="Resize generate prompt width and height"
+        />
         {/* Prompt input + controls. The prompt input itself is flex-1 (grows
             to match the Generate button's height, per Higgsfield's real
             markup); the control row below it is mt-auto so it always stays
@@ -2357,6 +2428,7 @@ export default function PromptBar(props: PromptBarProps) {
           />
         )}
         </div>
+      </div>
       </div>
 
       <AssetsPickerModal

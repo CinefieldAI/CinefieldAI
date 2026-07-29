@@ -19,25 +19,24 @@ import {
 import {
   IMAGE_MODEL_CATEGORIES,
   MODEL_CATEGORIES,
-  SEEDANCE_ICON,
   getModel,
   type ModelBadge,
   type ModelInfo,
 } from "./cinemaStudioData";
 
-/** The Seedance PNG has more transparent margin baked in than the other model
- * icons, so it renders visibly smaller at the shared icon size — zoom it in
- * specifically rather than resizing every model's icon. */
-function iconImgClassName(iconPath: string, base: string) {
-  return iconPath === SEEDANCE_ICON ? `${base} scale-150` : base;
+/** Seedance now renders via its real SVG component (not an `<img>` PNG), so
+ * no per-icon zoom compensation is needed here anymore — kept as a no-op
+ * passthrough since callers still pass a (path, base-className) pair. */
+function iconImgClassName(_iconPath: string, base: string) {
+  return base;
 }
 
-/** Compact NEW/PREMIUM/EXCLUSIVE pill — reuses the app's existing lime accent (#D1FE17). */
+/** Compact NEW/PREMIUM/EXCLUSIVE pill using the shared orange accent. */
 function VersionBadge({ badge }: { badge: ModelBadge }) {
   return (
     <span
-      className="shrink-0 rounded px-1 py-px text-[9px] font-bold uppercase leading-none tracking-wide text-black"
-      style={{ backgroundColor: "#D1FE17" }}
+      className="shrink-0 rounded px-1 py-px text-sm font-bold uppercase leading-none tracking-wide text-black"
+      style={{ backgroundColor: "#D97757" }}
     >
       {badge}
     </span>
@@ -88,7 +87,7 @@ const KLING_TURBO_PANEL =
   "rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.95)] shadow-[0_24px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 /** Roving-focus ring shown when a row is keyboard-active (distinct from the "selected model" state). */
-const FOCUS_RING = "ring-2 ring-[#00e5ff]";
+const FOCUS_RING = "ring-2 ring-[#D97757]";
 
 type RowSkin = "default" | "klingTurbo";
 
@@ -122,7 +121,7 @@ function ImageRow({
         active ? "bg-white/5" : "hover:bg-white/5"
       } ${focused ? FOCUS_RING : ""}`}
     >
-      <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
+      <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg text-white">
         {iconPath ? (
           <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-10 object-cover")} />
         ) : (
@@ -131,7 +130,9 @@ function ImageRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-white">{model.name}</span>
+          <span className="truncate text-sm font-semibold leading-5 text-white">
+            {model.name}
+          </span>
         </span>
         <span className="mt-0.5 block truncate text-xs text-gray-400">
           {model.description}
@@ -177,16 +178,30 @@ function VideoFlatRow({
           : `border px-3 py-2.5 ${active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
       } ${focused ? FOCUS_RING : ""}`}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
+      <span
+        className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+        style={
+          active
+            ? {
+                background: "rgba(217,119,87,0.10)",
+                border: "1px solid rgba(217,119,87,0.45)",
+                boxShadow: "0 0 12px rgba(217,119,87,0.20)",
+                color: "#D97757",
+              }
+            : { color: "white" }
+        }
+      >
         {iconPath ? (
           <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
         ) : (
-          Icon && <Icon className="size-6" />
+          Icon && <Icon className="size-6" aria-hidden="true" />
         )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-white">{model.name}</span>
+          <span className="truncate text-sm font-semibold leading-5 text-white">
+            {model.name}
+          </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
           {model.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
         </span>
@@ -207,7 +222,7 @@ function VideoFlatRow({
           </span>
         ) : null}
       </span>
-      {active && <Check className="size-4 shrink-0" style={{ color: "#D1FE17" }} />}
+      {active && <Check className="size-4 shrink-0" style={{ color: "#D97757" }} />}
     </button>
   );
 }
@@ -239,6 +254,7 @@ function VideoParentRow({
   const subs = model.submodels ?? [];
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
+  const active = model.id === value || subs.some((s) => s.id === value);
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,23 +311,37 @@ function VideoParentRow({
         }}
         type="button"
         role="option"
-        aria-selected={false}
+        aria-selected={active}
         tabIndex={focused ? 0 : -1}
         onClick={openFlyout}
         className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200 ease-out hover:bg-white/5 focus:outline-none ${
           focused ? FOCUS_RING : ""
         }`}
       >
-        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-white">
+        <span
+          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+          style={
+            active
+              ? {
+                  background: "rgba(217,119,87,0.10)",
+                  border: "1px solid rgba(217,119,87,0.45)",
+                  boxShadow: "0 0 12px rgba(217,119,87,0.20)",
+                  color: "#D97757",
+                }
+              : { color: "white" }
+          }
+        >
           {iconPath ? (
             <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
           ) : (
-            Icon && <Icon className="size-6" />
+            Icon && <Icon className="size-6" aria-hidden="true" />
           )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-white">{model.name}</span>
+            <span className="truncate text-sm font-semibold leading-5 text-white">
+              {model.name}
+            </span>
           </span>
           {model.description && (
             <span className="mt-0.5 block truncate text-xs text-gray-400">
@@ -359,7 +389,7 @@ function VideoParentRow({
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-medium text-white">
+                      <span className="truncate text-sm font-semibold leading-5 text-white">
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -377,7 +407,7 @@ function VideoParentRow({
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1">
-                    {sel && <Check className="size-4" style={{ color: "#D1FE17" }} />}
+                    {sel && <Check className="size-4" style={{ color: "#D97757" }} />}
                   </span>
                 </button>
               );
@@ -405,9 +435,13 @@ export default function ModelSelector({
   const selected = getModel(value);
   const isImage = mode === "image";
   const source = isImage ? IMAGE_MODEL_CATEGORIES : MODEL_CATEGORIES;
-  const accent = isImage ? "#D1FE17" : "#00e5ff";
-  const TriggerIcon = isImage ? LocationPin : Clapperboard;
+  const FallbackTriggerIcon = isImage ? LocationPin : Clapperboard;
   const triggerIconPath = typeof selected.icon === "string" ? selected.icon : null;
+  // The selected model's own icon component (Google/OpenAI Sora/Seedance/
+  // Kling/Wan/etc.) when it has one, falling back to the generic
+  // Clapperboard/LocationPin glyph only for models without a brand icon.
+  const SelectedIcon =
+    typeof selected.icon === "string" || !selected.icon ? FallbackTriggerIcon : selected.icon;
 
   // Alternate skin shown ONLY while Kling 3.0 Turbo is the selected model —
   // every other model keeps the standard look above.
@@ -571,7 +605,8 @@ export default function ModelSelector({
               type="button"
               aria-haspopup="listbox"
               aria-expanded={open}
-              className="flex h-7 items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#d1fe17]"
+              aria-label={`Model: ${selected.name}`}
+              className="flex h-7 items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
@@ -582,12 +617,9 @@ export default function ModelSelector({
                   />
                 </span>
               ) : (
-                <TriggerIcon className="h-5 w-5" style={{ color: "#d1fe17" }} />
+                <SelectedIcon className="h-5 w-5" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span
-                className="max-w-[140px] truncate text-xs font-semibold"
-                style={{ color: "rgb(209, 254, 23)" }}
-              >
+              <span className="max-w-[140px] truncate text-xs font-semibold text-white">
                 {selected.name}
               </span>
             </button>
@@ -596,7 +628,8 @@ export default function ModelSelector({
               type="button"
               aria-haspopup="listbox"
               aria-expanded={open}
-              className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+              aria-label={`Model: ${selected.name}`}
+              className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
@@ -607,9 +640,9 @@ export default function ModelSelector({
                   />
                 </span>
               ) : (
-                <TriggerIcon className="h-5 w-5" style={{ color: accent }} />
+                <SelectedIcon className="h-5 w-5" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span className="max-w-[140px] truncate" style={{ color: accent }}>
+              <span className="max-w-[140px] truncate text-white">
                 {selected.name}
               </span>
               <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
@@ -624,9 +657,7 @@ export default function ModelSelector({
             onKeyDown={handleKeyDown}
             className={`z-[100000] overflow-y-auto pointer-events-auto ${
               isKlingTurboSkin ? KLING_TURBO_PANEL : FROSTED
-            } ${
-              isKlingTurboSkin ? "max-h-[70vh] w-[380px]" : `max-h-[500px] ${isImage ? "w-[400px]" : "w-[340px]"}`
-            }`}
+            } ${isKlingTurboSkin ? "max-h-[70vh] w-[380px]" : "h-[602px] w-[402px]"}`}
           >
             {isKlingTurboSkin ? (
               <div className="sticky top-0 z-10 p-3">

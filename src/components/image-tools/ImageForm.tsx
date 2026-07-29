@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, MapPin, Palette, Plus, Search, Check, Wand2 } from "lucide-react";
 import { IMAGE_MODEL_CONFIGS, type ImageModelConfig } from "@/lib/imageModelConfig";
@@ -25,10 +25,18 @@ import {
   MultiReferenceIcon,
 } from "@/components/cinema-studio/icons/ProviderIcons";
 import WanIcon from "@/components/cinema-studio/icons/WanIcon";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import {
   getCapabilities,
   type AspectRatioChoice,
 } from "@/components/landing/createImage/imageModelCapabilities";
+
+const DEFAULT_GENERATE_PROMPT_WIDTH = 960;
+const MAX_GENERATE_PROMPT_WIDTH = 1100;
+const DEFAULT_GENERATE_PROMPT_HEIGHT = 116;
+const MAX_GENERATE_PROMPT_HEIGHT = 360;
+const GENERATE_VIEWPORT_GUTTER = 16;
 import {
   AspectRatioPopover,
   AssetsButtonGroup,
@@ -248,7 +256,9 @@ function ModelSelectorDropdown({
             </div>
             <div className="flex-1 min-w-0 flex flex-col gap-1 items-start">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="model-title">{model.label}</span>
+                <span className="text-sm font-semibold leading-5 text-white">
+                  {model.label}
+                </span>
                 {model.badge && (
                   <span className="font-grotesk text-sm inline-block uppercase px-1 rounded-sm font-bold -skew-x-12 h-4 max-h-4 leading-4 flex items-center justify-center bg-amber-400 text-black">
                     {model.badge}
@@ -383,11 +393,16 @@ export default function ImageForm({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
 
   const [, setPrompt] = useState("");
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [isQualityOpen, setIsQualityOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
+  const [promptWidth, setPromptWidth] = useState(DEFAULT_GENERATE_PROMPT_WIDTH);
+  const [promptHeight, setPromptHeight] = useState(DEFAULT_GENERATE_PROMPT_HEIGHT);
+  const [maxPromptWidth, setMaxPromptWidth] = useState(MAX_GENERATE_PROMPT_WIDTH);
+  const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_GENERATE_PROMPT_HEIGHT);
 
   const [quality, setQuality] = useState(config?.defaultQuality ?? "");
   const [aspectRatio, setAspectRatio] = useState(config?.defaultAspectRatio ?? "Auto");
@@ -469,6 +484,50 @@ export default function ImageForm({
     setOpenPopoverId(null);
   }
 
+  useEffect(() => {
+    if (!embedded) return;
+
+    const updateResizeBounds = () => {
+      const left = composerRef.current?.getBoundingClientRect().left ?? GENERATE_VIEWPORT_GUTTER;
+      setMaxPromptWidth(
+        Math.max(
+          320,
+          Math.min(
+            MAX_GENERATE_PROMPT_WIDTH,
+            window.innerWidth - left - GENERATE_VIEWPORT_GUTTER,
+          ),
+        ),
+      );
+      setMaxPromptHeight(
+        Math.max(
+          DEFAULT_GENERATE_PROMPT_HEIGHT,
+          Math.min(MAX_GENERATE_PROMPT_HEIGHT, window.innerHeight - 160),
+        ),
+      );
+    };
+
+    const frame = requestAnimationFrame(updateResizeBounds);
+    window.addEventListener("resize", updateResizeBounds);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateResizeBounds);
+    };
+  }, [embedded]);
+
+  const promptResize = usePromptSurfaceResize({
+    width: promptWidth,
+    height: promptHeight,
+    minWidth: Math.min(DEFAULT_GENERATE_PROMPT_WIDTH, maxPromptWidth),
+    maxWidth: maxPromptWidth,
+    minHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+    maxHeight: maxPromptHeight,
+    defaultWidth: DEFAULT_GENERATE_PROMPT_WIDTH,
+    defaultHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+    setWidth: setPromptWidth,
+    setHeight: setPromptHeight,
+    storageKey: embedded ? "generatePromptDimensions" : undefined,
+  });
+
   if (!config) return null;
 
   const handleModelSelect = (modelId: string) => {
@@ -528,10 +587,20 @@ export default function ImageForm({
 
   return (
     <div
+      ref={composerRef}
       className={
         embedded
-          ? "relative h-[116px] min-h-[116px] min-w-0 flex-1"
+          ? `relative min-h-[116px] min-w-0 flex-none ${
+              promptResize.isResizing
+                ? ""
+                : "transition-[width,height] duration-150 ease-out"
+            }`
           : "fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-7xl px-4 z-50"
+      }
+      style={
+        embedded
+          ? { width: promptWidth, height: DEFAULT_GENERATE_PROMPT_HEIGHT }
+          : undefined
       }
     >
       {/* Recraft V4.1 Utility — single decorative centered utility shell,
@@ -562,10 +631,12 @@ export default function ImageForm({
       )}
 
       <div
-        className="flex min-w-0 flex-1 items-stretch rounded-[24px] p-1"
+        className={`flex min-w-0 items-stretch rounded-[24px] p-1 ${
+          embedded ? "absolute inset-x-0 bottom-0" : "flex-1"
+        }`}
         style={{
-          minHeight: 116,
-          height: 116,
+          minHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
+          height: embedded ? promptHeight : DEFAULT_GENERATE_PROMPT_HEIGHT,
           background: "#141414",
           border: "1px solid rgba(255,255,255,0.025)",
           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025), 0 12px 26px rgba(0,0,0,0.45)",
@@ -575,9 +646,18 @@ export default function ImageForm({
             → surface(gradient) nesting; the flat outer frame above is the
             near-black chassis, this is the lighter surface inside it. */}
         <div
-          className="flex min-w-0 flex-1 items-stretch gap-3 rounded-[20px] p-3"
+          className="relative flex min-w-0 flex-1 items-stretch gap-3 rounded-[20px] p-3"
           style={PROMPT_BAR_SURFACE}
         >
+        {embedded && (
+          <PromptResizeHandles
+            verticalHandleProps={promptResize.verticalHandleProps}
+            cornerHandleProps={promptResize.cornerHandleProps}
+            isResizing={promptResize.isResizing}
+            verticalLabel="Resize generate image prompt height"
+            cornerLabel="Resize generate image prompt width and height"
+          />
+        )}
         {/* Prompt input + controls. The prompt text box is flex-1 (grows to
             match the Generate button's height, per Higgsfield's real markup);
             the control row below it is mt-auto so it always stays pinned to
@@ -613,7 +693,7 @@ export default function ImageForm({
                 aria-label="Prompt"
                 data-placeholder="Describe the scene you imagine"
                 onInput={(e) => setPrompt(e.currentTarget.textContent ?? "")}
-                className="max-h-[80px] min-h-[24px] overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
+                className="min-h-[24px] overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
               />
             </div>
           </div>
@@ -1417,7 +1497,7 @@ export default function ImageForm({
         <button
           type="submit"
           aria-label="Generate"
-          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#D97757] focus:ring-offset-2 focus:ring-offset-black"
+          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#D97757] focus:ring-offset-2 focus:ring-offset-black"
           style={{
             width: 120,
             height: 80,

@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { Plus } from "lucide-react";
 
 interface CharacterCardPopoverProps {
   onOpen?: () => void;
 }
 
+/** 80x80 Character card (Higgsfield Soul 2.0) — the whole card is the
+ *  single semantic trigger button; the plus glyph is a decorative span,
+ *  never a nested interactive element. */
 export default function CharacterCardPopover({
   onOpen,
 }: CharacterCardPopoverProps) {
@@ -17,9 +21,23 @@ export default function CharacterCardPopover({
       <Popover.Trigger asChild>
         <button
           type="button"
-          className="h-10 px-4 rounded-xl border border-white/10 bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition-colors"
+          aria-label="Add or select character"
+          className="group relative flex h-20 w-20 shrink-0 cursor-pointer flex-col justify-between overflow-hidden rounded-xl p-1.5 text-left transition-transform hover:scale-[1.02]"
+          style={{
+            background: "linear-gradient(180deg, #2a2d31 0%, #17191b 100%)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.32)",
+          }}
         >
-          Character
+          <span
+            aria-hidden
+            className="flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white"
+          >
+            <Plus className="h-3 w-3" />
+          </span>
+          <span className="text-[12px] font-bold uppercase leading-none tracking-wide text-white">
+            Character
+          </span>
         </button>
       </Popover.Trigger>
       <Popover.Portal>

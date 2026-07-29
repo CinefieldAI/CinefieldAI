@@ -250,19 +250,15 @@ export default function AudioFeed({
         )}
       </div>
 
-      {/* Bottom audio wave visual (behind/above the composer) */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-[150px] flex h-[120px] items-end justify-center gap-[3px] opacity-25">
-        {Array.from({ length: 96 }, (_, i) => {
-          const center = Math.abs(i - 48) / 48;
-          const h = 10 + Math.round((1 - center) * Math.abs(Math.sin(i * 0.5)) * 100);
-          return (
-            <span
-              key={i}
-              className="w-[3px] rounded-full bg-gradient-to-t from-white/5 to-white/30"
-              style={{ height: `${h}%` }}
-            />
-          );
-        })}
+      {/* Bottom audio wave visual (behind/above the composer) — matches the
+          reference: one image, full width, native 246px height, 30% opacity. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[246px] w-full opacity-30">
+        <img
+          src="/waves.svg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       </div>
     </div>
   );

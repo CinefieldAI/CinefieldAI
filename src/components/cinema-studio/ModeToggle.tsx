@@ -56,13 +56,13 @@ function ToggleButton({
       onClick={onClick}
       aria-label={`${label} mode`}
       aria-pressed={active}
-      className={`flex h-14 w-16 flex-col items-center justify-center gap-1 rounded-[20px] border-none px-3 py-1.5 text-[10px] font-bold leading-3 tracking-[0.2px] transition-all duration-200 ${
+      className={`flex w-16 flex-1 flex-col items-center justify-center gap-1 rounded-[20px] border-none px-3 py-1.5 text-[10px] font-bold leading-3 tracking-[0.2px] transition-all duration-200 active:brightness-[.6] ${
         active
           ? "bg-white/5 text-white"
           : "bg-transparent text-neutral-400 hover:text-white"
       }`}
     >
-      <Icon className={active ? "text-[#00e5ff]" : ""} />
+      <Icon className={active ? "text-[#D97757]" : ""} />
       {label}
     </button>
   );
@@ -75,24 +75,26 @@ function ToggleButton({
 export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
     <div
-      className="z-50 flex h-[116px] w-[72px] min-w-[72px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-[24px] bg-[#1a1d1f] p-1 backdrop-blur-[20px]"
+      className="z-50 flex h-[116px] min-h-[116px] w-[72px] min-w-[72px] shrink-0 rounded-[24px] bg-[#1a1d1f] p-1"
       style={{
         boxShadow:
           "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
       }}
     >
-      <ToggleButton
-        active={mode === "image"}
-        label="Image"
-        icon={ImageIcon}
-        onClick={() => onChange("image")}
-      />
-      <ToggleButton
-        active={mode === "video"}
-        label="Video"
-        icon={VideoIcon}
-        onClick={() => onChange("video")}
-      />
+      <div className="flex h-full w-full flex-col gap-0.5">
+        <ToggleButton
+          active={mode === "image"}
+          label="Image"
+          icon={ImageIcon}
+          onClick={() => onChange("image")}
+        />
+        <ToggleButton
+          active={mode === "video"}
+          label="Video"
+          icon={VideoIcon}
+          onClick={() => onChange("video")}
+        />
+      </div>
     </div>
   );
 }

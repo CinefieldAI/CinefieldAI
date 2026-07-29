@@ -1,32 +1,47 @@
 import {
-  Aperture,
-  BarChart3,
   Camera,
   Clapperboard,
   Compass,
-  Copy,
   Film,
   Home,
   Heart,
   Layers,
   MapPin,
-  Rabbit,
   Sparkle,
   Sparkles,
   Star,
   UserRound,
   Users,
   Wand2,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import WanIcon from "./icons/WanIcon";
+import {
+  GoogleIcon,
+  GrokIcon,
+  OpenAIIcon,
+  OpenAISoraIcon,
+  SeedanceIcon,
+  SeedreamIcon,
+  KlingIcon,
+  RecraftIcon,
+  FluxIcon,
+  MinimaxIcon,
+  HappyHorseIcon,
+  MultiReferenceIcon,
+} from "./icons/ProviderIcons";
 
 /** Neon turquoise brand accent — DO NOT CHANGE. */
-export const ACCENT = "#00e5ff";
+export const ACCENT = "#D97757";
 
-/** Seedance family icon (replaces the old Runway-branded PNG). */
-export const SEEDANCE_ICON = "/775d3617-427c-4cca-ae5c-db5ae6b1c64f-removebg-preview.png";
+/** Exact supplied brand SVGs, one per provider — used in place of the old
+ *  PNG screenshots so every model row and its trigger render the real
+ *  vector icon supplied for that provider. */
+export const SEEDANCE_ICON = SeedanceIcon;
+export const GOOGLE_ICON = GoogleIcon;
+export const KLING_ICON = KlingIcon;
+export const SORA_ICON = OpenAISoraIcon;
+export const GROK_ICON = GrokIcon;
 
 /* ------------------------------------------------------------------ */
 /* Settings shape                                                      */
@@ -187,13 +202,13 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
       vfeat("seedance-2.0", "Seedance 2.0", SEEDANCE_ICON, "4K", "4s-15s"),
       vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", SEEDANCE_ICON, "720p", "4s-15s"),
       vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", SEEDANCE_ICON, "720p", "4s-15s"),
-      vfeat("gemini-omni-flash", "Gemini Omni Flash", "/Google_Veo_3.1.png", "720p", "4s-10s"),
-      vfeat("kling-3.0", "Kling 3.0", "/Kling_3.0.png", "4K", "3s-15s", undefined, true),
-      vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", "/Kling_3.0.png", "1080p", "3s-15s"),
-      vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", "/Kling_3.0.png", "1080p", "3s-30s"),
-      vfeat("happyhorse", "HappyHorse", Rabbit, "1080p", "3s-15s", undefined, true),
-      vfeat("grok-base", "Grok Imagine", "/Grok_Imagine_1.5.png", "720p", "1s-15s"),
-      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", "/Google_Veo_3.1.png", "1080p", "4s-8s", undefined, true),
+      vfeat("gemini-omni-flash", "Gemini Omni Flash", GOOGLE_ICON, "720p", "4s-10s"),
+      vfeat("kling-3.0", "Kling 3.0", KLING_ICON, "4K", "3s-15s", undefined, true),
+      vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", KLING_ICON, "1080p", "3s-15s"),
+      vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", KLING_ICON, "1080p", "3s-30s"),
+      vfeat("happyhorse", "HappyHorse", HappyHorseIcon, "1080p", "3s-15s", undefined, true),
+      vfeat("grok-base", "Grok Imagine", GROK_ICON, "720p", "1s-15s"),
+      vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", GOOGLE_ICON, "1080p", "4s-8s", undefined, true),
       vfeat("wan-2.7", "Wan 2.7", WanIcon, "1080p", "2s-15s"),
     ],
   },
@@ -204,7 +219,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "minimax-hailuo",
         "Minimax Hailuo",
         "High-dynamic, VFX-ready, fastest and most affordable",
-        "/Minimax_Hailuo_2.3.png",
+        MinimaxIcon,
         [
           vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "1080p", "6s-10s"),
           vsub("minimax-2.3", "Minimax Hailuo 2.3", "1080p", "6s-10s"),
@@ -216,7 +231,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "kling",
         "Kling",
         "Perfect motion with advanced video control",
-        "/Kling_3.0.png",
+        KLING_ICON,
         [
           vsub("kling-3.0", "Kling 3.0", "4K", "3s-15s", undefined, true),
           vsub("kling-3.0-turbo", "Kling 3.0 Turbo", "1080p", "3s-15s", undefined, true),
@@ -244,7 +259,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "openai-sora",
         "OpenAI Sora 2",
         "Multi-shot video with sound generation",
-        "/Sora_2.png",
+        SORA_ICON,
         [
           vsub("sora-2", "Sora 2", "720p", "4s-12s"),
           vsub("sora-3.1-lite", "Sora 3.1 Lite", "720p", "6s-10s"),
@@ -258,7 +273,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "google-veo",
         "Google Veo",
         "Precision video with sound control",
-        "/Google_Veo_3.1.png",
+        GOOGLE_ICON,
         [
           vsub("veo-3.1", "Google Veo 3.1", "1080p", "4s-8s"),
           vsub("veo-3.1-fast", "Google Veo 3.1 Fast", "1080p", "4s-8s"),
@@ -309,7 +324,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "happyhorse-cat",
         "HappyHorse",
         "",
-        Rabbit,
+        HappyHorseIcon,
         [vsub("happyhorse", "HappyHorse", "1080p", "3s-15s")],
       ),
     ],
@@ -345,30 +360,30 @@ const IM = {
   cameras: M("cinematic-cameras", "Cinematic Cameras", "Image generation with camera controls", Camera),
   soul2: M("higgsfield-soul-2", "Higgsfield Soul 2.0", "Next generation ultra-realistic fashion visuals", Sparkles),
   soulCinema: M("higgsfield-soul-cinema", "Higgsfield Soul Cinema", "Cinema-grade visual creation", Sparkles),
-  gpt2: M("gpt-image-2", "GPT Image 2", "4K images with near-perfect text rendering", "/GPT_Image_-_OpenAI.png", { resolution: "4K", isNew: true }),
-  seedream45: M("seedream-4-5", "Seedream 4.5", "ByteDance's next-gen 4K image-editing model", BarChart3, { resolution: "4K" }),
-  seedream5pro: M("seedream-5-pro", "Seedream 5.0 Pro", "Logically consistent images with intelligent visual reasoning", BarChart3, { isNew: true }),
-  nanoPro: M("nano-banana-pro", "Nano Banana Pro", "Google's flagship generation model", "/Nano_Banana.png"),
-  nano2: M("nano-banana-2", "Nano Banana 2", "Pro quality at Flash speed", "/Nano_Banana.png", { isNew: true }),
-  nano2lite: M("nano-banana-2-lite", "Nano Banana 2 Lite", "Lightweight image generation at speed", "/Nano_Banana.png", { isNew: true }),
-  recraft: M("recraft-v4-1", "Recraft V4.1", "Photorealistic and expressive image generation", "/Recraft_V4.1.png", { isNew: true }),
+  gpt2: M("gpt-image-2", "GPT Image 2", "4K images with near-perfect text rendering", OpenAIIcon, { resolution: "4K", isNew: true }),
+  seedream45: M("seedream-4-5", "Seedream 4.5", "ByteDance's next-gen 4K image-editing model", SeedreamIcon, { resolution: "4K" }),
+  seedream5pro: M("seedream-5-pro", "Seedream 5.0 Pro", "Logically consistent images with intelligent visual reasoning", SeedreamIcon, { isNew: true }),
+  nanoPro: M("nano-banana-pro", "Nano Banana Pro", "Google's flagship generation model", GoogleIcon),
+  nano2: M("nano-banana-2", "Nano Banana 2", "Pro quality at Flash speed", GoogleIcon, { isNew: true }),
+  nano2lite: M("nano-banana-2-lite", "Nano Banana 2 Lite", "Lightweight image generation at speed", GoogleIcon, { isNew: true }),
+  recraft: M("recraft-v4-1", "Recraft V4.1", "Photorealistic and expressive image generation", RecraftIcon, { isNew: true }),
   auto: M("auto", "Auto", "The best model for any prompt, chosen for you", Wand2),
   soul: M("higgsfield-soul", "Higgsfield Soul", "Ultra-realistic fashion visuals", Sparkles),
-  gpt15: M("gpt-image-1-5", "GPT Image 1.5", "True-color precision rendering", "/GPT_Image_-_OpenAI.png"),
-  gpt: M("gpt-image", "GPT Image", "Versatile text-to-image AI", "/GPT_Image_-_OpenAI.png"),
-  nano: M("nano-banana", "Nano Banana", "Google's standard generation model", "/Nano_Banana.png"),
-  seedream5lite: M("seedream-5-lite", "Seedream 5.0 lite", "Intelligent visual reasoning", BarChart3),
-  seedream4: M("seedream-4-0", "Seedream 4.0", "ByteDance's advanced image editing model", BarChart3),
-  grok: M("grok-imagine-image", "Grok Imagine", "Versatile image styles by xAI", Zap),
-  recraftUtil: M("recraft-utility", "Recraft V4.1 Utility", "Simple scenes with flat, even lighting", "/Recraft_V4.1.png", { isNew: true }),
+  gpt15: M("gpt-image-1-5", "GPT Image 1.5", "True-color precision rendering", OpenAIIcon),
+  gpt: M("gpt-image", "GPT Image", "Versatile text-to-image AI", OpenAIIcon),
+  nano: M("nano-banana", "Nano Banana", "Google's standard generation model", GoogleIcon),
+  seedream5lite: M("seedream-5-lite", "Seedream 5.0 lite", "Intelligent visual reasoning", SeedreamIcon),
+  seedream4: M("seedream-4-0", "Seedream 4.0", "ByteDance's advanced image editing model", SeedreamIcon),
+  grok: M("grok-imagine-image", "Grok Imagine", "Versatile image styles by xAI", GrokIcon),
+  recraftUtil: M("recraft-utility", "Recraft V4.1 Utility", "Simple scenes with flat, even lighting", RecraftIcon, { isNew: true }),
   zImage: M("z-image", "Z-Image", "Instant lifelike portraits", Star),
-  kling01: M("kling-01", "Kling O1", "Kling's Photorealistic Image Model", Aperture),
-  flux2pro: M("flux-2-pro", "FLUX.2 Pro", "Speed-optimized detail", "/FLUX.2.png"),
-  flux2flex: M("flux-2-flex", "FLUX.2 Flex", "Edit with accuracy", "/FLUX.2.png"),
-  flux2max: M("flux-2-max", "FLUX.2 MAX", "Sharp text, maximum detail", "/FLUX.2.png", { resolution: "4K" }),
+  kling01: M("kling-01", "Kling O1", "Kling's Photorealistic Image Model", KlingIcon),
+  flux2pro: M("flux-2-pro", "FLUX.2 Pro", "Speed-optimized detail", FluxIcon),
+  flux2flex: M("flux-2-flex", "FLUX.2 Flex", "Edit with accuracy", FluxIcon),
+  flux2max: M("flux-2-max", "FLUX.2 MAX", "Sharp text, maximum detail", FluxIcon, { resolution: "4K" }),
   reve: M("reve", "Reve", "Advanced editing model", "/Reve.png"),
-  fluxKontext: M("flux-kontext-max", "Flux Kontext Max", "Edit with accuracy", "/FLUX.2.png"),
-  multiRef: M("multi-reference", "Multi Reference", "Multiple edits in one shot", Copy),
+  fluxKontext: M("flux-kontext-max", "Flux Kontext Max", "Edit with accuracy", FluxIcon),
+  multiRef: M("multi-reference", "Multi Reference", "Multiple edits in one shot", MultiReferenceIcon),
   wan22: M("wan-2-2", "WAN 2.2", "High-fidelity cinematic visuals", Sparkle),
 } as const;
 

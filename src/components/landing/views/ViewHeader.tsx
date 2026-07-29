@@ -23,7 +23,7 @@ export default function ViewHeader({
         <ArrowLeft className="h-3.5 w-3.5" />
         Back to Explore
       </button>
-      <span className="inline-flex items-center rounded-full bg-magenta-500/10 px-3 py-1 text-xs font-semibold text-magenta-400">
+      <span className="inline-flex items-center rounded-full bg-magenta-500/10 px-3 py-1 text-sm font-semibold text-magenta-400">
         {badge}
       </span>
       <h1 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
