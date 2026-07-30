@@ -247,16 +247,16 @@ function ModelRow({
       }`}
     >
       <div
-        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+        className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
           isSelected ? "bg-[#E61E8F]/20" : "bg-white/8"
         }`}
       >
-        <Icon className={`h-4 w-4 ${isSelected ? "text-[#E61E8F]" : ""}`} />
+        <Icon className={`h-6 w-6 ${isSelected ? "text-[#E61E8F]" : ""}`} />
       </div>
 
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-semibold leading-5 text-white">
+          <h4 className="text-[18px] font-semibold leading-6 text-white">
             {model.name}
           </h4>
           {model.badge && (

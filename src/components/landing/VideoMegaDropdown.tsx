@@ -37,12 +37,12 @@ export default function VideoMegaDropdown({
                   onClick={() => onFeatureSelect?.(feature.title)}
                   className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
                 >
-                  <div className="grid size-12 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
-                    <Icon className="size-6 text-zinc-300" />
+                  <div className="grid size-14 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
+                    <Icon className="size-7 text-zinc-300" />
                   </div>
                   <div className="grid min-w-0 auto-rows-min gap-1">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-5 text-white">
+                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
                         {feature.title}
                       </span>
                       {feature.badge && (
@@ -76,12 +76,12 @@ export default function VideoMegaDropdown({
                   onClick={() => onModelSelect?.(model.name)}
                   className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
                 >
-                  <div className="grid size-12 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
-                    <Icon className="size-6 text-zinc-300" aria-hidden="true" />
+                  <div className="grid size-14 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
+                    <Icon className="size-7 text-zinc-300" aria-hidden="true" />
                   </div>
                   <div className="grid min-w-0 auto-rows-min gap-1">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-5 text-white">
+                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
                         {model.name}
                       </span>
                       {model.badge && (

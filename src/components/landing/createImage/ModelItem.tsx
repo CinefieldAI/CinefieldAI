@@ -23,18 +23,18 @@ export default function ModelItem({ model, isSelected, onSelect }: ModelItemProp
       }`}
     >
       {model.icon ? (
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
           <Image
             src={model.icon}
             alt={model.name}
-            width={28}
-            height={28}
+            width={40}
+            height={40}
             className="h-full w-full object-cover"
           />
         </span>
       ) : (
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors ${
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-semibold transition-colors ${
             isSelected
               ? "bg-gradient-to-br from-magenta-500 to-magenta-600 text-white"
               : "bg-gradient-to-br from-zinc-700 to-zinc-900 text-zinc-300 group-hover:from-magenta-500/40 group-hover:to-magenta-600/40 group-hover:text-white"

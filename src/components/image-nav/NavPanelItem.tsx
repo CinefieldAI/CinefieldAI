@@ -41,11 +41,11 @@ export default function NavPanelItem({
       }`}
     >
       <div
-        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+        className={`mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${
           isActive ? "bg-white/15" : "bg-white/8 group-hover:bg-white/12"
         }`}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-6 w-6" />
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">

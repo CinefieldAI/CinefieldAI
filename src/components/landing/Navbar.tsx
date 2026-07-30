@@ -337,13 +337,12 @@ export default function Navbar({
             {/* Image: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={
+                className={`text-[20px] ${
                   activePanel === "image"
                     ? "bg-white/10 text-[#D97757]"
-                    : undefined
-                }
+                    : ""
+                }`}
               >
-                <ImageIcon className="size-4" />
                 Image
               </NavigationMenuTrigger>
               <NavigationMenuContent>
@@ -357,14 +356,13 @@ export default function Navbar({
             {/* Video: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={
+                className={`text-[20px] ${
                   activePanel === "video" ||
                   pathname.startsWith("/video/")
                     ? "bg-white/10 text-[#D97757]"
-                    : undefined
-                }
+                    : ""
+                }`}
               >
-                <Film className="size-4" />
                 Video
               </NavigationMenuTrigger>
               <NavigationMenuContent>
@@ -378,14 +376,13 @@ export default function Navbar({
             {/* Audio: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={
+                className={`text-[20px] ${
                   activePanel === "audio" ||
                   pathname.startsWith("/audio/")
                     ? "bg-white/10 text-[#D97757]"
-                    : undefined
-                }
+                    : ""
+                }`}
               >
-                <Music2 className="size-4" />
                 Audio
               </NavigationMenuTrigger>
               <NavigationMenuContent>

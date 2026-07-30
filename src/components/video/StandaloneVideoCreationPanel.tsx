@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AtSign,
   Check,
   ChevronDown,
   Clapperboard,
@@ -10,18 +11,26 @@ import {
   ImageIcon,
   ImagePlus,
   Loader2,
+  Music2,
   Move3d,
+  Pencil,
   Plus,
+  RectangleHorizontal,
   Search,
   Scissors,
   Sparkles,
   Upload,
   Video,
+  Volume2,
+  VolumeX,
   WandSparkles,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import { useSearchParams } from "next/navigation";
+import AssetsPickerModal from "@/components/cinema-studio/AssetsPickerModal";
 import {
   GoogleIcon,
   GrokIcon,
@@ -231,10 +240,52 @@ const WORKFLOWS: {
 ];
 
 const DEFAULT_MODEL_INDEX: Record<StandaloneVideoWorkflow, number> = {
-  "create-video": 6,
+  "create-video": 0,
   "edit-video": 3,
   "motion-control": 5,
 };
+
+type SeedanceModelCapabilities = {
+  mediaTypes: Array<"image" | "video" | "audio">;
+  duration: boolean;
+  aspectRatio: boolean;
+  resolution: boolean;
+  bitrate: boolean;
+  audioToggle: boolean;
+};
+
+const SEEDANCE_MODEL_CAPABILITIES: Record<
+  string,
+  SeedanceModelCapabilities
+> = {
+  "Seedance 2.0": {
+    mediaTypes: ["image", "video", "audio"],
+    duration: true,
+    aspectRatio: true,
+    resolution: true,
+    bitrate: true,
+    audioToggle: true,
+  },
+  "Seedance 2.0 Fast": {
+    mediaTypes: ["image", "video", "audio"],
+    duration: true,
+    aspectRatio: true,
+    resolution: true,
+    bitrate: true,
+    audioToggle: true,
+  },
+  "Seedance 2.0 Mini": {
+    mediaTypes: ["image", "video", "audio"],
+    duration: true,
+    aspectRatio: true,
+    resolution: true,
+    bitrate: false,
+    audioToggle: true,
+  },
+};
+
+const ASPECT_RATIO_OPTIONS = ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"];
+const RESOLUTION_OPTIONS = ["480p", "720p"];
 
 const WORKFLOW_MODELS: Record<StandaloneVideoWorkflow, WorkflowModel[]> = {
   "create-video": CREATE_MODELS,
@@ -433,6 +484,7 @@ function WorkflowModelPanel({
           <Search className="size-4 text-zinc-500" />
           <input
             autoFocus
+            name="standalone-video-model-search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search..."
@@ -459,24 +511,19 @@ function WorkflowModelPanel({
                 }`}
               >
                 <span
-                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] ${
+                  className={`flex size-12 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] ${
                     selected ? "text-[#D97757]" : "text-zinc-400"
                   }`}
                 >
-                  <Icon className="size-5" aria-hidden="true" />
+                  <Icon className="size-6" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-xs font-semibold text-white">
+                    <span className="truncate text-[18px] font-semibold leading-6 text-white">
                       {model.name}
                     </span>
                     {model.audio && (
                       <Video className="size-3 text-zinc-500" />
-                    )}
-                    {model.badge && (
-                      <span className="rounded bg-[#D97757] px-1 py-0.5 text-[9px] font-black text-black">
-                        {model.badge}
-                      </span>
                     )}
                   </span>
                   {workflow === "create-video" ? (
@@ -493,7 +540,7 @@ function WorkflowModelPanel({
                       )}
                     </span>
                   ) : (
-                    <span className="mt-0.5 block truncate text-[10px] text-zinc-500">
+                    <span className="mt-0.5 block truncate text-xs text-zinc-500">
                       {model.description}
                     </span>
                   )}
@@ -538,10 +585,380 @@ function ModelTrigger({
   );
 }
 
-export default function StandaloneVideoCreationPanel() {
+function SeedanceBanner({ modelName }: { modelName: string }) {
+  return (
+    <div className="relative h-32 overflow-hidden rounded-xl bg-black">
+      <img
+        src="https://static.higgsfield.ai/feed/step-3-thumbnail.webp"
+        alt=""
+        className="size-full object-cover opacity-55"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+      <button
+        type="button"
+        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-zinc-200 backdrop-blur-sm"
+      >
+        <Pencil className="size-3" />
+        Change
+      </button>
+      <div className="absolute bottom-3 left-3">
+        <p className="text-lg font-black text-[#d1fe17]">GENERAL</p>
+        <p className="mt-0.5 text-xs text-zinc-300">{modelName}</p>
+      </div>
+    </div>
+  );
+}
+
+function SeedanceMediaUpload({
+  fileName,
+  onFileNameChange,
+}: {
+  fileName: string;
+  onFileNameChange: (name: string) => void;
+}) {
+  return (
+    <label className="flex min-h-[120px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-4 text-center transition-colors hover:border-white/25 hover:bg-white/[0.05]">
+      <input
+        type="file"
+        name="standalone-seedance-media"
+        className="sr-only"
+        accept="image/*,video/*,audio/*"
+        onChange={(event) =>
+          onFileNameChange(event.target.files?.[0]?.name ?? "")
+        }
+      />
+      <span className="flex h-10 items-center justify-center">
+        <span className="-mr-1 flex size-9 -rotate-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner">
+          <ImageIcon className="size-3 text-zinc-300" />
+        </span>
+        <span className="relative z-10 flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.09] shadow-inner">
+          {fileName ? (
+            <Check className="size-3.5 text-[#d1fe17]" />
+          ) : (
+            <Video className="size-3 text-zinc-200" />
+          )}
+        </span>
+        <span className="-ml-1 flex size-9 rotate-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner">
+          <Music2 className="size-3 text-zinc-300" />
+        </span>
+      </span>
+      <span className="mt-2 text-xs font-medium text-zinc-300">
+        {fileName || "Upload media"}
+      </span>
+      <span className="mt-1 text-[11px] font-medium text-zinc-500">
+        {fileName ? "Ready to use" : "Image, Video or Audio"}
+      </span>
+    </label>
+  );
+}
+
+function SeedancePromptCard({
+  prompt,
+  onPromptChange,
+  audioEnabled,
+  onAudioEnabledChange,
+  onElementsClick,
+  showAudioToggle,
+}: {
+  prompt: string;
+  onPromptChange: (value: string) => void;
+  audioEnabled: boolean;
+  onAudioEnabledChange: (value: boolean) => void;
+  onElementsClick: () => void;
+  showAudioToggle: boolean;
+}) {
+  const AudioIcon = audioEnabled ? Volume2 : VolumeX;
+  return (
+    <div className="flex min-h-[142px] flex-col rounded-xl bg-white/[0.035] p-3">
+      <label htmlFor="standalone-seedance-prompt" className="text-xs font-semibold text-zinc-300">
+        Prompt
+      </label>
+      <textarea
+        id="standalone-seedance-prompt"
+        name="standalone-seedance-prompt"
+        rows={3}
+        value={prompt}
+        onChange={(event) => onPromptChange(event.target.value)}
+        placeholder="Describe your scene in detail. Use @ to reference assets"
+        className="mt-1 min-h-0 flex-1 resize-none bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onElementsClick}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#131517] px-1.5 py-1 text-xs font-semibold text-zinc-200 hover:bg-white/[0.06]"
+        >
+          <AtSign className="size-3" />
+          Elements
+        </button>
+        {showAudioToggle && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={audioEnabled}
+            onClick={() => onAudioEnabledChange(!audioEnabled)}
+            className={`inline-flex items-center gap-1.5 rounded-lg bg-[#131517] px-1.5 py-1 text-xs font-semibold ${
+              audioEnabled ? "text-white" : "text-zinc-500"
+            }`}
+          >
+            <AudioIcon className="size-3" />
+            {audioEnabled ? "On" : "Off"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SeedanceSelectControl({
+  label,
+  value,
+  options,
+  icon: Icon,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  icon: LucideIcon;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`${label}: ${value}`}
+          className="flex h-10 min-w-0 flex-1 items-center justify-between gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-semibold text-white hover:bg-white/[0.08]"
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Icon className="size-3.5 shrink-0 text-zinc-400" />
+            <span className="truncate">{value}</span>
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 text-zinc-500" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
+          role="listbox"
+          aria-label={label}
+          className="z-[100000] min-w-[180px] rounded-xl border border-white/10 bg-[#1d2022]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+        >
+          {options.map((option) => (
+            <Popover.Close asChild key={option}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={option === value}
+                onClick={() => onChange(option)}
+                className={`flex h-9 w-full items-center justify-between rounded-lg px-2 text-left text-xs font-medium transition-colors ${
+                  option === value
+                    ? "bg-white/[0.07] text-white"
+                    : "text-zinc-300 hover:bg-white/[0.04]"
+                }`}
+              >
+                {option}
+                {option === value && <Check className="size-3.5" />}
+              </button>
+            </Popover.Close>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function SeedanceDurationControl({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Duration: ${value} seconds`}
+          className="flex h-10 min-w-0 flex-1 items-center justify-between gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-semibold text-white hover:bg-white/[0.08]"
+        >
+          <span className="flex items-center gap-1.5">
+            <Clock3 className="size-3.5 text-zinc-400" />
+            {value}s
+          </span>
+          <ChevronDown className="size-3.5 text-zinc-500" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
+          className="z-[100000] w-[334px] rounded-2xl border border-white/10 bg-[#1d2022]/95 p-2 shadow-2xl shadow-black/60 backdrop-blur-xl"
+        >
+          <p className="px-1 pb-2 text-xs font-semibold text-zinc-300">
+            Choose duration
+          </p>
+          <div className="rounded-xl bg-[#131517] p-2">
+            <div
+              className="relative flex h-9 items-center overflow-hidden rounded-md border border-[#424242] bg-[#202326] px-3 focus-within:ring-1 focus-within:ring-white/40"
+              style={
+                {
+                  "--duration-progress": `${((value - 4) / 11) * 100}%`,
+                } as React.CSSProperties
+              }
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-0 bg-white/[0.045]"
+                style={{ width: "var(--duration-progress)" }}
+              />
+              <span className="absolute left-3 text-xs font-semibold text-white">
+                {value}s
+              </span>
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 h-full w-1 -translate-x-1/2 rounded-full bg-white"
+                style={{ left: "var(--duration-progress)" }}
+              />
+              <input
+                type="range"
+                name="standalone-seedance-duration"
+                min={4}
+                max={15}
+                step={1}
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value))}
+                aria-label="Duration in seconds"
+                aria-valuetext={`${value} seconds`}
+                className="absolute inset-0 size-full cursor-ew-resize opacity-0 active:cursor-grabbing"
+              />
+            </div>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function SeedanceBitrateControl({
+  value,
+  onChange,
+}: {
+  value: "High" | "Standard";
+  onChange: (value: "High" | "Standard") => void;
+}) {
+  const BitrateIcon = () => (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="size-5 shrink-0 text-zinc-300"
+      aria-hidden="true"
+    >
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.5 5.5h-10a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h10m0-16v19m3-13v7m6-5v3m-3-8v13m-15-11h1m-1 9h1m2-9h1m2 0h1m-4 9h1m2 0h1"
+      />
+    </svg>
+  );
+  const options = [
+    {
+      value: "High" as const,
+      description: "Less compression · larger size",
+      icon: Sparkles,
+    },
+    {
+      value: "Standard" as const,
+      description: "More compression · smaller size",
+      icon: Zap,
+    },
+  ];
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between rounded-md bg-white/[0.05] px-3 text-xs font-semibold text-white"
+        >
+          <span className="flex items-center gap-2">
+            <BitrateIcon />
+            Bitrate
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-md bg-[#d1fe17]/10 px-1.5 py-1 text-[#d1fe17]">
+              <Sparkles className="size-3" />
+              {value}
+            </span>
+            <ChevronDown className="size-3.5 text-zinc-500" />
+          </span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
+          className="z-[100000] w-[326px] rounded-xl border border-white/[0.07] bg-[#1d2022]/95 p-2 shadow-2xl shadow-black/60 backdrop-blur-xl"
+        >
+          <div role="listbox" aria-label="Bitrate" className="space-y-0.5">
+            {options.map((option) => {
+              const Icon = option.icon;
+              return (
+                <Popover.Close asChild key={option.value}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={option.value === value}
+                    onClick={() => onChange(option.value)}
+                    className={`flex min-h-9 w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-white/[0.04] ${
+                      option.value === value ? "bg-white/[0.05]" : ""
+                    }`}
+                  >
+                    <Icon className="size-4 shrink-0 text-zinc-300" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-white">
+                        {option.value}
+                      </span>
+                      <span className="block text-[10px] text-zinc-500">
+                        {option.description}
+                      </span>
+                    </span>
+                    {option.value === value && (
+                      <Check className="size-4 text-[#d1fe17]" />
+                    )}
+                  </button>
+                </Popover.Close>
+              );
+            })}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+interface StandaloneVideoCreationPanelProps {
+  workflow: StandaloneVideoWorkflow;
+  onWorkflowChange: (workflow: StandaloneVideoWorkflow) => void;
+}
+
+export default function StandaloneVideoCreationPanel({
+  workflow,
+  onWorkflowChange,
+}: StandaloneVideoCreationPanelProps) {
   const searchParams = useSearchParams();
-  const [workflow, setWorkflow] =
-    useState<StandaloneVideoWorkflow>("create-video");
   const [modelIndexes, setModelIndexes] = useState(DEFAULT_MODEL_INDEX);
   const [modelOpen, setModelOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -551,10 +968,24 @@ export default function StandaloneVideoCreationPanel() {
   const [autoSettings, setAutoSettings] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [generating, setGenerating] = useState(false);
+  const [seedanceMediaName, setSeedanceMediaName] = useState("");
+  const [seedanceAudioEnabled, setSeedanceAudioEnabled] = useState(true);
+  const [seedanceDuration, setSeedanceDuration] = useState(10);
+  const [seedanceAspectRatio, setSeedanceAspectRatio] = useState("Auto");
+  const [seedanceResolution, setSeedanceResolution] = useState("720p");
+  const [seedanceBitrate, setSeedanceBitrate] = useState<
+    "High" | "Standard"
+  >("High");
+  const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
+  const [, setElementReferences] = useState<string[]>([]);
 
   const models = WORKFLOW_MODELS[workflow];
   const selectedIndex = modelIndexes[workflow];
   const selectedModel = models[selectedIndex];
+  const seedanceCapabilities =
+    workflow === "create-video"
+      ? SEEDANCE_MODEL_CAPABILITIES[selectedModel.name]
+      : undefined;
 
   useEffect(() => {
     const requestedModel = searchParams.get("model");
@@ -569,16 +1000,16 @@ export default function StandaloneVideoCreationPanel() {
     );
     if (targetIndex < 0) return;
 
-    setWorkflow(target.workflow);
+    onWorkflowChange(target.workflow);
     setModelIndexes((current) => ({
       ...current,
       [target.workflow]: targetIndex,
     }));
     setModelOpen(false);
-  }, [searchParams]);
+  }, [onWorkflowChange, searchParams]);
 
   const changeWorkflow = (nextWorkflow: StandaloneVideoWorkflow) => {
-    setWorkflow(nextWorkflow);
+    onWorkflowChange(nextWorkflow);
     setModelOpen(false);
     setPrompt("");
   };
@@ -601,10 +1032,9 @@ export default function StandaloneVideoCreationPanel() {
         <div
           role="tablist"
           aria-label="Video workflow"
-          className="flex h-12 shrink-0 items-end gap-1 overflow-x-auto border-b border-white/[0.07] px-3 [scrollbar-width:none]"
+          className="flex shrink-0 gap-3 overflow-x-auto border-b border-white/[0.07] px-4 pt-3 [scrollbar-width:none]"
         >
           {WORKFLOWS.map((item) => {
-            const Icon = item.icon;
             const selected = workflow === item.value;
             return (
               <button
@@ -613,84 +1043,139 @@ export default function StandaloneVideoCreationPanel() {
                 role="tab"
                 aria-selected={selected}
                 onClick={() => changeWorkflow(item.value)}
-                className={`relative flex h-12 shrink-0 items-center gap-1.5 px-1.5 text-xs font-semibold transition-colors ${
+                className={`h-9 shrink-0 whitespace-nowrap border-b-2 text-[16px] font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
                   selected ? "text-white" : "text-zinc-500 hover:text-zinc-200"
-                }`}
+                } ${selected ? "border-b-white" : "border-b-transparent"}`}
               >
-                <Icon className="size-3.5" />
                 {item.label}
-                {selected && (
-                  <span className="absolute inset-x-1 bottom-0 h-0.5 bg-white" />
-                )}
               </button>
             );
           })}
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-          <WorkflowBanner workflow={workflow} />
+          {seedanceCapabilities ? (
+            <SeedanceBanner modelName={selectedModel.name} />
+          ) : (
+            <WorkflowBanner workflow={workflow} />
+          )}
 
           {workflow === "create-video" && (
             <>
-              <UploadSurface
-                title="Upload image or generate it"
-                description="PNG, JPG or Paste from clipboard"
-                icon={ImagePlus}
-              />
-              <label className="block rounded-xl bg-white/[0.035] p-3">
-                <span className="text-xs font-semibold text-zinc-300">
-                  Prompt
-                </span>
-                <textarea
-                  rows={3}
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder="Describe the scene you imagine, with details."
-                  className="mt-1 w-full resize-none bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
-                />
-              </label>
-              <ModelTrigger
-                model={selectedModel}
-                onClick={() => setModelOpen((open) => !open)}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <label className="rounded-lg bg-white/[0.035] px-2 py-2">
-                  <span className="sr-only">Duration</span>
-                  <select
-                    value={duration}
-                    onChange={(event) => setDuration(event.target.value)}
-                    className="w-full bg-transparent text-xs font-semibold text-white outline-none"
-                  >
-                    <option className="bg-zinc-900">5s</option>
-                    <option className="bg-zinc-900">8s</option>
-                    <option className="bg-zinc-900">12s</option>
-                  </select>
-                </label>
-                <label className="rounded-lg bg-white/[0.035] px-2 py-2">
-                  <span className="sr-only">Aspect ratio</span>
-                  <select
-                    value={aspectRatio}
-                    onChange={(event) => setAspectRatio(event.target.value)}
-                    className="w-full bg-transparent text-xs font-semibold text-white outline-none"
-                  >
-                    <option className="bg-zinc-900">16:9</option>
-                    <option className="bg-zinc-900">9:16</option>
-                    <option className="bg-zinc-900">1:1</option>
-                  </select>
-                </label>
-                <label className="rounded-lg bg-white/[0.035] px-2 py-2">
-                  <span className="sr-only">Resolution</span>
-                  <select
-                    value={resolution}
-                    onChange={(event) => setResolution(event.target.value)}
-                    className="w-full bg-transparent text-xs font-semibold text-white outline-none"
-                  >
-                    <option className="bg-zinc-900">720p</option>
-                    <option className="bg-zinc-900">1080p</option>
-                    <option className="bg-zinc-900">4K</option>
-                  </select>
-                </label>
-              </div>
+              {seedanceCapabilities ? (
+                <>
+                  <SeedanceMediaUpload
+                    fileName={seedanceMediaName}
+                    onFileNameChange={setSeedanceMediaName}
+                  />
+                  <SeedancePromptCard
+                    prompt={prompt}
+                    onPromptChange={setPrompt}
+                    audioEnabled={seedanceAudioEnabled}
+                    onAudioEnabledChange={setSeedanceAudioEnabled}
+                    onElementsClick={() => setAssetsPickerOpen(true)}
+                    showAudioToggle={seedanceCapabilities.audioToggle}
+                  />
+                  <ModelTrigger
+                    model={selectedModel}
+                    onClick={() => setModelOpen((open) => !open)}
+                  />
+                  <div className="flex gap-2">
+                    {seedanceCapabilities.duration && (
+                      <SeedanceDurationControl
+                        value={seedanceDuration}
+                        onChange={setSeedanceDuration}
+                      />
+                    )}
+                    {seedanceCapabilities.aspectRatio && (
+                      <SeedanceSelectControl
+                        label="Aspect ratio"
+                        value={seedanceAspectRatio}
+                        options={ASPECT_RATIO_OPTIONS}
+                        icon={RectangleHorizontal}
+                        onChange={setSeedanceAspectRatio}
+                      />
+                    )}
+                    {seedanceCapabilities.resolution && (
+                      <SeedanceSelectControl
+                        label="Resolution"
+                        value={seedanceResolution}
+                        options={RESOLUTION_OPTIONS}
+                        icon={Diamond}
+                        onChange={setSeedanceResolution}
+                      />
+                    )}
+                  </div>
+                  {seedanceCapabilities.bitrate && (
+                    <SeedanceBitrateControl
+                      value={seedanceBitrate}
+                      onChange={setSeedanceBitrate}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <UploadSurface
+                    title="Upload image or generate it"
+                    description="PNG, JPG or Paste from clipboard"
+                    icon={ImagePlus}
+                  />
+                  <label className="block rounded-xl bg-white/[0.035] p-3">
+                    <span className="text-xs font-semibold text-zinc-300">
+                      Prompt
+                    </span>
+                    <textarea
+                      rows={3}
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      placeholder="Describe the scene you imagine, with details."
+                      className="mt-1 w-full resize-none bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
+                    />
+                  </label>
+                  <ModelTrigger
+                    model={selectedModel}
+                    onClick={() => setModelOpen((open) => !open)}
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="rounded-lg bg-white/[0.035] px-2 py-2">
+                      <span className="sr-only">Duration</span>
+                      <select
+                        value={duration}
+                        onChange={(event) => setDuration(event.target.value)}
+                        className="w-full bg-transparent text-xs font-semibold text-white outline-none"
+                      >
+                        <option className="bg-zinc-900">5s</option>
+                        <option className="bg-zinc-900">8s</option>
+                        <option className="bg-zinc-900">12s</option>
+                      </select>
+                    </label>
+                    <label className="rounded-lg bg-white/[0.035] px-2 py-2">
+                      <span className="sr-only">Aspect ratio</span>
+                      <select
+                        value={aspectRatio}
+                        onChange={(event) => setAspectRatio(event.target.value)}
+                        className="w-full bg-transparent text-xs font-semibold text-white outline-none"
+                      >
+                        <option className="bg-zinc-900">16:9</option>
+                        <option className="bg-zinc-900">9:16</option>
+                        <option className="bg-zinc-900">1:1</option>
+                      </select>
+                    </label>
+                    <label className="rounded-lg bg-white/[0.035] px-2 py-2">
+                      <span className="sr-only">Resolution</span>
+                      <select
+                        value={resolution}
+                        onChange={(event) => setResolution(event.target.value)}
+                        className="w-full bg-transparent text-xs font-semibold text-white outline-none"
+                      >
+                        <option className="bg-zinc-900">720p</option>
+                        <option className="bg-zinc-900">1080p</option>
+                        <option className="bg-zinc-900">4K</option>
+                      </select>
+                    </label>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -828,7 +1313,11 @@ export default function StandaloneVideoCreationPanel() {
             type="button"
             onClick={generate}
             disabled={generating}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#D97757] text-sm font-bold text-black shadow-[0_5px_0_#934c36] transition-transform active:translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
+            className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-black transition-transform active:translate-y-0.5 disabled:cursor-wait disabled:opacity-70 ${
+              seedanceCapabilities
+                ? "bg-[#D97757] shadow-[0_5px_0_#934c36]"
+                : "bg-[#D97757] shadow-[0_5px_0_#934c36]"
+            }`}
           >
             {generating ? (
               <Loader2 className="size-4 animate-spin" />
@@ -855,6 +1344,15 @@ export default function StandaloneVideoCreationPanel() {
           onClose={() => setModelOpen(false)}
         />
       )}
+      <AssetsPickerModal
+        isOpen={assetsPickerOpen}
+        onClose={() => setAssetsPickerOpen(false)}
+        defaultTab="elements"
+        accept="image/*,video/*,audio/*"
+        onSelectAsset={(url) =>
+          setElementReferences((current) => [...current, url])
+        }
+      />
     </div>
   );
 }

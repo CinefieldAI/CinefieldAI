@@ -12,11 +12,13 @@ const TABS: { value: StandaloneVideoContentTab; label: string }[] = [
 interface StandaloneVideoContentTabsProps {
   value: StandaloneVideoContentTab;
   onChange: (value: StandaloneVideoContentTab) => void;
+  secondaryLabel?: string;
 }
 
 export default function StandaloneVideoContentTabs({
   value,
   onChange,
+  secondaryLabel = "How it works",
 }: StandaloneVideoContentTabsProps) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -45,6 +47,8 @@ export default function StandaloneVideoContentTabs({
     >
       {TABS.map((tab, index) => {
         const selected = tab.value === value;
+        const label =
+          tab.value === "how-it-works" ? secondaryLabel : tab.label;
         return (
           <button
             key={tab.value}
@@ -65,7 +69,7 @@ export default function StandaloneVideoContentTabs({
                 : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
             }`}
           >
-            {tab.label}
+            {label}
           </button>
         );
       })}

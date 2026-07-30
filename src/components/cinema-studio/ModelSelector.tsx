@@ -130,7 +130,7 @@ function ImageRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold leading-5 text-white">
+          <span className="truncate text-[18px] font-semibold leading-6 text-white">
             {model.name}
           </span>
         </span>
@@ -179,7 +179,7 @@ function VideoFlatRow({
       } ${focused ? FOCUS_RING : ""}`}
     >
       <span
-        className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+        className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg"
         style={
           active
             ? {
@@ -192,14 +192,14 @@ function VideoFlatRow({
         }
       >
         {iconPath ? (
-          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
+          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-7 object-cover")} />
         ) : (
-          Icon && <Icon className="size-6" aria-hidden="true" />
+          Icon && <Icon className="size-7" aria-hidden="true" />
         )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold leading-5 text-white">
+          <span className="truncate text-[18px] font-semibold leading-6 text-white">
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -319,7 +319,7 @@ function VideoParentRow({
         }`}
       >
         <span
-          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+          className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg"
           style={
             active
               ? {
@@ -332,14 +332,14 @@ function VideoParentRow({
           }
         >
           {iconPath ? (
-            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-6 object-cover")} />
+            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-7 object-cover")} />
           ) : (
-            Icon && <Icon className="size-6" aria-hidden="true" />
+            Icon && <Icon className="size-7" aria-hidden="true" />
           )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold leading-5 text-white">
+            <span className="truncate text-[18px] font-semibold leading-6 text-white">
               {model.name}
             </span>
           </span>
@@ -389,7 +389,7 @@ function VideoParentRow({
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-5 text-white">
+                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}

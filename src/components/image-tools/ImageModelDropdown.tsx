@@ -204,14 +204,14 @@ function ModelRow({
       }`}
     >
       <div
-        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+        className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
           isSelected ? "bg-magenta-500/20" : "bg-white/8"
         }`}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-6 w-6" />
       </div>
       <div className="flex-1 min-w-0">
-        <h4 className="text-xs font-medium text-white">{item.title}</h4>
+        <h4 className="text-[18px] font-medium leading-6 text-white">{item.title}</h4>
         <p className="text-[10px] text-zinc-500">{item.description}</p>
       </div>
       {isSelected && (

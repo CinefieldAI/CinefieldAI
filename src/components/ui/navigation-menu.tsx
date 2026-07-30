@@ -57,7 +57,7 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  "inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-[9px] px-2 py-1 text-[15px] font-medium leading-5 tracking-[-0.1px] text-white [font-family:Inter,ui-sans-serif,system-ui,sans-serif] transition-colors hover:bg-white/5 hover:text-white focus:bg-white/5 focus:text-white focus:outline-none data-[state=open]:text-[#D97757] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-[9px] px-2 py-1 text-[18px] font-medium leading-5 tracking-[-0.1px] text-white [font-family:Inter,ui-sans-serif,system-ui,sans-serif] transition-colors hover:bg-white/5 hover:text-white focus:bg-white/5 focus:text-white focus:outline-none data-[state=open]:text-[#D97757] disabled:pointer-events-none disabled:opacity-50",
 );
 
 function NavigationMenuTrigger({
@@ -122,7 +122,7 @@ function NavigationMenuLink({
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        "flex flex-row items-center gap-1 whitespace-nowrap rounded-[9px] px-2 py-1 text-[15px] font-medium leading-5 tracking-[-0.1px] text-white [font-family:Inter,ui-sans-serif,system-ui,sans-serif] outline-none transition-colors hover:bg-white/5 hover:text-white focus:bg-white/5 focus:text-white",
+        "flex flex-row items-center gap-1 whitespace-nowrap rounded-[9px] px-2 py-1 text-[18px] font-medium leading-5 tracking-[-0.1px] text-white [font-family:Inter,ui-sans-serif,system-ui,sans-serif] outline-none transition-colors hover:bg-white/5 hover:text-white focus:bg-white/5 focus:text-white",
         className,
       )}
       {...props}
