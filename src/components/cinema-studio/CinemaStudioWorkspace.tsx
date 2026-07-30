@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
-import HeroBanner from "./HeroBanner";
+import CommunitySection from "./CommunitySection";
 import ControlButtons from "./ControlButtons";
 import ModeToggle from "./ModeToggle";
 import PromptBar from "./PromptBar";
@@ -15,7 +15,6 @@ import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import CinemaStudio25DirectorPanel from "./CinemaStudio25DirectorPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
 import ImageForm from "@/components/image-tools/ImageForm";
-import HeroSection from "@/components/image-tools/HeroSection";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 import type { GenerateVideoRequest } from "@/lib/jobs";
@@ -32,10 +31,10 @@ export default function CinemaStudioWorkspace() {
   const [model, setModel] = useState(() => {
     return searchParams.get("model") || "cinema-3.5";
   });
-  // Image mode — reuses /generate/image's own HeroSection + ImageForm
-  // wholesale (same model list, popovers, capability system) instead of a
-  // Cinema-Studio-specific composer. Kept independent from `model` (video)
-  // since the two systems use different model-id schemes.
+  // Image mode — reuses /generate/image's own ImageForm wholesale (same
+  // model list, popovers, capability system) instead of a Cinema-Studio-
+  // specific composer. Kept independent from `model` (video) since the two
+  // systems use different model-id schemes.
   const [imageModel, setImageModel] = useState("nano-banana-pro");
   const [isDrawOpen, setIsDrawOpen] = useState(false);
 
@@ -199,14 +198,7 @@ export default function CinemaStudioWorkspace() {
   };
 
   return (
-    <div
-      className="min-h-screen w-full bg-[#0a0a0a] text-white"
-      style={{
-        backgroundImage:
-          "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
-        backgroundSize: "64px 64px",
-      }}
-    >
+    <div className="min-h-screen w-full bg-black text-white">
       <Navbar
         activePanel={null}
         onOpenImagePanel={noop}
@@ -216,32 +208,7 @@ export default function CinemaStudioWorkspace() {
       />
 
       <CinemaStudioHoverSidebar />
-      <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[1320px] flex-col items-center gap-2 px-4 pb-12 pt-[18vh] md:pl-[68px]">
-        {/* Keep both mode heroes in the same grid cell so their shared slot
-            always reserves the larger height and cannot push the composer. */}
-        <div className="mb-10 grid w-full">
-          <div
-            className={`col-start-1 row-start-1 ${
-              mode === "image"
-                ? "visible opacity-100"
-                : "invisible pointer-events-none opacity-0"
-            }`}
-            aria-hidden={mode !== "image"}
-          >
-            <HeroSection selectedModel={imageModel} />
-          </div>
-          <div
-            className={`col-start-1 row-start-1 ${
-              mode === "video"
-                ? "visible opacity-100"
-                : "invisible pointer-events-none opacity-0"
-            }`}
-            aria-hidden={mode !== "video"}
-          >
-            <HeroBanner />
-          </div>
-        </div>
-
+      <main className="mx-auto flex w-full max-w-[1320px] flex-col items-center gap-2 px-4 pt-8 md:pl-[68px]">
         {/* Control buttons — Cinema Studio 3.5 only. Reserve the row height in every mode. */}
         <div className="flex min-h-[36px] w-full items-center justify-center">
           {isCinema35 && (
@@ -402,6 +369,11 @@ export default function CinemaStudioWorkspace() {
           )}
         </div>
       </main>
+
+      {/* Community grid over the Blueface promo — 24px below the prompt bar. */}
+      <div className="mt-6">
+        <CommunitySection />
+      </div>
 
       {/* Docked Panels — Cinema Studio 3.5 only */}
       {isCinema35 && (
