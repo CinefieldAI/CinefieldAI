@@ -28,7 +28,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
-import { useEffect, useMemo, useState, type ElementType } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ElementType,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import AssetsPickerModal from "@/components/cinema-studio/AssetsPickerModal";
 import {
@@ -57,7 +62,14 @@ interface WorkflowModel {
   audio?: boolean;
 }
 
-const CREATE_MODELS: WorkflowModel[] = [
+interface WorkflowModelGroup {
+  name: string;
+  description: string;
+  icon: ElementType;
+  modelNames: string[];
+}
+
+const FEATURED_CREATE_MODELS: WorkflowModel[] = [
   {
     name: "Seedance 2.0",
     description: "Native cinematic video generation",
@@ -229,6 +241,143 @@ const EDIT_MODELS: WorkflowModel[] = [
   },
 ];
 
+const CREATE_MODEL_GROUPS: WorkflowModelGroup[] = [
+  {
+    name: "Minimax Hailuo",
+    description: "High-dynamic, VFX-ready, fastest and most affordable",
+    icon: MinimaxIcon,
+    modelNames: [
+      "Minimax Hailuo 2.3 Fast",
+      "Minimax Hailuo 2.3",
+      "Minimax Hailuo 02 Fast",
+      "Minimax Hailuo 02",
+    ],
+  },
+  {
+    name: "Kling",
+    description: "Perfect motion with advanced video control",
+    icon: KlingIcon,
+    modelNames: [
+      "Kling 3.0",
+      "Kling 3.0 Turbo",
+      "Kling 3.0 Omni",
+      "Kling 3.0 Omni Edit",
+      "Kling 2.6",
+      "Kling O1 Video",
+      "Kling O1 Video Edit",
+      "Kling Motion Control",
+    ],
+  },
+  {
+    name: "OpenAI Sora 2",
+    description: "Multi-shot video with sound generation",
+    icon: OpenAISoraIcon,
+    modelNames: ["Sora 2", "Sora 2 Pro", "Sora 2 Max", "Sora 2 Pro Max"],
+  },
+  {
+    name: "Google Veo",
+    description: "Precision video with sound control",
+    icon: GoogleIcon,
+    modelNames: [
+      "Google Veo 3.1 Lite",
+      "Google Veo 3.1 Fast",
+      "Google Veo 3.1",
+      "Google Veo 3 Fast",
+      "Google Veo 3",
+    ],
+  },
+  {
+    name: "Gemini Omni Flash",
+    description: "Google multimodal video generation",
+    icon: GoogleIcon,
+    modelNames: ["Gemini Omni Flash"],
+  },
+  {
+    name: "Higgsfield",
+    description: "Advanced camera controls and effect presets",
+    icon: Clapperboard,
+    modelNames: [
+      "Cinematic Studio Video 3.5",
+      "Higgsfield Lite",
+      "Higgsfield Standard",
+      "Higgsfield Turbo",
+    ],
+  },
+  {
+    name: "Wan",
+    description: "Camera-controlled video with sound, more freedom",
+    icon: WanIcon,
+    modelNames: [
+      "Wan 2.7",
+      "Wan 2.6",
+      "Wan 2.5",
+      "Wan 2.5 Fast",
+      "Wan 2.2",
+      "Wan 2.2 Fast",
+    ],
+  },
+  {
+    name: "Seedance",
+    description: "Cinematic, multi-shot video creation",
+    icon: SeedanceIcon,
+    modelNames: [
+      "Seedance 2.0 Fast",
+      "Seedance 2.0 Mini",
+      "Seedance 2.0",
+      "Seedance 1.5 Pro",
+      "Seedance Pro",
+      "Seedance Pro Fast",
+    ],
+  },
+  {
+    name: "Grok Imagine",
+    description: "Perfect motion with advanced video control",
+    icon: GrokIcon,
+    modelNames: ["Grok Imagine", "Grok Imagine 1.5", "Grok Imagine Edit"],
+  },
+  {
+    name: "HappyHorse",
+    description: "Fast stylized motion with audio",
+    icon: HappyHorseIcon,
+    modelNames: ["HappyHorse"],
+  },
+];
+
+const ADDITIONAL_CREATE_MODELS: WorkflowModel[] = [
+  { name: "Minimax Hailuo 2.3 Fast", description: "Fast Hailuo generation", icon: MinimaxIcon, quality: "1080p", duration: "6s-10s" },
+  { name: "Minimax Hailuo 02 Fast", description: "Efficient Hailuo generation", icon: MinimaxIcon, quality: "512p", duration: "6s-10s" },
+  { name: "Minimax Hailuo 02", description: "High-quality Hailuo generation", icon: MinimaxIcon, quality: "1080p", duration: "6s-10s" },
+  { name: "Kling 3.0 Omni", description: "Omni video generation", icon: KlingIcon, quality: "4K", duration: "3s-15s", audio: true },
+  { name: "Kling 3.0 Omni Edit", description: "Omni video editing", icon: KlingIcon, quality: "1080p", duration: "3s-10s" },
+  { name: "Kling 2.6", description: "Kling video generation", icon: KlingIcon, quality: "1080p", duration: "5s-10s", audio: true },
+  { name: "Kling O1 Video", description: "Kling O1 video generation", icon: KlingIcon, quality: "1080p", duration: "5s-10s" },
+  { name: "Kling O1 Video Edit", description: "Kling O1 video editing", icon: KlingIcon, quality: "1080p", duration: "3s-10s" },
+  { name: "Kling Motion Control", description: "Control motion with references", icon: KlingIcon },
+  { name: "Sora 2 Pro", description: "Professional Sora generation", icon: OpenAISoraIcon, quality: "1080p", duration: "4s-12s", audio: true },
+  { name: "Sora 2 Max", description: "Maximum-quality Sora generation", icon: OpenAISoraIcon, quality: "1080p", duration: "4s-12s", audio: true },
+  { name: "Sora 2 Pro Max", description: "Premium Sora generation", icon: OpenAISoraIcon, quality: "1080p", duration: "4s-12s", audio: true },
+  { name: "Google Veo 3.1 Fast", description: "Fast Veo 3.1 generation", icon: GoogleIcon, quality: "1080p", duration: "4s-8s", audio: true },
+  { name: "Google Veo 3 Fast", description: "Fast Veo 3 generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
+  { name: "Google Veo 3", description: "Google video generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
+  { name: "Higgsfield Lite", description: "Lightweight cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { name: "Higgsfield Standard", description: "Standard cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { name: "Higgsfield Turbo", description: "Fast cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { name: "Wan 2.6", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-15s" },
+  { name: "Wan 2.5", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
+  { name: "Wan 2.5 Fast", description: "Fast Wan generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
+  { name: "Wan 2.2", description: "Wan video generation", icon: WanIcon, quality: "720p", duration: "5s" },
+  { name: "Wan 2.2 Fast", description: "Fast Wan generation", icon: WanIcon, quality: "720p", duration: "5s" },
+  { name: "Seedance Pro", description: "Professional Seedance generation", icon: SeedanceIcon, quality: "1080p", duration: "5s-10s" },
+  { name: "Seedance Pro Fast", description: "Fast professional Seedance generation", icon: SeedanceIcon, quality: "1080p", duration: "5s-10s" },
+  { name: "Grok Imagine 1.5", description: "Expressive Grok generation", icon: GrokIcon, quality: "720p", duration: "1s-15s" },
+  { name: "Grok Imagine Edit", description: "Edit videos with text prompts", icon: GrokIcon },
+];
+
+const CREATE_MODELS: WorkflowModel[] = [
+  ...FEATURED_CREATE_MODELS,
+  ...ADDITIONAL_CREATE_MODELS,
+];
+
 const WORKFLOWS: {
   value: StandaloneVideoWorkflow;
   label: string;
@@ -252,6 +401,27 @@ type SeedanceModelCapabilities = {
   resolution: boolean;
   bitrate: boolean;
   audioToggle: boolean;
+};
+
+type GeminiOmniFlashCapabilities = {
+  inputModes: Array<"elements" | "frames">;
+  elementsMediaTypes: Array<"image" | "video">;
+  frameMediaTypes: Array<"image">;
+  prompt: boolean;
+  duration: {
+    enabled: boolean;
+    min: number;
+    max: number;
+    default: number;
+  };
+  aspectRatio: {
+    enabled: boolean;
+    options: string[];
+    default: string;
+  };
+  resolution: false;
+  bitrate: false;
+  audioToggle: false;
 };
 
 const SEEDANCE_MODEL_CAPABILITIES: Record<
@@ -281,6 +451,32 @@ const SEEDANCE_MODEL_CAPABILITIES: Record<
     resolution: true,
     bitrate: false,
     audioToggle: true,
+  },
+};
+
+const GEMINI_OMNI_FLASH_CAPABILITIES: Record<
+  string,
+  GeminiOmniFlashCapabilities
+> = {
+  "Gemini Omni Flash": {
+    inputModes: ["elements", "frames"],
+    elementsMediaTypes: ["image", "video"],
+    frameMediaTypes: ["image"],
+    prompt: true,
+    duration: {
+      enabled: true,
+      min: 3,
+      max: 10,
+      default: 10,
+    },
+    aspectRatio: {
+      enabled: true,
+      options: ["16:9", "9:16"],
+      default: "9:16",
+    },
+    resolution: false,
+    bitrate: false,
+    audioToggle: false,
   },
 };
 
@@ -452,15 +648,39 @@ function WorkflowModelPanel({
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [activeGroupName, setActiveGroupName] = useState<string | null>(null);
+  const [flyoutPosition, setFlyoutPosition] = useState({
+    left: 0,
+    top: 0,
+  });
   const filtered = useMemo(
     () =>
-      models
+      (workflow === "create-video"
+        ? models.slice(0, FEATURED_CREATE_MODELS.length)
+        : models
+      )
         .map((model, index) => ({ model, index }))
         .filter(({ model }) =>
           model.name.toLowerCase().includes(search.toLowerCase()),
         ),
-    [models, search],
+    [models, search, workflow],
   );
+  const filteredGroups = useMemo(
+    () =>
+      CREATE_MODEL_GROUPS.filter((group) => {
+        const query = search.toLowerCase();
+        return (
+          group.name.toLowerCase().includes(query) ||
+          group.description.toLowerCase().includes(query) ||
+          group.modelNames.some((name) => name.toLowerCase().includes(query))
+        );
+      }),
+    [search],
+  );
+  const activeGroup =
+    workflow === "create-video"
+      ? CREATE_MODEL_GROUPS.find((group) => group.name === activeGroupName)
+      : undefined;
 
   const panelTop =
     workflow === "create-video"
@@ -478,7 +698,7 @@ function WorkflowModelPanel({
         className="fixed inset-0 z-40 hidden bg-transparent lg:block"
       />
       <div
-        className={`absolute left-[calc(100%+12px)] z-50 w-[390px] max-w-[calc(100vw-390px)] overflow-hidden rounded-2xl border border-white/10 bg-[#1d2022]/[0.98] shadow-2xl shadow-black/60 backdrop-blur-xl max-lg:left-0 max-lg:top-full max-lg:mt-2 max-lg:w-full max-lg:max-w-none ${panelTop}`}
+        className={`absolute left-[calc(100%+12px)] z-50 w-[390px] max-w-[calc(100vw-390px)] origin-left overflow-hidden rounded-2xl border border-white/10 bg-[#1d2022]/[0.98] shadow-2xl shadow-black/60 backdrop-blur-xl animate-[nm-in_160ms_ease-out] max-lg:left-0 max-lg:top-full max-lg:mt-2 max-lg:w-full max-lg:max-w-none ${panelTop}`}
       >
         <div className="flex h-12 items-center gap-2 border-b border-white/[0.07] px-3">
           <Search className="size-4 text-zinc-500" />
@@ -486,12 +706,15 @@ function WorkflowModelPanel({
             autoFocus
             name="standalone-video-model-search"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setActiveGroupName(null);
+            }}
             placeholder="Search..."
             className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
           />
         </div>
-        <div className="max-h-[600px] overflow-y-auto p-2">
+        <div className="max-h-[600px] overflow-y-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <p className="px-2 py-1.5 text-[11px] text-zinc-500">
             {workflow === "create-video" ? "Featured models" : "All models"}
           </p>
@@ -503,27 +726,30 @@ function WorkflowModelPanel({
                 key={model.name}
                 type="button"
                 onClick={() => onSelect(index)}
+                onMouseEnter={() => setActiveGroupName(null)}
                 aria-pressed={selected}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
                   selected
                     ? "bg-white/[0.07]"
                     : "hover:bg-white/[0.04]"
                 }`}
               >
                 <span
-                  className={`flex size-12 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] ${
-                    selected ? "text-[#D97757]" : "text-zinc-400"
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] transition-[color,background-color,box-shadow] duration-200 group-hover/model:bg-[#D97757]/10 group-hover/model:text-[#D97757] group-hover/model:shadow-[0_0_14px_rgba(217,119,87,0.45)] ${
+                    selected
+                      ? "bg-[#D97757]/10 text-[#D97757] shadow-[0_0_14px_rgba(217,119,87,0.35)]"
+                      : "text-zinc-400"
                   }`}
                 >
-                  <Icon className="size-6" aria-hidden="true" />
+                  <Icon className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-[18px] font-semibold leading-6 text-white">
+                    <span className="truncate text-[16px] font-semibold leading-5 text-white">
                       {model.name}
                     </span>
                     {model.audio && (
-                      <Video className="size-3 text-zinc-500" />
+                      <Video className="size-3.5 text-zinc-500" />
                     )}
                   </span>
                   {workflow === "create-video" ? (
@@ -551,8 +777,151 @@ function WorkflowModelPanel({
               </button>
             );
           })}
+          {workflow === "create-video" && (
+            <>
+              <p className="mt-2 px-2 py-1.5 text-[11px] text-zinc-500">
+                All models
+              </p>
+              {filteredGroups.map((group) => {
+                const Icon = group.icon;
+                const groupIndexes = group.modelNames
+                  .map((name) => models.findIndex((model) => model.name === name))
+                  .filter((index) => index >= 0);
+                const selected = groupIndexes.includes(selectedIndex);
+                const expandable = groupIndexes.length > 1;
+                const active = activeGroupName === group.name;
+                const showFlyout = (button: HTMLButtonElement) => {
+                  const rect = button.getBoundingClientRect();
+                  const estimatedHeight = Math.min(
+                    520,
+                    groupIndexes.length * 68 + 16,
+                  );
+                  setFlyoutPosition({
+                    left: rect.right + 8,
+                    top: Math.max(
+                      8,
+                      Math.min(
+                        rect.top,
+                        window.innerHeight - estimatedHeight - 8,
+                      ),
+                    ),
+                  });
+                  setActiveGroupName(group.name);
+                };
+
+                return (
+                  <div key={group.name}>
+                    <button
+                      type="button"
+                      aria-expanded={expandable ? active : undefined}
+                      aria-pressed={!expandable ? selected : undefined}
+                      onMouseEnter={(event) => {
+                        if (expandable) {
+                          showFlyout(event.currentTarget);
+                        } else {
+                          setActiveGroupName(null);
+                        }
+                      }}
+                      onFocus={(event) => {
+                        if (expandable) showFlyout(event.currentTarget);
+                      }}
+                      onClick={(event) => {
+                        if (expandable) {
+                          showFlyout(event.currentTarget);
+                        } else if (groupIndexes[0] !== undefined) {
+                          onSelect(groupIndexes[0]);
+                        }
+                      }}
+                      className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                        selected || active
+                          ? "bg-white/[0.07]"
+                          : "hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      <span
+                        className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] transition-[color,background-color,box-shadow] duration-200 group-hover/model:bg-[#D97757]/10 group-hover/model:text-[#D97757] group-hover/model:shadow-[0_0_14px_rgba(217,119,87,0.45)] ${
+                          selected
+                            ? "bg-[#D97757]/10 text-[#D97757] shadow-[0_0_14px_rgba(217,119,87,0.35)]"
+                            : "text-zinc-400"
+                        }`}
+                      >
+                        <Icon className="size-5" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[16px] font-semibold leading-5 text-white">
+                          {group.name}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                          {group.description}
+                        </span>
+                      </span>
+                      {expandable ? (
+                        <ChevronDown
+                          className="size-4 shrink-0 -rotate-90 text-zinc-500"
+                        />
+                      ) : selected ? (
+                        <Check className="size-4 shrink-0 text-[#D97757]" />
+                      ) : null}
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       </div>
+      {activeGroup && (
+        <div
+          className="fixed z-[60] w-[310px] max-w-[calc(100vw-16px)] origin-left overflow-y-auto rounded-2xl border border-white/10 bg-[#1d2022]/[0.99] p-2 shadow-2xl shadow-black/60 backdrop-blur-xl animate-[nm-in_160ms_ease-out] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{
+            left: flyoutPosition.left,
+            top: flyoutPosition.top,
+            maxHeight: "min(520px, calc(100vh - 16px))",
+          }}
+        >
+          {activeGroup.modelNames.map((name) => {
+            const index = models.findIndex((model) => model.name === name);
+            if (index < 0) return null;
+
+            const model = models[index];
+            const selected = index === selectedIndex;
+            return (
+              <button
+                key={model.name}
+                type="button"
+                onClick={() => onSelect(index)}
+                aria-pressed={selected}
+                className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+                  selected ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                    {model.name}
+                  </span>
+                  {model.audio && (
+                    <Video className="size-3.5 shrink-0 text-zinc-500" />
+                  )}
+                </span>
+                {(model.quality || model.duration) && (
+                  <span className="mt-1 flex items-center gap-1">
+                    {model.quality && (
+                      <CapabilityChip icon={Diamond}>
+                        {model.quality}
+                      </CapabilityChip>
+                    )}
+                    {model.duration && (
+                      <CapabilityChip icon={Clock3}>
+                        {model.duration}
+                      </CapabilityChip>
+                    )}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -710,6 +1079,187 @@ function SeedancePromptCard({
   );
 }
 
+function GeminiInputModeSwitch({
+  value,
+  onChange,
+}: {
+  value: "elements" | "frames";
+  onChange: (value: "elements" | "frames") => void;
+}) {
+  const options = [
+    { value: "elements" as const, label: "Elements" },
+    { value: "frames" as const, label: "Frames" },
+  ];
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Gemini input mode"
+      className="mb-4 grid grid-cols-2 rounded-xl bg-white/[0.035] p-1"
+    >
+      {options.map((option, index) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          tabIndex={value === option.value ? 0 : -1}
+          onClick={() => onChange(option.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const nextIndex =
+              event.key === "ArrowRight"
+                ? (index + 1) % options.length
+                : (index - 1 + options.length) % options.length;
+            onChange(options[nextIndex].value);
+            const buttons =
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                '[role="radio"]',
+              );
+            buttons?.[nextIndex]?.focus({ preventScroll: true });
+          }}
+          className={`h-9 rounded-lg text-sm font-semibold transition-colors ${
+            value === option.value
+              ? "bg-white/10 text-white"
+              : "text-zinc-500 hover:text-zinc-200"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function GeminiElementsInput({
+  selected,
+  onClick,
+}: {
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="grid rounded-[20px] border border-white/[0.07] p-1 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Choose image or video media"
+        className="flex min-h-[132px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-[#1b1d1f] p-3 text-center transition-colors hover:bg-white/[0.035]"
+      >
+        <span className="flex h-10 items-center justify-center">
+          <span className="-mr-1 flex size-9 -rotate-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner">
+            <ImageIcon className="size-3 text-zinc-300" />
+          </span>
+          <span className="flex size-9 rotate-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.09] shadow-inner">
+            {selected ? (
+              <Check className="size-3.5 text-[#D97757]" />
+            ) : (
+              <Video className="size-3 text-zinc-200" />
+            )}
+          </span>
+        </span>
+        <span className="mt-2 text-sm font-medium text-zinc-400">
+          Upload media
+        </span>
+        <span className="mt-1 text-[11px] font-medium text-zinc-500">
+          Image or Video
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function GeminiFramesInput({
+  startSelected,
+  endSelected,
+  onStartClick,
+  onEndClick,
+}: {
+  startSelected: boolean;
+  endSelected: boolean;
+  onStartClick: () => void;
+  onEndClick: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-[20px] border border-white/[0.07] p-1 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+      <GeminiFrameCard
+        label="Start frame"
+        selected={startSelected}
+        onClick={onStartClick}
+      />
+      <GeminiFrameCard
+        label="End frame"
+        optional
+        selected={endSelected}
+        onClick={onEndClick}
+      />
+    </div>
+  );
+}
+
+function GeminiFrameCard({
+  label,
+  optional = false,
+  selected,
+  onClick,
+}: {
+  label: string;
+  optional?: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Choose ${label.toLowerCase()}`}
+      className="relative flex min-h-[132px] flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#1b1d1f] p-3 text-zinc-400 transition-colors hover:bg-white/[0.035]"
+    >
+      {optional && (
+        <span className="absolute right-2 top-2 rounded-full bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">
+          Optional
+        </span>
+      )}
+      <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner">
+        {selected ? (
+          <Check className="size-4 text-[#D97757]" />
+        ) : (
+          <ImageIcon className="size-3.5" />
+        )}
+      </span>
+      <span className="mt-3 text-sm font-medium">{label}</span>
+    </button>
+  );
+}
+
+function GeminiPromptCard({
+  prompt,
+  onPromptChange,
+}: {
+  prompt: string;
+  onPromptChange: (value: string) => void;
+}) {
+  return (
+    <div className="mt-4 flex min-h-[160px] max-h-64 flex-col rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
+      <label
+        htmlFor="standalone-gemini-prompt"
+        className="text-xs font-semibold text-zinc-400"
+      >
+        Prompt
+      </label>
+      <textarea
+        id="standalone-gemini-prompt"
+        name="standalone-gemini-prompt"
+        value={prompt}
+        onChange={(event) => onPromptChange(event.target.value)}
+        placeholder="Describe your scene in detail. Use @ to reference media"
+        className="mt-1 min-h-[112px] w-full flex-1 resize-none overflow-y-auto bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
+      />
+    </div>
+  );
+}
+
 function SeedanceSelectControl({
   label,
   value,
@@ -775,9 +1325,15 @@ function SeedanceSelectControl({
 function SeedanceDurationControl({
   value,
   onChange,
+  min = 4,
+  max = 15,
+  inputName = "standalone-seedance-duration",
 }: {
   value: number;
   onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  inputName?: string;
 }) {
   return (
     <Popover.Root>
@@ -810,7 +1366,7 @@ function SeedanceDurationControl({
               className="relative flex h-9 items-center overflow-hidden rounded-md border border-[#424242] bg-[#202326] px-3 focus-within:ring-1 focus-within:ring-white/40"
               style={
                 {
-                  "--duration-progress": `${((value - 4) / 11) * 100}%`,
+                  "--duration-progress": `${((value - min) / (max - min)) * 100}%`,
                 } as React.CSSProperties
               }
             >
@@ -829,9 +1385,9 @@ function SeedanceDurationControl({
               />
               <input
                 type="range"
-                name="standalone-seedance-duration"
-                min={4}
-                max={15}
+                name={inputName}
+                min={min}
+                max={max}
                 step={1}
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value))}
@@ -978,6 +1534,17 @@ export default function StandaloneVideoCreationPanel({
   >("High");
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   const [, setElementReferences] = useState<string[]>([]);
+  const [geminiInputMode, setGeminiInputMode] = useState<
+    "elements" | "frames"
+  >("elements");
+  const [geminiElementsMedia, setGeminiElementsMedia] = useState("");
+  const [geminiStartFrame, setGeminiStartFrame] = useState("");
+  const [geminiEndFrame, setGeminiEndFrame] = useState("");
+  const [geminiDuration, setGeminiDuration] = useState(10);
+  const [geminiAspectRatio, setGeminiAspectRatio] = useState("9:16");
+  const [geminiPickerTarget, setGeminiPickerTarget] = useState<
+    "elements" | "startFrame" | "endFrame" | null
+  >(null);
 
   const models = WORKFLOW_MODELS[workflow];
   const selectedIndex = modelIndexes[workflow];
@@ -986,6 +1553,14 @@ export default function StandaloneVideoCreationPanel({
     workflow === "create-video"
       ? SEEDANCE_MODEL_CAPABILITIES[selectedModel.name]
       : undefined;
+  const geminiCapabilities =
+    workflow === "create-video"
+      ? GEMINI_OMNI_FLASH_CAPABILITIES[selectedModel.name]
+      : undefined;
+
+  const openModelPanel = () => {
+    setModelOpen(true);
+  };
 
   useEffect(() => {
     const requestedModel = searchParams.get("model");
@@ -1056,7 +1631,7 @@ export default function StandaloneVideoCreationPanel({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
           {seedanceCapabilities ? (
             <SeedanceBanner modelName={selectedModel.name} />
-          ) : (
+          ) : geminiCapabilities ? null : (
             <WorkflowBanner workflow={workflow} />
           )}
 
@@ -1078,7 +1653,7 @@ export default function StandaloneVideoCreationPanel({
                   />
                   <ModelTrigger
                     model={selectedModel}
-                    onClick={() => setModelOpen((open) => !open)}
+                    onClick={openModelPanel}
                   />
                   <div className="flex gap-2">
                     {seedanceCapabilities.duration && (
@@ -1113,6 +1688,56 @@ export default function StandaloneVideoCreationPanel({
                     />
                   )}
                 </>
+              ) : geminiCapabilities ? (
+                <>
+                  <GeminiInputModeSwitch
+                    value={geminiInputMode}
+                    onChange={setGeminiInputMode}
+                  />
+                  {geminiInputMode === "elements" ? (
+                    <GeminiElementsInput
+                      selected={Boolean(geminiElementsMedia)}
+                      onClick={() => setGeminiPickerTarget("elements")}
+                    />
+                  ) : (
+                    <GeminiFramesInput
+                      startSelected={Boolean(geminiStartFrame)}
+                      endSelected={Boolean(geminiEndFrame)}
+                      onStartClick={() => setGeminiPickerTarget("startFrame")}
+                      onEndClick={() => setGeminiPickerTarget("endFrame")}
+                    />
+                  )}
+                  {geminiCapabilities.prompt && (
+                    <GeminiPromptCard
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                    />
+                  )}
+                  <ModelTrigger
+                    model={selectedModel}
+                    onClick={openModelPanel}
+                  />
+                  <div className="flex gap-2">
+                    {geminiCapabilities.duration.enabled && (
+                      <SeedanceDurationControl
+                        value={geminiDuration}
+                        onChange={setGeminiDuration}
+                        min={geminiCapabilities.duration.min}
+                        max={geminiCapabilities.duration.max}
+                        inputName="standalone-gemini-duration"
+                      />
+                    )}
+                    {geminiCapabilities.aspectRatio.enabled && (
+                      <SeedanceSelectControl
+                        label="Aspect ratio"
+                        value={geminiAspectRatio}
+                        options={geminiCapabilities.aspectRatio.options}
+                        icon={RectangleHorizontal}
+                        onChange={setGeminiAspectRatio}
+                      />
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   <UploadSurface
@@ -1134,7 +1759,7 @@ export default function StandaloneVideoCreationPanel({
                   </label>
                   <ModelTrigger
                     model={selectedModel}
-                    onClick={() => setModelOpen((open) => !open)}
+                    onClick={openModelPanel}
                   />
                   <div className="grid grid-cols-3 gap-2">
                     <label className="rounded-lg bg-white/[0.035] px-2 py-2">
@@ -1223,7 +1848,7 @@ export default function StandaloneVideoCreationPanel({
               </button>
               <ModelTrigger
                 model={selectedModel}
-                onClick={() => setModelOpen((open) => !open)}
+                onClick={openModelPanel}
               />
               <span className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-white/[0.05] px-3 text-xs font-semibold text-white">
                 <Diamond className="size-4" />
@@ -1250,7 +1875,7 @@ export default function StandaloneVideoCreationPanel({
               </div>
               <ModelTrigger
                 model={selectedModel}
-                onClick={() => setModelOpen((open) => !open)}
+                onClick={openModelPanel}
               />
               <button
                 type="button"
@@ -1352,6 +1977,33 @@ export default function StandaloneVideoCreationPanel({
         onSelectAsset={(url) =>
           setElementReferences((current) => [...current, url])
         }
+      />
+      <AssetsPickerModal
+        isOpen={geminiPickerTarget !== null}
+        onClose={() => setGeminiPickerTarget(null)}
+        defaultTab="uploads"
+        mode={
+          geminiPickerTarget === "startFrame"
+            ? "startFrame"
+            : geminiPickerTarget === "endFrame"
+              ? "endFrame"
+              : "default"
+        }
+        accept={
+          geminiPickerTarget === "elements"
+            ? "image/*,video/*"
+            : "image/*"
+        }
+        variant="geminiOmniFlash"
+        onSelectAsset={(url) => {
+          if (geminiPickerTarget === "elements") {
+            setGeminiElementsMedia(url);
+          } else if (geminiPickerTarget === "startFrame") {
+            setGeminiStartFrame(url);
+          } else if (geminiPickerTarget === "endFrame") {
+            setGeminiEndFrame(url);
+          }
+        }}
       />
     </div>
   );

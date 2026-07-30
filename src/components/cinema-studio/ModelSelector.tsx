@@ -117,24 +117,28 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ease-out focus:outline-none ${
+      className={`group/model flex w-full items-center gap-2 rounded-xl px-1.5 py-1.5 pr-3 text-left transition-all duration-200 ease-out focus:outline-none ${
         active ? "bg-white/5" : "hover:bg-white/5"
       } ${focused ? FOCUS_RING : ""}`}
     >
-      <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg text-white">
+      <span
+        className={`flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)] ${
+          active ? "text-[#D97757]" : ""
+        }`}
+      >
         {iconPath ? (
-          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-10 object-cover")} />
+          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
         ) : (
-          Icon && <Icon className="size-10" />
+          Icon && <Icon className="size-4" />
         )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-[18px] font-semibold leading-6 text-white">
+          <span className="truncate text-sm font-semibold leading-5 text-white">
             {model.name}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-xs text-gray-400">
+        <span className="mt-0.5 block truncate text-[11px] text-gray-400">
           {model.description}
         </span>
       </span>
@@ -172,14 +176,14 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`flex w-full items-center gap-3 rounded-lg text-left transition-all duration-100 ease-out focus:outline-none ${
+      className={`group/model flex w-full items-center gap-2 rounded-xl text-left transition-all duration-150 ease-out focus:outline-none ${
         isKT
-          ? `py-2.5 pr-3.5 ${active ? "border-l-2 border-l-[#d1fe17] bg-white/[0.08] pl-3" : "border-l-2 border-l-transparent pl-3 hover:bg-white/5"}`
-          : `border px-3 py-2.5 ${active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
+          ? `py-1.5 pr-3 ${active ? "bg-white/[0.08] pl-1.5" : "pl-1.5 hover:bg-white/5"}`
+          : `border py-1.5 pl-1.5 pr-3 ${active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
       } ${focused ? FOCUS_RING : ""}`}
     >
       <span
-        className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+        className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)]"
         style={
           active
             ? {
@@ -188,25 +192,25 @@ function VideoFlatRow({
                 boxShadow: "0 0 12px rgba(217,119,87,0.20)",
                 color: "#D97757",
               }
-            : { color: "white" }
+            : undefined
         }
       >
         {iconPath ? (
-          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-7 object-cover")} />
+          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
         ) : (
-          Icon && <Icon className="size-7" aria-hidden="true" />
+          Icon && <Icon className="size-4" aria-hidden="true" />
         )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[18px] font-semibold leading-6 text-white">
+          <span className="truncate text-sm font-semibold leading-5 text-white">
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
           {model.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
         </span>
         {model.durationLabel ? (
-          <span className="mt-0.5 flex items-center gap-2 text-xs text-gray-400">
+          <span className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-400">
             <span className="flex items-center gap-1">
               <Diamond className="size-3" />
               {model.resolution}
@@ -217,7 +221,7 @@ function VideoFlatRow({
             </span>
           </span>
         ) : model.description ? (
-          <span className="mt-0.5 block truncate text-xs text-gray-400">
+          <span className="mt-0.5 block truncate text-[11px] text-gray-400">
             {model.description}
           </span>
         ) : null}
@@ -314,12 +318,12 @@ function VideoParentRow({
         aria-selected={active}
         tabIndex={focused ? 0 : -1}
         onClick={openFlyout}
-        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200 ease-out hover:bg-white/5 focus:outline-none ${
+        className={`group/model flex w-full cursor-pointer items-center gap-2 rounded-xl py-1.5 pl-1.5 pr-3 text-left transition-all duration-150 ease-out hover:bg-white/5 focus:outline-none ${
           focused ? FOCUS_RING : ""
         }`}
       >
         <span
-          className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)]"
           style={
             active
               ? {
@@ -328,23 +332,23 @@ function VideoParentRow({
                   boxShadow: "0 0 12px rgba(217,119,87,0.20)",
                   color: "#D97757",
                 }
-              : { color: "white" }
+              : undefined
           }
         >
           {iconPath ? (
-            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-7 object-cover")} />
+            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
           ) : (
-            Icon && <Icon className="size-7" aria-hidden="true" />
+            Icon && <Icon className="size-4" aria-hidden="true" />
           )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="truncate text-[18px] font-semibold leading-6 text-white">
+            <span className="truncate text-sm font-semibold leading-5 text-white">
               {model.name}
             </span>
           </span>
           {model.description && (
-            <span className="mt-0.5 block truncate text-xs text-gray-400">
+            <span className="mt-0.5 block truncate text-[11px] text-gray-400">
               {model.description}
             </span>
           )}
@@ -389,13 +393,13 @@ function VideoParentRow({
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
+                      <span className="truncate text-sm font-semibold leading-5 text-white">
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
                       {s.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
                     </span>
-                    <span className="mt-0.5 flex items-center gap-2 text-xs text-gray-400">
+                    <span className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-400">
                       <span className="flex items-center gap-1">
                         <Diamond className="size-3" />
                         {s.resolution}
@@ -655,9 +659,9 @@ export default function ModelSelector({
             align="start"
             sideOffset={8}
             onKeyDown={handleKeyDown}
-            className={`z-[100000] overflow-y-auto pointer-events-auto ${
+            className={`z-[100000] h-[602px] w-[402px] overflow-y-auto pointer-events-auto ${
               isKlingTurboSkin ? KLING_TURBO_PANEL : FROSTED
-            } ${isKlingTurboSkin ? "max-h-[70vh] w-[380px]" : "h-[602px] w-[402px]"}`}
+            }`}
           >
             {isKlingTurboSkin ? (
               <div className="sticky top-0 z-10 p-3">
@@ -697,7 +701,7 @@ export default function ModelSelector({
               )}
               {categories.map((cat) => (
                   <div key={cat.label} className="mb-2">
-                    <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-xs font-medium text-gray-400">
                       {isKlingTurboSkin ? (
                         cat.label === "All models" ? (
                           <Grid3x3 className="size-3" />

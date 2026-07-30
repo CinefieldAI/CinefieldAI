@@ -1,7 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { X, Upload, Image as ImageIcon, Video, Heart } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  CalendarClock,
+  Check,
+  Filter,
+  History,
+  Image as ImageIcon,
+  ListFilter,
+  Plus,
+  SortAsc,
+  Upload,
+  Video,
+  Heart,
+  X,
+} from "lucide-react";
 
 interface AssetsPickerModalProps {
   isOpen: boolean;
@@ -13,6 +26,7 @@ interface AssetsPickerModalProps {
   onSelectAsset?: (url: string) => void;
   /** Restricts the Uploads file input (e.g. "image/*" for Kling 3.0 Turbo's image-only Start Frame). Defaults to the existing image+video behavior. */
   accept?: string;
+  variant?: "default" | "geminiOmniFlash";
 }
 
 type Tab = "uploads" | "elements" | "imageGenerations" | "videoGenerations" | "liked";
@@ -46,10 +60,21 @@ export default function AssetsPickerModal({
   mode = "default",
   onSelectAsset,
   accept = "image/*,video/*",
+  variant = "default",
 }: AssetsPickerModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   if (!isOpen) return null;
+
+  if (variant === "geminiOmniFlash") {
+    return (
+      <GeminiAssetsPicker
+        onClose={onClose}
+        accept={accept}
+        onSelectAsset={onSelectAsset}
+      />
+    );
+  }
 
   // Only wired when a caller passes onSelectAsset (e.g. Kling 3.0 References).
   // Other callers keep the prior fully-inert upload behavior.
@@ -121,6 +146,248 @@ export default function AssetsPickerModal({
         </div>
       </div>
     </div>
+  );
+}
+
+type GeminiTab = "uploads" | "imageGenerations" | "videoGenerations" | "liked";
+type SortOption = "lastCreated" | "lastUsed" | "firstCreated";
+type MediaFilter = "all" | "images" | "videos";
+
+const GEMINI_TABS: { id: GeminiTab; label: string }[] = [
+  { id: "uploads", label: "Uploads" },
+  { id: "imageGenerations", label: "Image Generations" },
+  { id: "videoGenerations", label: "Video Generations" },
+  { id: "liked", label: "Liked" },
+];
+
+function GeminiAssetsPicker({
+  onClose,
+  accept,
+  onSelectAsset,
+}: {
+  onClose: () => void;
+  accept: string;
+  onSelectAsset?: (url: string) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<GeminiTab>("uploads");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sort, setSort] = useState<SortOption>("lastCreated");
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const imageOnly = accept === "image/*";
+  const tabs = imageOnly
+    ? GEMINI_TABS.filter((tab) => tab.id !== "videoGenerations")
+    : GEMINI_TABS;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [onClose]);
+
+  const sectionLabel =
+    tabs.find((tab) => tab.id === activeTab)?.label ?? "Uploads";
+
+  return (
+    <div
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Assets picker"
+        tabIndex={-1}
+        data-assets-picker="true"
+        className="flex h-[min(680px,calc(100dvh-24px))] w-[min(800px,calc(100vw-24px))] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#292c2f]/95 shadow-2xl shadow-black/60 outline-none backdrop-blur-2xl"
+      >
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.07] px-3">
+          <div role="tablist" aria-label="Asset sources" className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`h-8 shrink-0 rounded-full px-4 text-xs font-semibold transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-white text-[#1c1e20] shadow-[inset_0_1px_0_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.18)]"
+                    : "text-white hover:bg-white/[0.06]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close assets picker"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-zinc-300 hover:bg-white/10 hover:text-white"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="relative flex h-11 shrink-0 items-center justify-between border-b border-white/[0.04] px-4">
+          <span className="text-xs font-semibold text-zinc-400">
+            {sectionLabel}
+          </span>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={filterOpen}
+            onClick={() => setFilterOpen((open) => !open)}
+            className={`flex h-7 items-center gap-1.5 rounded-[10px] px-3 text-xs font-semibold text-zinc-200 ${
+              filterOpen ? "bg-white/10" : "bg-white/[0.06] hover:bg-white/[0.09]"
+            }`}
+          >
+            <Filter className="size-3.5" />
+            Filter
+          </button>
+
+          {filterOpen && (
+            <div
+              role="menu"
+              aria-label="Asset filters"
+              className="absolute right-4 top-[38px] z-20 w-[188px] rounded-2xl border border-white/[0.07] bg-[#24272a]/95 p-1 shadow-2xl shadow-black/50 backdrop-blur-xl"
+            >
+              <FilterSectionLabel>Sort by</FilterSectionLabel>
+              <FilterItem
+                icon={CalendarClock}
+                label="Last created"
+                selected={sort === "lastCreated"}
+                onClick={() => setSort("lastCreated")}
+              />
+              <FilterItem
+                icon={History}
+                label="Last used"
+                selected={sort === "lastUsed"}
+                onClick={() => setSort("lastUsed")}
+              />
+              <FilterItem
+                icon={SortAsc}
+                label="First created"
+                selected={sort === "firstCreated"}
+                onClick={() => setSort("firstCreated")}
+              />
+              <FilterSectionLabel>Filter by</FilterSectionLabel>
+              <FilterItem
+                label="All media"
+                selected={mediaFilter === "all"}
+                onClick={() => setMediaFilter("all")}
+              />
+              <FilterItem
+                icon={ImageIcon}
+                label="Images"
+                selected={mediaFilter === "images"}
+                onClick={() => setMediaFilter("images")}
+              />
+              {!imageOnly && (
+                <FilterItem
+                  icon={Video}
+                  label="Videos"
+                  selected={mediaFilter === "videos"}
+                  onClick={() => setMediaFilter("videos")}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {activeTab === "uploads" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex min-h-[134px] w-[278px] max-w-full flex-col items-center justify-center rounded-xl border border-white/[0.04] bg-white/[0.05] text-white transition-colors hover:bg-white/10"
+              >
+                <span className="flex size-8 items-center justify-center rounded-full bg-white/[0.05] ring-1 ring-white/10">
+                  <Plus className="size-5 text-zinc-500" />
+                </span>
+                <span className="mt-3 text-sm font-semibold">Upload media</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                name="gemini-assets-upload"
+                accept={accept}
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file && onSelectAsset) {
+                    onSelectAsset(URL.createObjectURL(file));
+                    onClose();
+                  }
+                }}
+              />
+              <p className="mt-6 text-center text-sm text-zinc-500">
+                No uploads found
+              </p>
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              {activeTab === "imageGenerations"
+                ? "No image generations yet"
+                : activeTab === "videoGenerations"
+                  ? "No video generations yet"
+                  : "No liked assets yet"}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-7 items-center px-2 text-xs text-zinc-500">
+      {children}
+    </div>
+  );
+}
+
+function FilterItem({
+  icon: Icon,
+  label,
+  selected,
+  onClick,
+}: {
+  icon?: typeof ListFilter;
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={selected}
+      onClick={onClick}
+      className="flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-sm font-medium text-white hover:bg-white/[0.05]"
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        {Icon && <Icon className="size-4 text-zinc-300" />}
+      </span>
+      <span className="min-w-0 flex-1">{label}</span>
+      {selected && <Check className="size-4 text-[#d1fe17]" />}
+    </button>
   );
 }
 
