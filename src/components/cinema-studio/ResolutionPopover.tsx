@@ -62,7 +62,7 @@ export default function ResolutionPopover({
           collisionPadding={collisionPadding}
           role="listbox"
           aria-label="Resolution"
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto"
+          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
           style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >
           <div className="px-3 py-2">

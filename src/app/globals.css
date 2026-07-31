@@ -105,6 +105,37 @@ body {
   animation: nm-out 160ms ease-in;
 }
 
+/* Smooth popover opening animation for model selectors and dropdowns */
+@keyframes popover-smooth-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popover-smooth-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+
+.animate-popover-smooth-in {
+  animation: popover-smooth-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-popover-smooth-out {
+  animation: popover-smooth-out 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Referenced by className="hide-scrollbar" across the app (image model
    selectors, assets picker grids, etc.) — hides the scrollbar while keeping
    the element scrollable. */

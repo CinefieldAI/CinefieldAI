@@ -76,7 +76,7 @@ export default function DurationPopover({
           align={align}
           sideOffset={8}
           collisionPadding={collisionPadding}
-          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto"
+          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
           style={{ width: width ?? (showButtons ? "220px" : "334px") }}
         >
           <div className="flex flex-col gap-3 rounded-xl p-2">

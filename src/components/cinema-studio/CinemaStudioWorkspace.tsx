@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { Volume2, VolumeX } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
 import CommunitySection from "./CommunitySection";
@@ -24,6 +25,15 @@ type ModalKey = "genre" | "style" | "camera" | null;
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
   const promptBarWrapperRef = useRef<HTMLDivElement>(null);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
+
+  const toggleHeroVideoMute = () => {
+    if (heroVideoRef.current) {
+      heroVideoRef.current.muted = !heroVideoRef.current.muted;
+      setIsHeroVideoMuted(heroVideoRef.current.muted);
+    }
+  };
 
   // Core settings
   const [prompt, setPrompt] = useState("");
@@ -208,7 +218,50 @@ export default function CinemaStudioWorkspace() {
       />
 
       <CinemaStudioHoverSidebar />
-      <main className="mx-auto flex w-full max-w-[1320px] flex-col items-center gap-2 px-4 pt-8 md:pl-[68px]">
+
+      {/* Hero — the Blueface promo fills this band, with the composer sitting
+          over its lower edge (matches the reference: video on top, cards on
+          black underneath). */}
+      <section className="relative w-full overflow-hidden bg-black">
+        <video
+          ref={heroVideoRef}
+          autoPlay
+          muted={isHeroVideoMuted}
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          onTimeUpdate={(e) => {
+            const vid = e.currentTarget;
+            if (vid.duration && vid.currentTime >= vid.duration - 0.2) {
+              vid.currentTime = 0;
+              vid.play().catch(() => {});
+            }
+          }}
+          className="absolute inset-0 h-full w-full object-cover"
+        >
+          <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
+        </video>
+
+        {/* Soft gradient overlays blending video smoothly into black background — transition pulled lower down */}
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
+        <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
+
+        {/* Mute/Unmute audio button in top right corner */}
+        <button
+          type="button"
+          onClick={toggleHeroVideoMute}
+          aria-label={isHeroVideoMuted ? "Unmute video" : "Mute video"}
+          className="absolute top-20 right-6 z-40 flex size-10 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/80 backdrop-blur-md transition-all hover:bg-black/80 hover:text-white active:scale-95 shadow-lg"
+        >
+          {isHeroVideoMuted ? (
+            <VolumeX className="size-4 text-white/70" />
+          ) : (
+            <Volume2 className="size-4 text-white" />
+          )}
+        </button>
+
+      <main className="relative z-10 mx-auto flex min-h-[520px] w-full max-w-[1320px] flex-col items-center justify-end gap-2 px-4 pb-10 pt-8 md:pl-[68px]">
         {/* Control buttons — Cinema Studio 3.5 only. Reserve the row height in every mode. */}
         <div className="flex min-h-[36px] w-full items-center justify-center">
           {isCinema35 && (
@@ -241,15 +294,17 @@ export default function CinemaStudioWorkspace() {
             <ModeToggle mode={mode} onChange={handleModeChange} />
 
             {mode === "image" ? (
-              <ImageForm
-                embedded
-                externalModel={imageModel}
-                onExternalModelChange={setImageModel}
-                isDrawOpen={isDrawOpen}
-                onDrawOpen={setIsDrawOpen}
-              />
+              <div key="image-mode-container" className="flex min-w-0 flex-1 flex-col transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-2">
+                <ImageForm
+                  embedded
+                  externalModel={imageModel}
+                  onExternalModelChange={setImageModel}
+                  isDrawOpen={isDrawOpen}
+                  onDrawOpen={setIsDrawOpen}
+                />
+              </div>
             ) : isCinema25 ? (
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div key="cinema25-mode-container" className="flex min-w-0 flex-1 flex-col gap-2 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-2">
                 <CinemaStudio25DirectorPanel
                   isOpen={cinema25DirectorPanelOpen}
                   onToggle={() => setCinema25DirectorPanelOpen((v) => !v)}
@@ -307,52 +362,54 @@ export default function CinemaStudioWorkspace() {
                 />
               </div>
             ) : (
-              <PromptBar
-                prompt={prompt}
-                onPromptChange={setPrompt}
-                model={model}
-                onModelChange={handleModelChange}
-                mode={mode}
-                aspectRatio={aspectRatio}
-                onAspectRatioChange={setAspectRatio}
-                resolution={resolution}
-                onResolutionChange={setResolution}
-                duration={duration}
-                durations={
-                  model === "gemini-omni-flash"
-                    ? [4, 6, 8, 10]
-                    : model === "kling-3.0-omni-edit" || model === "kling-o1-video-edit"
-                      ? [3, 4, 5, 6, 7, 8, 9, 10]
-                      : model === "sora-2" ||
-                          model === "sora-2-pro" ||
-                          model === "sora-2-max" ||
-                          model === "sora-2-pro-max"
-                        ? [4, 8, 12]
-                        : selectedModel.durations
-                }
-                onDurationChange={setDuration}
-                batch={batch}
-                onBatchChange={setBatch}
-                sound={sound}
-                onSoundChange={setSound}
-                creditCost={creditCost}
-                onGenerate={handleGenerate}
-                isGenerating={isGenerating}
-                klingAdvancedPrompt={klingAdvancedPrompt}
-                onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
-                kling3TurboSettings={kling3TurboSettings}
-                onKling3TurboSettingsChange={setKling3TurboSettings}
-                cinema25References={cinema25References}
-                onCinema25AssignReference={(slotIndex, url) =>
-                  setCinema25References((s) => {
-                    const next = [...s];
-                    next[slotIndex] = url;
-                    return next;
-                  })
-                }
-                cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
-                onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
-              />
+              <div key="video-mode-container" className="flex min-w-0 flex-1 flex-col transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-2">
+                <PromptBar
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  mode={mode}
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
+                  resolution={resolution}
+                  onResolutionChange={setResolution}
+                  duration={duration}
+                  durations={
+                    model === "gemini-omni-flash"
+                      ? [4, 6, 8, 10]
+                      : model === "kling-3.0-omni-edit" || model === "kling-o1-video-edit"
+                        ? [3, 4, 5, 6, 7, 8, 9, 10]
+                        : model === "sora-2" ||
+                            model === "sora-2-pro" ||
+                            model === "sora-2-max" ||
+                            model === "sora-2-pro-max"
+                          ? [4, 8, 12]
+                          : selectedModel.durations
+                  }
+                  onDurationChange={setDuration}
+                  batch={batch}
+                  onBatchChange={setBatch}
+                  sound={sound}
+                  onSoundChange={setSound}
+                  creditCost={creditCost}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  klingAdvancedPrompt={klingAdvancedPrompt}
+                  onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+                  kling3TurboSettings={kling3TurboSettings}
+                  onKling3TurboSettingsChange={setKling3TurboSettings}
+                  cinema25References={cinema25References}
+                  onCinema25AssignReference={(slotIndex, url) =>
+                    setCinema25References((s) => {
+                      const next = [...s];
+                      next[slotIndex] = url;
+                      return next;
+                    })
+                  }
+                  cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+                  onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                />
+              </div>
             )}
           </div>
 
@@ -369,11 +426,10 @@ export default function CinemaStudioWorkspace() {
           )}
         </div>
       </main>
+      </section>
 
-      {/* Community grid over the Blueface promo — 24px below the prompt bar. */}
-      <div className="mt-6">
-        <CommunitySection />
-      </div>
+      {/* Community grid — plain black, directly under the video hero. */}
+      <CommunitySection />
 
       {/* Docked Panels — Cinema Studio 3.5 only */}
       {isCinema35 && (

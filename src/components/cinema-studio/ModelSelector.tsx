@@ -659,7 +659,7 @@ export default function ModelSelector({
             align="start"
             sideOffset={8}
             onKeyDown={handleKeyDown}
-            className={`z-[100000] h-[602px] w-[402px] overflow-y-auto pointer-events-auto ${
+            className={`z-[100000] h-[602px] w-[402px] overflow-y-auto pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out ${
               isKlingTurboSkin ? KLING_TURBO_PANEL : FROSTED
             }`}
           >

@@ -77,7 +77,7 @@ export default function AspectRatioDropdown({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1b1d20] shadow-[0_8px_30px_rgba(0,0,0,0.55)] p-1 w-[220px] pointer-events-auto"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1b1d20] shadow-[0_8px_30px_rgba(0,0,0,0.55)] p-1 w-[220px] pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
         >
           {visibleOptions.map((opt) => {
             const selected = opt.value === value;

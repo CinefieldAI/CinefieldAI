@@ -2,9 +2,6 @@
 
 import CommunityCard, { type CommunityItem } from "./CommunityCard";
 
-/** Local Blueface promo used as the section's full-bleed background. */
-const BACKGROUND_VIDEO = "/Blueface - Box Training - Promo - 4K.mp4";
-
 const POSTERS = [
   "/cinema-studio/lighting/contre-jour.jpg",
   "/cinema-studio/lighting/overhead-fall.jpg",
@@ -49,29 +46,13 @@ const COMMUNITY_ITEMS: CommunityItem[] = [
 }));
 
 /**
- * Community grid sitting directly under the prompt bar. The Blueface promo
- * is the section's background (not a card of its own): black base → video →
- * black overlay → the nine cards. Section height is driven purely by the
- * grid, so the absolutely-positioned video always covers it exactly.
+ * Community grid sitting on solid black directly under the video hero —
+ * exactly nine cards, 3/2/1 columns with a 16px gap.
  */
 export default function CommunitySection() {
   return (
-    <section className="relative isolate w-full overflow-hidden bg-black">
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full object-cover"
-      >
-        <source src={BACKGROUND_VIDEO} type="video/mp4" />
-      </video>
-
-      <div aria-hidden="true" className="absolute inset-0 bg-black/70" />
-
-      <div className="relative z-10 mx-auto w-full max-w-[1320px] px-4 py-10 md:pl-[68px]">
+    <section className="w-full bg-black">
+      <div className="mx-auto w-full max-w-[1320px] px-4 py-10 md:pl-[68px]">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {COMMUNITY_ITEMS.map((item) => (
             <CommunityCard key={item.id} item={item} />

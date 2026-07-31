@@ -305,7 +305,7 @@ function ModelSelectorDropdown({
           side="top"
           align="start"
           sideOffset={12}
-          className="outline-none z-[100000] rounded-2xl shadow-none border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] flex flex-col p-0 overflow-hidden"
+          className="outline-none z-[100000] rounded-2xl shadow-none border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] flex flex-col p-0 overflow-hidden transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
         >
           <div className="relative rounded-2xl flex flex-col overflow-hidden w-screen h-screen md:h-[602px] md:w-[402px]">
             <div
