@@ -2,6 +2,7 @@
 
 import {
   AtSign,
+  BookOpen,
   Check,
   ChevronDown,
   Clapperboard,
@@ -589,6 +590,14 @@ type KlingCapabilities = {
   aspectRatioOptions: string[];
   resolutionOptions: string[];
   credits: string;
+  /** Kling 3.0 uses raised dark panel; Turbo uses flat */
+  surfaceStyle?: "raised" | "flat";
+  /** Kling 3.0 has dual start/end frame dropzone */
+  dualFrames?: boolean;
+  /** Kling 3.0 has multi-shot */
+  multiShot?: boolean;
+  /** Kling 3.0 has action row (enhance, sound, elements) */
+  actionRow?: boolean;
 };
 
 const KLING_MODEL_CAPABILITIES: Record<string, KlingCapabilities> = {
@@ -599,14 +608,19 @@ const KLING_MODEL_CAPABILITIES: Record<string, KlingCapabilities> = {
     aspectRatioOptions: ["16:9", "9:16", "1:1"],
     resolutionOptions: ["720p", "1080p"],
     credits: "22.5",
+    surfaceStyle: "flat",
   },
   "Kling 3.0": {
     presetVideo: "https://static.higgsfield.ai/kling-3.0/kling-3.0.mp4",
     subtitle: "Kling 3.0",
-    durationSlider: { min: 3, max: 15, default: 8 },
+    durationSlider: { min: 3, max: 15, default: 5 },
     aspectRatioOptions: ["16:9", "9:16", "1:1"],
     resolutionOptions: ["720p", "1080p", "4K"],
-    credits: "25",
+    credits: "30",
+    surfaceStyle: "raised",
+    dualFrames: true,
+    multiShot: true,
+    actionRow: true,
   },
 };
 
@@ -1938,6 +1952,42 @@ function KlingMotionControlForm({
 
   return (
     <>
+      <figure className="relative aspect-[2.3] w-full select-none overflow-hidden rounded-xl group mb-1">
+        <video
+          loop
+          playsInline
+          disablePictureInPicture
+          preload="none"
+          src="https://static.higgsfield.ai/v2-fnf-web-kmc-preset.mp4"
+          className="size-full w-full h-full rounded-md object-cover"
+          onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLVideoElement).pause(); (e.currentTarget as HTMLVideoElement).currentTime = 0; }}
+        >
+          Your browser does not support the video.
+        </video>
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(rgba(0,0,0,0) 0%, rgba(0,0,0,0.4) 50%)",
+          }}
+        />
+        <button
+          type="button"
+          className="absolute right-3 top-3 z-10 inline-flex h-6 items-center gap-1 rounded-lg border border-white/10 bg-black/70 px-2 text-[11px] font-medium text-white backdrop-blur-sm transition-colors hover:bg-white hover:text-black"
+        >
+          <BookOpen className="size-3.5" />
+          How it works
+        </button>
+        <figcaption className="absolute bottom-3 left-3 right-3 z-10 min-w-0">
+          <p className="w-full truncate text-base font-black uppercase text-[#D97757]">
+            MOTION CONTROL
+          </p>
+          <p className="truncate text-xs text-white/60">
+            Control motion with video references
+          </p>
+        </figcaption>
+      </figure>
+
       <div className="grid w-full grid-cols-2 gap-1 rounded-[20px] border border-white/[0.07] p-1 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <MotionControlUploadCard
           title="Add motion to copy"
@@ -2063,19 +2113,118 @@ function KlingMotionControlForm({
       >
         <div className="min-h-0 overflow-hidden">
           <div className="space-y-3 pb-1">
-            <label className="block rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
-              <span className="text-xs font-semibold text-zinc-300">
-                Prompt
-              </span>
-              <textarea
-                rows={5}
-                maxLength={2500}
-                value={state.prompt}
-                onChange={(event) => onChange({ prompt: event.target.value })}
-                placeholder={'Describe background and scene details – e.g., "A corgi runs in" or "Snowy park setting". Motion is controlled by your reference video'}
-                className="mt-1 min-h-[100px] max-h-64 w-full resize-none overflow-y-auto bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
-              />
-            </label>
+            <div className="relative">
+              <label className={`block rounded-xl border border-white/[0.07] bg-white/[0.035] p-3 transition-opacity ${
+                state.sceneControlEnabled ? "opacity-50 pointer-events-none select-none" : ""
+              }`}>
+                <span className="text-xs font-semibold text-zinc-300">
+                  Prompt
+                </span>
+                <textarea
+                  rows={5}
+                  maxLength={2500}
+                  disabled={state.sceneControlEnabled}
+                  value={state.prompt}
+                  onChange={(event) => onChange({ prompt: event.target.value })}
+                  placeholder={'Describe background and scene details – e.g., "A corgi runs in" or "Snowy park setting". Motion is controlled by your reference video'}
+                  className="mt-1 min-h-[100px] max-h-64 w-full resize-none overflow-y-auto bg-transparent text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
+                />
+              </label>
+
+              {state.sceneControlEnabled && (
+                <Popover.Root>
+                  <Popover.Trigger asChild>
+                    <button
+                      type="button"
+                      className="absolute inset-0 size-full cursor-pointer rounded-xl bg-transparent focus:outline-none"
+                    />
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      side="right"
+                      align="center"
+                      sideOffset={12}
+                      className="z-[100000] w-72 rounded-2xl border border-white/10 bg-[#191b1d]/95 p-4 shadow-2xl backdrop-blur-xl animate-popover-in-right"
+                    >
+                      <div className="rounded-xl border border-white/10 bg-[#131517] p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-white">Scene control mode</span>
+                          <span className="flex h-5 w-8 items-center rounded-full bg-emerald-500 p-0.5">
+                            <span className="size-4 translate-x-3 rounded-full bg-white transition-transform" />
+                          </span>
+                        </div>
+                        <div className="mt-2.5 flex rounded-lg border border-white/10 bg-black/40 p-1">
+                          <span className="flex flex-1 items-center justify-center gap-1 py-1 text-[11px] font-semibold text-zinc-400">
+                            <Video className="size-3" /> Video
+                          </span>
+                          <span className="flex flex-1 items-center justify-center gap-1 rounded bg-white/10 py-1 text-[11px] font-semibold text-white">
+                            <ImageIcon className="size-3" /> Image
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[10px] text-zinc-400">
+                          Choose where the background should come from: the character image or the motion video
+                        </p>
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-white">Scene control enabled</p>
+                        <p className="mt-1 text-[11px] leading-4 text-zinc-400">
+                          Advanced settings (Prompt + Orientation) are locked to keep the scene consistent.
+                        </p>
+                        <p className="mt-1.5 text-[11px] text-zinc-400">
+                          To adjust these settings, turn Scene control mode off.
+                        </p>
+
+                        <div className="mt-3 flex gap-2">
+                          <Popover.Close asChild>
+                            <button
+                              type="button"
+                              onClick={() => onChange({ sceneControlEnabled: false })}
+                              className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
+                            >
+                              Turn off
+                            </button>
+                          </Popover.Close>
+                          <Popover.Close asChild>
+                            <button
+                              type="button"
+                              className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-white"
+                            >
+                              Not now
+                            </button>
+                          </Popover.Close>
+                        </div>
+                      </div>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+              )}
+            </div>
+
+            <div className={`space-y-1.5 transition-opacity ${
+              state.sceneControlEnabled ? "opacity-50 pointer-events-none" : ""
+            }`}>
+              <p className="text-xs font-semibold text-zinc-400">Orientation</p>
+              <div className="flex rounded-xl border border-white/[0.07] bg-white/[0.035] p-1">
+                <button
+                  type="button"
+                  disabled={state.sceneControlEnabled}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/10 py-1.5 text-xs font-semibold text-white"
+                >
+                  <Video className="size-3.5" /> Video
+                </button>
+                <button
+                  type="button"
+                  disabled={state.sceneControlEnabled}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold text-zinc-400 hover:text-white"
+                >
+                  <ImageIcon className="size-3.5" /> Image
+                </button>
+              </div>
+              <p className="px-1 text-[11px] leading-4 text-zinc-500">
+                When Character Orientation matches the video, complex motions perform better; when it matches the image, camera movements are better supported.
+              </p>
+            </div>
 
             <button
               type="button"
@@ -2173,6 +2322,14 @@ export default function StandaloneVideoCreationPanel({
   const [klingDurationNum, setKlingDurationNum] = useState(8);
   const [klingAspectRatio, setKlingAspectRatio] = useState("16:9");
   const [klingResolution, setKlingResolution] = useState("1080p");
+  // Kling 3.0 specific states (isolated from Turbo)
+  const [kling3StartFrame, setKling3StartFrame] = useState("");
+  const [kling3EndFrame, setKling3EndFrame] = useState("");
+  const [kling3MultiShot, setKling3MultiShot] = useState(true);
+  const [kling3MultiShotMode, setKling3MultiShotMode] = useState("Auto");
+  const [kling3Enhance, setKling3Enhance] = useState(true);
+  const [kling3Sound, setKling3Sound] = useState(true);
+  const [kling3ElementsOpen, setKling3ElementsOpen] = useState(false);
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   const [, setElementReferences] = useState<string[]>([]);
   const [geminiInputMode, setGeminiInputMode] = useState<
@@ -2699,6 +2856,7 @@ export default function StandaloneVideoCreationPanel({
                 </>
               ) : klingCapabilities ? (
                 <>
+                  {/* Preset banner card */}
                   <figure
                     className="relative aspect-[2.3] w-full select-none overflow-hidden rounded-xl group"
                     tabIndex={-1}
@@ -2740,48 +2898,151 @@ export default function StandaloneVideoCreationPanel({
                     </div>
                   </figure>
 
-                  <div className="rounded-[20px] border border-white/[0.07] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <label
-                      className="relative flex h-[130px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-2 text-center transition-colors hover:border-white/25 hover:bg-white/[0.05]"
-                    >
-                      <input
-                        type="file"
-                        id="kling3-turbo-imageUrl"
-                        name="kling3-turbo-imageUrl"
-                        className="sr-only"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        onChange={(event) =>
-                          setKlingImageName(
-                            event.target.files?.[0]?.name ?? "",
-                          )
-                        }
-                      />
-                      <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner mix-blend-screen">
-                        {klingImageName ? (
-                          <Check className="size-4 text-[#D97757]" />
-                        ) : (
-                          <ImageIcon className="size-4 text-zinc-300" />
-                        )}
-                      </span>
-                      <span className="mt-2 text-xs font-medium text-zinc-300">
-                        {klingImageName || (
-                          <>
-                            Upload image or{" "}
-                            <span className="cursor-pointer text-[#D97757] hover:underline">
-                              generate it
-                            </span>
-                          </>
-                        )}
-                      </span>
-                      <span className="mt-1 text-[11px] font-medium text-zinc-500">
-                        {klingImageName
-                          ? "Ready to use"
-                          : "PNG, JPG or Paste from clipboard"}
-                      </span>
-                    </label>
-                  </div>
+                  {klingCapabilities.dualFrames ? (
+                    /* Dual Start/End frame dropzone — Kling 3.0 */
+                    <div className="rounded-[20px] border border-white/[0.07] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" style={{ height: 146 }}>
+                      <div className="grid h-full w-full grid-cols-2 gap-1">
+                        {/* Start frame */}
+                        <label className="relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-2 text-center transition-colors hover:border-white/25 hover:bg-white/[0.05]">
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={(e) => setKling3StartFrame(e.target.files?.[0]?.name ?? "")}
+                          />
+                          <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner mix-blend-screen">
+                            {kling3StartFrame ? (
+                              <Check className="size-4 text-[#D97757]" />
+                            ) : (
+                              <ImageIcon className="size-4 text-zinc-300" />
+                            )}
+                          </span>
+                          <span className="mt-1.5 text-xs font-medium text-zinc-300">
+                            {kling3StartFrame || "Start frame"}
+                          </span>
+                          <span className="mt-0.5 text-[10px] font-medium text-zinc-500">Optional</span>
+                        </label>
+                        {/* End frame */}
+                        <label className="relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-2 text-center transition-colors hover:border-white/25 hover:bg-white/[0.05]">
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={(e) => setKling3EndFrame(e.target.files?.[0]?.name ?? "")}
+                          />
+                          <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner mix-blend-screen">
+                            {kling3EndFrame ? (
+                              <Check className="size-4 text-[#D97757]" />
+                            ) : (
+                              <ImageIcon className="size-4 text-zinc-300" />
+                            )}
+                          </span>
+                          <span className="mt-1.5 text-xs font-medium text-zinc-300">
+                            {kling3EndFrame || "End frame"}
+                          </span>
+                          <span className="mt-0.5 text-[10px] font-medium text-zinc-500">Optional</span>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Single upload — Kling 3.0 Turbo */
+                    <div className="rounded-[20px] border border-white/[0.07] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <label
+                        className="relative flex h-[130px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.035] p-2 text-center transition-colors hover:border-white/25 hover:bg-white/[0.05]"
+                      >
+                        <input
+                          type="file"
+                          id="kling3-turbo-imageUrl"
+                          name="kling3-turbo-imageUrl"
+                          className="sr-only"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(event) =>
+                            setKlingImageName(
+                              event.target.files?.[0]?.name ?? "",
+                            )
+                          }
+                        />
+                        <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] shadow-inner mix-blend-screen">
+                          {klingImageName ? (
+                            <Check className="size-4 text-[#D97757]" />
+                          ) : (
+                            <ImageIcon className="size-4 text-zinc-300" />
+                          )}
+                        </span>
+                        <span className="mt-2 text-xs font-medium text-zinc-300">
+                          {klingImageName || (
+                            <>
+                              Upload image or{" "}
+                              <span className="cursor-pointer text-[#D97757] hover:underline">
+                                generate it
+                              </span>
+                            </>
+                          )}
+                        </span>
+                        <span className="mt-1 text-[11px] font-medium text-zinc-500">
+                          {klingImageName
+                            ? "Ready to use"
+                            : "PNG, JPG or Paste from clipboard"}
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
-                  <div className="relative flex min-h-[10rem] max-h-[16rem] flex-col overflow-y-auto rounded-xl border border-white/[0.07] bg-white/[0.035] md:bg-[#17191b]">
+                  {/* Multi-shot control — Kling 3.0 only */}
+                  {klingCapabilities.multiShot && (
+                    <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] md:bg-[#17191b]">
+                      <div className="flex items-center justify-between px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Film className="size-3.5 text-zinc-400" />
+                          <span className={`text-xs font-medium ${kling3MultiShot ? "text-white" : "text-zinc-400"}`}>
+                            Multi-shot
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={kling3MultiShot}
+                          onClick={() => setKling3MultiShot((v) => !v)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                            kling3MultiShot ? "bg-[#4ade80]" : "bg-zinc-700"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                              kling3MultiShot ? "translate-x-[18px]" : "translate-x-[3px]"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      {kling3MultiShot && (
+                        <div className="px-3 pb-3">
+                          <div className="flex rounded-xl bg-[#131517] p-1 border border-white/[0.04]">
+                            {["Auto", "Custom"].map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setKling3MultiShotMode(mode)}
+                                className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                                  kling3MultiShotMode === mode
+                                    ? "bg-[#2E3031] text-white"
+                                    : "text-zinc-400 hover:text-zinc-300"
+                                }`}
+                              >
+                                {mode}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Prompt area — raised dark surface for Kling 3.0, flat for Turbo */}
+                  <div className={`relative flex min-h-[10rem] max-h-[16rem] flex-col overflow-hidden ${
+                    klingCapabilities.surfaceStyle === "raised"
+                      ? "rounded-t-xl border border-b-0 border-white/[0.07] bg-white/[0.035] md:bg-[#1c1e20]"
+                      : "rounded-xl border border-white/[0.07] bg-white/[0.035] md:bg-[#17191b]"
+                  }`}>
                     <label
                       htmlFor="kling-prompt"
                       className="absolute left-3 top-3 text-xs font-medium text-zinc-500"
@@ -2794,10 +3055,52 @@ export default function StandaloneVideoCreationPanel({
                       rows={4}
                       value={prompt}
                       onChange={(event) => setPrompt(event.target.value)}
-                      placeholder="Describe the scene you imagine, with details."
-                      className="mt-8 min-h-0 flex-1 resize-none bg-transparent px-3 pb-3 text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
+                      placeholder={'Describe your video, like "A woman walking through a neon-lit city". Add elements using @'}
+                      className="mt-8 min-h-0 flex-1 resize-none overflow-y-auto bg-transparent px-3 pb-3 text-sm leading-5 text-white outline-none placeholder:text-zinc-500"
                     />
                   </div>
+
+                  {/* Action row — Kling 3.0 only, attached under prompt */}
+                  {klingCapabilities.actionRow && (
+                    <div className="-mt-[1px] flex items-center gap-1.5 rounded-b-xl border border-t border-white/[0.07] bg-white/[0.035] md:bg-[#1c1e20] px-2.5 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setKling3Enhance((v) => !v)}
+                        className={`inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12px] font-medium transition-colors ${
+                          kling3Enhance
+                            ? "bg-[#131517] text-white"
+                            : "bg-[#131517] text-zinc-500"
+                        }`}
+                      >
+                        <WandSparkles className="size-3.5" />
+                        Enhance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKling3Sound((v) => !v)}
+                        className={`inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12px] font-medium transition-colors ${
+                          kling3Sound
+                            ? "bg-[#131517] text-white"
+                            : "bg-[#131517] text-zinc-500"
+                        }`}
+                      >
+                        {kling3Sound ? (
+                          <Volume2 className="size-3.5" />
+                        ) : (
+                          <VolumeX className="size-3.5" />
+                        )}
+                        {kling3Sound ? "On" : "Off"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKling3ElementsOpen(true)}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#131517] px-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:text-white"
+                      >
+                        <AtSign className="size-3.5" />
+                        Elements
+                      </button>
+                    </div>
+                  )}
 
                   <ModelTrigger
                     model={selectedModel}
@@ -3005,7 +3308,7 @@ export default function StandaloneVideoCreationPanel({
                   : workflow === "edit-video"
                     ? "Generate  ✦ 9"
                     : workflow === "motion-control"
-                      ? "Generate  ✦ 12"
+                      ? `Generate  ✦ ${motionState?.sceneControlEnabled ? 10 : 8}`
                       : "Generate  ✦ 7.5"}
           </button>
         </div>
@@ -3074,6 +3377,15 @@ export default function StandaloneVideoCreationPanel({
             supportingAssets: [...current.supportingAssets, url],
           });
         }}
+      />
+      <AssetsPickerModal
+        isOpen={kling3ElementsOpen}
+        onClose={() => setKling3ElementsOpen(false)}
+        defaultTab="elements"
+        accept="image/*,video/*"
+        onSelectAsset={(url) =>
+          setElementReferences((current) => [...current, url])
+        }
       />
     </div>
   );
