@@ -43,11 +43,10 @@ export default function Cinema25ReferencesPopover({
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label="Add assets"
-          title="Add assets"
+          aria-label="References"
           aria-haspopup="dialog"
           aria-expanded={isOpen}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 hover:bg-white/10 transition-colors"
+          className="flex h-8 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
           <Plus className="size-4" />
         </button>

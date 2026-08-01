@@ -203,6 +203,14 @@ function ProfileAvatar() {
 interface NavbarProps {
   activePanel: PanelKey | null;
   onOpenImagePanel: () => void;
+  /**
+   * A specific model was clicked in the Image mega-dropdown — routes to the
+   * full Create Image workspace with that model preselected. Optional so
+   * pages without the workspace (Cinema Studio, Marketing Studio, etc.) can
+   * render Navbar unchanged; when omitted, model clicks fall back to
+   * onOpenImagePanel like before.
+   */
+  onOpenImageModel?: (modelName: string) => void;
   onOpenVideoPanel: () => void;
   onOpenAudioPanel: () => void;
   onSetView: (view: ActiveView) => void;
@@ -221,6 +229,7 @@ interface NavbarProps {
 export default function Navbar({
   activePanel,
   onOpenImagePanel,
+  onOpenImageModel,
   onOpenVideoPanel,
   onOpenAudioPanel,
   onSetView,
@@ -260,8 +269,24 @@ export default function Navbar({
     }
   };
 
-  const handleModelSelect = () => {
-    onOpenImagePanel();
+  // Two of the thirteen models in the dropdown aren't prompt-driven image
+  // generators — Popcorn is a storyboard tool, Topaz is an upscaler — so
+  // they don't have a Create Image workspace destination yet and keep
+  // falling back to the generic side panel.
+  const IMAGE_MODELS_WITHOUT_WORKSPACE = new Set(["Higgsfield Popcorn", "Topaz"]);
+  // The dropdown's display names match the Create Image workspace's model
+  // list 1:1 except for these two casing/naming differences.
+  const IMAGE_DROPDOWN_TO_WORKSPACE_MODEL: Record<string, string> = {
+    "Seedream 5.0 lite": "Seedream 5.0 Lite",
+    "FLUX.2": "FLUX.2 Pro",
+  };
+
+  const handleModelSelect = (name: string) => {
+    if (!onOpenImageModel || IMAGE_MODELS_WITHOUT_WORKSPACE.has(name)) {
+      onOpenImagePanel();
+      return;
+    }
+    onOpenImageModel(IMAGE_DROPDOWN_TO_WORKSPACE_MODEL[name] ?? name);
   };
 
   const handleVideoFeatureSelect = (title: string) => {

@@ -56,14 +56,14 @@ function ToggleButton({
       onClick={onClick}
       aria-label={`${label} mode`}
       aria-pressed={active}
-      className={`flex w-16 flex-1 flex-col items-center justify-center gap-1 rounded-[20px] border-none px-3 py-1.5 text-[10px] font-bold leading-3 tracking-[0.2px] transition-all duration-200 active:brightness-[.6] ${
+      className={`flex w-full flex-1 flex-col items-center justify-center gap-1 rounded-[16px] border transition-all duration-200 active:scale-95 ${
         active
-          ? "bg-white/5 text-white"
-          : "bg-transparent text-neutral-400 hover:text-white"
+          ? "border-[#D97757] bg-[#101112] text-white font-bold shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+          : "border-transparent bg-transparent text-neutral-400 hover:text-white hover:bg-white/5"
       }`}
     >
-      <Icon className={active ? "text-[#D97757]" : ""} />
-      {label}
+      <Icon className={active ? "size-6 text-[#D97757]" : "size-6 text-neutral-400"} />
+      <span className="text-xs font-extrabold tracking-wide">{label}</span>
     </button>
   );
 }
@@ -75,13 +75,13 @@ function ToggleButton({
 export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
     <div
-      className="z-50 flex h-[116px] min-h-[116px] w-[72px] min-w-[72px] shrink-0 rounded-[24px] bg-[#1a1d1f] p-1"
+      className="relative z-50 flex h-[140px] min-h-[140px] w-[80px] min-w-[80px] shrink-0 rounded-[24px] bg-[#141414] p-1.5 border-2 border-[#D97757] shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse"
       style={{
-        boxShadow:
-          "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
+        background:
+          "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
       }}
     >
-      <div className="flex h-full w-full flex-col gap-0.5">
+      <div className="flex h-full w-full flex-col gap-1">
         <ToggleButton
           active={mode === "image"}
           label="Image"

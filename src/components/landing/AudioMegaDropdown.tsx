@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   AUDIO_FEATURES,
@@ -28,6 +29,15 @@ function AudioColumn({
   activeTitle?: string;
   onSelect?: (title: string) => void;
 }) {
+  const [selectedTitle, setSelectedTitle] = useState<string | undefined>(activeTitle);
+
+  const handleSelect = (t: string) => {
+    setSelectedTitle(t);
+    onSelect?.(t);
+  };
+
+  const currentActive = selectedTitle ?? activeTitle;
+
   return (
     <section className="min-w-[18rem] p-2 pt-3 first-of-type:pr-0 last-of-type:pl-0">
       <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -37,16 +47,24 @@ function AudioColumn({
         {items.map((item) => {
           const Icon = item.icon;
           const iconSrc = "iconSrc" in item ? item.iconSrc : undefined;
-          const active = item.title === activeTitle;
+          const active = item.title === currentActive;
           return (
             <button
               key={item.title}
               type="button"
-              onClick={() => onSelect?.(item.title)}
+              onClick={() => handleSelect(item.title)}
               aria-pressed={active}
-              className="group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-transparent p-2 text-left no-underline transition-colors hover:border-[#D97757]/25 hover:bg-white/[0.04] active:brightness-[.6]"
+              className={`group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors ${
+                active ? "bg-white/[0.04]" : "hover:bg-white/[0.04]"
+              } active:brightness-[.6]`}
             >
-              <div className="grid size-14 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-300 transition-colors group-hover:bg-[#D97757]/10 group-hover:text-[#D97757]">
+              <div
+                className={`grid size-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+                  active
+                    ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+                    : "bg-white/5 text-zinc-300 border border-transparent group-hover:text-[#D97757]"
+                }`}
+              >
                 {iconSrc ? (
                   <img
                     src={iconSrc}

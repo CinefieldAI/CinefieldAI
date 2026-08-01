@@ -1,15 +1,10 @@
 "use client";
 
-import { IMAGE_MODEL_CONFIGS } from "@/lib/imageModelConfig";
-
 interface HeroSectionProps {
-  selectedModel: string;
+  modelLabel: string;
 }
 
-export default function HeroSection({ selectedModel }: HeroSectionProps) {
-  const config = IMAGE_MODEL_CONFIGS[selectedModel];
-  const modelLabel = config?.label || "Nano Banana Pro";
-
+export default function HeroSection({ modelLabel }: HeroSectionProps) {
   return (
     // Padding kept tight (vs. a standalone hero) — this is embedded inline
     // above the Cinema Studio composer, whose vertical position must match

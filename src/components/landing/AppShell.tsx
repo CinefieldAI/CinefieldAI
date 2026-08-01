@@ -23,8 +23,20 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
   const [audioMode, setAudioMode] = useState<AudioMode>("voiceover");
   const [audioModelIndex, setAudioModelIndex] = useState(0);
 
+  // Model clicked in the navbar's Image mega-dropdown — routes straight into
+  // the full Create Image workspace with that model preselected, instead of
+  // always opening the same generic side panel regardless of which model
+  // was clicked.
+  const [selectedImageModel, setSelectedImageModel] = useState<string | undefined>(undefined);
+
   const openImagePanel = () => {
     setActivePanel("image");
+  };
+
+  const openImageModel = (modelName: string) => {
+    setSelectedImageModel(modelName);
+    setActiveView("createImage");
+    setActivePanel(null);
   };
 
   const openVideoPanel = () => {
@@ -49,6 +61,7 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
       <Navbar
         activePanel={activePanel}
         onOpenImagePanel={openImagePanel}
+        onOpenImageModel={openImageModel}
         onOpenVideoPanel={openVideoPanel}
         onOpenAudioPanel={openAudioPanel}
         onSetView={setView}
@@ -61,7 +74,10 @@ export default function AppShell({ initialView = "default" }: AppShellProps) {
 
       <main className="flex-1">
         {activeView === "createImage" && (
-          <CreateImageWorkspace onBack={() => setActiveView("default")} />
+          <CreateImageWorkspace
+            onBack={() => setActiveView("default")}
+            initialModel={selectedImageModel}
+          />
         )}
         {activeView === "createAudio" && (
           <CreateAudioWorkspace

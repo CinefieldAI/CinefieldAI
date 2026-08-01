@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { VIDEO_DROPDOWN_MODELS, VIDEO_FEATURES } from "./videoMenuData";
 
@@ -16,6 +17,18 @@ export default function VideoMegaDropdown({
   onFeatureSelect,
   onModelSelect,
 }: VideoMegaDropdownProps) {
+  const [selectedTitle, setSelectedTitle] = useState<string>("Create Video");
+
+  const handleFeatureClick = (title: string) => {
+    setSelectedTitle(title);
+    onFeatureSelect?.(title);
+  };
+
+  const handleModelClick = (name: string) => {
+    setSelectedTitle(name);
+    onModelSelect?.(name);
+  };
+
   return (
     <div
       className="w-[732px] max-w-[92vw] overflow-y-auto rounded-[24px] border border-white/[0.06] bg-[#1c1e20] p-1 shadow-2xl shadow-black/60"
@@ -30,15 +43,24 @@ export default function VideoMegaDropdown({
           <div className="grid auto-rows-min gap-0.5">
             {VIDEO_FEATURES.map((feature) => {
               const Icon = feature.icon;
+              const active = selectedTitle === feature.title;
               return (
                 <button
                   key={feature.title}
                   type="button"
-                  onClick={() => onFeatureSelect?.(feature.title)}
-                  className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
+                  onClick={() => handleFeatureClick(feature.title)}
+                  className={`group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors ${
+                    active ? "bg-[#131517]" : "hover:bg-[#131517]"
+                  } active:brightness-[.6]`}
                 >
-                  <div className="grid size-14 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
-                    <Icon className="size-7 text-zinc-300" />
+                  <div
+                    className={`grid size-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+                      active
+                        ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+                        : "bg-[#23262a] text-zinc-300 border border-transparent group-hover:text-[#D97757]"
+                    }`}
+                  >
+                    <Icon className="size-7" />
                   </div>
                   <div className="grid min-w-0 auto-rows-min gap-1">
                     <span className="flex items-center gap-1.5">
@@ -69,15 +91,24 @@ export default function VideoMegaDropdown({
           <div className="grid auto-rows-min gap-0.5">
             {VIDEO_DROPDOWN_MODELS.map((model) => {
               const Icon = model.icon;
+              const active = selectedTitle === model.name;
               return (
                 <button
                   key={model.name}
                   type="button"
-                  onClick={() => onModelSelect?.(model.name)}
-                  className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors hover:bg-[#131517] active:brightness-[.6]"
+                  onClick={() => handleModelClick(model.name)}
+                  className={`group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors ${
+                    active ? "bg-[#131517]" : "hover:bg-[#131517]"
+                  } active:brightness-[.6]`}
                 >
-                  <div className="grid size-14 shrink-0 items-center justify-center rounded-xl bg-[#23262a]">
-                    <Icon className="size-7 text-zinc-300" aria-hidden="true" />
+                  <div
+                    className={`grid size-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+                      active
+                        ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+                        : "bg-[#23262a] text-zinc-300 border border-transparent group-hover:text-[#D97757]"
+                    }`}
+                  >
+                    <Icon className="size-7" aria-hidden="true" />
                   </div>
                   <div className="grid min-w-0 auto-rows-min gap-1">
                     <span className="flex items-center gap-1.5">

@@ -65,7 +65,7 @@ export default function AspectRatioDropdown({
           aria-label="Aspect ratio"
           aria-haspopup="listbox"
           aria-expanded={controlledOpen}
-          className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
           <RectangleHorizontal className="size-4" />
           <span className="min-w-[40px] text-center">{value}</span>
@@ -77,7 +77,7 @@ export default function AspectRatioDropdown({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1b1d20] shadow-[0_8px_30px_rgba(0,0,0,0.55)] p-1 w-[220px] pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
         >
           {visibleOptions.map((opt) => {
             const selected = opt.value === value;
@@ -91,10 +91,10 @@ export default function AspectRatioDropdown({
                   onChange(opt.value);
                   handleOpenChange(false);
                 }}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
                   selected
-                    ? "bg-[#25282c]"
-                    : "hover:bg-[#25282c]"
+                    ? "bg-white/10 text-white font-semibold"
+                    : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <ShapeIcon shape={opt.shape} active={selected} />
@@ -102,7 +102,7 @@ export default function AspectRatioDropdown({
                   <span className="block truncate text-sm font-medium text-white">
                     {opt.value}
                   </span>
-                  <span className="block truncate text-xs text-gray-400">
+                  <span className="block truncate text-xs text-white/50">
                     {opt.description}
                   </span>
                 </span>

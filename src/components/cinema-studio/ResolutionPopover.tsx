@@ -47,7 +47,7 @@ export default function ResolutionPopover({
           aria-label="Resolution"
           aria-haspopup="listbox"
           aria-expanded={controlledOpen}
-          className="flex h-8 items-center gap-1 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
           <MonitorPlay className="size-4" />
           <span className="min-w-[40px] text-center">{value}</span>
@@ -62,11 +62,11 @@ export default function ResolutionPopover({
           collisionPadding={collisionPadding}
           role="listbox"
           aria-label="Resolution"
-          className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >
-          <div className="px-3 py-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <div className="px-3 py-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
               Resolution
             </span>
           </div>
@@ -82,16 +82,16 @@ export default function ResolutionPopover({
                   onChange(opt);
                   handleOpenChange(false);
                 }}
-                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
                   selected
-                    ? "bg-[#131517]"
-                    : "hover:bg-[#131517]"
+                    ? "bg-white/10 text-white font-semibold"
+                    : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <span className="text-sm font-medium text-white">
                   {opt}
                 </span>
-                {selected && <Check className="size-4 shrink-0 text-[#00e5ff]" />}
+                {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>
             );
           })}

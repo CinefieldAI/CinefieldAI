@@ -77,17 +77,11 @@ function LocationPin({
 }
 
 const FROSTED =
-  "rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-/**
- * Alternate panel skin shown ONLY while Kling 3.0 Turbo is the selected model
- * (per explicit request — every other model keeps the standard FROSTED look).
- */
+/** Alternate panel skin shown ONLY while Kling 3.0 Turbo is selected */
 const KLING_TURBO_PANEL =
   "rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.95)] shadow-[0_24px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-
-/** Roving-focus ring shown when a row is keyboard-active (distinct from the "selected model" state). */
-const FOCUS_RING = "ring-2 ring-[#D97757]";
 
 type RowSkin = "default" | "klingTurbo";
 
@@ -117,13 +111,15 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model flex w-full items-center gap-2 rounded-xl px-1.5 py-1.5 pr-3 text-left transition-all duration-200 ease-out focus:outline-none ${
-        active ? "bg-white/5" : "hover:bg-white/5"
-      } ${focused ? FOCUS_RING : ""}`}
+      className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
+        active ? "bg-white/5" : ""
+      }`}
     >
       <span
-        className={`flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)] ${
-          active ? "text-[#D97757]" : ""
+        className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
+          active
+            ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+            : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
         }`}
       >
         {iconPath ? (
@@ -134,15 +130,15 @@ function ImageRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold leading-5 text-white">
+          <span className="truncate text-xs font-medium text-white">
             {model.name}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-gray-400">
+        <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
           {model.description}
         </span>
       </span>
-      {active && <Check className="size-4 shrink-0 text-white" />}
+      {active && <Check className="size-4 shrink-0 text-[#D97757]" />}
     </button>
   );
 }
@@ -154,7 +150,6 @@ function VideoFlatRow({
   onSelect,
   focused,
   buttonRef,
-  skin = "default",
 }: {
   model: ModelInfo;
   value: string;
@@ -166,7 +161,6 @@ function VideoFlatRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
-  const isKT = skin === "klingTurbo";
 
   return (
     <button
@@ -176,24 +170,16 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model flex w-full items-center gap-2 rounded-xl text-left transition-all duration-150 ease-out focus:outline-none ${
-        isKT
-          ? `py-1.5 pr-3 ${active ? "bg-white/[0.08] pl-1.5" : "pl-1.5 hover:bg-white/5"}`
-          : `border py-1.5 pl-1.5 pr-3 ${active ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
-      } ${focused ? FOCUS_RING : ""}`}
+      className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
+        active ? "bg-white/5" : ""
+      }`}
     >
       <span
-        className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)]"
-        style={
+        className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
           active
-            ? {
-                background: "rgba(217,119,87,0.10)",
-                border: "1px solid rgba(217,119,87,0.45)",
-                boxShadow: "0 0 12px rgba(217,119,87,0.20)",
-                color: "#D97757",
-              }
-            : undefined
-        }
+            ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+            : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
+        }`}
       >
         {iconPath ? (
           <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
@@ -203,14 +189,14 @@ function VideoFlatRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold leading-5 text-white">
+          <span className="truncate text-xs font-medium text-white">
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
           {model.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
         </span>
         {model.durationLabel ? (
-          <span className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-400">
+          <span className="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-400">
             <span className="flex items-center gap-1">
               <Diamond className="size-3" />
               {model.resolution}
@@ -221,12 +207,12 @@ function VideoFlatRow({
             </span>
           </span>
         ) : model.description ? (
-          <span className="mt-0.5 block truncate text-[11px] text-gray-400">
+          <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
             {model.description}
           </span>
         ) : null}
       </span>
-      {active && <Check className="size-4 shrink-0" style={{ color: "#D97757" }} />}
+      {active && <Check className="size-4 shrink-0 text-[#D97757]" />}
     </button>
   );
 }
@@ -242,7 +228,6 @@ function VideoParentRow({
   keyboardOpen,
   activeSubIndex,
   onSubRefsChange,
-  skin = "default",
 }: {
   model: ModelInfo;
   value: string;
@@ -254,7 +239,6 @@ function VideoParentRow({
   onSubRefsChange?: (refs: (HTMLButtonElement | null)[]) => void;
   skin?: RowSkin;
 }) {
-  const isKT = skin === "klingTurbo";
   const subs = model.submodels ?? [];
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
@@ -318,22 +302,16 @@ function VideoParentRow({
         aria-selected={active}
         tabIndex={focused ? 0 : -1}
         onClick={openFlyout}
-        className={`group/model flex w-full cursor-pointer items-center gap-2 rounded-xl py-1.5 pl-1.5 pr-3 text-left transition-all duration-150 ease-out hover:bg-white/5 focus:outline-none ${
-          focused ? FOCUS_RING : ""
+        className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
+          active ? "bg-white/5" : ""
         }`}
       >
         <span
-          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5 text-[#8a8a8a] shadow-[inset_0_2px_3px_rgba(255,255,255,0.03)] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:text-[#D97757] group-hover/model:shadow-[inset_0_2px_3px_rgba(255,255,255,0.03),0_0_14px_rgba(217,119,87,0.34)]"
-          style={
+          className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
             active
-              ? {
-                  background: "rgba(217,119,87,0.10)",
-                  border: "1px solid rgba(217,119,87,0.45)",
-                  boxShadow: "0 0 12px rgba(217,119,87,0.20)",
-                  color: "#D97757",
-                }
-              : undefined
-          }
+              ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+              : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
+          }`}
         >
           {iconPath ? (
             <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
@@ -343,12 +321,12 @@ function VideoParentRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold leading-5 text-white">
+            <span className="truncate text-xs font-medium text-white">
               {model.name}
             </span>
           </span>
           {model.description && (
-            <span className="mt-0.5 block truncate text-[11px] text-gray-400">
+            <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
               {model.description}
             </span>
           )}
@@ -368,7 +346,7 @@ function VideoParentRow({
             onMouseLeave={() => {
               if (!keyboardOpen) scheduleClose();
             }}
-            className={`fixed z-[100000] max-h-[500px] w-[280px] overflow-y-auto p-1 ${isKT ? KLING_TURBO_PANEL : FROSTED}`}
+            className="fixed z-[100000] max-h-[500px] w-[280px] overflow-y-auto p-1 rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ top: pos.top, left: pos.left }}
           >
             {subs.map((s, i) => {
@@ -385,21 +363,19 @@ function VideoParentRow({
                   aria-selected={sel}
                   tabIndex={subFocused ? 0 : -1}
                   onClick={() => onSelect(s.id)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg text-left transition-all duration-100 ${
-                    isKT
-                      ? `py-2.5 pr-3.5 ${sel ? "border-l-2 border-l-[#d1fe17] bg-white/[0.08] pl-3" : "border-l-2 border-l-transparent pl-3 hover:bg-white/5"}`
-                      : `border px-3 py-2.5 ${sel ? "border-white/20 bg-white/10" : "border-transparent hover:bg-white/5"}`
-                  } ${subFocused ? FOCUS_RING : ""}`}
+                  className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
+                    sel ? "bg-white/5" : ""
+                  }`}
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold leading-5 text-white">
+                      <span className="truncate text-xs font-medium text-white">
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
                       {s.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
                     </span>
-                    <span className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-400">
+                    <span className="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-400">
                       <span className="flex items-center gap-1">
                         <Diamond className="size-3" />
                         {s.resolution}
@@ -411,7 +387,7 @@ function VideoParentRow({
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1">
-                    {sel && <Check className="size-4" style={{ color: "#D97757" }} />}
+                    {sel && <Check className="size-4 text-[#D97757]" />}
                   </span>
                 </button>
               );
@@ -633,7 +609,7 @@ export default function ModelSelector({
               aria-haspopup="listbox"
               aria-expanded={open}
               aria-label={`Model: ${selected.name}`}
-              className="flex h-9 items-center gap-2 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+              className="flex h-8 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
@@ -659,27 +635,15 @@ export default function ModelSelector({
             align="start"
             sideOffset={8}
             onKeyDown={handleKeyDown}
-            className={`z-[100000] h-[602px] w-[402px] overflow-y-auto pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out ${
-              isKlingTurboSkin ? KLING_TURBO_PANEL : FROSTED
-            }`}
+            className="outline-none z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur flex flex-col pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
           >
-            {isKlingTurboSkin ? (
-              <div className="sticky top-0 z-10 p-3">
-                <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/[0.06] bg-white/[0.04] px-3 transition-colors focus-within:border-white/15">
-                  <Search className="size-4 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }} />
-                  <input
-                    ref={searchInputRef}
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search..."
-                    aria-label="Search models"
-                    className="w-full bg-transparent text-[13px] text-white placeholder:text-white/30 focus:outline-none"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="sticky top-0 z-10 flex h-[41px] items-center gap-2 border-b border-white/10 bg-[rgba(24,26,30,0.92)] px-3 backdrop-blur-[24px]">
+            <div className="relative rounded-2xl flex flex-col overflow-hidden w-100 h-[100vh] max-w-[calc(100vw-32px)] max-h-[min(40rem,calc(100vh-32px))]">
+              {/* Decorative background glow layers */}
+              <div className="pointer-events-none absolute top-0 h-[37px] w-full rounded-[317px] bg-[rgba(139,213,244,0.24)] blur-[50px]" aria-hidden="true" />
+              <div className="pointer-events-none absolute bottom-[35%] h-[37px] w-full rounded-[317px] bg-[rgba(139,213,244,0.24)] blur-[50px]" aria-hidden="true" />
+
+              {/* Search header */}
+              <div className="relative z-10 flex h-[41px] min-h-[41px] items-center gap-2 border-b border-white/10 bg-transparent px-3">
                 <Search className="size-4 shrink-0 text-gray-400" />
                 <input
                   ref={searchInputRef}
@@ -688,20 +652,20 @@ export default function ModelSelector({
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search..."
                   aria-label="Search models"
-                  className="w-full bg-transparent text-sm text-white placeholder:text-gray-400 focus:outline-none"
+                  className="w-full bg-transparent text-sm text-white placeholder:text-gray-400 outline-none"
                 />
               </div>
-            )}
 
-            <div className="p-2" role="listbox" aria-label="AI video models">
-              {categories.length === 0 && (
-                <p className="px-2 py-6 text-center text-xs text-neutral-500">
-                  No models match &quot;{query}&quot;.
-                </p>
-              )}
-              {categories.map((cat) => (
+              {/* Internal scroll area */}
+              <div className="relative z-10 flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-2" role="listbox" aria-label="AI models">
+                {categories.length === 0 && (
+                  <p className="px-2 py-6 text-center text-xs text-neutral-500">
+                    No models match &quot;{query}&quot;.
+                  </p>
+                )}
+                {categories.map((cat) => (
                   <div key={cat.label} className="mb-2">
-                    <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-1 text-xs font-medium text-gray-400">
+                    <p className="flex items-center gap-1.5 px-3 pt-2 pb-2 text-xs font-medium text-gray-400">
                       {isKlingTurboSkin ? (
                         cat.label === "All models" ? (
                           <Grid3x3 className="size-3" />
@@ -762,7 +726,8 @@ export default function ModelSelector({
                       })}
                     </div>
                   </div>
-              ))}
+                ))}
+              </div>
             </div>
           </Popover.Content>
         </Popover.Portal>

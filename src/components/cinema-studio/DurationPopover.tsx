@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, ChevronDown } from "lucide-react";
+import { Clock, ChevronDown, Check } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 
 interface DurationPopoverProps {
@@ -29,9 +29,9 @@ interface DurationPopoverProps {
   collisionPadding?: number;
 }
 
-/** Shared h-7 control-pill style. */
+/** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 export default function DurationPopover({
   value,
@@ -76,14 +76,14 @@ export default function DurationPopover({
           align={align}
           sideOffset={8}
           collisionPadding={collisionPadding}
-          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur-[40px] pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           style={{ width: width ?? (showButtons ? "220px" : "334px") }}
         >
-          <div className="flex flex-col gap-3 rounded-xl p-2">
-            <div>
-              <label className="text-xs font-medium text-neutral-400 truncate">
+          <div className="flex flex-col gap-2 rounded-xl p-1">
+            <div className="px-2 py-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
                 Duration
-              </label>
+              </span>
             </div>
             {showButtons ? (
               <div className="space-y-1">
@@ -97,13 +97,14 @@ export default function DurationPopover({
                         onChange(d);
                         handleOpenChange(false);
                       }}
-                      className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
                         selected
-                          ? "bg-[#131517] text-[#00e5ff]"
-                          : "text-white hover:bg-[#131517]"
+                          ? "bg-white/10 text-white font-semibold"
+                          : "text-white/80 hover:bg-white/5 hover:text-white"
                       }`}
                     >
-                      {d}s
+                      <span>{d}s</span>
+                      {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
                     </button>
                   );
                 })}

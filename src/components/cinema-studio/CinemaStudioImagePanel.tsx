@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import CinemaModelSelector from "./ModelSelector";
+import GenerateButton from "./GenerateButton";
 import Cinema25AssetsPicker from "./Cinema25AssetsPicker";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
 import ColorTransferPanel, {
   type ColorTransferSwatch,
 } from "@/components/image-tools/ColorTransferPopover";
@@ -132,45 +135,85 @@ export default function CinemaStudioImagePanel({
     });
   };
 
-  return (
-    <div
-      className="flex min-w-0 flex-1 items-stretch gap-1 rounded-[24px] bg-[#1a1d1f] p-3"
-      style={{
-        minHeight: 116,
-        maxHeight: 400,
-        boxShadow: "0 4px 6px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
-      }}
-    >
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-        {attachments.length > 0 && (
-          <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
-        )}
+  const [promptWidth, setPromptWidth] = useState(1060);
+  const [promptHeight, setPromptHeight] = useState(160);
 
-        <div className="flex min-w-0 items-start gap-2">
-          {showPlus && (
-            <button
-              type="button"
-              onClick={() => setAssetsPickerOpen(true)}
-              aria-label="Add reference"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-card text-white transition-colors hover:bg-white/10"
-            >
-              <Plus className="size-3.5" />
-            </button>
+  const promptResize = usePromptSurfaceResize({
+    width: promptWidth,
+    height: promptHeight,
+    minWidth: 700,
+    maxWidth: 1240,
+    minHeight: 116,
+    maxHeight: 400,
+    defaultWidth: 1060,
+    defaultHeight: 160,
+    setWidth: setPromptWidth,
+    setHeight: setPromptHeight,
+    storageKey: "imagePromptDimensions",
+  });
+
+  return (
+    <div className="relative w-full">
+      <PromptResizeHandles
+        verticalHandleProps={promptResize.verticalHandleProps}
+        cornerHandleProps={promptResize.cornerHandleProps}
+        isResizing={promptResize.isResizing}
+        verticalLabel="Resize generate prompt height"
+        cornerLabel="Resize generate prompt width and height"
+      />
+      {/* Full frame glowing pulsing orange border shimmer overlay */}
+      <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30" />
+      <div
+        className="prompt-main-surface relative flex min-w-0 flex-1 items-stretch gap-3 rounded-[20px] p-3 overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
+          border: "1px solid rgba(217, 119, 87, 0.45)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
+      >
+        <div className="prompt-shimmer-light pointer-events-none absolute left-3 top-2.5 z-0 h-10 w-48 opacity-40" />
+        <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-between gap-2">
+          {attachments.length > 0 && (
+            <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
           )}
-          <div className="min-w-0 flex-1">
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-multiline="true"
-              aria-label="Prompt"
-              data-placeholder="Describe the scene you imagine"
-              onInput={(e) => onPromptChange(e.currentTarget.textContent ?? "")}
-              className="max-h-[80px] min-h-[24px] overflow-y-auto px-1 text-sm leading-5 text-white focus:outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)]"
-            />
+
+          <div className="flex min-w-0 items-start gap-2">
+            {showPlus && (
+              <div className="flex h-8 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112]">
+                <button
+                  type="button"
+                  onClick={() => setAssetsPickerOpen(true)}
+                  aria-label="Add reference"
+                  className="flex h-8 w-8 items-center justify-center rounded-l-lg text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <Plus className="size-4 text-white/80" />
+                </button>
+                <div className="h-4 w-px bg-white/20" />
+                <button
+                  type="button"
+                  onClick={() => setAssetsPickerOpen(true)}
+                  aria-label="Elements"
+                  className="flex h-8 w-8 items-center justify-center rounded-r-lg text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <span className="text-xs font-bold text-white/80">@</span>
+                </button>
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <textarea
+                value={prompt}
+                onChange={(e) => onPromptChange(e.target.value)}
+                placeholder="Describe the scene you imagine"
+                rows={1}
+                className="w-full resize-none overflow-hidden bg-transparent px-1 text-sm leading-5 text-white placeholder-neutral-500 focus:outline-none"
+              />
+            </div>
           </div>
-        </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           <CinemaModelSelector value={model} onChange={onModelChange} mode="image" />
@@ -379,27 +422,13 @@ export default function CinemaStudioImagePanel({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={isGenerating}
-        aria-label="Generate"
-        className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#D97757] focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-80"
-        style={{
-          width: 120,
-          height: 80,
-          background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
-          boxShadow:
-            "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #8A4A32, inset 0px -2px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
-          textShadow: "rgba(255,255,255,0.45) 0px 0px 8px",
-        }}
-      >
-        <span className="relative z-10 text-xs font-bold leading-[18px]">Generate</span>
-        <span className="relative z-10 flex h-4 items-center justify-center gap-0.5 text-[11px] font-semibold normal-case">
-          <span>✨</span>
-          {creditCost}
-        </span>
-      </button>
+      <GenerateButton
+        creditCost={creditCost}
+        onGenerate={onGenerate}
+        mode="image"
+        isLoading={isGenerating}
+      />
+      </div>
 
       <Cinema25AssetsPicker
         isOpen={assetsPickerOpen}

@@ -40,9 +40,9 @@ import BitrateControl from "./BitrateControl";
 import SeedControl from "./SeedControl";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 
-const DEFAULT_GENERATE_PROMPT_WIDTH = 960;
-const MAX_GENERATE_PROMPT_WIDTH = 1100;
-const DEFAULT_GENERATE_PROMPT_HEIGHT = 116;
+const DEFAULT_GENERATE_PROMPT_WIDTH = 1060;
+const MAX_GENERATE_PROMPT_WIDTH = 1240;
+const DEFAULT_GENERATE_PROMPT_HEIGHT = 140;
 const MAX_GENERATE_PROMPT_HEIGHT = 360;
 const GENERATE_VIEWPORT_GUTTER = 16;
 
@@ -222,9 +222,9 @@ function AutoSettingsToggle({
   );
 }
 
-/** Shared h-7 control-pill style. */
+/** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-7 items-center gap-1.5 rounded-lg bg-[rgba(255,255,255,0.05)] px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-[rgba(255,255,255,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
@@ -972,6 +972,8 @@ export default function PromptBar(props: PromptBarProps) {
           height: DEFAULT_GENERATE_PROMPT_HEIGHT,
         }}
       >
+      {/* Full frame glowing pulsing orange border shimmer overlay */}
+      <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30" />
       <div
         ref={composerRef}
         className={`absolute inset-x-0 bottom-0 flex min-w-0 items-stretch rounded-[24px] p-1 opacity-100 ${
@@ -981,17 +983,17 @@ export default function PromptBar(props: PromptBarProps) {
           minHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
           width: "100%",
           height: promptHeight,
-          background: "#141414",
-          border: "1px solid rgba(255,255,255,0.025)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025), 0 12px 26px rgba(0,0,0,0.45)",
+          background:
+            "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
+          border: "1px solid rgba(217, 119, 87, 0.45)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
         }}
       >
-        {/* Gray prompt surface — matches Higgsfield's chassis(flat, thin)
-            → surface(gradient) nesting; the flat outer frame above is the
-            near-black chassis, this is the lighter surface inside it. */}
         <div
-          className="prompt-main-surface relative flex min-w-0 flex-1 items-stretch gap-1 rounded-[20px] p-3"
-          style={PROMPT_BAR_SURFACE}
+          className="prompt-main-surface relative flex min-w-0 flex-1 items-stretch gap-1 rounded-[20px] p-3 overflow-hidden bg-transparent"
         >
         <PromptResizeHandles
           verticalHandleProps={promptResize.verticalHandleProps}
@@ -1031,7 +1033,7 @@ export default function PromptBar(props: PromptBarProps) {
             {/* Assets Picker Buttons - Cinema Studio 3.5 and 3.0 only */}
             {(isCinema35 || isCinema30) && (
               <>
-                <div className="flex items-center gap-0 rounded-lg bg-[rgba(255,255,255,0.05)]">
+                <div className="flex h-8 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112]">
                   <button
                     type="button"
                     onClick={() => {
@@ -1040,9 +1042,9 @@ export default function PromptBar(props: PromptBarProps) {
                     }}
                     aria-label="Add assets"
                     title="Add assets"
-                    className="flex h-7 w-7 items-center justify-center rounded-none text-neutral-400 hover:bg-white/10 transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-l-lg text-neutral-400 hover:bg-white/10 transition-colors"
                   >
-                    <Plus className="size-4" />
+                    <Plus className="size-4 text-white/80" />
                   </button>
 
                   <div className="h-4 w-px bg-white/20" />
@@ -1055,7 +1057,7 @@ export default function PromptBar(props: PromptBarProps) {
                     }}
                     aria-label="My elements"
                     title="My elements"
-                    className="flex h-7 min-h-7 min-w-7 w-7 shrink-0 items-center justify-center rounded-none bg-transparent p-0 text-font-primary shadow-none transition-colors hover:bg-neutral-primary-reverted-10 active:bg-neutral-primary-reverted-20"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-r-lg bg-transparent p-0 text-white/80 transition-colors hover:bg-white/10"
                   >
                     <svg
                       className="size-4 text-icon-primary"
@@ -1779,33 +1781,7 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Video Reference tile - Kling 3.0 Omni Edit + Kling O1 Video Edit */}
-            {isKling3OmniEdit && (
-              <FrameCard
-                variant="reference"
-                label="Video Reference"
-                value={omniEditVideoReference}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setOmniEditVideoReference(null)}
-              />
-            )}
-            {isKlingO1VideoEdit && (
-              <FrameCard
-                variant="reference"
-                label="Video Reference"
-                value={o1VideoEditVideoReference}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setO1VideoEditVideoReference(null)}
-              />
-            )}
+
 
             {/* Kling Motion Control (non-3.0) Specific Controls — isolated state from the LOCKED Kling 3.0 Motion Control */}
             {isKlingMotionControlNon3 && (
@@ -1839,594 +1815,474 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Start Frame + General preset tile - Kling 2.5 Turbo / Kling 2.1 */}
-            {isKling25TurboOr21 && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={klingLegacyStartFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKlingLegacyStartFrame(null)}
-                />
-                <FrameCard
-                  variant="general"
-                  label="General"
-                  value={null}
-                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
-                />
-              </>
-            )}
-
-            {/* Start + End Frame + General preset tile - Kling 2.1 Master */}
-            {isKling21Master && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={kling21MasterFrames.startFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKling21MasterFrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKling21MasterFrames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={kling21MasterFrames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKling21MasterFrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKling21MasterFrames((s) => ({ ...s, endFrame: null }))}
-                />
-                <FrameCard
-                  variant="general"
-                  label="General"
-                  value={null}
-                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
-                />
-              </>
-            )}
-
-            {/* Start/End Frame - Kling 3.0 Omni, Frames mode only (hidden in Elements mode) */}
-            {isKling3Omni && klingOmniMode === "frames" && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={klingOmniFrames.startFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKlingOmniFrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKlingOmniFrames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={klingOmniFrames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKlingOmniFrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKlingOmniFrames((s) => ({ ...s, endFrame: null }))}
-                />
-              </>
-            )}
-
-            {/* Start Frame + General preset tile - Kling 2.6 */}
-            {isKling2_6 && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={kling26StartFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKling26StartFrame(null)}
-                />
-                <FrameCard
-                  variant="general"
-                  label="General"
-                  value={null}
-                  onOpenPicker={() => {}}
-                />
-              </>
-            )}
-
-            {/* Start/End Frame - Kling O1 Video, Frames mode only (hidden in Elements mode) */}
-            {isKlingO1Video && klingO1Mode === "frames" && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={klingO1Frames.startFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKlingO1FrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKlingO1Frames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={klingO1Frames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKlingO1FrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKlingO1Frames((s) => ({ ...s, endFrame: null }))}
-                />
-              </>
-            )}
-
-            {/* Batch - Hidden for every Kling family model, Google Veo 3.1 Lite, Seedance 1.5 Pro,
-                and Minimax Hailuo 2.3 Fast/02/2.3 (no model list shows a batch stepper) */}
-            {!isKling3MotionControl &&
-              !isKling3 &&
-              !isKling3Turbo &&
-              !isVeo31Lite &&
-              !isKling3OmniEdit &&
-              !isKling3Omni &&
-              !isKling2_6 &&
-              !isKlingO1Video &&
-              !isKlingO1VideoEdit &&
-              !isKlingMotionControlNon3 &&
-              !isKling25TurboOr21 &&
-              !isKling21Master &&
-              !isOpenAISora &&
-              !isGrokImagine &&
-              !isHiggsfield &&
-              !isWan &&
-              !isSeedance15Pro &&
-              !isMinimaxSimplified &&
-              !isMinimax23PlainOnly && <BatchStepper value={batch} onChange={onBatchChange} />}
-
-            {isVideo &&
-              !isGeminiOmniFlash &&
-              !isKling3MotionControl &&
-              !isKling3Turbo &&
-              !isKling3OmniEdit &&
-              !isKlingO1Video &&
-              !isKlingO1VideoEdit &&
-              !isKlingMotionControlNon3 &&
-              !isOpenAISora &&
-              !isHappyHorse &&
-              !isGrokImagine &&
-              !isSeedance15Pro &&
-              !isMinimaxSimplified &&
-              !isMinimax23PlainOnly && (
-              <button
-                type="button"
-                onClick={() => {
-                  // Google Veo 3.1 Lite confirms before turning sound Off; every
-                  // other model (and Off -> On for Veo) toggles directly.
-                  if (isVeo31Lite && sound) {
-                    setSoundConfirmOpen(true);
-                  } else {
-                    onSoundChange(!sound);
-                  }
-                }}
-                aria-label="Toggle sound"
-                aria-pressed={sound}
-                className={`${PILL} ${
-                  sound ? "text-[#D97757]" : "text-neutral-400"
-                }`}
-              >
-                {sound ? (
-                  <Volume2 className="size-3.5" />
-                ) : (
-                  <VolumeX className="size-3.5" />
-                )}
-                {sound ? "On" : "Off"}
-              </button>
-            )}
-
-            {/* Fixed Lens toggle - Seedance 1.5 Pro only, replaces Batch + Sound in this slot */}
-            {isSeedance15Pro && (
-              <AutoSettingsToggle
-                checked={seedance15FixedLens}
-                onToggle={() => setSeedance15FixedLens((v) => !v)}
-                label="Fixed Lens"
-                wholeRowClickable
-              />
-            )}
-
-            {/* Enhance chip - Minimax Hailuo 2.3 Fast / 02 / 2.3 only, replaces
-                Aspect Ratio/Batch/Sound in this slot. Isolated per model id.
-                2.3 (plain) gets a dynamic "Enhance: On/Off" aria-label per
-                explicit request; 2.3 Fast/02 keep their original static label
-                unchanged. */}
-            {(isMinimaxSimplified || isMinimax23PlainOnly) && (
-              <button
-                type="button"
-                onClick={() =>
-                  setMinimaxEnhance((s) => ({
-                    ...s,
-                    [minimaxEnhanceModelKey]: !s[minimaxEnhanceModelKey],
-                  }))
-                }
-                aria-label={
-                  isMinimax23PlainOnly
-                    ? `Enhance: ${minimaxEnhance[minimaxEnhanceModelKey] ? "On" : "Off"}`
-                    : "Toggle enhance"
-                }
-                aria-pressed={minimaxEnhance[minimaxEnhanceModelKey]}
-                className={`${PILL} ${
-                  minimaxEnhance[minimaxEnhanceModelKey] ? "text-[#D97757]" : "text-neutral-400"
-                }`}
-              >
-                <EnhanceIcon />
-                {minimaxEnhance[minimaxEnhanceModelKey] ? "On" : "Off"}
-              </button>
-            )}
-
-            {/* Audio-Voice chip - Kling 2.6 only, separate from Sound per live reference capture */}
-            {isKling2_6 && (
-              <button
-                type="button"
-                onClick={() => setKling26AudioVoice((v) => !v)}
-                aria-label="Toggle audio voice"
-                aria-pressed={kling26AudioVoice}
-                className={`${PILL} ${kling26AudioVoice ? "text-[#D97757]" : "text-neutral-400"}`}
-              >
-                {kling26AudioVoice ? (
-                  <Volume2 className="size-3.5" />
-                ) : (
-                  <VolumeX className="size-3.5" />
-                )}
-                {kling26AudioVoice ? "On" : "Off"}
-              </button>
-            )}
-
-            {/* Start/End Frame - Google Veo 3.1 Lite only, placed after Sound */}
-            {isVeo31Lite && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={veo31Frames.startFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setVeo31FrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setVeo31Frames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={veo31Frames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setVeo31FrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setVeo31Frames((s) => ({ ...s, endFrame: null }))}
-                />
-              </>
-            )}
-
-            {/* Start Frame - OpenAI Sora 2 family only */}
-            {isOpenAISora && (
-              <FrameCard
-                label="Start Frame"
-                value={soraStartFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setSoraStartFrame(null)}
-              />
-            )}
-
-            {/* Start Frame - HappyHorse only (Optional) */}
-            {isHappyHorse && (
-              <FrameCard
-                label="Start Frame"
-                value={happyHorseStartFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setHappyHorseStartFrame(null)}
-              />
-            )}
-
-            {/* Start Frame - Grok Imagine family only (mandatory, no "Optional" label) */}
-            {isGrokImagine && (
-              <FrameCard
-                label="Start Frame"
-                value={grokStartFrame}
-                optional={false}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setGrokStartFrame(null)}
-              />
-            )}
-
-            {/* Start Frame (mandatory) + End Frame (Optional) + General preset tile - Higgsfield family only */}
-            {isHiggsfield && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={higgsfieldFrames.startFrame}
-                  optional={false}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setHiggsfieldFrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setHiggsfieldFrames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={higgsfieldFrames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setHiggsfieldFrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setHiggsfieldFrames((s) => ({ ...s, endFrame: null }))}
-                />
-                <FrameCard
-                  variant="general"
-                  label="General"
-                  value={null}
-                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
-                />
-              </>
-            )}
-
-            {/* Start/End Frame - Wan family only (both Optional) */}
-            {isWan && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={wanFrames.startFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setWanFrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setWanFrames((s) => ({ ...s, startFrame: null }))}
-                />
-                <FrameCard
-                  label="End Frame"
-                  value={wanFrames.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setWanFrameMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setWanFrames((s) => ({ ...s, endFrame: null }))}
-                />
-              </>
-            )}
-
-            {/* Start/End Frame - Minimax Hailuo family only, placed after Sound.
-                The "2.3" family has Start Frame only (no End Frame); the "02"
-                family has both. Start Frame is mandatory (no "Optional" label)
-                except for "minimax-2.3" specifically — all per live click-audit. */}
-            {isMinimaxHailuo && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={minimaxFrames.startFrame}
-                  optional={model === "minimax-2.3" || isMinimax23FastOnly}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setMinimaxFrameMode("startFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setMinimaxFrames((s) => ({ ...s, startFrame: null }))}
-                />
-                {isMinimax02Family && (
-                  <FrameCard
-                    label="End Frame"
-                    value={minimaxFrames.endFrame}
-                    onOpenPicker={() => {
-                      setActivePromptPopover(null);
-                      setMinimaxFrameMode("endFrame");
-                      setAssetsPickerTab("uploads");
-                      setAssetsPickerOpen(true);
-                    }}
-                    onRemove={() => setMinimaxFrames((s) => ({ ...s, endFrame: null }))}
-                  />
-                )}
-                <FrameCard
-                  variant="general"
-                  label="General"
-                  value={null}
-                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
-                />
-              </>
-            )}
-
-            {/* Start Frame - Kling 3.0 Turbo only, moved to the far right (next to Generate) per explicit request */}
-            {isKling3Turbo && (
-              <FrameCard
-                label="Start Frame"
-                value={kling3TurboSettings.startFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() =>
-                  onKling3TurboSettingsChange((s) => ({ ...s, startFrame: null }))
-                }
-              />
-            )}
-
-            {/* Cinema Studio 2.5's Start/End Frame are NOT here — they live in
-                the far-right action group next to Generate (see below), matching
-                the Higgsfield reference. */}
-
-            {/* Start Frame + General - Seedance Pro Fast only. Mutually exclusive
-                overlays: opening one explicitly closes the other. */}
-            {isSeedanceProFast && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={seedanceProFastStartFrame}
-                  optional={false}
-                  ariaHaspopup="dialog"
-                  ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setMotionPresetsPanelOpen(false);
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setSeedanceProFastStartFrame(null)}
-                />
-                <FrameCard
-                  variant="general"
-                  label={seedanceProFastPreset}
-                  value={null}
-                  ariaHaspopup="dialog"
-                  ariaExpanded={motionPresetsPanelOpen}
-                  onOpenPicker={() => {
-                    setAssetsPickerOpen(false);
-                    setMotionPresetsPanelOpen(true);
-                  }}
-                />
-              </>
-            )}
-
-            {/* Start Frame + General - Seedance Pro and Seedance 1.5 Pro only
-                (never Seedance Pro Fast, handled separately above). State is
-                keyed per exact model id so the two never share a selection. */}
-            {isSeedanceProOrPro15 && (
-              <>
-                <FrameCard
-                  label="Start Frame"
-                  value={seedanceProPanels[seedanceProModelKey].startFrame}
-                  optional={false}
-                  ariaHaspopup="dialog"
-                  ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setMotionPresetsPanelOpen(false);
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() =>
-                    setSeedanceProPanels((s) => ({
-                      ...s,
-                      [seedanceProModelKey]: { ...s[seedanceProModelKey], startFrame: null },
-                    }))
-                  }
-                />
-                <FrameCard
-                  variant="general"
-                  label={seedanceProPanels[seedanceProModelKey].preset}
-                  value={null}
-                  ariaHaspopup="dialog"
-                  ariaExpanded={motionPresetsPanelOpen}
-                  onOpenPicker={() => {
-                    setAssetsPickerOpen(false);
-                    setMotionPresetsPanelOpen(true);
-                  }}
-                />
-              </>
-            )}
           </div>
         </div>
 
         {/* C — Right action group.
-            Cinema Studio 2.5 and Kling 3.0 keep their frame cards immediately
-            to the left of Generate. The group is shrink-0 so Generate stays
-            pinned to the far-right edge while the left controls flex. */}
-        {isCinema25 || isKling3 ? (
-          <div className="flex h-20 shrink-0 items-stretch gap-1.5 self-end">
-            {isCinema25 ? (
-              <>
+            All frame cards across all models live here, immediately to the
+            left of GenerateButton. The group is shrink-0 and self-end so Generate
+            and FrameCards stay pinned to the far-right edge without overlapping. */}
+        <div className="flex h-[96px] shrink-0 items-stretch gap-2 self-end">
+          {/* Cinema Studio 2.5 */}
+          {isCinema25 && (
+            <>
+              <FrameCard
+                variant="cinema25"
+                label="Start Frame"
+                value={cinema25References[1] ?? null}
+                optional={false}
+                onOpenPicker={() => openCinema25Picker("startFrame")}
+                onRemove={() => onCinema25AssignReference(1, null)}
+              />
+              <FrameCard
+                variant="cinema25"
+                label="End Frame"
+                value={cinema25References[2] ?? null}
+                optional={false}
+                onOpenPicker={() => openCinema25Picker("endFrame")}
+                onRemove={() => onCinema25AssignReference(2, null)}
+              />
+            </>
+          )}
+
+          {/* Kling 3.0 */}
+          {isKling3 && (
+            <>
+              <FrameCard
+                variant="cinema25"
+                label="Start Frame"
+                value={kling3Extras.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKling3ReferenceMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKling3Extras((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                variant="cinema25"
+                label="End Frame"
+                value={kling3Extras.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKling3ReferenceMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKling3Extras((s) => ({ ...s, endFrame: null }))}
+              />
+            </>
+          )}
+
+          {/* Minimax Hailuo */}
+          {isMinimaxHailuo && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={minimaxFrames.startFrame}
+                optional={model === "minimax-2.3" || isMinimax23FastOnly}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setMinimaxFrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setMinimaxFrames((s) => ({ ...s, startFrame: null }))}
+              />
+              {isMinimax02Family && (
                 <FrameCard
-                  variant="cinema25"
-                  label="Start Frame"
-                  value={cinema25References[1] ?? null}
-                  optional={false}
-                  onOpenPicker={() => openCinema25Picker("startFrame")}
-                  onRemove={() => onCinema25AssignReference(1, null)}
-                />
-                <FrameCard
-                  variant="cinema25"
                   label="End Frame"
-                  value={cinema25References[2] ?? null}
-                  optional={false}
-                  onOpenPicker={() => openCinema25Picker("endFrame")}
-                  onRemove={() => onCinema25AssignReference(2, null)}
-                />
-              </>
-            ) : (
-              <>
-                <FrameCard
-                  variant="cinema25"
-                  label="Start Frame"
-                  value={kling3Extras.startFrame}
+                  value={minimaxFrames.endFrame}
                   onOpenPicker={() => {
                     setActivePromptPopover(null);
-                    setKling3ReferenceMode("startFrame");
+                    setMinimaxFrameMode("endFrame");
                     setAssetsPickerTab("uploads");
                     setAssetsPickerOpen(true);
                   }}
-                  onRemove={() => setKling3Extras((s) => ({ ...s, startFrame: null }))}
+                  onRemove={() => setMinimaxFrames((s) => ({ ...s, endFrame: null }))}
                 />
-                <FrameCard
-                  variant="cinema25"
-                  label="End Frame"
-                  value={kling3Extras.endFrame}
-                  onOpenPicker={() => {
-                    setActivePromptPopover(null);
-                    setKling3ReferenceMode("endFrame");
-                    setAssetsPickerTab("uploads");
-                    setAssetsPickerOpen(true);
-                  }}
-                  onRemove={() => setKling3Extras((s) => ({ ...s, endFrame: null }))}
-                />
-              </>
-            )}
-            <GenerateButton
-              creditCost={creditCost}
-              onGenerate={onGenerate}
-              mode={mode}
-              isLoading={props.isGenerating}
-              accent={isCinema25 ? "yellow" : undefined}
+              )}
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* OpenAI Sora 2 */}
+          {isOpenAISora && (
+            <FrameCard
+              label="Start Frame"
+              value={soraStartFrame}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setSoraStartFrame(null)}
             />
-          </div>
-        ) : (
+          )}
+
+          {/* Kling 2.5 Turbo / Kling 2.1 */}
+          {isKling25TurboOr21 && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={klingLegacyStartFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKlingLegacyStartFrame(null)}
+              />
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Kling 2.1 Master */}
+          {isKling21Master && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={kling21MasterFrames.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKling21MasterFrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKling21MasterFrames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={kling21MasterFrames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKling21MasterFrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKling21MasterFrames((s) => ({ ...s, endFrame: null }))}
+              />
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Kling 3.0 Omni (Frames mode) */}
+          {isKling3Omni && klingOmniMode === "frames" && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={klingOmniFrames.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKlingOmniFrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKlingOmniFrames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={klingOmniFrames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKlingOmniFrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKlingOmniFrames((s) => ({ ...s, endFrame: null }))}
+              />
+            </>
+          )}
+
+          {/* Kling 3.0 Omni Edit / Kling O1 Video Edit */}
+          {isKling3OmniEdit && (
+            <FrameCard
+              variant="reference"
+              label="Video Reference"
+              value={omniEditVideoReference}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setOmniEditVideoReference(null)}
+            />
+          )}
+          {isKlingO1VideoEdit && (
+            <FrameCard
+              variant="reference"
+              label="Video Reference"
+              value={o1VideoEditVideoReference}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setO1VideoEditVideoReference(null)}
+            />
+          )}
+
+          {/* Kling O1 Video */}
+          {isKlingO1Video && klingO1Mode === "frames" && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={klingO1Frames.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKlingO1FrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKlingO1Frames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={klingO1Frames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setKlingO1FrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setKlingO1Frames((s) => ({ ...s, endFrame: null }))}
+              />
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Google Veo 3.1 Lite */}
+          {isVeo31Lite && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={veo31Frames.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setVeo31FrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setVeo31Frames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={veo31Frames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setVeo31FrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setVeo31Frames((s) => ({ ...s, endFrame: null }))}
+              />
+            </>
+          )}
+
+          {/* HappyHorse */}
+          {isHappyHorse && (
+            <FrameCard
+              label="Start Frame"
+              value={happyHorseStartFrame}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setHappyHorseStartFrame(null)}
+            />
+          )}
+
+          {/* Grok Imagine */}
+          {isGrokImagine && (
+            <FrameCard
+              label="Start Frame"
+              value={grokStartFrame}
+              optional={false}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setGrokStartFrame(null)}
+            />
+          )}
+
+          {/* Higgsfield */}
+          {isHiggsfield && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={higgsfieldFrames.startFrame}
+                optional={false}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setHiggsfieldFrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setHiggsfieldFrames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={higgsfieldFrames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setHiggsfieldFrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setHiggsfieldFrames((s) => ({ ...s, endFrame: null }))}
+              />
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Wan */}
+          {isWan && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={wanFrames.startFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setWanFrameMode("startFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setWanFrames((s) => ({ ...s, startFrame: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={wanFrames.endFrame}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setWanFrameMode("endFrame");
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setWanFrames((s) => ({ ...s, endFrame: null }))}
+              />
+            </>
+          )}
+
+          {/* Kling 3.0 Turbo */}
+          {isKling3Turbo && (
+            <FrameCard
+              label="Start Frame"
+              value={kling3TurboSettings.startFrame}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() =>
+                onKling3TurboSettingsChange((s) => ({ ...s, startFrame: null }))
+              }
+            />
+          )}
+
+          {/* Seedance Pro Fast */}
+          {isSeedanceProFast && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={seedanceProFastStartFrame}
+                optional={false}
+                ariaHaspopup="dialog"
+                ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setMotionPresetsPanelOpen(false);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setSeedanceProFastStartFrame(null)}
+              />
+              <FrameCard
+                variant="general"
+                label={seedanceProFastPreset}
+                value={null}
+                ariaHaspopup="dialog"
+                ariaExpanded={motionPresetsPanelOpen}
+                onOpenPicker={() => {
+                  setAssetsPickerOpen(false);
+                  setMotionPresetsPanelOpen(true);
+                }}
+              />
+            </>
+          )}
+
+          {/* Seedance Pro / Pro 1.5 */}
+          {isSeedanceProOrPro15 && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={seedanceProPanels[seedanceProModelKey].startFrame}
+                optional={false}
+                ariaHaspopup="dialog"
+                ariaExpanded={assetsPickerOpen && assetsPickerTab === "uploads"}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setMotionPresetsPanelOpen(false);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() =>
+                  setSeedanceProPanels((s) => ({
+                    ...s,
+                    [seedanceProModelKey]: { ...s[seedanceProModelKey], startFrame: null },
+                  }))
+                }
+              />
+              <FrameCard
+                variant="general"
+                label={seedanceProPanels[seedanceProModelKey].preset}
+                value={null}
+                ariaHaspopup="dialog"
+                ariaExpanded={motionPresetsPanelOpen}
+                onOpenPicker={() => {
+                  setAssetsPickerOpen(false);
+                  setMotionPresetsPanelOpen(true);
+                }}
+              />
+            </>
+          )}
+
           <GenerateButton
             creditCost={creditCost}
             onGenerate={onGenerate}
             mode={mode}
             isLoading={props.isGenerating}
+            accent={isCinema25 ? "yellow" : undefined}
           />
-        )}
+        </div>
         </div>
       </div>
       </div>

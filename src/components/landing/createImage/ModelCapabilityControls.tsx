@@ -27,11 +27,11 @@ export interface PopoverCoordination {
 
 /** Shared translucent dark popover surface matching the compact control language. */
 const POPOVER_SURFACE =
-  "rounded-2xl border border-[rgba(255,255,255,0.05)] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_12px_20px_rgba(0,0,0,0.24)] backdrop-blur-[40px]";
+  "rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200";
 
-/** 28px-tall compact trigger shared by every model-specific control. */
+/** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
-  "flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-white/5 px-2 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 active:bg-white/20";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boolean }) {
   if (ratio.value === "Auto") {

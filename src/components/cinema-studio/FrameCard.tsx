@@ -64,7 +64,7 @@ function ExactFrameSurface({
       aria-label={label}
       aria-haspopup={ariaHaspopup}
       aria-expanded={ariaExpanded}
-      className="size-[80px] rounded-xl p-1.5 flex flex-col items-start justify-between overflow-clip relative cursor-pointer group shrink-0"
+      className="h-[96px] w-[96px] rounded-xl p-2 flex flex-col items-start justify-between overflow-clip relative cursor-pointer group shrink-0"
       style={{
         background: value
           ? `url(${value}) center / cover no-repeat`
@@ -119,7 +119,7 @@ export default function FrameCard({
         aria-label={label}
         aria-haspopup={ariaHaspopup}
         aria-expanded={ariaExpanded}
-        className="group relative flex h-[80px] w-[80px] shrink-0 flex-col items-start justify-between overflow-hidden rounded-xl bg-[#202020] p-1.5"
+        className="group relative flex h-[96px] w-[96px] shrink-0 flex-col items-start justify-between overflow-hidden rounded-xl bg-[#202020] p-2"
         style={{
           boxShadow:
             "10px 34px 24px 0px rgba(0,0,0,0.08), 8px 21px 6px 0px rgba(0,0,0,0.01), 3px 7px 5px 0px rgba(0,0,0,0.12), 1px 3px 4px 0px rgba(0,0,0,0.32), 0px 1px 2px 0px rgba(0,0,0,0.32), 0px 0px 0px 1px rgba(255,255,255,0.04) inset",
@@ -159,7 +159,7 @@ export default function FrameCard({
           if (e.key === "Enter" || e.key === " ") onOpenPicker();
         }}
         aria-label={label}
-        className="gen-panel-reference-element-button group relative flex h-[80px] w-[80px] shrink-0 cursor-pointer flex-col items-start justify-between overflow-hidden rounded-xl p-1.5"
+        className="gen-panel-reference-element-button group relative flex h-[96px] w-[96px] shrink-0 cursor-pointer flex-col items-start justify-between overflow-hidden rounded-xl p-2"
         style={{
           backgroundImage: value
             ? `url(${value})`

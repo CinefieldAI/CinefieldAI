@@ -95,39 +95,47 @@ export default function AssetsPickerModal({
         className="relative h-[600px] w-[800px] rounded-[24px] border border-white/10 bg-[rgba(24,26,30,0.95)] shadow-2xl backdrop-blur-[24px]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 rounded-lg p-2 text-neutral-400 hover:bg-white/10 hover:text-white transition-colors"
-          aria-label="Close assets picker"
-        >
-          <X className="size-5" />
-        </button>
-
-        {mode !== "default" && (
-          <div className="absolute left-6 top-4 z-10 text-xs font-medium text-[#00e5ff]">
-            {MODE_LABELS[mode]}
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex border-b border-white/10">
-          {(mode === "startFrame" || mode === "endFrame" ? TABS.filter(t => t.id === "uploads" || t.id === "imageGenerations" || t.id === "liked") : TABS).map((tab) => (
+        {/* Header: mode badge + tabs + close */}
+        <div className="flex flex-col border-b border-white/10 px-5 pt-3">
+          <div className="flex items-center justify-between pb-1.5">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-white">
+                Assets Library
+              </span>
+              {mode !== "default" && (
+                <span className="rounded-full bg-[#D97757]/20 border border-[#D97757]/40 px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-[#D97757]">
+                  {MODE_LABELS[mode]}
+                </span>
+              )}
+            </div>
             <button
-              key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "border-b-2 border-[#00e5ff] text-[#00e5ff]"
-                  : "text-neutral-400 hover:text-white"
-              }`}
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-neutral-400 hover:bg-white/10 hover:text-white transition-colors"
+              aria-label="Close assets picker"
             >
-              {tab.icon}
-              {tab.label}
+              <X className="size-5" />
             </button>
-          ))}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex items-center gap-1">
+            {(mode === "startFrame" || mode === "endFrame" ? TABS.filter(t => t.id === "uploads" || t.id === "imageGenerations" || t.id === "liked") : TABS).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  activeTab === tab.id
+                    ? "border-b-2 border-[#D97757] text-[#D97757] font-bold"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content */}

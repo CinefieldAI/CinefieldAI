@@ -15,6 +15,7 @@ import CameraSettings from "./CameraSettings";
 import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import CinemaStudio25DirectorPanel from "./CinemaStudio25DirectorPanel";
 import DockedPanelContainer from "./DockedPanelContainer";
+import CinemaStudioImagePanel from "./CinemaStudioImagePanel";
 import ImageForm from "@/components/image-tools/ImageForm";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
@@ -247,6 +248,17 @@ export default function CinemaStudioWorkspace() {
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
         <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
 
+        {/* Hero Headline Overlay matching reference screenshot exactly */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-32 md:top-36 z-30 flex justify-center px-4"
+          style={{ opacity: 1, transition: "opacity 300ms ease-out" }}
+        >
+          <h1 className="text-center text-2xl sm:text-3xl md:text-[34px] font-black uppercase leading-tight tracking-wider text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] [font-feature-settings:'ss04'_1]">
+            <span className="block">Direct anything</span>
+            <span className="block">you imagine</span>
+          </h1>
+        </div>
+
         {/* Mute/Unmute audio button in top right corner */}
         <button
           type="button"
@@ -295,12 +307,40 @@ export default function CinemaStudioWorkspace() {
 
             {mode === "image" ? (
               <div key="image-mode-container" className="flex min-w-0 flex-1 flex-col transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-2">
-                <ImageForm
-                  embedded
-                  externalModel={imageModel}
-                  onExternalModelChange={setImageModel}
-                  isDrawOpen={isDrawOpen}
-                  onDrawOpen={setIsDrawOpen}
+                <PromptBar
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  model={imageModel}
+                  onModelChange={setImageModel}
+                  mode="image"
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
+                  resolution={resolution}
+                  onResolutionChange={setResolution}
+                  duration={duration}
+                  durations={[5, 10]}
+                  onDurationChange={setDuration}
+                  batch={batch}
+                  onBatchChange={setBatch}
+                  sound={sound}
+                  onSoundChange={setSound}
+                  creditCost={10}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  klingAdvancedPrompt={klingAdvancedPrompt}
+                  onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+                  kling3TurboSettings={kling3TurboSettings}
+                  onKling3TurboSettingsChange={setKling3TurboSettings}
+                  cinema25References={cinema25References}
+                  onCinema25AssignReference={(slotIndex, url) =>
+                    setCinema25References((s) => {
+                      const next = [...s];
+                      next[slotIndex] = url;
+                      return next;
+                    })
+                  }
+                  cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+                  onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
                 />
               </div>
             ) : isCinema25 ? (

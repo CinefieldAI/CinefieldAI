@@ -49,8 +49,8 @@ export default function GenerateButton({
       aria-label="Generate"
       className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#D97757] disabled:cursor-not-allowed disabled:opacity-40"
       style={{
-        width: 120,
-        height: 80,
+        width: 135,
+        height: 96,
         background,
         boxShadow,
         textShadow: "rgba(255,255,255,0.45) 0px 0px 8px",

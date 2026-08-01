@@ -91,6 +91,7 @@ export interface ModelInfo {
   submodels?: ModelInfo[];
   /** Per-model icon (LucideIcon or image path string). */
   icon?: LucideIcon | string;
+  isAdded?: boolean;
 }
 
 export interface ModelCategory {
