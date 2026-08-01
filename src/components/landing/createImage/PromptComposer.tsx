@@ -473,12 +473,10 @@ export default function PromptComposer({
         </div>
       )}
 
-      {/* Two-column layout: left = editor + controls, right = Generate */}
-      <div className="grid grid-cols-[1fr_144px] items-stretch gap-4">
-        {/* LEFT */}
-        <div className="flex min-w-0 flex-col gap-3">
-          {/* Top row: upload + prompt editor */}
-          <div className="flex items-start gap-2.5">
+      {/* Flex column: prompt editor + control row */}
+      <div className="flex min-w-0 flex-col gap-3">
+        {/* Prompt editor row */}
+        <div className="flex items-start gap-2.5">
             {!capabilities && selectedModel !== "Z-Image" && (
               <button
                 type="button"
@@ -532,13 +530,14 @@ export default function PromptComposer({
             </div>
           </div>
 
-          {/* Bottom tools row — premium pill chips, aligned with the prompt text.
-              ModelSelector is kept OUTSIDE the horizontal-scroll container so its
-              upward absolute dropdown is not clipped by overflow-x/overflow-y.
-              Rendered before capability check so component instance persists across model changes. */}
-          <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
-          {capabilities ? (
-            <div className="flex min-w-0 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Control row: Cinema Studio style — ModelSelector + capability-driven controls on left, Generate on right */}
+        <div className="flex items-center justify-between gap-1">
+          {/* Left side: ModelSelector + capability-driven controls */}
+          <div className="prompt-control-row flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+            <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
+
+            {capabilities ? (
+              <>
               {selectedModel === "GPT Image 2" && (
                 <>
                   {capabilities.assetUpload && (
@@ -996,9 +995,9 @@ export default function PromptComposer({
                   <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
                 </>
               )}
-            </div>
-          ) : (
-            <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              </>
+            ) : (
+              <>
                 <GenerationModeSelector value={genMode} onChange={setGenMode} />
                 <QualitySelector
                   value={quality}
@@ -1040,37 +1039,31 @@ export default function PromptComposer({
                   <Wand2 />
                   Magic Prompt
                 </button>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT: Generate */}
-        <button
-          type="submit"
-          disabled={isGenerating}
-          className="flex h-full min-h-[104px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[22px] bg-[#D97757] px-3 text-white shadow-[0_18px_44px_rgba(217,119,87,0.32),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-[180ms] ease-out hover:bg-[#e08a6c] hover:brightness-105 hover:shadow-[0_22px_56px_rgba(217,119,87,0.45),inset_0_1px_0_rgba(255,255,255,0.22)] active:scale-[0.98] active:bg-[#B85A3E] active:duration-100 disabled:cursor-not-allowed disabled:opacity-80"
-        >
-          <span
-            key={isGenerating ? "loading" : "idle"}
-            className="flex animate-in flex-col items-center gap-1 fade-in-0 duration-200"
-          >
-            {isGenerating ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Sparkles className="h-5 w-5" />
+              </>
             )}
-            <span style={{ fontSize: "14px", fontWeight: 700 }}>
-              {isGenerating ? "Generating…" : "Generate"}
-            </span>
-          </span>
-          <span
-            className="flex items-center gap-1 text-white/80"
-            style={{ fontSize: "11px" }}
+          </div>
+
+          {/* Right side: Generate button at h-8 matching control row */}
+          <button
+            type="submit"
+            disabled={isGenerating}
+            className="flex h-8 w-auto shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#D97757] px-2.5 text-xs font-semibold text-white transition-all duration-[180ms] ease-out hover:bg-[#e08a6c] hover:brightness-105 active:scale-[0.98] active:bg-[#B85A3E] active:duration-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Gem className="h-3 w-3" />
-            {outputCount} credits
-          </span>
-        </button>
+            <span
+              key={isGenerating ? "loading" : "idle"}
+              className="flex animate-in items-center gap-1 fade-in-0 duration-200"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              <span style={{ fontSize: "12px", fontWeight: 600 }}>
+                {isGenerating ? "Generating…" : "Generate"}
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
 
       <Cinema25AssetsPicker
