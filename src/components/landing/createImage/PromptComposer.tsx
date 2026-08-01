@@ -409,11 +409,17 @@ export default function PromptComposer({
         width: "min(1120px, calc(100vw - 40px))",
         minHeight: "148px",
         zIndex: 80,
-        borderRadius: "30px",
-        padding: "20px 22px",
-        ...PROMPT_BAR_SURFACE,
+        borderRadius: "24px",
+        padding: "16px",
+        background:
+          "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
+        border: "1px solid rgba(217, 119, 87, 0.45)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
       }}
-      className="flex flex-col justify-center transition-shadow duration-[180ms] ease-out focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-1px_0_rgba(0,0,0,0.55),inset_0_0_0_1px_rgba(0,0,0,0.35),inset_0_10px_18px_-12px_rgba(0,0,0,0.55),0_14px_30px_rgba(0,0,0,0.55),0_0_0_1px_rgba(0,229,255,0.35)]"
+      className="flex flex-col justify-center transition-shadow duration-[180ms] ease-out"
     >
       <input
         ref={fileInputRef}
