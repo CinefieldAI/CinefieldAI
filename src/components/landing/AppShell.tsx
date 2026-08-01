@@ -10,10 +10,11 @@ import type { AudioMode } from "@/components/landing/audioMenuData";
 
 interface AppShellProps {
   initialView?: ActiveView;
+  initialPanel?: PanelKey | null;
 }
 
-export default function AppShell({ initialView = "default" }: AppShellProps) {
-  const [activePanel, setActivePanel] = useState<PanelKey | null>(null);
+export default function AppShell({ initialView = "default", initialPanel = null }: AppShellProps) {
+  const [activePanel, setActivePanel] = useState<PanelKey | null>(initialPanel);
   const [activeView, setActiveView] = useState<ActiveView>(initialView);
 
   // Shared Audio mode/model — single source of truth for both the top-nav
