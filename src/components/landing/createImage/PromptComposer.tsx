@@ -538,7 +538,7 @@ export default function PromptComposer({
 
             {capabilities ? (
               <>
-              {selectedModel === "GPT Image 2" && (
+                {selectedModel === "GPT Image 2" && (
                 <>
                   {capabilities.assetUpload && (
                     <AssetsButtonGroup
@@ -995,7 +995,6 @@ export default function PromptComposer({
                   <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
                 </>
               )}
-              </>
             ) : (
               <>
                 <GenerationModeSelector value={genMode} onChange={setGenMode} />

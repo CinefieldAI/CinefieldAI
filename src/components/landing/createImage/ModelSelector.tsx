@@ -130,66 +130,96 @@ export default function ModelSelector({ selected, onSelect, size = "compact" }: 
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
             style={{
-              width: "420px",
-              maxWidth: "calc(100vw - 40px)",
-              maxHeight: "520px",
+              width: "400px",
+              maxWidth: "calc(100vw - 32px)",
+              height: "100vh",
+              maxHeight: "min(40rem, calc(100vh - 32px))",
               marginBottom: "10px",
-              borderRadius: "24px",
-              padding: "10px",
-              background: "rgba(14,14,18,0.94)",
-              backdropFilter: "blur(16px) saturate(130%)",
-              WebkitBackdropFilter: "blur(16px) saturate(130%)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.65)",
-              zIndex: 9999,
+              borderRadius: "16px",
+              background: "rgba(28, 30, 32, 0.95)",
+              backdropFilter: "blur(32px)",
+              WebkitBackdropFilter: "blur(32px)",
+              border: "1px solid rgba(217, 217, 217, 0.04)",
+              boxShadow: "none",
+              zIndex: 100000,
             }}
-            className="absolute bottom-full left-0 overflow-y-auto"
+            className="absolute bottom-full left-0 flex flex-col overflow-hidden"
           >
-            <p
+            {/* Top glow */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute top-0 left-0 w-full h-[37px] z-0"
               style={{
-                fontSize: "11px",
-                letterSpacing: "0.08em",
-                color: "rgba(255,255,255,0.42)",
-                padding: "8px 10px",
+                borderRadius: "317px",
+                background: "rgba(139, 213, 244, 0.24)",
+                filter: "blur(50px)",
               }}
-              className="flex items-center gap-1.5 uppercase"
-            >
-              <Sparkles className="h-3 w-3 text-magenta-400" />
-              Featured Models
-            </p>
-            <div className="flex flex-col gap-1">
-              {FEATURED_MODELS.map((model) => (
-                <ModelItem
-                  key={model.name}
-                  model={model}
-                  isSelected={selected === model.name}
-                  onSelect={handleSelect}
-                />
-              ))}
-            </div>
-
-            <Separator className="my-2" />
-
-            <p
+            />
+            {/* Lower glow */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-0 w-full h-[37px] z-0"
               style={{
-                fontSize: "11px",
-                letterSpacing: "0.08em",
-                color: "rgba(255,255,255,0.42)",
-                padding: "8px 10px",
+                bottom: "35%",
+                borderRadius: "317px",
+                background: "rgba(139, 213, 244, 0.24)",
+                filter: "blur(50px)",
               }}
-              className="uppercase"
-            >
-              All Models
-            </p>
-            <div className="flex flex-col gap-1">
-              {ALL_MODELS.map((model) => (
-                <ModelItem
-                  key={`${model.name}-${model.description}`}
-                  model={model}
-                  isSelected={selected === model.name}
-                  onSelect={handleSelect}
-                />
-              ))}
+            />
+
+            {/* Content wrapper */}
+            <div className="relative z-10 flex flex-col min-h-0 flex-1">
+              {/* Featured Models heading */}
+              <div className="px-3 py-2 min-h-[41px] flex items-center border-b border-b-[rgba(217,217,217,0.04)]">
+                <p
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    color: "rgba(255,255,255,0.6)",
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Featured Models
+                </p>
+              </div>
+
+              {/* Featured models list */}
+              <div className="flex flex-col gap-0 min-h-0 overflow-y-auto hide-scrollbar">
+                {FEATURED_MODELS.map((model) => (
+                  <ModelItem
+                    key={model.name}
+                    model={model}
+                    isSelected={selected === model.name}
+                    onSelect={handleSelect}
+                  />
+                ))}
+              </div>
+
+              {/* All Models heading */}
+              <div className="px-3 py-2 min-h-[41px] flex items-center border-t border-b border-b-[rgba(217,217,217,0.04)] border-t-[rgba(217,217,217,0.04)]">
+                <p
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    color: "rgba(255,255,255,0.6)",
+                  }}
+                >
+                  All Models
+                </p>
+              </div>
+
+              {/* All models list */}
+              <div className="flex flex-col gap-0 min-h-0 overflow-y-auto hide-scrollbar flex-1">
+                {ALL_MODELS.map((model) => (
+                  <ModelItem
+                    key={`${model.name}-${model.description}`}
+                    model={model}
+                    isSelected={selected === model.name}
+                    onSelect={handleSelect}
+                  />
+                ))}
+              </div>
             </div>
           </motion.div>
         )}

@@ -16,44 +16,62 @@ export default function ModelItem({ model, isSelected, onSelect }: ModelItemProp
     <button
       type="button"
       onClick={() => onSelect(model.name)}
-      className={`group flex min-h-[48px] w-full items-center gap-3 rounded-[14px] border px-2.5 text-left transition-colors ${
-        isSelected
-          ? "border-[rgba(0,229,255,0.45)] bg-[rgba(0,229,255,0.12)]"
-          : "border-transparent hover:bg-[rgba(255,255,255,0.065)]"
-      }`}
+      className="group w-full flex items-center px-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start"
     >
       {model.icon ? (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/5 mr-2 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
           <Image
             src={model.icon}
             alt={model.name}
             width={40}
             height={40}
-            className="h-full w-full object-cover"
+            className="size-4 object-cover"
           />
         </span>
       ) : (
-        <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-semibold transition-colors ${
-            isSelected
-              ? "bg-gradient-to-br from-magenta-500 to-magenta-600 text-white"
-              : "bg-gradient-to-br from-zinc-700 to-zinc-900 text-zinc-300 group-hover:from-magenta-500/40 group-hover:to-magenta-600/40 group-hover:text-white"
-          }`}
-        >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/5 mr-2 text-xs font-medium text-icon-secondary shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)]">
           {model.name.charAt(0)}
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="model-title block truncate">
+        <span
+          className="model-title block truncate text-xs font-medium text-white"
+          style={{
+            fontSize: "12px",
+            fontWeight: 500,
+          }}
+        >
           {model.name}
         </span>
-        <span className="block truncate text-xs text-zinc-500">{model.description}</span>
+        <span
+          className="block truncate text-icon-secondary"
+          style={{
+            fontSize: "10px",
+            fontWeight: 400,
+          }}
+        >
+          {model.description}
+        </span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
         {model.badge && (
-          <Badge variant={model.badge === "TOP" ? "top" : "new"}>{model.badge}</Badge>
+          <Badge
+            variant={model.badge === "TOP" ? "top" : "new"}
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              height: "16px",
+              lineHeight: "16px",
+              paddingLeft: "4px",
+              paddingRight: "4px",
+              borderRadius: "2px",
+              textTransform: "uppercase",
+            }}
+          >
+            {model.badge}
+          </Badge>
         )}
-        {isSelected && <Check className="h-4 w-4 text-magenta-400" />}
+        {isSelected && <Check className="h-4 w-4 text-white/80" />}
       </span>
     </button>
   );
