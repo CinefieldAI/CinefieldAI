@@ -141,7 +141,7 @@ export default function ModelSelector({ selected, onSelect, size = "compact" }: 
               WebkitBackdropFilter: "blur(16px) saturate(130%)",
               border: "1px solid rgba(255,255,255,0.10)",
               boxShadow: "0 24px 80px rgba(0,0,0,0.65)",
-              zIndex: 120,
+              zIndex: 9999,
             }}
             className="absolute bottom-full left-0 overflow-y-auto"
           >
