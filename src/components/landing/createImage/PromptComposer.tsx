@@ -528,7 +528,9 @@ export default function PromptComposer({
 
           {/* Bottom tools row — premium pill chips, aligned with the prompt text.
               ModelSelector is kept OUTSIDE the horizontal-scroll container so its
-              upward absolute dropdown is not clipped by overflow-x/overflow-y. */}
+              upward absolute dropdown is not clipped by overflow-x/overflow-y.
+              Rendered before capability check so component instance persists across model changes. */}
+          <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
           {capabilities ? (
             <div className="flex min-w-0 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {selectedModel === "GPT Image 2" && (
@@ -539,7 +541,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="large" />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -575,7 +576,6 @@ export default function PromptComposer({
 
               {selectedModel === "Higgsfield Soul Cinema" && (
                 <>
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -604,7 +604,6 @@ export default function PromptComposer({
 
               {selectedModel === "WAN 2.2" && (
                 <>
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -719,7 +718,6 @@ export default function PromptComposer({
                   {capabilities.assetUpload && (
                     <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -749,7 +747,6 @@ export default function PromptComposer({
                   {capabilities.assetUpload && (
                     <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -790,7 +787,6 @@ export default function PromptComposer({
                   {capabilities.assetUpload && (
                     <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -823,7 +819,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -856,7 +851,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -890,7 +884,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -926,7 +919,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -959,7 +951,6 @@ export default function PromptComposer({
                       onOpenElementsPicker={openElementsPicker}
                     />
                   )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -986,7 +977,6 @@ export default function PromptComposer({
 
               {selectedModel === "Z-Image" && (
                 <>
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover
                       value={modelAspectRatio}
@@ -1002,9 +992,7 @@ export default function PromptComposer({
               )}
             </div>
           ) : (
-            <div className="ml-[46px] flex min-w-0 items-center gap-2">
-              <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
-              <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <GenerationModeSelector value={genMode} onChange={setGenMode} />
                 <QualitySelector
                   value={quality}
@@ -1046,7 +1034,6 @@ export default function PromptComposer({
                   <Wand2 />
                   Magic Prompt
                 </button>
-              </div>
             </div>
           )}
         </div>
