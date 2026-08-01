@@ -533,7 +533,7 @@ export default function PromptComposer({
         {/* Control row: Cinema Studio style — ModelSelector + capability-driven controls on left, Generate on right */}
         <div className="flex items-center justify-between gap-1">
           {/* Left side: ModelSelector + capability-driven controls */}
-          <div className="prompt-control-row flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+          <div className="prompt-control-row relative flex min-w-0 flex-nowrap items-center gap-1 overflow-visible">
             <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
 
             {capabilities ? (
