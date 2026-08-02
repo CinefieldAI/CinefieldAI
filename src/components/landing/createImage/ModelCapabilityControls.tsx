@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AspectRatioChoice, ResolutionChoice } from "./imageModelCapabilities";
-import { GPT_QUALITY_OPTIONS, GRID_GENERATION_OPTIONS } from "./imageModelCapabilities";
+import { getAspectRatioDescription, GPT_QUALITY_OPTIONS, GRID_GENERATION_OPTIONS } from "./imageModelCapabilities";
 
 const LIME = "rgb(209, 254, 23)";
 
@@ -31,7 +31,7 @@ const POPOVER_SURFACE =
 
 /** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
-  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boolean }) {
   if (ratio.value === "Auto") {
@@ -41,7 +41,7 @@ function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boole
         style={{
           width: `${ratio.width}px`,
           height: `${ratio.height}px`,
-          borderColor: active ? LIME : "rgba(255,255,255,0.45)",
+          borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
         }}
       />
     );
@@ -52,7 +52,7 @@ function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boole
       style={{
         width: `${ratio.width}px`,
         height: `${ratio.height}px`,
-        borderColor: active ? LIME : "rgba(255,255,255,0.45)",
+        borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
       }}
     />
   );
@@ -63,9 +63,9 @@ function CinematicBadge() {
     <span
       className="ml-1.5 rounded-lg border px-1.5 py-0.5 text-[10px] font-semibold leading-none"
       style={{
-        color: "#d1fe17",
-        background: "rgba(209,254,23,0.1)",
-        borderColor: "rgba(209,254,23,0.25)",
+        color: "#D97757",
+        background: "rgba(217,119,87,0.1)",
+        borderColor: "rgba(217,119,87,0.25)",
       }}
     >
       Cinematic
@@ -91,23 +91,23 @@ export function AssetsButtonGroup({
   showElementButton?: boolean;
 }) {
   return (
-    <div className="group flex h-7 shrink-0 items-center rounded-lg bg-white/5 px-0.5">
+    <div className="group flex h-8 shrink-0 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
       <button
         type="button"
         onClick={onOpenPicker}
         aria-label="Add media"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 active:bg-white/20"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-white/10 active:bg-white/20"
       >
         <Plus className="h-4 w-4" />
       </button>
       {showElementButton && (
         <>
-          <span className="h-4 w-px shrink-0 bg-white/10 transition-opacity duration-150 group-hover:opacity-0" />
+          <span className="h-4 w-px shrink-0 bg-white/20" />
           <button
             type="button"
             onClick={onOpenElementsPicker ?? onOpenPicker}
             aria-label="Add element reference"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 active:bg-white/20"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-white/10 active:bg-white/20"
           >
             <AtSign className="h-4 w-4" />
           </button>
@@ -169,7 +169,7 @@ export function QualityPopover({
                   <span className="text-sm font-medium text-white">{opt.value}</span>
                   <span className="text-xs text-white/45">{opt.description}</span>
                 </span>
-                {selected && <Check className="h-4 w-4 shrink-0 text-white" />}
+                {selected && <Check className="h-4 w-4 shrink-0 text-[#D97757]" />}
               </button>
             );
           })}
@@ -290,11 +290,7 @@ export function AspectRatioPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={
-            large
-              ? "flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-xs font-medium text-white/85 transition-colors hover:bg-white/[0.08]"
-              : COMPACT_TRIGGER
-          }
+          className={COMPACT_TRIGGER}
         >
           <RatioIcon ratio={active} />
           {active.value}
@@ -304,17 +300,10 @@ export function AspectRatioPopover({
       <PopoverContent
         side="top"
         align="start"
-        sideOffset={10}
-        className="w-[200px] rounded-2xl p-2"
-        style={{
-          background: "rgba(35,38,42,0.75)",
-          border: "1px solid rgba(217,217,217,0.04)",
-          backdropFilter: "blur(40px)",
-          WebkitBackdropFilter: "blur(40px)",
-          boxShadow: "0 4px 4px rgba(0,0,0,0.12)",
-        }}
+        sideOffset={8}
+        className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
       >
-        <div role="listbox" className="flex flex-col gap-1">
+        <div role="listbox" className="flex flex-col gap-0.5">
           {options.map((ratio) => {
             const selected = ratio.value === value;
             return (
@@ -327,15 +316,22 @@ export function AspectRatioPopover({
                   onChange(ratio.value);
                   onOpenIdChange(null);
                 }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-[#131517]"
-                style={selected ? { background: "#131517" } : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
+                  selected
+                    ? "bg-white/10 text-white font-semibold"
+                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                }`}
               >
                 <RatioIcon ratio={ratio} active={selected} />
-                <span className="truncate text-[13px] font-medium text-white">{ratio.value}</span>
-                {ratio.cinematic && <CinematicBadge />}
-                {selected && (
-                  <Check className="ml-auto h-4 w-4 shrink-0" style={{ color: LIME }} />
-                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-white">
+                    {ratio.value}
+                  </span>
+                  <span className="block truncate text-xs text-white/50">
+                    {ratio.description ?? getAspectRatioDescription(ratio.value)}
+                  </span>
+                </span>
+                {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>
             );
           })}
@@ -359,17 +355,17 @@ export function BatchSizeCounter({
   max?: number;
 }) {
   return (
-    <div className="flex h-7 shrink-0 items-center gap-1 rounded-lg bg-white/5 px-1">
+    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
       <button
         type="button"
         disabled={value <= 1}
         onClick={() => onChange(Math.max(1, value - 1))}
         aria-label="Decrease batch size"
-        className="flex h-5 w-5 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
+        className="flex h-6 w-6 items-center justify-center rounded text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
       >
-        <Minus className="h-4 w-4" />
+        <Minus className="h-3.5 w-3.5" />
       </button>
-      <span className="w-8 shrink-0 text-center text-xs font-medium text-white">
+      <span className="w-8 shrink-0 text-center text-xs font-bold text-white">
         {value}
         <span className="text-white/40">/{max}</span>
       </span>
@@ -378,9 +374,9 @@ export function BatchSizeCounter({
         disabled={value >= max}
         onClick={() => onChange(Math.min(max, value + 1))}
         aria-label="Increase batch size"
-        className="flex h-5 w-5 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
+        className="flex h-6 w-6 items-center justify-center rounded text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-3.5 w-3.5" />
       </button>
     </div>
   );

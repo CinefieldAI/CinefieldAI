@@ -613,7 +613,7 @@ export default function AudioComposer({
           ) / 2}px)`,
         }}
       >
-        {/* Standalone rotary mode selector — visually separate from the prompt bar */}
+        {/* Standalone rotary mode selector — visually separate card on the left */}
         <RotarySelector value={feature} onChange={onFeatureChange} />
 
         {/* One persistent resizable shell for every Audio mode. Only the
@@ -624,11 +624,22 @@ export default function AudioComposer({
               ? ""
               : "transition-[height,width,background,border-radius,padding] duration-150 ease-out"
           }`}
-          style={{ ...PROMPT_BAR_OUTER_SHELL, height: promptHeight }}
+          style={{
+            height: promptHeight,
+            background:
+              "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
+            border: "1px solid rgba(217, 119, 87, 0.45)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
         >
+          {/* Full frame glowing pulsing orange border shimmer overlay around prompt bar */}
+          <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30" />
+
           <div
-            className="relative flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2"
-            style={PROMPT_BAR_SURFACE_TRANSLUCENT}
+            className="relative flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2 bg-transparent"
           >
             <PromptResizeHandles
               verticalHandleProps={audioCornerResize.verticalHandleProps}
@@ -652,17 +663,14 @@ export default function AudioComposer({
                 onReferenceVideo(e.target.files?.[0]?.name ?? null)
               }
             />
-            {/* Reference Video upload — sits directly on the gray surface
-                (no separate dark frame layer); matches the reference, which
-                shows only a very subtle inset ring, not a visible dark gap. */}
+            {/* Reference Video upload — sits directly on the glass surface without dark slab */}
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleReferenceDrop}
               aria-label="Upload reference video"
-              className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-2xl px-6 text-left transition-all hover:brightness-125"
-              style={PROMPT_BAR_PANEL_SURFACE}
+              className="flex h-full min-w-0 flex-1 items-center justify-center gap-4 rounded-2xl px-6 text-left transition-all hover:bg-white/[0.04] bg-white/[0.02] border border-white/10"
             >
               <span
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
@@ -739,15 +747,12 @@ export default function AudioComposer({
               </div>
             </button>
 
-            {/* Generate — orange accent, matching the other audio modes.
-                h-full (not a hardcoded px height) so it always fits the gray
-                surface's actual height and never overflows past the chassis
-                edge, regardless of the chassis/surface padding used. */}
+            {/* Generate — orange accent, fixed height self-end (never stretches) */}
             <button
               type="button"
               onClick={onGenerate}
               disabled={isGenerating}
-              className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-20 w-[120px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
                 boxShadow:
@@ -814,7 +819,11 @@ export default function AudioComposer({
                       )}
                     </span>
                     {activeModel.title}
-                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${
+                        modelMenuOpen ? "rotate-180 text-[#D97757]" : "text-zinc-400"
+                      }`}
+                    />
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
@@ -851,32 +860,14 @@ export default function AudioComposer({
                               onSelectModel(i);
                               setModelMenuOpen(false);
                             }}
-                            className="flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors focus-visible:outline-none"
-                            style={{
-                              background: active ? "rgba(217,119,87,0.10)" : "transparent",
-                              boxShadow: active
-                                ? "inset 0 0 0 1px rgba(217,119,87,0.45)"
-                                : "none",
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!active)
-                                e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!active)
-                                e.currentTarget.style.background = "transparent";
-                            }}
+                            className="group/model-row flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors duration-200 hover:bg-white/5 focus-visible:outline-none cursor-pointer"
                           >
-                            <span
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-                              style={{
-                                background: active
-                                  ? "rgba(217,119,87,0.10)"
-                                  : "rgba(255,255,255,0.06)",
-                                boxShadow: active
-                                  ? "0 0 12px rgba(217,119,87,0.20), inset 0 2px 3px rgba(255,255,255,0.03)"
-                                  : "inset 0 2px 3px rgba(255,255,255,0.03)",
-                              }}
+                            <div
+                              className={`size-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
+                                active
+                                  ? "bg-[rgba(217,119,87,0.20)] text-[#D97757] border border-[rgba(217,119,87,0.50)] shadow-[0_0_14px_rgba(217,119,87,0.40)]"
+                                  : "bg-white/5 text-gray-400 border border-white/5 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model-row:bg-[rgba(217,119,87,0.22)] group-hover/model-row:text-[#D97757] group-hover/model-row:border-[#D97757]/40 group-hover/model-row:shadow-[0_0_16px_rgba(217,119,87,0.45)]"
+                              }`}
                             >
                               {model.iconSrc ? (
                                 <img
@@ -887,11 +878,10 @@ export default function AudioComposer({
                               ) : (
                                 <Icon
                                   className="h-4 w-4"
-                                  style={{ color: active ? "#D97757" : "#d4d4d8" }}
                                   aria-hidden="true"
                                 />
                               )}
-                            </span>
+                            </div>
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5">
                                 <span className="truncate text-xs font-semibold text-white">

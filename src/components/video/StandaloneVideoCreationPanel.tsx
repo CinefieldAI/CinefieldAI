@@ -633,6 +633,58 @@ const WORKFLOW_MODELS: Record<StandaloneVideoWorkflow, WorkflowModel[]> = {
   "motion-control": MOTION_CONTROL_MODELS,
 };
 
+// Models that also appear inside Create Video's own catalog (Featured row or
+// Kling family flyout) but actually belong to a specialized tab. Picking one
+// of these — from Create Video's list/flyout, or from the model panel's
+// search, no matter which tab is currently open — switches the active tab to
+// its real home instead of selecting it locally. Native browsing of Edit
+// Video's or Motion Control's own list is unaffected: picking anything while
+// already on that tab's own panel always selects locally, never bounces you
+// to the sibling tab.
+const CROSS_WORKFLOW_MODEL_TARGET: Record<string, StandaloneVideoWorkflow> = {
+  "gemini-omni-flash-edit": "edit-video",
+  "higgsfield-reframe": "edit-video",
+  "kling-3.0-omni-edit": "edit-video",
+  "grok-imagine-edit": "edit-video",
+  "kling-motion-control": "motion-control",
+  "kling-3.0-motion-control": "motion-control",
+  "kling-o1-video-edit": "motion-control",
+};
+
+interface GlobalModelEntry {
+  model: WorkflowModel;
+  workflow: StandaloneVideoWorkflow;
+  index: number;
+}
+
+// Flat search index spanning all three tabs' catalogs, used so every model
+// panel's search box can find any model regardless of which tab is open.
+// Edit Video and Motion Control share one underlying array, so a model with
+// a cross-workflow target is only listed once here (under its real target);
+// its index is valid in both EDIT_MODELS and MOTION_CONTROL_MODELS since
+// they're the same array reference.
+const GLOBAL_MODEL_INDEX: GlobalModelEntry[] = (() => {
+  const seen = new Set<string>();
+  const entries: GlobalModelEntry[] = [];
+
+  EDIT_MODELS.forEach((model, index) => {
+    entries.push({
+      model,
+      workflow: CROSS_WORKFLOW_MODEL_TARGET[model.id] ?? "edit-video",
+      index,
+    });
+    seen.add(model.id);
+  });
+
+  CREATE_MODELS.forEach((model, index) => {
+    if (seen.has(model.id)) return;
+    entries.push({ model, workflow: "create-video", index });
+    seen.add(model.id);
+  });
+
+  return entries;
+})();
+
 const NAVBAR_MODEL_TARGETS: Record<
   string,
   { workflow: StandaloneVideoWorkflow; modelName: string }
@@ -837,7 +889,7 @@ function WorkflowModelPanel({
   workflow: StandaloneVideoWorkflow;
   models: WorkflowModel[];
   selectedIndex: number;
-  onSelect: (index: number) => void;
+  onSelect: (targetWorkflow: StandaloneVideoWorkflow, index: number) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -902,6 +954,38 @@ function WorkflowModelPanel({
       ? CREATE_MODEL_GROUPS.find((group) => group.name === activeGroupName)
       : undefined;
 
+  // Global search: active whenever the box has text, regardless of which
+  // tab's panel is open — results span all three catalogs, replacing the
+  // normal Featured/All models view for as long as the user is typing.
+  const trimmedSearch = search.trim();
+  const isSearching = trimmedSearch.length > 0;
+  const globalResults = useMemo(() => {
+    if (!isSearching) return [];
+    const query = trimmedSearch.toLowerCase();
+    return GLOBAL_MODEL_INDEX.filter(
+      ({ model }) =>
+        model.name.toLowerCase().includes(query) ||
+        model.description.toLowerCase().includes(query),
+    );
+  }, [isSearching, trimmedSearch]);
+
+  // Selecting a model from Create Video's own list/flyout: models that
+  // belong to Edit Video or Motion Control resolve to their real tab and
+  // index there; everything else just selects locally within Create Video.
+  const resolveCreateVideoSelection = (
+    model: WorkflowModel,
+    fallbackIndex: number,
+  ): { workflow: StandaloneVideoWorkflow; index: number } => {
+    const target = CROSS_WORKFLOW_MODEL_TARGET[model.id];
+    if (target) {
+      const targetIndex = WORKFLOW_MODELS[target].findIndex(
+        (m) => m.id === model.id,
+      );
+      if (targetIndex >= 0) return { workflow: target, index: targetIndex };
+    }
+    return { workflow: "create-video", index: fallbackIndex };
+  };
+
   const panelTop =
     workflow === "create-video"
       ? "top-0"
@@ -935,6 +1019,8 @@ function WorkflowModelPanel({
           />
         </div>
         <div className="max-h-[600px] overflow-y-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {!isSearching && (
+          <>
           <p className="px-2 py-1.5 text-[11px] text-zinc-500">
             {workflow === "create-video" ? "Featured models" : "All models"}
           </p>
@@ -948,7 +1034,13 @@ function WorkflowModelPanel({
                 key={model.name}
                 type="button"
                 onClick={() => {
-                  if (!unavailable) onSelect(index);
+                  if (unavailable) return;
+                  if (workflow === "create-video") {
+                    const target = resolveCreateVideoSelection(model, index);
+                    onSelect(target.workflow, target.index);
+                  } else {
+                    onSelect(workflow, index);
+                  }
                 }}
                 aria-pressed={selected}
                 aria-disabled={unavailable || undefined}
@@ -1070,7 +1162,11 @@ function WorkflowModelPanel({
                         if (expandable) {
                           showFlyout(event.currentTarget);
                         } else if (groupIndexes[0] !== undefined) {
-                          onSelect(groupIndexes[0]);
+                          const target = resolveCreateVideoSelection(
+                            models[groupIndexes[0]],
+                            groupIndexes[0],
+                          );
+                          onSelect(target.workflow, target.index);
                         }
                       }}
                       className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
@@ -1109,6 +1205,119 @@ function WorkflowModelPanel({
               })}
             </>
           )}
+          </>
+          )}
+          {isSearching && (
+            <>
+              <p className="px-2 py-1.5 text-[11px] text-zinc-500">
+                {globalResults.length > 0 ? "Search results" : "No models found"}
+              </p>
+              {globalResults.map(({ model, workflow: entryWorkflow, index }) => {
+                const Icon = model.icon;
+                const unavailable =
+                  model.disabled || model.available === false;
+                const selected =
+                  !unavailable &&
+                  entryWorkflow === workflow &&
+                  index === selectedIndex;
+                const dangerIcon = model.iconTone === "danger";
+                const crossTab = entryWorkflow !== workflow;
+                const targetLabel = WORKFLOWS.find(
+                  (w) => w.value === entryWorkflow,
+                )?.label;
+                return (
+                  <button
+                    key={`${entryWorkflow}-${model.id}`}
+                    type="button"
+                    onClick={() => {
+                      if (!unavailable) onSelect(entryWorkflow, index);
+                    }}
+                    aria-pressed={selected}
+                    aria-disabled={unavailable || undefined}
+                    disabled={unavailable}
+                    className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                      selected
+                        ? "bg-white/[0.07]"
+                        : unavailable
+                          ? "cursor-not-allowed opacity-75"
+                          : "hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div
+                      className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
+                        selected
+                          ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)]"
+                          : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)]"
+                      }`}
+                      style={{
+                        background:
+                          "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                      }}
+                    >
+                      <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center overflow-hidden">
+                        <Icon className="size-5 text-white" aria-hidden="true" />
+                      </div>
+                    </div>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={`truncate text-[16px] font-semibold leading-5 ${
+                            model.name.includes("Higgsfield")
+                              ? "text-red-500"
+                              : "text-white"
+                          }`}
+                        >
+                          {model.name}
+                        </span>
+                        {model.badge === "COMING_SOON" && (
+                          <ModelBadgePill
+                            badge={model.badge}
+                            tone={model.badgeTone}
+                          />
+                        )}
+                        {model.audio && (
+                          <Video className="size-3.5 text-zinc-500" />
+                        )}
+                      </span>
+                      {entryWorkflow === "create-video" ? (
+                        <span className="mt-1 flex items-center gap-1">
+                          {model.quality && (
+                            <CapabilityChip icon={Diamond}>
+                              {model.quality}
+                            </CapabilityChip>
+                          )}
+                          {model.duration && (
+                            <CapabilityChip icon={Clock3}>
+                              {model.duration}
+                            </CapabilityChip>
+                          )}
+                          {crossTab && targetLabel && (
+                            <span className="text-[10px] text-zinc-500">
+                              in {targetLabel}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-zinc-500">
+                          {model.description}
+                          {crossTab && targetLabel && (
+                            <span className="shrink-0 text-[10px] text-zinc-600">
+                              · {targetLabel}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                    {unavailable ? (
+                      <LockKeyhole className="size-4 shrink-0 text-red-400" />
+                    ) : selected ? (
+                      <Check className="size-4 shrink-0 text-[#D97757]" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </>
+          )}
         </div>
       </div>
       {activeGroup && (
@@ -1134,11 +1343,11 @@ function WorkflowModelPanel({
                 key={model.name}
                 type="button"
                 onClick={() => {
-                  if (!unavailable) {
-                    cancelFlyoutClose();
-                    setActiveGroupName(null);
-                    onSelect(index);
-                  }
+                  if (unavailable) return;
+                  cancelFlyoutClose();
+                  setActiveGroupName(null);
+                  const target = resolveCreateVideoSelection(model, index);
+                  onSelect(target.workflow, target.index);
                 }}
                 aria-pressed={selected}
                 aria-disabled={unavailable || undefined}
@@ -1193,9 +1402,11 @@ function WorkflowModelPanel({
 
 function ModelTrigger({
   model,
+  open,
   onClick,
 }: {
   model: WorkflowModel;
+  open?: boolean;
   onClick: () => void;
 }) {
   const Icon = model.icon;
@@ -1203,7 +1414,11 @@ function ModelTrigger({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2.5 text-left hover:bg-white/[0.06]"
+      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ease-out ${
+        open
+          ? "border-[#D97757] bg-white/[0.06] shadow-[0_0_12px_rgba(217,119,87,0.30)]"
+          : "border-white/[0.07] bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.06]"
+      }`}
     >
       <span className="min-w-0">
         <span className="block text-[10px] text-zinc-500">Model</span>
@@ -1214,7 +1429,11 @@ function ModelTrigger({
           <Icon className="size-4 shrink-0 text-[#D97757]" />
         </span>
       </span>
-      <ChevronDown className="size-4 -rotate-90 text-zinc-500" />
+      <ChevronDown
+        className={`size-4 transition-transform duration-200 ease-out ${
+          open ? "rotate-180 text-[#D97757]" : "text-zinc-400"
+        }`}
+      />
     </button>
   );
 }
@@ -1941,12 +2160,14 @@ function KlingMotionControlForm({
   onChange,
   onOpenAssets,
   onOpenModelPanel,
+  modelOpen,
 }: {
   model: WorkflowModel;
   state: MotionControlState;
   onChange: (patch: Partial<MotionControlState>) => void;
   onOpenAssets: () => void;
   onOpenModelPanel: () => void;
+  modelOpen?: boolean;
 }) {
   const advancedId = `motion-advanced-${model.id}`;
 
@@ -2009,7 +2230,7 @@ function KlingMotionControlForm({
         />
       </div>
 
-      <ModelTrigger model={model} onClick={onOpenModelPanel} />
+      <ModelTrigger model={model} open={modelOpen} onClick={onOpenModelPanel} />
 
       <MotionQualityControl
         value={state.quality}
@@ -2420,11 +2641,17 @@ export default function StandaloneVideoCreationPanel({
     setModelOpen(false);
   };
 
-  const selectModel = (index: number) => {
-    const nextModel = models[index];
+  const selectModel = (
+    targetWorkflow: StandaloneVideoWorkflow,
+    index: number,
+  ) => {
+    const nextModel = WORKFLOW_MODELS[targetWorkflow][index];
     if (!nextModel || nextModel.disabled || nextModel.available === false)
       return;
-    setModelIndexes((current) => ({ ...current, [workflow]: index }));
+    if (targetWorkflow !== workflow) {
+      onWorkflowChange(targetWorkflow);
+    }
+    setModelIndexes((current) => ({ ...current, [targetWorkflow]: index }));
     setModelOpen(false);
   };
 
@@ -2500,6 +2727,7 @@ export default function StandaloneVideoCreationPanel({
                   />
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
                   <div className="flex gap-2">
@@ -2562,6 +2790,7 @@ export default function StandaloneVideoCreationPanel({
                   )}
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
                   <div className="flex gap-2">
@@ -2686,6 +2915,7 @@ export default function StandaloneVideoCreationPanel({
                   </div>
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
                   <div className="flex gap-2">
@@ -2818,6 +3048,7 @@ export default function StandaloneVideoCreationPanel({
                   </div>
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
                   <div className="flex gap-2">
@@ -3104,6 +3335,7 @@ export default function StandaloneVideoCreationPanel({
 
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
 
@@ -3152,6 +3384,7 @@ export default function StandaloneVideoCreationPanel({
                   </label>
                   <ModelTrigger
                     model={selectedModel}
+                    open={modelOpen}
                     onClick={openModelPanel}
                   />
                   <div className="grid grid-cols-3 gap-2">
@@ -3263,6 +3496,7 @@ export default function StandaloneVideoCreationPanel({
               </button>
               <ModelTrigger
                 model={selectedModel}
+                open={modelOpen}
                 onClick={openModelPanel}
               />
               <span className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-white/[0.05] px-3 text-xs font-semibold text-white">
@@ -3279,6 +3513,7 @@ export default function StandaloneVideoCreationPanel({
               onChange={(patch) => updateMotionState(selectedModel.id, patch)}
               onOpenAssets={() => setMotionAssetsTarget(selectedModel.id)}
               onOpenModelPanel={openModelPanel}
+              modelOpen={modelOpen}
             />
           )}
         </div>

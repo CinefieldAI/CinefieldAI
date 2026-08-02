@@ -136,6 +136,25 @@ body {
   animation: popover-smooth-out 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Smooth gliding morph animation when switching models */
+@keyframes model-switch-glide {
+  0% {
+    opacity: 0.35;
+    transform: translateY(4px) scale(0.98);
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-model-switch-glide {
+  animation: model-switch-glide 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Referenced by className="hide-scrollbar" across the app (image model
    selectors, assets picker grids, etc.) — hides the scrollbar while keeping
    the element scrollable. */
@@ -223,3 +242,58 @@ body {
 .border-cyan-500,
 .border-lime-400,
 .border-lime-500 { border-color: #D97757 !important; }
+
+/* White-to-Orange Gradient Split Border for Icon Containers */
+.icon-box-white-orange {
+  position: relative;
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(rgba(31, 33, 35, 1), rgba(31, 33, 35, 1)) padding-box,
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(255, 255, 255, 0.82) 20%,
+      rgba(255, 255, 255, 0.34) 45%,
+      rgba(217, 119, 87, 0.72) 70%,
+      rgba(217, 119, 87, 1) 100%
+    ) border-box !important;
+  box-shadow:
+    0 -2px 8px rgba(255, 255, 255, 0.18),
+    0 7px 16px rgba(217, 119, 87, 0.42),
+    0 0 12px rgba(217, 119, 87, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(217, 119, 87, 0.25);
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+
+.group:hover .icon-box-white-orange,
+.group\/model:hover .icon-box-white-orange {
+  box-shadow:
+    0 -2px 10px rgba(255, 255, 255, 0.24),
+    0 8px 20px rgba(217, 119, 87, 0.55),
+    0 0 16px rgba(217, 119, 87, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(217, 119, 87, 0.32);
+}
+
+.icon-box-white-orange-active {
+  position: relative;
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(rgba(217, 119, 87, 0.10), rgba(217, 119, 87, 0.10)) padding-box,
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(255, 255, 255, 0.82) 20%,
+      rgba(255, 255, 255, 0.34) 45%,
+      rgba(217, 119, 87, 0.72) 70%,
+      rgba(217, 119, 87, 1) 100%
+    ) border-box !important;
+  box-shadow:
+    0 -2px 10px rgba(255, 255, 255, 0.28),
+    0 9px 22px rgba(217, 119, 87, 0.62),
+    0 0 18px rgba(217, 119, 87, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 -1px 0 rgba(217, 119, 87, 0.38);
+  transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
+}

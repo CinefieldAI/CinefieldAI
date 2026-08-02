@@ -21,44 +21,49 @@ const KLING3_ASPECT_RATIOS = [
 
 /** Dynamic aspect ratio icon that renders the actual shape. */
 function DynamicAspectIcon({ value }: { value: string }) {
-  const option = KLING3_ASPECT_RATIOS.find((opt) => opt.value === value);
-  if (!option) return null;
-
-  const [w, h] = option.shape;
+  const shape =
+    value === "9:16"
+      ? [9, 16]
+      : value === "1:1"
+        ? [1, 1]
+        : value === "4:3"
+          ? [4, 3]
+          : value === "3:4"
+            ? [3, 4]
+            : value === "21:9"
+              ? [21, 9]
+              : [16, 9];
+  const [w, h] = shape;
   const scale = 14 / Math.max(w, h);
   const width = Math.round(w * scale);
   const height = Math.round(h * scale);
 
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      className="text-neutral-400"
-      style={{ color: "currentColor" }}
-    >
-      <rect
-        x={(16 - width) / 2}
-        y={(16 - height) / 2}
-        width={width}
-        height={height}
-        rx="1"
-        fill="currentColor"
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+      <span
+        className="rounded-[2px] border-[1.5px] border-white/70"
+        style={{
+          width: Math.max(6, width),
+          height: Math.max(6, height),
+        }}
       />
-    </svg>
+    </span>
   );
 }
 
 /** Small rectangle preview shaped to the option's aspect ratio. */
-function ShapeIcon({ shape }: { shape: [number, number] }) {
+function ShapeIcon({ shape, active }: { shape: [number, number]; active?: boolean }) {
   const [w, h] = shape;
-  const scale = 22 / Math.max(w, h);
+  const scale = 20 / Math.max(w, h);
   return (
-    <span className="flex h-6 w-8 shrink-0 items-center justify-center rounded-sm border border-white/20 bg-white/10">
+    <span className="flex h-6 w-8 shrink-0 items-center justify-center">
       <span
-        className="rounded-[1px] border border-white/30 bg-white/20"
-        style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
+        className="rounded-[2px] border-[1.5px]"
+        style={{
+          width: Math.round(w * scale),
+          height: Math.round(h * scale),
+          borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
+        }}
       />
     </span>
   );
@@ -123,7 +128,7 @@ export default function Kling3AspectRatioControl({
                     : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <DynamicAspectIcon value={opt.value} />
+                <ShapeIcon shape={opt.shape} active={selected} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-white">
                     {opt.value}

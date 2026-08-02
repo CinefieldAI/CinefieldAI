@@ -31,6 +31,8 @@ import {
   MultiReferenceIcon,
 } from "./icons/ProviderIcons";
 
+import { getSharedModelIcon } from "@/lib/modelIconRegistry";
+
 /** Neon turquoise brand accent — DO NOT CHANGE. */
 export const ACCENT = "#D97757";
 
@@ -69,7 +71,7 @@ export interface CinemaStudioSettings {
   creditCost: number;
 }
 
-export type ModelBadge = "NEW" | "EXCLUSIVE" | "PREMIUM";
+export type ModelBadge = "NEW" | "EXCLUSIVE" | "PREMIUM" | "TOP";
 
 export interface ModelInfo {
   id: string;
@@ -89,8 +91,8 @@ export interface ModelInfo {
   characterStyle?: boolean;
   /** All-models entries may expand into a submenu of variants. */
   submodels?: ModelInfo[];
-  /** Per-model icon (LucideIcon or image path string). */
-  icon?: LucideIcon | string;
+  /** Per-model icon (LucideIcon or image path string or React Component). */
+  icon?: LucideIcon | string | React.ComponentType<{ className?: string }>;
   isAdded?: boolean;
 }
 
@@ -340,18 +342,22 @@ const M = (
   id: string,
   name: string,
   description: string,
-  icon: LucideIcon | string,
-  opts: { resolution?: ModelInfo["resolution"]; isNew?: boolean } = {},
-): ModelInfo => ({
-  id,
-  name,
-  description,
-  icon,
-  resolution: opts.resolution ?? "2K",
-  durations: [1],
-  baseCredits: 1,
-  badges: opts.isNew ? ["NEW"] : undefined,
-});
+  fallbackIcon: LucideIcon | string | React.ComponentType<{ className?: string }>,
+  opts: { resolution?: ModelInfo["resolution"]; badge?: ModelBadge; isAdded?: boolean } = {},
+): ModelInfo => {
+  const sharedIcon = getSharedModelIcon(name);
+  return {
+    id,
+    name,
+    description,
+    icon: sharedIcon ?? fallbackIcon,
+    resolution: opts.resolution ?? "2K",
+    durations: [1],
+    baseCredits: 1,
+    badges: opts.badge ? [opts.badge] : undefined,
+    isAdded: opts.isAdded,
+  };
+};
 
 /** Each image model defined once; reused across Featured/All so selection syncs. */
 const IM = {
@@ -359,72 +365,63 @@ const IM = {
   locations: M("cinematic-locations", "Cinematic Locations", "Rich environments with cinematic lighting", MapPin),
   soulCinemaC: M("soul-cinema-c", "Soul Cinema", "Cinematic image generation", Clapperboard),
   cameras: M("cinematic-cameras", "Cinematic Cameras", "Image generation with camera controls", Camera),
-  soul2: M("higgsfield-soul-2", "Higgsfield Soul 2.0", "Next generation ultra-realistic fashion visuals", Sparkles),
-  soulCinema: M("higgsfield-soul-cinema", "Higgsfield Soul Cinema", "Cinema-grade visual creation", Sparkles),
-  gpt2: M("gpt-image-2", "GPT Image 2", "4K images with near-perfect text rendering", OpenAIIcon, { resolution: "4K", isNew: true }),
-  seedream45: M("seedream-4-5", "Seedream 4.5", "ByteDance's next-gen 4K image-editing model", SeedreamIcon, { resolution: "4K" }),
-  seedream5pro: M("seedream-5-pro", "Seedream 5.0 Pro", "Logically consistent images with intelligent visual reasoning", SeedreamIcon, { isNew: true }),
+  soul2: M("higgsfield-soul-2", "Higgsfield Soul 2.0", "Photoreal portrait engine", Sparkles, { badge: "TOP" }),
+  soulCinema: M("higgsfield-soul-cinema", "Higgsfield Soul Cinema", "Cinematic character stills", Sparkles),
+  gpt2: M("gpt-image-2", "GPT Image 2", "4K images with near-perfect text rendering", OpenAIIcon, { resolution: "4K", badge: "NEW" }),
+  seedream45: M("seedream-4-5", "Seedream 4.5", "Balanced quality & speed", SeedreamIcon, { resolution: "4K", badge: "PREMIUM", isAdded: true }),
+  seedream5pro: M("seedream-5-pro", "Seedream 5.0 Pro", "Logically consistent images with intelligent visual reasoning", SeedreamIcon, { badge: "NEW", isAdded: true }),
   nanoPro: M("nano-banana-pro", "Nano Banana Pro", "Google's flagship generation model", GoogleIcon),
-  nano2: M("nano-banana-2", "Nano Banana 2", "Pro quality at Flash speed", GoogleIcon, { isNew: true }),
-  nano2lite: M("nano-banana-2-lite", "Nano Banana 2 Lite", "Lightweight image generation at speed", GoogleIcon, { isNew: true }),
-  recraft: M("recraft-v4-1", "Recraft V4.1", "Photorealistic and expressive image generation", RecraftIcon, { isNew: true }),
-  auto: M("auto", "Auto", "The best model for any prompt, chosen for you", Wand2),
-  soul: M("higgsfield-soul", "Higgsfield Soul", "Ultra-realistic fashion visuals", Sparkles),
-  gpt15: M("gpt-image-1-5", "GPT Image 1.5", "True-color precision rendering", OpenAIIcon),
-  gpt: M("gpt-image", "GPT Image", "Versatile text-to-image AI", OpenAIIcon),
-  nano: M("nano-banana", "Nano Banana", "Google's standard generation model", GoogleIcon),
+  nano2: M("nano-banana-2", "Nano Banana 2", "Fast iteration drafts", GoogleIcon, { badge: "PREMIUM" }),
+  nano2lite: M("nano-banana-2-lite", "Nano Banana 2 Lite", "Lightweight generation at speed", GoogleIcon, { badge: "NEW", isAdded: true }),
+  recraft: M("recraft-v4-1", "Recraft V4.1", "Photorealistic and expressive image generation", RecraftIcon, { badge: "NEW" }),
+  auto: M("auto", "Auto", "Automatically pick the best model for your prompt", Wand2),
+  soul: M("higgsfield-soul", "Higgsfield Soul", "Original portrait engine", Sparkles, { isAdded: true }),
+  faceSwap: M("higgsfield-face-swap", "Higgsfield Face Swap", "Transfer a face across any image", UserRound, { isAdded: true }),
+  characterSwap: M("higgsfield-character-swap", "Higgsfield Character Swap", "Replace a full subject seamlessly", Users, { isAdded: true }),
+  gpt15: M("gpt-image-1-5", "GPT Image 1.5", "OpenAI · balanced quality", OpenAIIcon),
+  gpt: M("gpt-image", "GPT Image", "OpenAI · general purpose", OpenAIIcon, { isAdded: true }),
+  nano: M("nano-banana", "Nano Banana", "Quick stylized drafts", GoogleIcon, { isAdded: true }),
   seedream5lite: M("seedream-5-lite", "Seedream 5.0 lite", "Intelligent visual reasoning", SeedreamIcon),
-  seedream4: M("seedream-4-0", "Seedream 4.0", "ByteDance's advanced image editing model", SeedreamIcon),
-  grok: M("grok-imagine-image", "Grok Imagine", "Versatile image styles by xAI", GrokIcon),
-  recraftUtil: M("recraft-utility", "Recraft V4.1 Utility", "Simple scenes with flat, even lighting", RecraftIcon, { isNew: true }),
-  zImage: M("z-image", "Z-Image", "Instant lifelike portraits", Star),
-  kling01: M("kling-01", "Kling O1", "Kling's Photorealistic Image Model", KlingIcon),
-  flux2pro: M("flux-2-pro", "FLUX.2 Pro", "Speed-optimized detail", FluxIcon),
-  flux2flex: M("flux-2-flex", "FLUX.2 Flex", "Edit with accuracy", FluxIcon),
-  flux2max: M("flux-2-max", "FLUX.2 MAX", "Sharp text, maximum detail", FluxIcon, { resolution: "4K" }),
-  reve: M("reve", "Reve", "Advanced editing model", "/Reve.png"),
-  fluxKontext: M("flux-kontext-max", "Flux Kontext Max", "Edit with accuracy", FluxIcon),
-  multiRef: M("multi-reference", "Multi Reference", "Multiple edits in one shot", MultiReferenceIcon),
-  wan22: M("wan-2-2", "WAN 2.2", "High-fidelity cinematic visuals", Sparkle),
+  seedream4: M("seedream-4-0", "Seedream 4.0", "Lightweight diffusion", SeedreamIcon, { isAdded: true }),
+  grok: M("grok-imagine-image", "Grok Imagine", "Versatile image styles by xAI", GrokIcon, { badge: "PREMIUM" }),
+  recraftUtil: M("recraft-utility", "Recraft V4.1 Utility", "Icon & asset generation", RecraftIcon, { isAdded: true }),
+  zImage: M("z-image", "Z-Image", "Instant lifelike portraits", WanIcon),
+  kling01: M("kling-01", "Kling O1", "Kling's Photorealistic Image Model", KlingIcon, { badge: "PREMIUM", isAdded: true }),
+  flux2pro: M("flux-2-pro", "FLUX.2 Pro", "Speed-optimized detail", FluxIcon, { isAdded: true }),
+  flux2flex: M("flux-2-flex", "FLUX.2 Flex", "Flexible aspect & control", FluxIcon, { isAdded: true }),
+  flux2max: M("flux-2-max", "FLUX.2 Max", "Maximum fidelity render", FluxIcon, { resolution: "4K", isAdded: true }),
+  reve: M("reve", "Reve", "Advanced editing model", Wand2),
+  fluxKontext: M("flux-kontext-max", "Flux Kontext Max", "Context-aware editing", FluxIcon, { isAdded: true }),
+  multiRef: M("multi-reference", "Multi Reference", "Blend multiple reference images", MultiReferenceIcon, { isAdded: true }),
+  wan22: M("wan-2-2", "WAN 2.2", "High-fidelity cinematic visuals", Sparkle, { isAdded: true }),
 } as const;
 
 export const IMAGE_MODEL_CATEGORIES: ModelCategory[] = [
   {
-    label: "Cinematic models",
-    models: [IM.aiCast, IM.locations, IM.soulCinemaC, IM.cameras],
-  },
-  {
     label: "Featured models",
     models: [
+      IM.auto,
       IM.soul2,
       IM.soulCinema,
       IM.gpt2,
-      IM.seedream45,
       IM.seedream5pro,
+      IM.seedream45,
       IM.nanoPro,
       IM.nano2,
       IM.nano2lite,
       IM.recraft,
+      IM.wan22,
     ],
   },
   {
     label: "All models",
     models: [
-      IM.auto,
-      IM.soul,
-      IM.soul2,
-      IM.soulCinema,
-      IM.gpt2,
-      IM.gpt15,
-      IM.gpt,
-      IM.nanoPro,
-      IM.nano2,
-      IM.nano2lite,
       IM.nano,
-      IM.seedream5pro,
-      IM.seedream5lite,
-      IM.seedream45,
+      IM.soul,
+      IM.faceSwap,
+      IM.characterSwap,
       IM.seedream4,
+      IM.gpt15,
       IM.grok,
       IM.recraft,
       IM.recraftUtil,
@@ -433,8 +430,8 @@ export const IMAGE_MODEL_CATEGORIES: ModelCategory[] = [
       IM.flux2pro,
       IM.flux2flex,
       IM.flux2max,
-      IM.reve,
       IM.fluxKontext,
+      IM.gpt,
       IM.multiRef,
       IM.wan22,
     ],

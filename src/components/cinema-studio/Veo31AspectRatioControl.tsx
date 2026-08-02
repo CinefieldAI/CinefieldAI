@@ -21,28 +21,35 @@ const VEO31_ASPECT_RATIOS = [
   { value: "9:16", description: "Stories/Reels" },
 ];
 
-/** Exact reference SVGs (verbatim) — a tall rounded rect for 9:16, a wide rounded rect for 16:9. No verbatim icon was captured for "Auto", so it uses a generic sparkle icon instead of an invented custom path. */
-function AspectIcon({ value }: { value: string }) {
+function ShapeIcon({ value, active }: { value: string; active?: boolean }) {
   if (value === "auto") {
-    return <Sparkles className="size-4" />;
-  }
-  if (value === "9:16") {
     return (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="size-4">
-        <path
-          d="M13 12.5C13 13.8807 11.8807 15 10.5 15L4.5 15C3.11929 15 2 13.8807 2 12.5L2 3.5C2 2.11929 3.11929 1 4.5 1L10.5 1C11.8807 1 13 2.11929 13 3.5L13 12.5ZM12 3.5C12 2.67157 11.3284 2 10.5 2L4.5 2C3.67157 2 3 2.67157 3 3.5L3 12.5C3 13.3284 3.67157 14 4.5 14L10.5 14C11.3284 14 12 13.3284 12 12.5L12 3.5Z"
-          fill="currentColor"
+      <span className="flex h-6 w-8 shrink-0 items-center justify-center">
+        <span
+          className="rounded-[2px] border-[1.5px]"
+          style={{
+            width: 20,
+            height: 20,
+            borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
+          }}
         />
-      </svg>
+      </span>
     );
   }
+  const shape = value === "9:16" ? [9, 16] : [16, 9];
+  const [w, h] = shape;
+  const scale = 20 / Math.max(w, h);
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" className="size-4">
-      <path
-        d="M13.833 3.5C14.8454 3.5 15.6658 4.32064 15.666 5.33301V10.667C15.6658 11.6794 14.8454 12.5 13.833 12.5H3.16602C2.1539 12.4996 1.33318 11.6791 1.33301 10.667V5.33301C1.33318 4.32085 2.1539 3.50035 3.16602 3.5H13.833ZM3.16602 4.5C2.70619 4.50035 2.33318 4.87314 2.33301 5.33301V10.667C2.33318 11.1269 2.70619 11.4996 3.16602 11.5H13.833C14.2931 11.5 14.6658 11.1271 14.666 10.667V5.33301C14.6658 4.87292 14.2931 4.5 13.833 4.5H3.16602Z"
-        fill="currentColor"
+    <span className="flex h-6 w-8 shrink-0 items-center justify-center">
+      <span
+        className="rounded-[2px] border-[1.5px]"
+        style={{
+          width: Math.round(w * scale),
+          height: Math.round(h * scale),
+          borderColor: active ? "#D97757" : "rgba(255,255,255,0.45)",
+        }}
       />
-    </svg>
+    </span>
   );
 }
 
@@ -79,7 +86,7 @@ export default function Veo31AspectRatioControl({
           aria-expanded={controlledOpen}
           className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
-          <AspectIcon value={value} />
+          <ShapeIcon value={value} />
           <span className="min-w-[24px]">{value}</span>
         </button>
       </Popover.Trigger>
@@ -88,7 +95,7 @@ export default function Veo31AspectRatioControl({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[200px]"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
         >
           {options.map((opt) => {
             const selected = opt.value === value;
@@ -108,7 +115,7 @@ export default function Veo31AspectRatioControl({
                     : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <AspectIcon value={opt.value} />
+                <ShapeIcon value={opt.value} active={selected} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-white">
                     {opt.value}

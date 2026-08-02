@@ -2,7 +2,33 @@ export interface AspectRatioChoice {
   value: string;
   width: number;
   height: number;
+  description?: string;
   cinematic?: boolean;
+}
+
+export function getAspectRatioDescription(value: string): string {
+  switch (value) {
+    case "Auto":
+    case "auto":
+      return "Model default";
+    case "1:1":
+      return "Square";
+    case "3:4":
+    case "2:3":
+      return "Portrait";
+    case "9:16":
+      return "Stories/Reels";
+    case "4:3":
+      return "Standard";
+    case "16:9":
+      return "Widescreen";
+    case "21:9":
+      return "Cinematic";
+    case "3:2":
+      return "Landscape";
+    default:
+      return "Custom";
+  }
 }
 
 export interface ResolutionChoice {
@@ -209,6 +235,21 @@ export const NANO_BANANA_2_LITE_QUALITY_OPTIONS: { value: string; description: s
 ];
 
 export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
+  Auto: {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "Auto",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
   "GPT Image 2": {
     modelTriggerSize: "large",
     quality: true,
@@ -545,6 +586,113 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   },
   // Nano Banana 2 Lite keeps its existing "High" quality field (not a real
   // resolution) and renders it after batch, matching the supplied reference.
+  "Nano Banana": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "3:4",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "Higgsfield Soul": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "3:4",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "Higgsfield Face Swap": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "Higgsfield Character Swap": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "GPT Image 1.5": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: GPT_ASPECT_RATIOS,
+    defaultAspectRatio: "Auto",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "GPT Image": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: false,
+    aspectRatio: "simple",
+    aspectRatioOptions: GPT_ASPECT_RATIOS,
+    defaultAspectRatio: "Auto",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
+  "Kling O1": {
+    modelTriggerSize: "compact",
+    quality: false,
+    resolution: "simple",
+    resolutionOptions: GPT_RESOLUTION_OPTIONS,
+    defaultResolution: "1K",
+    aspectRatio: "simple",
+    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    batchSize: true,
+    defaultBatchSize: 1,
+    gridGeneration: false,
+    enhancementToggle: false,
+    settingsTrigger: false,
+    assetUpload: true,
+    referenceSelection: true,
+  },
   "Nano Banana 2 Lite": {
     modelTriggerSize: "compact",
     quality: true,

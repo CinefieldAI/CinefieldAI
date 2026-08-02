@@ -1,23 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Check } from "lucide-react";
 import { VIDEO_DROPDOWN_MODELS, VIDEO_FEATURES } from "./videoMenuData";
 
 interface VideoMegaDropdownProps {
   onFeatureSelect?: (title: string) => void;
   onModelSelect?: (name: string) => void;
-}
-
-function badgeVariant(badge: "TOP" | "NEW") {
-  return badge === "TOP" ? "top" : "new";
+  activeFeatureTitle?: string;
+  activeModelName?: string;
 }
 
 export default function VideoMegaDropdown({
   onFeatureSelect,
   onModelSelect,
+  activeFeatureTitle,
+  activeModelName,
 }: VideoMegaDropdownProps) {
-  const [selectedTitle, setSelectedTitle] = useState<string>("Create Video");
+  const [selectedTitle, setSelectedTitle] = useState<string | undefined>(
+    activeModelName ?? activeFeatureTitle ?? "Seedance 2.0 4K",
+  );
 
   const handleFeatureClick = (title: string) => {
     setSelectedTitle(title);
@@ -31,16 +33,18 @@ export default function VideoMegaDropdown({
 
   return (
     <div
-      className="w-[732px] max-w-[92vw] overflow-y-auto rounded-[24px] border border-white/[0.06] bg-[#1c1e20] p-1 shadow-2xl shadow-black/60"
-      style={{ maxHeight: "calc(100dvh - 100px)" }}
+      className="w-[740px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-80px)] overflow-y-auto rounded-[16px] border border-white/[0.08] p-3 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-[24px]"
+      style={{
+        background: "rgba(28, 30, 32, 0.98)",
+      }}
     >
-      <div className="grid grid-flow-col-dense">
+      <div className="grid grid-cols-2 gap-3">
         {/* LEFT: Features */}
-        <section className="min-w-[18rem] p-2 pt-3 first-of-type:pr-0 last-of-type:pl-0">
-          <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-            Features
+        <section className="min-w-0 p-1">
+          <p className="px-2 pt-1 pb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-white/40">
+            FEATURES
           </p>
-          <div className="grid auto-rows-min gap-0.5">
+          <div className="flex flex-col gap-1.5">
             {VIDEO_FEATURES.map((feature) => {
               const Icon = feature.icon;
               const active = selectedTitle === feature.title;
@@ -49,34 +53,39 @@ export default function VideoMegaDropdown({
                   key={feature.title}
                   type="button"
                   onClick={() => handleFeatureClick(feature.title)}
-                  className={`group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors ${
-                    active ? "bg-[#131517]" : "hover:bg-[#131517]"
-                  } active:brightness-[.6]`}
+                  className={`group relative flex min-h-[72px] items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition-all duration-160 ease-out border ${
+                    active
+                      ? "bg-[rgba(217,119,87,0.075)] border-[rgba(217,119,87,0.36)]"
+                      : "bg-white/[0.022] border-white/[0.055] hover:bg-white/[0.04] hover:border-[rgba(217,119,87,0.18)]"
+                  } active:brightness-[.8]`}
                 >
+                  {active && (
+                    <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-[3px] bg-[#D97757]" />
+                  )}
                   <div
-                    className={`grid size-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+                    className={`relative size-12 min-w-[48px] min-h-[48px] rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
                       active
-                        ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
-                        : "bg-[#23262a] text-zinc-300 border border-transparent group-hover:text-[#D97757]"
+                        ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)]"
+                        : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)]"
                     }`}
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                    }}
                   >
-                    <Icon className="size-7" />
+                    <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center overflow-hidden">
+                      <Icon className="size-6 text-white" />
+                    </div>
                   </div>
-                  <div className="grid min-w-0 auto-rows-min gap-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
-                        {feature.title}
-                      </span>
-                      {feature.badge && (
-                        <Badge variant={badgeVariant(feature.badge)}>
-                          {feature.badge}
-                        </Badge>
-                      )}
+                  <div className="flex flex-1 flex-col min-w-0 justify-center gap-0.5">
+                    <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                      {feature.title}
                     </span>
-                    <span className="truncate text-xs font-medium leading-5 text-zinc-400">
+                    <span className="truncate text-[13px] font-normal leading-[18px] text-white/60">
                       {feature.description}
                     </span>
                   </div>
+                  {active && <Check className="size-4 shrink-0 text-[#D97757] ml-auto" />}
                 </button>
               );
             })}
@@ -84,11 +93,11 @@ export default function VideoMegaDropdown({
         </section>
 
         {/* RIGHT: Models */}
-        <section className="min-w-[18rem] p-2 pt-3 first-of-type:pr-0 last-of-type:pl-0">
-          <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-            Models
+        <section className="min-w-0 p-1">
+          <p className="px-2 pt-1 pb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-white/40">
+            MODELS
           </p>
-          <div className="grid auto-rows-min gap-0.5">
+          <div className="flex flex-col gap-1.5">
             {VIDEO_DROPDOWN_MODELS.map((model) => {
               const Icon = model.icon;
               const active = selectedTitle === model.name;
@@ -97,34 +106,39 @@ export default function VideoMegaDropdown({
                   key={model.name}
                   type="button"
                   onClick={() => handleModelClick(model.name)}
-                  className={`group grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl p-2 text-left no-underline transition-colors ${
-                    active ? "bg-[#131517]" : "hover:bg-[#131517]"
-                  } active:brightness-[.6]`}
+                  className={`group relative flex min-h-[72px] items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition-all duration-160 ease-out border ${
+                    active
+                      ? "bg-[rgba(217,119,87,0.075)] border-[rgba(217,119,87,0.36)]"
+                      : "bg-white/[0.022] border-white/[0.055] hover:bg-white/[0.04] hover:border-[rgba(217,119,87,0.18)]"
+                  } active:brightness-[.8]`}
                 >
+                  {active && (
+                    <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-[3px] bg-[#D97757]" />
+                  )}
                   <div
-                    className={`grid size-14 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${
+                    className={`relative size-12 min-w-[48px] min-h-[48px] rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
                       active
-                        ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
-                        : "bg-[#23262a] text-zinc-300 border border-transparent group-hover:text-[#D97757]"
+                        ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)]"
+                        : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)]"
                     }`}
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                    }}
                   >
-                    <Icon className="size-7" aria-hidden="true" />
+                    <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center overflow-hidden">
+                      <Icon className="size-6 text-white" aria-hidden="true" />
+                    </div>
                   </div>
-                  <div className="grid min-w-0 auto-rows-min gap-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[18px] font-semibold leading-6 text-white">
-                        {model.name}
-                      </span>
-                      {model.badge && (
-                        <Badge variant={badgeVariant(model.badge)} className="px-1">
-                          {model.badge}
-                        </Badge>
-                      )}
+                  <div className="flex flex-1 flex-col min-w-0 justify-center gap-0.5">
+                    <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                      {model.name}
                     </span>
-                    <span className="truncate text-xs font-medium leading-5 text-zinc-400">
+                    <span className="truncate text-[13px] font-normal leading-[18px] text-white/60">
                       {model.meta}
                     </span>
                   </div>
+                  {active && <Check className="size-4 shrink-0 text-[#D97757] ml-auto" />}
                 </button>
               );
             })}

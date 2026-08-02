@@ -1,229 +1,169 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp, Sparkles } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { ChevronDown, Search, Sparkles } from "lucide-react";
 import ModelItem from "./ModelItem";
 import { ALL_MODELS, FEATURED_MODELS } from "./createImageData";
+import { getSharedModelIcon } from "@/lib/modelIconRegistry";
 
 interface ModelSelectorProps {
   selected: string;
   onSelect: (name: string) => void;
-  /**
-   * "large" renders the 40px GPT Image 2 style trigger; "mini" renders the
-   * 28px lime-accented chip shared by every other capability-driven model
-   * row (Soul Cinema, WAN 2.2, Multi Reference, ...); default is the 36px
-   * compact pill used by the legacy generic control row.
-   */
   size?: "compact" | "large" | "mini";
+  portalContainer?: HTMLElement | null;
 }
 
-export default function ModelSelector({ selected, onSelect, size = "compact" }: ModelSelectorProps) {
+export default function ModelSelector({
+  selected,
+  onSelect,
+  size = "compact",
+  portalContainer,
+}: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const selectedIcon = [...FEATURED_MODELS, ...ALL_MODELS].find(
-    (m) => m.name === selected,
-  )?.icon;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    if (!open) return;
-    const handlePointer = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", handlePointer);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handlePointer);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
+  const allModelsCombined = [...FEATURED_MODELS, ...ALL_MODELS];
+  const selectedModelObj = allModelsCombined.find((m) => m.name === selected);
+  const sharedTriggerIcon = getSharedModelIcon(selected);
+  const SelectedIconComp =
+    sharedTriggerIcon ??
+    (typeof selectedModelObj?.icon === "function" ? selectedModelObj.icon : null);
+  const selectedIconPath =
+    typeof selectedModelObj?.icon === "string" ? selectedModelObj.icon : null;
 
   const handleSelect = (name: string) => {
     onSelect(name);
     setOpen(false);
+    setQuery("");
   };
 
+  const q = query.trim().toLowerCase();
+  const filterModel = (m: (typeof FEATURED_MODELS)[number]) =>
+    !q || m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+
+  const filteredFeatured = FEATURED_MODELS.filter(filterModel);
+  const filteredAll = ALL_MODELS.filter(filterModel);
+  const hasNoResults = filteredFeatured.length === 0 && filteredAll.length === 0;
+
   return (
-    <div ref={containerRef} className="relative">
-      {size === "mini" ? (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="listbox"
           aria-expanded={open}
-          className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-white/5 px-2 text-xs font-medium text-white/85 transition-colors hover:bg-white/10 active:bg-white/20 ${
-            open ? "bg-white/10" : ""
-          }`}
-        >
-          {selectedIcon ? (
-            <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[4px]"
-              style={{ boxShadow: "0 0 0 1px rgba(209,254,23,0.35)" }}
-            >
-              <Image
-                src={selectedIcon}
-                alt={selected}
-                width={16}
-                height={16}
-                className="h-full w-full object-cover"
-              />
-            </span>
-          ) : (
-            <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] text-[9px] font-bold"
-              style={{ background: "rgba(209,254,23,0.15)", color: "rgb(209,254,23)" }}
-            >
-              {selected.charAt(0)}
-            </span>
-          )}
-          <span className="max-w-[120px] truncate">{selected}</span>
-          <ChevronUp
-            className={`h-3.5 w-3.5 shrink-0 opacity-60 transition-transform ${open ? "" : "rotate-180"}`}
-          />
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border text-[13px] font-medium transition-all duration-[160ms] ease-out hover:-translate-y-px active:scale-[0.98] active:duration-100 ${
-            size === "large" ? "h-10 px-3" : "h-9 rounded-full px-3"
-          } ${
+          aria-label={`Model: ${selected}`}
+          className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
             open
-              ? "border-[rgba(0,229,255,0.55)] bg-[rgba(0,229,255,0.12)] text-white"
-              : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.055)] text-[rgba(255,255,255,0.78)] hover:border-[rgba(255,255,255,0.14)] hover:bg-[rgba(255,255,255,0.09)] hover:text-[rgba(255,255,255,0.95)]"
+              ? "border-[#D97757] bg-[#181a1d] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-[rgba(217,119,87,0.45)] bg-[#101112] hover:border-[#D97757] hover:bg-[#181a1d]"
           }`}
         >
-          {selectedIcon ? (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white">
-              <Image
-                src={selectedIcon}
-                alt={selected}
-                width={20}
-                height={20}
-                className="h-full w-full object-cover"
-              />
-            </span>
+          {SelectedIconComp ? (
+            <SelectedIconComp className="h-4 w-4 text-[#D97757]" />
+          ) : selectedIconPath ? (
+            <img src={selectedIconPath} alt="" className="h-4 w-4 object-contain" />
           ) : (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-magenta-500 to-magenta-600 text-[10px] font-semibold text-white">
-              {selected.charAt(0)}
-            </span>
+            <Sparkles className="h-4 w-4 text-[#D97757]" />
           )}
-          <span className="max-w-[150px] truncate">{selected}</span>
-          <ChevronUp
-            className={`h-3.5 w-3.5 shrink-0 opacity-75 transition-transform ${open ? "" : "rotate-180"}`}
+          <span className="max-w-[140px] truncate text-white">{selected}</span>
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${
+              open ? "rotate-180 text-[#D97757]" : "text-neutral-400"
+            }`}
           />
         </button>
-      )}
+      </Popover.Trigger>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            style={{
-              width: "400px",
-              maxWidth: "calc(100vw - 32px)",
-              height: "100vh",
-              maxHeight: "min(40rem, calc(100vh - 32px))",
-              marginBottom: "10px",
-              borderRadius: "16px",
-              background: "rgba(28, 30, 32, 0.95)",
-              backdropFilter: "blur(32px)",
-              WebkitBackdropFilter: "blur(32px)",
-              border: "1px solid rgba(217, 217, 217, 0.04)",
-              boxShadow: "none",
-              zIndex: 100000,
-            }}
-            className="absolute bottom-full left-0 flex flex-col overflow-hidden"
-          >
-            {/* Top glow */}
+      <Popover.Portal container={portalContainer}>
+        <Popover.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          collisionPadding={16}
+          data-page="image"
+          data-image-model-dropdown="true"
+          className="outline-none z-[100000] rounded-2xl border border-white/[0.08] bg-[rgba(25,27,30,0.76)] backdrop-blur-[28px] backdrop-saturate-[125%] shadow-[0_20px_60px_rgba(0,0,0,0.45)] flex flex-col pointer-events-auto transition-all duration-[170ms] ease-out origin-bottom animate-in fade-in-0 slide-in-from-bottom-2 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+        >
+          <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
+            {/* Top ambient orange/cyan glow */}
             <div
               aria-hidden
-              className="pointer-events-none absolute top-0 left-0 w-full h-[37px] z-0"
-              style={{
-                borderRadius: "317px",
-                background: "rgba(139, 213, 244, 0.24)",
-                filter: "blur(50px)",
-              }}
-            />
-            {/* Lower glow */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute left-0 w-full h-[37px] z-0"
-              style={{
-                bottom: "35%",
-                borderRadius: "317px",
-                background: "rgba(139, 213, 244, 0.24)",
-                filter: "blur(50px)",
-              }}
+              className="pointer-events-none absolute top-0 left-0 w-full h-[40px] z-0 rounded-[317px] bg-[rgba(217,119,87,0.15)] blur-[50px]"
             />
 
-            {/* Content wrapper */}
-            <div className="relative z-10 flex flex-col min-h-0 flex-1">
-              {/* Featured Models heading */}
-              <div className="px-3 py-2 min-h-[41px] flex items-center border-b border-b-[rgba(217,217,217,0.04)]">
-                <p
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: "rgba(255,255,255,0.6)",
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Featured Models
-                </p>
-              </div>
-
-              {/* Featured models list */}
-              <div className="flex flex-col gap-0 min-h-0 overflow-y-auto hide-scrollbar">
-                {FEATURED_MODELS.map((model) => (
-                  <ModelItem
-                    key={model.name}
-                    model={model}
-                    isSelected={selected === model.name}
-                    onSelect={handleSelect}
-                  />
-                ))}
-              </div>
-
-              {/* All Models heading */}
-              <div className="px-3 py-2 min-h-[41px] flex items-center border-t border-b border-b-[rgba(217,217,217,0.04)] border-t-[rgba(217,217,217,0.04)]">
-                <p
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: "rgba(255,255,255,0.6)",
-                  }}
-                >
-                  All Models
-                </p>
-              </div>
-
-              {/* All models list */}
-              <div className="flex flex-col gap-0 min-h-0 overflow-y-auto hide-scrollbar flex-1">
-                {ALL_MODELS.map((model) => (
-                  <ModelItem
-                    key={`${model.name}-${model.description}`}
-                    model={model}
-                    isSelected={selected === model.name}
-                    onSelect={handleSelect}
-                  />
-                ))}
+            {/* Search Header Container (Glass Field) */}
+            <div className="relative z-10 p-2.5 pb-1">
+              <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.25)]">
+                <Search className="size-4 shrink-0 text-white/40 group-focus-within/search:text-[#F19A72] group-focus-within/search:drop-shadow-[0_0_5px_rgba(217,119,87,0.5)] transition-colors duration-200" />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search models..."
+                  aria-label="Search models"
+                  className="w-full bg-transparent text-xs font-medium text-white placeholder:text-white/35 outline-none"
+                />
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+
+            {/* Internal scroll area with professional thin scrollbar */}
+            <div
+              className="relative z-10 flex-1 min-h-0 overflow-y-auto px-2.5 pb-2.5 space-y-1 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent] hover:[scrollbar-color:rgba(217,119,87,0.45)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#D97757]/50 transition-colors"
+              role="listbox"
+              aria-label="AI models"
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {hasNoResults && (
+                <p className="px-3 py-8 text-center text-xs text-white/40">
+                  No models match &quot;{query}&quot;.
+                </p>
+              )}
+
+              {/* Featured Models Section */}
+              {filteredFeatured.length > 0 && (
+                <div className="mb-3">
+                  <p className="flex items-center gap-1.5 px-3 pt-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase text-white/40">
+                    <Sparkles className="size-3 text-[#D97757]" />
+                    Featured Models
+                  </p>
+                  <div className="space-y-1.5">
+                    {filteredFeatured.map((model) => (
+                      <ModelItem
+                        key={`featured-${model.id}`}
+                        model={model}
+                        isSelected={selected === model.name}
+                        onSelect={handleSelect}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* All Models Section */}
+              {filteredAll.length > 0 && (
+                <div>
+                  <p className="flex items-center gap-1.5 px-3 pt-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase text-white/40">
+                    <Sparkles className="size-3 text-white/30" />
+                    All Models
+                  </p>
+                  <div className="space-y-1.5">
+                    {filteredAll.map((model) => (
+                      <ModelItem
+                        key={`all-${model.id}`}
+                        model={model}
+                        isSelected={selected === model.name}
+                        onSelect={handleSelect}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

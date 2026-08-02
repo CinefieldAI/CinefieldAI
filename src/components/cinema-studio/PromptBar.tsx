@@ -965,11 +965,11 @@ export default function PromptBar(props: PromptBarProps) {
       />
       <div
         className={`relative min-w-0 flex-none ${
-          promptResize.isResizing ? "" : "transition-[width] duration-150 ease-out"
+          promptResize.isResizing ? "" : "transition-[width,height] duration-150 ease-out"
         }`}
         style={{
           width: promptWidth,
-          height: DEFAULT_GENERATE_PROMPT_HEIGHT,
+          height: promptHeight,
         }}
       >
       {/* Full frame glowing pulsing orange border shimmer overlay */}

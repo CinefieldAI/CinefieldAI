@@ -27,6 +27,8 @@ import {
 /** Seedance now renders via its real SVG component (not an `<img>` PNG), so
  * no per-icon zoom compensation is needed here anymore — kept as a no-op
  * passthrough since callers still pass a (path, base-className) pair. */
+import { getSharedModelIcon } from "@/lib/modelIconRegistry";
+
 function iconImgClassName(_iconPath: string, base: string) {
   return base;
 }
@@ -77,11 +79,11 @@ function LocationPin({
 }
 
 const FROSTED =
-  "rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0";
 
 /** Alternate panel skin shown ONLY while Kling 3.0 Turbo is selected */
 const KLING_TURBO_PANEL =
-  "rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.95)] shadow-[0_24px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "rounded-2xl border border-white/[0.06] bg-[rgba(20,20,20,0.95)] shadow-[0_24px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0";
 
 type RowSkin = "default" | "klingTurbo";
 
@@ -100,9 +102,11 @@ function ImageRow({
   focused?: boolean;
   buttonRef?: (el: HTMLButtonElement | null) => void;
 }) {
-  const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
+  const sharedIcon = getSharedModelIcon(model.name);
+  const IconComponent = sharedIcon ?? (typeof model.icon === "function" ? model.icon : null);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+
   return (
     <button
       ref={buttonRef}
@@ -111,34 +115,49 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
-        active ? "bg-white/5" : ""
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+        active
+          ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
       }`}
     >
-      <span
-        className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
+      {active && (
+        <span
+          aria-hidden
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+        />
+      )}
+      <div
+        className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active
-            ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
-            : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
+            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
+            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
         }`}
+        style={{
+          background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+        }}
       >
-        {iconPath ? (
-          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
-        ) : (
-          Icon && <Icon className="size-4" />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate text-xs font-medium text-white">
-            {model.name}
-          </span>
+        <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center">
+          {IconComponent ? (
+            <IconComponent className="size-4.5 text-white" />
+          ) : iconPath ? (
+            <img src={iconPath} alt="" className="size-4.5 object-contain" />
+          ) : (
+            <Clapperboard className="size-4.5 text-white" />
+          )}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
+        <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          {model.name}
         </span>
-        <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
+        <p className="truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
           {model.description}
-        </span>
-      </span>
-      {active && <Check className="size-4 shrink-0 text-[#D97757]" />}
+        </p>
+      </div>
+      <div className="size-5 shrink-0 flex items-center justify-center ml-1">
+        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+      </div>
     </button>
   );
 }
@@ -170,33 +189,48 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
-        active ? "bg-white/5" : ""
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+        active
+          ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
       }`}
     >
-      <span
-        className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
+      {active && (
+        <span
+          aria-hidden
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+        />
+      )}
+      <div
+        className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active
-            ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
-            : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
+            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
+            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
         }`}
+        style={{
+          background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+        }}
       >
-        {iconPath ? (
-          <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
-        ) : (
-          Icon && <Icon className="size-4" aria-hidden="true" />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-xs font-medium text-white">
+        <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center">
+          {iconPath ? (
+            <img src={iconPath} alt="" className="size-4.5 object-contain" />
+          ) : Icon ? (
+            <Icon className="size-4.5 text-white" aria-hidden="true" />
+          ) : (
+            <Clapperboard className="size-4.5 text-white" />
+          )}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
+        <div className="flex items-center gap-1.5">
+          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
           {model.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
-        </span>
+        </div>
         {model.durationLabel ? (
-          <span className="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-400">
+          <span className="flex items-center gap-2 text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
             <span className="flex items-center gap-1">
               <Diamond className="size-3" />
               {model.resolution}
@@ -207,12 +241,14 @@ function VideoFlatRow({
             </span>
           </span>
         ) : model.description ? (
-          <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
+          <span className="block truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
             {model.description}
           </span>
         ) : null}
-      </span>
-      {active && <Check className="size-4 shrink-0 text-[#D97757]" />}
+      </div>
+      <div className="size-5 shrink-0 flex items-center justify-center ml-1">
+        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+      </div>
     </button>
   );
 }
@@ -302,36 +338,49 @@ function VideoParentRow({
         aria-selected={active}
         tabIndex={focused ? 0 : -1}
         onClick={openFlyout}
-        className={`group/model flex w-full cursor-pointer items-center pl-1.5 py-1.5 pr-3 rounded-xl text-start transition-colors hover:bg-white/5 focus-visible:bg-white/5 focus:outline-none ${
-          active ? "bg-white/5" : ""
+        className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+          active
+            ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+            : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
         }`}
       >
-        <span
-          className={`flex size-10 shrink-0 mr-2 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ${
+        {active && (
+          <span
+            aria-hidden
+            className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+          />
+        )}
+        <div
+          className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
             active
-              ? "bg-[rgba(217,119,87,0.12)] text-[#D97757] border border-[rgba(217,119,87,0.40)] shadow-[0_0_12px_rgba(217,119,87,0.35)]"
-              : "bg-white/5 text-gray-400 border border-transparent shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model:text-[#D97757]"
+              ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
+              : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
           }`}
+          style={{
+            background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+          }}
         >
-          {iconPath ? (
-            <img src={iconPath} alt="" className={iconImgClassName(iconPath, "size-4 object-contain")} />
-          ) : (
-            Icon && <Icon className="size-4" aria-hidden="true" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="truncate text-xs font-medium text-white">
-              {model.name}
-            </span>
+          <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center">
+            {iconPath ? (
+              <img src={iconPath} alt="" className="size-4.5 object-contain" />
+            ) : Icon ? (
+              <Icon className="size-4.5 text-white" aria-hidden="true" />
+            ) : (
+              <Clapperboard className="size-4.5 text-white" />
+            )}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
+          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+            {model.name}
           </span>
           {model.description && (
-            <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
+            <span className="block truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
               {model.description}
             </span>
           )}
-        </span>
-        <ChevronRight className="size-4 shrink-0 text-gray-400" />
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-white/50 group-hover/model-row:text-white ml-1" />
       </button>
 
       {isOpen &&
@@ -416,12 +465,11 @@ export default function ModelSelector({
   const isImage = mode === "image";
   const source = isImage ? IMAGE_MODEL_CATEGORIES : MODEL_CATEGORIES;
   const FallbackTriggerIcon = isImage ? LocationPin : Clapperboard;
-  const triggerIconPath = typeof selected.icon === "string" ? selected.icon : null;
-  // The selected model's own icon component (Google/OpenAI Sora/Seedance/
-  // Kling/Wan/etc.) when it has one, falling back to the generic
-  // Clapperboard/LocationPin glyph only for models without a brand icon.
+  const sharedTriggerIcon = getSharedModelIcon(selected.name);
   const SelectedIcon =
-    typeof selected.icon === "string" || !selected.icon ? FallbackTriggerIcon : selected.icon;
+    sharedTriggerIcon ??
+    (typeof selected.icon === "function" ? selected.icon : FallbackTriggerIcon);
+  const triggerIconPath = typeof selected.icon === "string" ? selected.icon : null;
 
   // Alternate skin shown ONLY while Kling 3.0 Turbo is the selected model —
   // every other model keeps the standard look above.
@@ -609,7 +657,11 @@ export default function ModelSelector({
               aria-haspopup="listbox"
               aria-expanded={open}
               aria-label={`Model: ${selected.name}`}
-              className="flex h-8 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+              className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+                open
+                  ? "border-[#D97757] bg-[#181a1d] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                  : "border-[rgba(217,119,87,0.45)] bg-[#101112] hover:border-[#D97757] hover:bg-[#181a1d]"
+              }`}
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
@@ -625,7 +677,7 @@ export default function ModelSelector({
               <span className="max-w-[140px] truncate text-white">
                 {selected.name}
               </span>
-              <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${open ? "rotate-180 text-[#D97757]" : "text-neutral-400"}`} />
             </button>
           )}
         </Popover.Trigger>
@@ -634,30 +686,34 @@ export default function ModelSelector({
             side="top"
             align="start"
             sideOffset={8}
+            collisionPadding={16}
             onKeyDown={handleKeyDown}
-            className="outline-none z-[100000] rounded-2xl border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] shadow-[0_4px_4px_rgba(0,0,0,0.12)] backdrop-blur flex flex-col pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
+            className="outline-none z-[100000] rounded-2xl border border-white/10 bg-[#141618]/95 shadow-[0_16px_48px_rgba(0,0,0,0.65)] backdrop-blur-xl flex flex-col pointer-events-auto transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
           >
-            <div className="relative rounded-2xl flex flex-col overflow-hidden w-100 h-[100vh] max-w-[calc(100vw-32px)] max-h-[min(40rem,calc(100vh-32px))]">
-              {/* Decorative background glow layers */}
-              <div className="pointer-events-none absolute top-0 h-[37px] w-full rounded-[317px] bg-[rgba(139,213,244,0.24)] blur-[50px]" aria-hidden="true" />
-              <div className="pointer-events-none absolute bottom-[35%] h-[37px] w-full rounded-[317px] bg-[rgba(139,213,244,0.24)] blur-[50px]" aria-hidden="true" />
-
-              {/* Search header */}
-              <div className="relative z-10 flex h-[41px] min-h-[41px] items-center gap-2 border-b border-white/10 bg-transparent px-3">
-                <Search className="size-4 shrink-0 text-gray-400" />
-                <input
-                  ref={searchInputRef}
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search..."
-                  aria-label="Search models"
-                  className="w-full bg-transparent text-sm text-white placeholder:text-gray-400 outline-none"
-                />
+            <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
+              {/* Search Header Container (Glass Field matching screenshot) */}
+              <div className="relative z-10 p-2.5 pb-1">
+                <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-[rgba(217,119,87,0.40)] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757] focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.30)]">
+                  <Search className="size-4 shrink-0 text-[#D97757] drop-shadow-[0_0_5px_rgba(217,119,87,0.5)]" />
+                  <input
+                    ref={searchInputRef}
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search models..."
+                    aria-label="Search models"
+                    className="w-full bg-transparent text-xs font-medium text-white placeholder:text-white/35 outline-none"
+                  />
+                </div>
               </div>
 
               {/* Internal scroll area */}
-              <div className="relative z-10 flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-2" role="listbox" aria-label="AI models">
+              <div
+                className="relative z-10 flex-1 min-h-0 overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent]"
+                role="listbox"
+                aria-label="AI models"
+                onWheel={(e) => e.stopPropagation()}
+              >
                 {categories.length === 0 && (
                   <p className="px-2 py-6 text-center text-xs text-neutral-500">
                     No models match &quot;{query}&quot;.

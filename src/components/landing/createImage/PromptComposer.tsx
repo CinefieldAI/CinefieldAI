@@ -13,7 +13,15 @@ import {
   Wand2,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
+
+const DEFAULT_IMAGE_PROMPT_WIDTH = 1060;
+const MAX_IMAGE_PROMPT_WIDTH = 1240;
+const DEFAULT_IMAGE_PROMPT_HEIGHT = 140;
+const MAX_IMAGE_PROMPT_HEIGHT = 360;
 import Cinema25AssetsPicker from "@/components/cinema-studio/Cinema25AssetsPicker";
+import GenerateButton from "@/components/cinema-studio/GenerateButton";
 import AttachmentPreview from "./AttachmentPreview";
 import ModelSelector from "./ModelSelector";
 import { OUTPUT_COUNTS, type ReferenceAttachment } from "./createImageData";
@@ -294,7 +302,7 @@ export default function PromptComposer({
   // Keep the contenteditable in sync when the prompt is set externally (e.g. "reuse")
   useEffect(() => {
     const el = editorRef.current;
-    if (el && el.textContent !== prompt) {
+    if (el && el.textContent !== prompt && document.activeElement !== el) {
       el.textContent = prompt;
     }
   }, [prompt]);
@@ -395,684 +403,752 @@ export default function PromptComposer({
     }
   };
 
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void handleGenerate();
-      }}
-      style={{
-        position: "fixed",
-        bottom: "18px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(1120px, calc(100vw - 40px))",
-        minHeight: "148px",
-        zIndex: 80,
-        borderRadius: "24px",
-        padding: "16px",
-        background:
-          "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
-        border: "1px solid rgba(217, 119, 87, 0.45)",
-        boxShadow:
-          "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-      }}
-      className="flex flex-col justify-center transition-shadow duration-[180ms] ease-out"
-    >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          handleFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
+  // Resizable prompt surface state (height resize up/down via top handle)
+  const [promptWidth, setPromptWidth] = useState(DEFAULT_IMAGE_PROMPT_WIDTH);
+  const [promptHeight, setPromptHeight] = useState(DEFAULT_IMAGE_PROMPT_HEIGHT);
+  const [maxPromptWidth, setMaxPromptWidth] = useState(MAX_IMAGE_PROMPT_WIDTH);
+  const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_IMAGE_PROMPT_HEIGHT);
 
-      {/* Recraft V4.1 Utility — single decorative centered utility shell.
-          Purely visual (pointer-events-none); never duplicated. */}
-      {selectedModel === "Recraft V4.1 Utility" && (
+  useEffect(() => {
+    const updateResizeBounds = () => {
+      const nextMaxWidth = Math.max(
+        320,
+        Math.min(MAX_IMAGE_PROMPT_WIDTH, window.innerWidth - 32),
+      );
+      const nextMaxHeight = Math.max(
+        DEFAULT_IMAGE_PROMPT_HEIGHT,
+        Math.min(MAX_IMAGE_PROMPT_HEIGHT, window.innerHeight - 160),
+      );
+      setMaxPromptWidth(nextMaxWidth);
+      setMaxPromptHeight(nextMaxHeight);
+    };
+
+    updateResizeBounds();
+    window.addEventListener("resize", updateResizeBounds);
+    return () => window.removeEventListener("resize", updateResizeBounds);
+  }, []);
+
+  const promptResize = usePromptSurfaceResize({
+    width: promptWidth,
+    height: promptHeight,
+    minWidth: Math.min(DEFAULT_IMAGE_PROMPT_WIDTH, maxPromptWidth),
+    maxWidth: maxPromptWidth,
+    minHeight: DEFAULT_IMAGE_PROMPT_HEIGHT,
+    maxHeight: maxPromptHeight,
+    defaultWidth: DEFAULT_IMAGE_PROMPT_WIDTH,
+    defaultHeight: DEFAULT_IMAGE_PROMPT_HEIGHT,
+    setWidth: setPromptWidth,
+    setHeight: setPromptHeight,
+    storageKey: "imagePromptBarDimensions",
+  });
+
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+
+  return (
+    <>
+      <div
+        id="image-prompt-popover-root"
+        ref={setPortalRoot}
+        className="pointer-events-none fixed left-0 top-0 z-[100000]"
+      />
+      <div
+        className={`fixed bottom-[18px] left-1/2 -translate-x-1/2 z-[100] max-w-[calc(100vw-32px)] ${
+          promptResize.isResizing ? "" : "transition-[width,height] duration-150 ease-out"
+        }`}
+        style={{
+          width: promptWidth,
+          height: Math.max(DEFAULT_IMAGE_PROMPT_HEIGHT, promptHeight),
+          minHeight: `${DEFAULT_IMAGE_PROMPT_HEIGHT}px`,
+        }}
+      >
+      {/* Outer Illuminated Glowing Border (Matches Generate #D97757 orange glow) */}
+      <div className="relative rounded-[24px] w-full h-full">
         <div
-          aria-hidden
-          className="pointer-events-none absolute -inset-0.5 z-10 transition-opacity duration-200"
-          style={{
-            borderRadius: "20px",
-            left: "calc(50% + 38px)",
-            right: "auto",
-            maxWidth: "calc(100% - 76px)",
-            width: "800px",
-            transform: "translateX(-50%)",
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-[1px] rounded-[24px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30"
+        />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleGenerate();
           }}
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
+            border: "1px solid rgba(217, 119, 87, 0.45)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 25px rgba(217,119,87,0.18), 0 10px 30px rgba(0,0,0,0.5)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
+          className="prompt-main-surface relative flex min-w-0 w-full h-full items-stretch gap-1 rounded-[24px] p-3 overflow-hidden"
         >
-          <div
-            className="absolute left-0 right-0 overflow-hidden"
-            style={{
-              bottom: "calc(100% - 30px)",
-              borderTopLeftRadius: "20px",
-              borderTopRightRadius: "20px",
-              background:
-                "linear-gradient(180deg, rgba(209,254,23,0.08), rgba(209,254,23,0))",
+          {/* Top handle for vertical height resize */}
+          <PromptResizeHandles
+            verticalHandleProps={promptResize.verticalHandleProps}
+            cornerHandleProps={promptResize.cornerHandleProps}
+            isResizing={promptResize.isResizing}
+            verticalLabel="Resize image prompt height"
+            cornerLabel="Resize image prompt width and height"
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = "";
             }}
           />
-        </div>
-      )}
 
-      {/* Attachment preview (when present) */}
-      {attachments.length > 0 && (
-        <div className="mb-3">
-          <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
-        </div>
-      )}
-      {elementReferences.length > 0 && (
-        <div className="mb-3">
-          <AttachmentPreview attachments={elementReferences} onRemove={removeElementReference} />
-        </div>
-      )}
-
-      {/* Flex column: prompt editor + control row */}
-      <div className="flex min-w-0 flex-col gap-3">
-        {/* Prompt editor row */}
-        <div className="flex items-start gap-2.5">
-            {!capabilities && selectedModel !== "Z-Image" && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Add reference image"
-                className="group flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_12px_rgba(0,229,255,0.25)] active:scale-95"
-              >
-                <ImagePlus className="h-4 w-4 transition-transform duration-200 ease-out group-hover:rotate-[3deg]" />
-              </button>
-            )}
-
-            <div className="relative min-w-0 flex-1">
+          {/* Recraft V4.1 Utility — single decorative centered utility shell */}
+          {selectedModel === "Recraft V4.1 Utility" && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-0.5 z-10 transition-opacity duration-200"
+              style={{
+                borderRadius: "20px",
+                left: "calc(50% + 38px)",
+                right: "auto",
+                transform: "translateX(-50%)",
+                width: "360px",
+                height: "56px",
+                top: "calc(100% - 58px)",
+                border: "1.5px solid rgba(209,254,23,0.9)",
+                boxShadow:
+                  "0 0 35px rgba(209,254,23,0.55), inset 0 0 20px rgba(209,254,23,0.35)",
+                background:
+                  "linear-gradient(180deg, rgba(209,254,23,0.12) 0%, rgba(209,254,23,0.03) 100%)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+              }}
+            >
               <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-multiline="true"
-                aria-label="Prompt"
-                onInput={(e) => onPromptChange(e.currentTarget.textContent ?? "")}
-                onKeyDown={handleEditorKeyDown}
+                className="absolute left-0 right-0 overflow-hidden"
                 style={{
-                  minHeight: "42px",
-                  maxHeight: "20dvh",
-                  paddingTop: "7px",
-                  paddingLeft: "2px",
-                  fontSize: "15px",
-                  lineHeight: 1.55,
-                  letterSpacing: "-0.01em",
-                  color: "rgba(255,255,255,0.92)",
-                  caretColor: "#00e5ff",
+                  bottom: "calc(100% - 30px)",
+                  borderTopLeftRadius: "20px",
+                  borderTopRightRadius: "20px",
+                  background:
+                    "linear-gradient(180deg, rgba(209,254,23,0.08), rgba(209,254,23,0))",
                 }}
-                className="w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent outline-none"
               />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute select-none transition-opacity duration-200 ease-out"
-                style={{
-                  left: "2px",
-                  top: "7px",
-                  fontSize: "15px",
-                  fontWeight: 400,
-                  lineHeight: 1.55,
-                  letterSpacing: "-0.01em",
-                  color: "rgba(255,255,255,0.42)",
-                  opacity: prompt ? 0 : 1,
-                }}
-              >
-                Describe the scene you imagine
-              </span>
+            </div>
+          )}
+
+          {/* Left Column: Text editor (top) + controls row (mt-auto bottom) */}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col justify-start gap-1">
+              {attachments.length > 0 && (
+                <div className="mb-2">
+                  <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+                </div>
+              )}
+              {elementReferences.length > 0 && (
+                <div className="mb-2">
+                  <AttachmentPreview attachments={elementReferences} onRemove={removeElementReference} />
+                </div>
+              )}
+
+              <div className="flex items-start gap-2.5 flex-1 min-h-[24px]">
+                {!capabilities && selectedModel !== "Z-Image" && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Add reference image"
+                    className="group flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_12px_rgba(0,229,255,0.25)] active:scale-95"
+                  >
+                    <ImagePlus className="h-4 w-4 transition-transform duration-200 ease-out group-hover:rotate-[3deg]" />
+                  </button>
+                )}
+
+                <div
+                  className="relative min-w-0 flex-1 h-full cursor-text"
+                  onClick={() => editorRef.current?.focus()}
+                >
+                  <div
+                    ref={editorRef}
+                    contentEditable={true}
+                    suppressContentEditableWarning
+                    role="textbox"
+                    tabIndex={0}
+                    aria-multiline="true"
+                    aria-label="Prompt"
+                    onInput={(e) => onPromptChange(e.currentTarget.textContent ?? "")}
+                    onKeyDown={handleEditorKeyDown}
+                    style={{
+                      minHeight: "24px",
+                      maxHeight: "100%",
+                      paddingTop: "4px",
+                      paddingLeft: "2px",
+                      fontSize: "15px",
+                      lineHeight: 1.55,
+                      letterSpacing: "-0.01em",
+                      color: "rgba(255,255,255,0.92)",
+                      caretColor: "#00e5ff",
+                    }}
+                    className="relative z-10 w-full h-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent outline-none cursor-text"
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute select-none transition-opacity duration-200 ease-out z-0"
+                    style={{
+                      left: "2px",
+                      top: "4px",
+                      fontSize: "15px",
+                      fontWeight: 400,
+                      lineHeight: 1.55,
+                      letterSpacing: "-0.01em",
+                      color: "rgba(255,255,255,0.42)",
+                      opacity: prompt ? 0 : 1,
+                    }}
+                  >
+                    Describe the scene you imagine
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom control row: mt-auto */}
+            <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+              <ModelSelector selected={selectedModel} onSelect={onSelectModel} portalContainer={portalRoot} />
+
+              {capabilities ? (
+                <>
+                  {selectedModel === "GPT Image 2" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          large
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <QualityPopover
+                        value={gptQuality}
+                        onChange={setGptQuality}
+                        id="quality"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Higgsfield Soul Cinema" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          compactWidth
+                          lime
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "WAN 2.2" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <EnhancementToggle
+                        enabled={enhancementEnabled}
+                        onToggle={() => setEnhancementEnabled((v) => !v)}
+                        icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                      />
+                    </>
+                  )}
+
+                  {(selectedModel === "Multi Reference" ||
+                    selectedModel === "Flux Kontext Max" ||
+                    selectedModel === "FLUX.2 Max") && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                      )}
+                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <EnhancementToggle
+                        enabled={enhancementEnabled}
+                        onToggle={() => setEnhancementEnabled((v) => !v)}
+                      />
+                    </>
+                  )}
+
+                  {selectedModel === "FLUX.2 Pro" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                      )}
+                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "FLUX.2 Flex" && (
+                    <>
+                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <SettingsPopover
+                        settings={fluxFlexSettings}
+                        onChange={setFluxFlexSettings}
+                        id="settings"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                    </>
+                  )}
+
+                  {(selectedModel === "Higgsfield Soul 2.0" || selectedModel === "Higgsfield Soul") && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Grok Imagine" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          compactWidth
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {selectedModel === "Seedream 4.0" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Seedream 4.5" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Seedream 5.0 Lite" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          compactWidth
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Seedream 5.0 Pro" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          label="QUALITY"
+                          compactWidth
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {(selectedModel === "Nano Banana Pro" || selectedModel === "Nano Banana 2") && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "Nano Banana 2 Lite" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup
+                          onOpenPicker={openUploadsPicker}
+                          onOpenElementsPicker={openElementsPicker}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {selectedModel === "Z-Image" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <GenerationModeSelector value={genMode} onChange={setGenMode} />
+                  <QualitySelector
+                    value={quality}
+                    onChange={setQuality}
+                    options={selectedModel === "Kling O1" ? KLING_O1_RESOLUTION_OPTIONS : QUALITY_LEVELS}
+                  />
+                  <AspectRatioPopover
+                    value={aspectRatio}
+                    onChange={setAspectRatio}
+                    options={STANDARD_ASPECT_RATIOS}
+                    id="legacyAspectRatio"
+                    openId={openPopoverId}
+                    onOpenIdChange={setOpenPopoverId}
+                  />
+                  <OutputCountSelector value={outputCount} onChange={setOutputCount} />
+                  <button
+                    type="button"
+                    onClick={() => setDrawMode((v) => !v)}
+                    aria-pressed={drawMode}
+                    className={`${CHIP} ${drawMode ? CHIP_ACTIVE : CHIP_IDLE}`}
+                  >
+                    <Pencil />
+                    Draw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setColorTransfer((v) => !v)}
+                    aria-pressed={colorTransfer}
+                    className={`${CHIP} ${colorTransfer ? CHIP_ACTIVE : CHIP_IDLE}`}
+                  >
+                    <Blend />
+                    Color Transfer
+                  </button>
+                  <button type="button" className={`${CHIP} ${CHIP_IDLE}`}>
+                    <Sparkles />
+                    Enhance Prompt
+                  </button>
+                  <button type="button" className={`${CHIP} ${CHIP_IDLE}`}>
+                    <Wand2 />
+                    Magic Prompt
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-        {/* Control row: Cinema Studio style — ModelSelector + capability-driven controls on left, Generate on right */}
-        <div className="flex items-center justify-between gap-1">
-          {/* Left side: ModelSelector + capability-driven controls */}
-          <div className="prompt-control-row relative flex min-w-0 flex-nowrap items-center gap-1 overflow-visible">
-            <ModelSelector selected={selectedModel} onSelect={onSelectModel} />
-
-            {capabilities ? (
-              <>
-                {selectedModel === "GPT Image 2" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      large
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <QualityPopover
-                    value={gptQuality}
-                    onChange={setGptQuality}
-                    id="quality"
-                    openId={openPopoverId}
-                    onOpenIdChange={setOpenPopoverId}
-                  />
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      detailed
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Higgsfield Soul Cinema" && (
-                <>
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      compactWidth
-                      lime
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "WAN 2.2" && (
-                <>
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <EnhancementToggle
-                    enabled={enhancementEnabled}
-                    onToggle={() => setEnhancementEnabled((v) => !v)}
-                    icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
-                  />
-                </>
-              )}
-
-              {(selectedModel === "Multi Reference" ||
-                selectedModel === "Flux Kontext Max" ||
-                selectedModel === "FLUX.2 Max") && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                  )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                  <EnhancementToggle
-                    enabled={enhancementEnabled}
-                    onToggle={() => setEnhancementEnabled((v) => !v)}
-                  />
-                </>
-              )}
-
-              {selectedModel === "FLUX.2 Pro" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                  )}
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      detailed
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "FLUX.2 Flex" && (
-                <>
-                  <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                  <SettingsPopover
-                    settings={fluxFlexSettings}
-                    onChange={setFluxFlexSettings}
-                    id="settings"
-                    openId={openPopoverId}
-                    onOpenIdChange={setOpenPopoverId}
-                  />
-                </>
-              )}
-
-              {selectedModel === "Higgsfield Soul 2.0" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Grok Imagine" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      compactWidth
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                  {capabilities.qualityOptions && (
-                    <QualityPopover
-                      value={modelQuality}
-                      onChange={setModelQuality}
-                      options={capabilities.qualityOptions}
-                      id="quality"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                </>
-              )}
-
-              {selectedModel === "Seedream 4.0" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.qualityOptions && (
-                    <QualityPopover
-                      value={modelQuality}
-                      onChange={setModelQuality}
-                      options={capabilities.qualityOptions}
-                      id="quality"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Seedream 4.5" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Seedream 5.0 Lite" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      compactWidth
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Seedream 5.0 Pro" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      detailed
-                      label="QUALITY"
-                      compactWidth
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {(selectedModel === "Nano Banana Pro" || selectedModel === "Nano Banana 2") && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  {capabilities.resolutionOptions && (
-                    <ResolutionPopover
-                      value={modelResolution}
-                      onChange={setModelResolution}
-                      options={capabilities.resolutionOptions}
-                      id="resolution"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-
-              {selectedModel === "Nano Banana 2 Lite" && (
-                <>
-                  {capabilities.assetUpload && (
-                    <AssetsButtonGroup
-                      onOpenPicker={openUploadsPicker}
-                      onOpenElementsPicker={openElementsPicker}
-                    />
-                  )}
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                  {capabilities.qualityOptions && (
-                    <QualityPopover
-                      value={modelQuality}
-                      onChange={setModelQuality}
-                      options={capabilities.qualityOptions}
-                      id="quality"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                </>
-              )}
-
-              {selectedModel === "Z-Image" && (
-                <>
-                  {capabilities.aspectRatioOptions && (
-                    <AspectRatioPopover
-                      value={modelAspectRatio}
-                      onChange={setModelAspectRatio}
-                      options={capabilities.aspectRatioOptions}
-                      id="aspectRatio"
-                      openId={openPopoverId}
-                      onOpenIdChange={setOpenPopoverId}
-                    />
-                  )}
-                  <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                </>
-              )}
-            ) : (
-              <>
-                <GenerationModeSelector value={genMode} onChange={setGenMode} />
-                <QualitySelector
-                  value={quality}
-                  onChange={setQuality}
-                  options={selectedModel === "Kling O1" ? KLING_O1_RESOLUTION_OPTIONS : QUALITY_LEVELS}
-                />
-                <AspectRatioPopover
-                  value={aspectRatio}
-                  onChange={setAspectRatio}
-                  options={STANDARD_ASPECT_RATIOS}
-                  id="legacyAspectRatio"
-                  openId={openPopoverId}
-                  onOpenIdChange={setOpenPopoverId}
-                />
-                <OutputCountSelector value={outputCount} onChange={setOutputCount} />
-                <button
-                  type="button"
-                  onClick={() => setDrawMode((v) => !v)}
-                  aria-pressed={drawMode}
-                  className={`${CHIP} ${drawMode ? CHIP_ACTIVE : CHIP_IDLE}`}
-                >
-                  <Pencil />
-                  Draw
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setColorTransfer((v) => !v)}
-                  aria-pressed={colorTransfer}
-                  className={`${CHIP} ${colorTransfer ? CHIP_ACTIVE : CHIP_IDLE}`}
-                >
-                  <Blend />
-                  Color Transfer
-                </button>
-                <button type="button" className={`${CHIP} ${CHIP_IDLE}`}>
-                  <Sparkles />
-                  Enhance Prompt
-                </button>
-                <button type="button" className={`${CHIP} ${CHIP_IDLE}`}>
-                  <Wand2 />
-                  Magic Prompt
-                </button>
-              </>
-            )}
+          {/* Right Column: Generate button centered vertically (flex h-full shrink-0 self-center) */}
+          <div className="flex h-full shrink-0 items-center justify-center gap-2 self-center">
+            <GenerateButton
+              height={88}
+              creditCost={40}
+              onGenerate={handleGenerate}
+              mode="image"
+              isLoading={isGenerating}
+            />
           </div>
 
-          {/* Right side: Generate button at h-8 matching control row */}
-          <button
-            type="submit"
-            disabled={isGenerating}
-            className="flex h-8 w-auto shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#D97757] px-2.5 text-xs font-semibold text-white transition-all duration-[180ms] ease-out hover:bg-[#e08a6c] hover:brightness-105 active:scale-[0.98] active:bg-[#B85A3E] active:duration-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span
-              key={isGenerating ? "loading" : "idle"}
-              className="flex animate-in items-center gap-1 fade-in-0 duration-200"
-            >
-              {isGenerating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              <span style={{ fontSize: "12px", fontWeight: 600 }}>
-                {isGenerating ? "Generating…" : "Generate"}
-              </span>
-            </span>
-          </button>
-        </div>
+          <Cinema25AssetsPicker
+            isOpen={assetsPickerOpen}
+            onClose={() => setAssetsPickerOpen(false)}
+            context="reference"
+            onSelectAsset={assetsPickerElementsMode ? addElementFromPicker : addAssetFromPicker}
+            showElementsTab={assetsPickerElementsMode}
+            initialTab={assetsPickerElementsMode ? "elements" : "uploads"}
+          />
+        </form>
       </div>
-
-      <Cinema25AssetsPicker
-        isOpen={assetsPickerOpen}
-        onClose={() => setAssetsPickerOpen(false)}
-        context="reference"
-        onSelectAsset={assetsPickerElementsMode ? addElementFromPicker : addAssetFromPicker}
-        showElementsTab={assetsPickerElementsMode}
-        initialTab={assetsPickerElementsMode ? "elements" : "uploads"}
-      />
-    </form>
+    </div>
+  </>
   );
 }

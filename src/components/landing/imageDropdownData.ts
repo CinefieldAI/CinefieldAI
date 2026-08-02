@@ -21,6 +21,8 @@ import {
   FluxIcon,
   GoogleIcon,
   GrokIcon,
+  KlingIcon,
+  MultiReferenceIcon,
   OpenAIIcon,
   RecraftIcon,
   SeedreamIcon,
@@ -149,52 +151,183 @@ export interface ImageModel {
   name: string;
   meta: string;
   icon: ElementType | string;
+  isAdded?: boolean;
 }
 
-export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
+export const FEATURED_DROPDOWN_MODELS: ImageModel[] = [
   {
     name: "Higgsfield Soul 2.0",
-    meta: "Photoreal portrait engine",
+    meta: "Next generation ultra-realistic fashion visuals",
     icon: Sparkles,
   },
   {
     name: "Higgsfield Soul Cinema",
-    meta: "Cinematic character stills",
+    meta: "Cinema-grade visual creation",
     icon: Sparkles,
+  },
+  {
+    name: "GPT Image 2",
+    meta: "4K images with near-perfect text rendering",
+    icon: OpenAIIcon,
+  },
+  {
+    name: "Seedream 5.0 Pro",
+    meta: "Logically consistent images with intelligent visual reasoning",
+    icon: SeedreamIcon,
+    isAdded: true,
+  },
+  {
+    name: "Seedream 5.0 lite",
+    meta: "Intelligent visual reasoning",
+    icon: SeedreamIcon,
+  },
+  {
+    name: "Seedream 4.5",
+    meta: "ByteDance's next-gen 4K image model",
+    icon: SeedreamIcon,
+    isAdded: true,
+  },
+  {
+    name: "Nano Banana Pro",
+    meta: "Google's flagship generation model",
+    icon: GoogleIcon,
+  },
+  {
+    name: "Nano Banana 2",
+    meta: "Pro quality at Flash speed",
+    icon: GoogleIcon,
+  },
+  {
+    name: "Nano Banana 2 Lite",
+    meta: "Lightweight image generation at speed",
+    icon: GoogleIcon,
+    isAdded: true,
+  },
+  {
+    name: "Recraft V4.1",
+    meta: "Photorealistic and expressive image generation",
+    icon: RecraftIcon,
+  },
+];
+
+export const ALL_DROPDOWN_MODELS: ImageModel[] = [
+  {
+    name: "Nano Banana",
+    meta: "Google's standard generation model",
+    icon: GoogleIcon,
+    isAdded: true,
+  },
+  {
+    name: "Higgsfield Soul",
+    meta: "Ultra-realistic fashion visuals",
+    icon: Sparkles,
+    isAdded: true,
+  },
+  {
+    name: "Higgsfield Face Swap",
+    meta: "Seamless face swapping",
+    icon: Sparkles,
+    isAdded: true,
+  },
+  {
+    name: "Higgsfield Character Swap",
+    meta: "Seamless character swapping",
+    icon: Sparkles,
+    isAdded: true,
+  },
+  {
+    name: "Seedream 4.0",
+    meta: "ByteDance's advanced image editing model",
+    icon: SeedreamIcon,
+    isAdded: true,
+  },
+  {
+    name: "GPT Image 1.5",
+    meta: "True-color precision rendering",
+    icon: OpenAIIcon,
+  },
+  {
+    name: "Grok Imagine",
+    meta: "Versatile image styles by xAI",
+    icon: GrokIcon,
+  },
+  {
+    name: "Recraft V4.1",
+    meta: "Photorealistic and expressive image generation",
+    icon: RecraftIcon,
+  },
+  {
+    name: "Recraft V4.1 Utility",
+    meta: "Simple scenes with flat, even lighting",
+    icon: RecraftIcon,
+    isAdded: true,
+  },
+  {
+    name: "Z-Image",
+    meta: "Instant lifelike portraits",
+    icon: WanIcon,
+  },
+  {
+    name: "Kling O1",
+    meta: "Kling's Photorealistic Image Model",
+    icon: KlingIcon,
+    isAdded: true,
+  },
+  {
+    name: "FLUX.2 Pro",
+    meta: "Speed-optimized detail",
+    icon: FluxIcon,
+    isAdded: true,
+  },
+  {
+    name: "FLUX.2 Flex",
+    meta: "Next-gen image generation",
+    icon: FluxIcon,
+    isAdded: true,
+  },
+  {
+    name: "FLUX.2 Max",
+    meta: "Ultimate precision and speed",
+    icon: FluxIcon,
+    isAdded: true,
+  },
+  {
+    name: "Flux Kontext Max",
+    meta: "Edit with accuracy",
+    icon: FluxIcon,
+    isAdded: true,
+  },
+  {
+    name: "GPT Image",
+    meta: "Versatile text-to-image AI",
+    icon: OpenAIIcon,
+    isAdded: true,
+  },
+  {
+    name: "Multi Reference",
+    meta: "Multiple edits in one shot",
+    icon: MultiReferenceIcon,
+    isAdded: true,
+  },
+  {
+    name: "WAN 2.2",
+    meta: "High-fidelity cinematic visuals",
+    icon: WanIcon,
+    isAdded: true,
+  },
+  {
+    name: "Topaz",
+    meta: "Upscale & restoration",
+    icon: TopazIcon,
   },
   {
     name: "Higgsfield Popcorn",
     meta: "Fun, stylized quick-gen",
     icon: Sparkles,
   },
-  { name: "GPT Image 2", meta: "OpenAI · general purpose", icon: OpenAIIcon },
-  { name: "Recraft V4.1", meta: "Vector & raster design", icon: RecraftIcon },
-  { name: "Nano Banana 2", meta: "Fast iteration drafts", icon: GoogleIcon },
-  {
-    name: "Nano Banana Pro",
-    meta: "High-fidelity drafts",
-    icon: GoogleIcon,
-  },
-  {
-    name: "Seedream 5.0 lite",
-    meta: "Lightweight diffusion",
-    icon: SeedreamIcon,
-  },
-  {
-    name: "GPT Image 1.5",
-    meta: "OpenAI · balanced quality",
-    icon: OpenAIIcon,
-  },
-  {
-    name: "Grok Imagine",
-    meta: "xAI · expressive generation",
-    icon: GrokIcon,
-  },
-  {
-    name: "FLUX.2",
-    meta: "Black Forest Labs · photoreal",
-    icon: FluxIcon,
-  },
-  { name: "Z-Image", meta: "Compact high-speed model", icon: WanIcon },
-  { name: "Topaz", meta: "Upscale & restoration", icon: TopazIcon },
+];
+
+export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
+  ...FEATURED_DROPDOWN_MODELS,
+  ...ALL_DROPDOWN_MODELS,
 ];

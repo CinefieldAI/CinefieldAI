@@ -9,6 +9,7 @@ interface GenerateButtonProps {
    * matches its real reference (yellow Generate button even in Video mode).
    * Omitted for every other caller, preserving the existing mode-based behavior. */
   accent?: "cyan" | "yellow";
+  height?: number;
 }
 
 function SparkleIcon() {
@@ -33,6 +34,7 @@ export default function GenerateButton({
   mode = "video",
   isLoading = false,
   accent,
+  height,
 }: GenerateButtonProps) {
   // Single brand accent everywhere — Generate is always #D97757 regardless
   // of mode (no more lime for Image, cyan for Video, yellow for Cinema 2.5).
@@ -47,10 +49,10 @@ export default function GenerateButton({
       onClick={onGenerate}
       disabled={isLoading}
       aria-label="Generate"
-      className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#D97757] disabled:cursor-not-allowed disabled:opacity-40"
+      className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-center overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#D97757] disabled:cursor-not-allowed disabled:opacity-40"
       style={{
         width: 135,
-        height: 96,
+        height: height ?? 96,
         background,
         boxShadow,
         textShadow: "rgba(255,255,255,0.45) 0px 0px 8px",

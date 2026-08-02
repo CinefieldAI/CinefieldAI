@@ -34,6 +34,37 @@ function ShapeIcon({ shape, active }: { shape: [number, number]; active?: boolea
   );
 }
 
+function DynamicAspectIcon({ value }: { value: string }) {
+  const shape =
+    value === "9:16"
+      ? [9, 16]
+      : value === "1:1"
+        ? [1, 1]
+        : value === "4:3"
+          ? [4, 3]
+          : value === "3:4"
+            ? [3, 4]
+            : value === "21:9"
+              ? [21, 9]
+              : [16, 9];
+  const [w, h] = shape;
+  const scale = 14 / Math.max(w, h);
+  const width = Math.round(w * scale);
+  const height = Math.round(h * scale);
+
+  return (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+      <span
+        className="rounded-[2px] border-[1.5px] border-white/70"
+        style={{
+          width: Math.max(6, width),
+          height: Math.max(6, height),
+        }}
+      />
+    </span>
+  );
+}
+
 /**
  * Aspect-ratio selector — opens UPWARD with Radix Popover, shows a shape
  * preview + description per option, turquoise checkmark on selected.
@@ -67,7 +98,7 @@ export default function AspectRatioDropdown({
           aria-expanded={controlledOpen}
           className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
-          <RectangleHorizontal className="size-4" />
+          <DynamicAspectIcon value={value} />
           <span className="min-w-[40px] text-center">{value}</span>
           <ChevronDown className="size-3 text-neutral-400" />
         </button>
