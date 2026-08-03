@@ -371,48 +371,6 @@ export default function CameraSettings({
   const update = (patch: Partial<NonNullable<CameraSettingsProps["camera"]>>) =>
     onCameraChange?.({ ...camera, ...patch });
 
-  // Extract header pills as separate const JSX component
-  const headerPills = (
-    <div className="flex shrink-0 justify-center px-8">
-      <div
-        className="relative flex w-full min-w-0 items-end justify-center overflow-visible pb-1"
-        style={{ height: 56 }}
-      >
-        <div className="flex justify-center w-full min-w-0 max-w-full">
-          <div className="flex items-center gap-0.5 p-0.75 rounded-[20px] w-max bg-gradient-to-r from-[#141619] to-[#27292b] overflow-x-auto hide-scrollbar max-w-full">
-            <button className="h-8 flex items-center gap-1 pl-1 pr-3 py-1 rounded-[18px] shrink-0 bg-[rgba(255,255,255,0.05)] transition-colors hover:bg-[rgba(255,255,255,0.08)] cursor-pointer">
-              <div className="relative size-6 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-white/10">
-                <AutoIconCamera />
-              </div>
-              <div className="flex min-w-0 items-center gap-1 px-1">
-                <span className="text-xs font-medium text-font-secondary whitespace-nowrap shrink-0">Genre:</span>
-                <span className="text-xs font-medium text-white truncate max-w-[180px] min-w-0">{genre ?? "General"}</span>
-              </div>
-            </button>
-            <button className="h-8 flex items-center gap-1 pl-1 pr-3 py-1 rounded-[18px] shrink-0 bg-[rgba(255,255,255,0.05)] transition-colors hover:bg-[rgba(255,255,255,0.08)] cursor-pointer">
-              <div className="flex items-center justify-center size-6 rounded-full bg-white/10 shrink-0">
-                <AutoIconCamera />
-              </div>
-              <div className="flex min-w-0 items-center gap-1 px-1">
-                <span className="text-xs font-medium text-font-secondary whitespace-nowrap shrink-0">Style:</span>
-                <span className="text-xs font-medium text-white truncate max-w-[180px] min-w-0">{styleLabel ?? "Auto"}</span>
-              </div>
-            </button>
-            <button className="h-8 flex items-center gap-1 pl-1 pr-3 py-1 rounded-[18px] shrink-0 bg-[rgba(255,255,255,0.08)] cursor-pointer">
-              <div className="flex items-center justify-center size-6 rounded-full bg-white/10 shrink-0">
-                <AutoIconCamera />
-              </div>
-              <div className="flex min-w-0 items-center gap-1 px-1">
-                <span className="text-xs font-medium text-font-secondary whitespace-nowrap shrink-0">Camera:</span>
-                <span className="text-xs font-medium text-white truncate max-w-[180px] min-w-0">{cameraSummary}</span>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // Extract columns grid as separate const JSX component
   const columnsGrid = (
     <div className="relative overflow-hidden rounded-2xl bg-white/5 min-h-0 flex-1">
@@ -465,7 +423,6 @@ export default function CameraSettings({
   if (docked) {
     return (
       <div className="flex h-[27rem] w-full flex-col gap-3 overflow-hidden rounded-[20px] p-1 backdrop-blur-[20px] shadow-[0_12px_8px_0_rgba(0,0,0,0.20),inset_0_0_0_1px_rgba(217,217,217,0.04)] bg-gradient-to-b from-[rgba(21,21,21,0.88)] to-[rgba(21,21,21,0.88)]">
-        {headerPills}
         {titleHeader}
         {columnsGrid}
       </div>
@@ -484,7 +441,6 @@ export default function CameraSettings({
       {/* Panel */}
       <div className="relative w-[min(876px,calc(100vw-32px))]">
         <div className="flex max-h-full min-h-0 w-full flex-col gap-3 overflow-visible">
-          {headerPills}
           {/* Panel body */}
           <div className="camera-panel min-h-0 flex h-[35rem] max-h-[calc(100vh-8rem)] overflow-hidden [&>*]:h-full [&>*]:min-h-0">
             <div className="w-full h-full min-h-0">

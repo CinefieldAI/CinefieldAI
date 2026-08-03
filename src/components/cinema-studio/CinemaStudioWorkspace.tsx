@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
+import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
 import CommunitySection from "./CommunitySection";
 import ControlButtons from "./ControlButtons";
@@ -29,6 +30,11 @@ export default function CinemaStudioWorkspace() {
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
 
+  // Sidebar state
+  const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(52);
+
   const toggleHeroVideoMute = () => {
     if (heroVideoRef.current) {
       heroVideoRef.current.muted = !heroVideoRef.current.muted;
@@ -36,16 +42,19 @@ export default function CinemaStudioWorkspace() {
     }
   };
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const delay = `-${((Date.now() % 20000) / 1000).toFixed(2)}s`;
+      document.documentElement.style.setProperty("--global-pulse-delay", delay);
+    }
+  }, []);
+
   // Core settings
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"image" | "video">("video");
   const [model, setModel] = useState(() => {
     return searchParams.get("model") || "cinema-3.5";
   });
-  // Image mode — reuses /generate/image's own ImageForm wholesale (same
-  // model list, popovers, capability system) instead of a Cinema-Studio-
-  // specific composer. Kept independent from `model` (video) since the two
-  // systems use different model-id schemes.
   const [imageModel, setImageModel] = useState("nano-banana-pro");
   const [isDrawOpen, setIsDrawOpen] = useState(false);
 
@@ -218,12 +227,24 @@ export default function CinemaStudioWorkspace() {
         onSetView={noop}
       />
 
-      <CinemaStudioHoverSidebar />
+      <CinemaGenerateSidebar
+        activeView={activeSidebarView}
+        onViewChange={(view) => setActiveSidebarView(view as any)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+        onWidthChange={setSidebarWidth}
+      />
 
       {/* Hero — the Blueface promo fills this band, with the composer sitting
           over its lower edge (matches the reference: video on top, cards on
-          black underneath). */}
-      <section className="relative w-full overflow-hidden bg-black">
+          black underneath). This section is its own independent panel next
+          to the sidebar — it does not live-follow the sidebar while it's
+          being drag-resized, only once the drag settles (see
+          `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
+      <section
+        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
+        style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
+      >
         <video
           ref={heroVideoRef}
           autoPlay
@@ -250,7 +271,7 @@ export default function CinemaStudioWorkspace() {
 
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
-          className="pointer-events-none absolute inset-x-0 top-32 md:top-36 z-30 flex justify-center px-4"
+          className="pointer-events-none absolute inset-x-0 top-32 md:top-36 z-5 flex justify-center px-4"
           style={{ opacity: 1, transition: "opacity 300ms ease-out" }}
         >
           <h1 className="text-center text-2xl sm:text-3xl md:text-[34px] font-black uppercase leading-tight tracking-wider text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] [font-feature-settings:'ss04'_1]">
@@ -273,7 +294,9 @@ export default function CinemaStudioWorkspace() {
           )}
         </button>
 
-      <main className="relative z-10 mx-auto flex min-h-[520px] w-full max-w-[1320px] flex-col items-center justify-end gap-2 px-4 pb-10 pt-8 md:pl-[68px]">
+      <main
+        className="relative z-10 mx-auto flex min-h-[520px] w-full max-w-[1320px] flex-col items-center justify-end gap-2 px-4 pb-10 pt-8"
+      >
         {/* Control buttons — Cinema Studio 3.5 only. Reserve the row height in every mode. */}
         <div className="flex min-h-[36px] w-full items-center justify-center">
           {isCinema35 && (
@@ -302,7 +325,7 @@ export default function CinemaStudioWorkspace() {
             misalignment (ModeToggle used to share the same max-w-[1040px] row
             as PromptBar while Director Panel had that same max-width alone).
           */}
-          <div className="relative z-50 mx-auto flex w-full max-w-[1040px] items-end gap-2" ref={promptBarWrapperRef}>
+          <div className="relative z-50 mx-auto flex w-full max-w-[962px] items-end gap-2" ref={promptBarWrapperRef}>
             <ModeToggle mode={mode} onChange={handleModeChange} />
 
             {mode === "image" ? (
@@ -469,7 +492,7 @@ export default function CinemaStudioWorkspace() {
       </section>
 
       {/* Community grid — plain black, directly under the video hero. */}
-      <CommunitySection />
+      <CommunitySection sidebarWidth={sidebarWidth} />
 
       {/* Docked Panels — Cinema Studio 3.5 only */}
       {isCinema35 && (

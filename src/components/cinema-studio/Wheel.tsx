@@ -17,6 +17,9 @@ interface WheelProps {
   renderItem: (option: string, state: WheelItemState) => ReactNode;
   gapClass?: string;
   className?: string;
+  /** Wrap continuously past the first/last option (a real spinning wheel)
+   *  instead of snapping back across the whole list. */
+  loop?: boolean;
 }
 
 /**
@@ -31,8 +34,51 @@ export default function Wheel({
   renderItem,
   gapClass = "gap-4",
   className = "",
+  loop = false,
 }: WheelProps) {
-  const selectedIndex = Math.max(0, options.indexOf(value));
+  const baseIndex = Math.max(0, options.indexOf(value));
+  // Looping renders 3 consecutive copies of the list so scrolling can keep
+  // moving in the same direction past either end, landing on a duplicate of
+  // the opposite end instead of snapping back across the whole list.
+  const renderOptions = loop ? [...options, ...options, ...options] : options;
+  const [centerIndex, setCenterIndex] = useState(
+    loop ? options.length + baseIndex : baseIndex,
+  );
+  // True while the next scroll should be an instant re-anchor (no visible
+  // motion) rather than the spinning animation.
+  const silentJumpRef = useRef(false);
+
+  useEffect(() => {
+    if (!loop) {
+      setCenterIndex(baseIndex);
+      return;
+    }
+    // Pick whichever copy of the target value is closest to where the wheel
+    // currently sits, so the motion always continues in-direction.
+    setCenterIndex((prev) => {
+      const candidates = [baseIndex, options.length + baseIndex, 2 * options.length + baseIndex];
+      return candidates.reduce((best, c) =>
+        Math.abs(c - prev) < Math.abs(best - prev) ? c : best,
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, loop]);
+
+  // Once the wheel has settled on a duplicate copy, silently re-anchor to
+  // the middle copy so the scrollable range never drifts toward an edge.
+  useEffect(() => {
+    if (!loop) return;
+    const mid = options.length + baseIndex;
+    if (centerIndex === mid) return;
+    const t = window.setTimeout(() => {
+      silentJumpRef.current = true;
+      setCenterIndex(mid);
+    }, 260);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerIndex, loop]);
+
+  const selectedIndex = centerIndex;
   const activeRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Vertical slack (in px) needed above/below the items so the first and
@@ -66,8 +112,13 @@ export default function Wheel({
     if (!el || !btn || slack === 0) return;
     const target =
       btn.offsetTop + btn.offsetHeight / 2 - el.clientHeight / 2;
-    el.scrollTop = target;
-  }, [selectedIndex, slack]);
+    if (!loop || silentJumpRef.current) {
+      el.scrollTop = target;
+      silentJumpRef.current = false;
+    } else {
+      el.scrollTo({ top: target, behavior: "smooth" });
+    }
+  }, [selectedIndex, slack, loop]);
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
@@ -82,16 +133,19 @@ export default function Wheel({
           className={`flex flex-col items-center ${gapClass}`}
           style={{ paddingTop: slack, paddingBottom: slack }}
         >
-          {options.map((opt, i) => {
+          {renderOptions.map((opt, i) => {
             const distance = Math.abs(i - selectedIndex);
             const active = distance === 0;
             const { opacity, scale } = fade(distance);
             return (
               <button
-                key={opt}
+                key={`${opt}-${i}`}
                 ref={active ? activeRef : undefined}
                 type="button"
-                onClick={() => onChange(opt)}
+                onClick={() => {
+                  setCenterIndex(i);
+                  onChange(opt);
+                }}
                 aria-pressed={active}
                 className="shrink-0 transition-all duration-200 ease-out focus:outline-none active:scale-95"
                 style={{ opacity, transform: `scale(${scale})` }}

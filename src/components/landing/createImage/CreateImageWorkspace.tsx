@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeft, Wand2 } from "lucide-react";
 import HeroSection from "@/components/image-tools/HeroSection";
+import ImageAtmosphereBackground from "./ImageAtmosphereBackground";
 import PromptComposer from "./PromptComposer";
 import { FEATURED_MODELS } from "./createImageData";
 
@@ -24,8 +25,10 @@ export default function CreateImageWorkspace({ onBack, initialModel }: CreateIma
 
   return (
     <section className="relative flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden pb-[190px]">
+      <ImageAtmosphereBackground />
+
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 pt-5">
+      <div className="relative z-10 flex items-center justify-between px-6 pt-5">
         <button
           type="button"
           onClick={onBack}
@@ -40,7 +43,9 @@ export default function CreateImageWorkspace({ onBack, initialModel }: CreateIma
         </span>
       </div>
 
-      <HeroSection modelLabel={selectedModel} />
+      <div className="relative z-10 flex flex-1">
+        <HeroSection modelLabel={selectedModel} />
+      </div>
 
       {/* Premium fixed bottom prompt composer */}
       <PromptComposer

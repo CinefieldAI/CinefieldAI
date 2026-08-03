@@ -75,7 +75,7 @@ function ToggleButton({
 export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
     <div
-      className="relative z-50 flex h-[140px] min-h-[140px] w-[80px] min-w-[80px] shrink-0 rounded-[24px] bg-[#141414] p-1.5 border-2 border-[#D97757] shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse"
+      className="relative z-50 flex h-[128px] min-h-[128px] w-[73px] min-w-[73px] shrink-0 rounded-[22px] bg-[#141414] p-1.5 border-2 animate-pulse-rainbow-20s"
       style={{
         background:
           "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",

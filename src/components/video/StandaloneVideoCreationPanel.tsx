@@ -1045,32 +1045,38 @@ function WorkflowModelPanel({
                 aria-pressed={selected}
                 aria-disabled={unavailable || undefined}
                 disabled={unavailable}
-                className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                className={`group/model relative flex w-full items-center px-2.5 py-2 rounded-[12px] text-left transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
                   selected
-                    ? "bg-white/[0.07]"
+                    ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
                     : unavailable
-                      ? "cursor-not-allowed opacity-75"
-                      : "hover:bg-white/[0.04]"
+                      ? "cursor-not-allowed opacity-75 bg-[rgba(255,255,255,0.015)] border border-white/[0.02]"
+                      : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
                 }`}
               >
-                <span
-                  className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] transition-[color,background-color,box-shadow] duration-200 ${
-                    dangerIcon
-                      ? "text-red-400 group-hover/model:bg-red-500/10 group-hover/model:text-red-400 group-hover/model:shadow-[0_0_14px_rgba(248,113,113,0.28)]"
-                      : "group-hover/model:bg-[#D97757]/10 group-hover/model:text-[#D97757] group-hover/model:shadow-[0_0_14px_rgba(217,119,87,0.45)]"
-                  } ${
-                    selected && !dangerIcon
-                      ? "bg-[#D97757]/10 text-[#D97757] shadow-[0_0_14px_rgba(217,119,87,0.35)]"
-                      : dangerIcon
-                        ? ""
-                        : "text-zinc-400"
+                {selected && (
+                  <span
+                    aria-hidden
+                    className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+                  />
+                )}
+                <div
+                  className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
+                    selected
+                      ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
+                      : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model:scale-[1.02] mr-3"
                   }`}
+                  style={{
+                    background:
+                      "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                  }}
                 >
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
+                  <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center overflow-hidden">
+                    <Icon className="size-5 text-white" aria-hidden="true" />
+                  </div>
+                </div>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className={`truncate text-[16px] font-semibold leading-5 ${model.name.includes("Higgsfield") ? "text-red-500" : "text-white"}`}>
+                    <span className={`truncate text-xs font-semibold ${selected ? "text-white font-bold" : "text-white/90 group-hover/model:text-white"}`}>
                       {model.name}
                     </span>
                     {model.badge === "COMING_SOON" && (
@@ -1097,7 +1103,7 @@ function WorkflowModelPanel({
                       )}
                     </span>
                   ) : (
-                    <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                    <span className="mt-0.5 block truncate text-[10px] text-white/45 group-hover/model:text-white/60">
                       {model.description}
                     </span>
                   )}
@@ -1105,7 +1111,7 @@ function WorkflowModelPanel({
                 {unavailable ? (
                   <LockKeyhole className="size-4 shrink-0 text-red-400" />
                 ) : selected ? (
-                  <Check className="size-4 shrink-0 text-[#D97757]" />
+                  <Check className="size-4 shrink-0 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />
                 ) : null}
               </button>
             );
@@ -1169,26 +1175,38 @@ function WorkflowModelPanel({
                           onSelect(target.workflow, target.index);
                         }
                       }}
-                      className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                      className={`group/model relative flex w-full items-center px-2.5 py-2 rounded-[12px] text-left transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
                         selected || active
-                          ? "bg-white/[0.07]"
-                          : "hover:bg-white/[0.04]"
+                          ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+                          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
                       }`}
                     >
-                      <span
-                        className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] transition-[color,background-color,box-shadow] duration-200 group-hover/model:bg-[#D97757]/10 group-hover/model:text-[#D97757] group-hover/model:shadow-[0_0_14px_rgba(217,119,87,0.45)] ${
-                          selected
-                            ? "bg-[#D97757]/10 text-[#D97757] shadow-[0_0_14px_rgba(217,119,87,0.35)]"
-                            : "text-zinc-400"
+                      {(selected || active) && (
+                        <span
+                          aria-hidden
+                          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+                        />
+                      )}
+                      <div
+                        className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
+                          selected || active
+                            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
+                            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model:scale-[1.02] mr-3"
                         }`}
+                        style={{
+                          background:
+                            "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                        }}
                       >
-                        <Icon className="size-5" aria-hidden="true" />
-                      </span>
+                        <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center overflow-hidden">
+                          <Icon className="size-5 text-white" aria-hidden="true" />
+                        </div>
+                      </div>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[16px] font-semibold leading-5 text-white">
+                        <span className={`truncate text-xs font-semibold ${selected || active ? "text-white font-bold" : "text-white/90 group-hover/model:text-white"}`}>
                           {group.name}
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                        <span className="mt-0.5 block truncate text-[10px] text-white/45 group-hover/model:text-white/60">
                           {group.description}
                         </span>
                       </span>
@@ -1197,7 +1215,7 @@ function WorkflowModelPanel({
                           className="size-4 shrink-0 -rotate-90 text-zinc-500"
                         />
                       ) : selected ? (
-                        <Check className="size-4 shrink-0 text-[#D97757]" />
+                        <Check className="size-4 shrink-0 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />
                       ) : null}
                     </button>
                   </div>
@@ -1235,12 +1253,12 @@ function WorkflowModelPanel({
                     aria-pressed={selected}
                     aria-disabled={unavailable || undefined}
                     disabled={unavailable}
-                    className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
+                    className={`group/model flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-all duration-[200ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                       selected
                         ? "bg-white/[0.07]"
                         : unavailable
                           ? "cursor-not-allowed opacity-75"
-                          : "hover:bg-white/[0.04]"
+                          : "hover:bg-white/[0.04] hover:-translate-y-[1px] hover:scale-[1.006]"
                     }`}
                   >
                     <div
@@ -1260,13 +1278,7 @@ function WorkflowModelPanel({
                     </div>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
-                        <span
-                          className={`truncate text-[16px] font-semibold leading-5 ${
-                            model.name.includes("Higgsfield")
-                              ? "text-red-500"
-                              : "text-white"
-                          }`}
-                        >
+                        <span className="truncate text-[16px] font-semibold leading-5 text-white">
                           {model.name}
                         </span>
                         {model.badge === "COMING_SOON" && (
@@ -1352,12 +1364,12 @@ function WorkflowModelPanel({
                 aria-pressed={selected}
                 aria-disabled={unavailable || undefined}
                 disabled={unavailable}
-                className={`relative w-full rounded-xl px-3 py-2.5 pr-9 text-left transition-colors ${
+                className={`relative w-full rounded-xl px-3 py-2.5 pr-9 text-left transition-all duration-[200ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   selected
-                    ? "bg-white/[0.07]"
+                    ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
                     : unavailable
                       ? "cursor-not-allowed opacity-75"
-                      : "hover:bg-white/[0.04]"
+                      : "hover:bg-white/[0.04] hover:-translate-y-[1px] hover:scale-[1.006]"
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -1388,9 +1400,11 @@ function WorkflowModelPanel({
                     )}
                   </span>
                 )}
-                {unavailable && (
+                {unavailable ? (
                   <LockKeyhole className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-red-400" />
-                )}
+                ) : selected ? (
+                  <Check className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />
+                ) : null}
               </button>
             );
           })}

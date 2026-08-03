@@ -297,3 +297,163 @@ body {
     inset 0 -1px 0 rgba(217, 119, 87, 0.38);
   transition: box-shadow 200ms ease-out, border-color 200ms ease-out;
 }
+
+@keyframes pulse-orange-white {
+  0%, 100% {
+    border-color: #D97757;
+    box-shadow: 0 0 25px rgba(217, 119, 87, 0.85), inset 0 0 15px rgba(217, 119, 87, 0.25);
+    opacity: 0.95;
+  }
+  50% {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 28px rgba(255, 255, 255, 0.90), 0 0 12px rgba(255, 255, 255, 0.50), inset 0 0 15px rgba(255, 255, 255, 0.30);
+    opacity: 1;
+  }
+}
+
+.animate-pulse-orange-white {
+  animation: pulse-orange-white 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: var(--global-pulse-delay, 0s) !important;
+}
+
+@keyframes prompt-resize-corner-breathe {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.5);
+    filter: brightness(1.05) drop-shadow(0 0 2px rgba(255, 255, 255, 0.28));
+    opacity: 0.72;
+  }
+  50% {
+    border-color: rgba(255, 255, 255, 1);
+    filter: brightness(1.5) drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+    opacity: 1;
+  }
+}
+
+.prompt-resize-corner-breathe {
+  border-color: rgba(255, 255, 255, 0.72);
+  animation: prompt-resize-corner-breathe 2.6s ease-in-out infinite;
+}
+
+.group:hover .prompt-resize-corner-breathe,
+.group:focus-visible .prompt-resize-corner-breathe {
+  border-color: rgba(255, 255, 255, 1);
+  filter: brightness(1.55) drop-shadow(0 0 7px rgba(255, 255, 255, 1));
+}
+
+@keyframes prompt-resize-horizontal-breathe {
+  0%, 100% {
+    background-color: rgba(255, 255, 255, 0.38);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.55),
+      0 0 3px rgba(255, 255, 255, 0.3);
+    opacity: 0.76;
+  }
+  50% {
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.42),
+      0 0 9px rgba(255, 255, 255, 0.92),
+      inset 0 1px 0 rgba(255, 255, 255, 1);
+    opacity: 1;
+  }
+}
+
+.prompt-resize-horizontal-breathe {
+  background-color: rgba(255, 255, 255, 0.62);
+  animation: prompt-resize-horizontal-breathe 2.6s ease-in-out infinite;
+}
+
+.group:hover .prompt-resize-horizontal-breathe,
+.group:focus-visible .prompt-resize-horizontal-breathe {
+  background-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-resize-corner-breathe,
+  .prompt-resize-horizontal-breathe {
+    animation: none;
+  }
+}
+
+@keyframes pulse-rainbow-20s {
+  0% {
+    border-color: #FF0055;
+    box-shadow: 0 0 25px rgba(255, 0, 85, 0.85), inset 0 0 15px rgba(255, 0, 85, 0.25);
+    opacity: 0.95;
+  }
+  10% {
+    border-color: #FF6600;
+    box-shadow: 0 0 16px rgba(255, 102, 0, 0.55), inset 0 0 8px rgba(255, 102, 0, 0.15);
+    opacity: 0.70;
+  }
+  20% {
+    border-color: #FFCC00;
+    box-shadow: 0 0 28px rgba(255, 204, 0, 0.90), inset 0 0 15px rgba(255, 204, 0, 0.30);
+    opacity: 1;
+  }
+  30% {
+    border-color: #00FF66;
+    box-shadow: 0 0 18px rgba(0, 255, 102, 0.60), inset 0 0 10px rgba(0, 255, 102, 0.18);
+    opacity: 0.75;
+  }
+  40% {
+    border-color: #00E5FF;
+    box-shadow: 0 0 30px rgba(0, 229, 255, 0.95), inset 0 0 18px rgba(0, 229, 255, 0.35);
+    opacity: 1;
+  }
+  50% {
+    border-color: #0066FF;
+    box-shadow: 0 0 16px rgba(0, 102, 255, 0.55), inset 0 0 8px rgba(0, 102, 255, 0.15);
+    opacity: 0.70;
+  }
+  60% {
+    border-color: #7A00FF;
+    box-shadow: 0 0 28px rgba(122, 0, 255, 0.90), inset 0 0 15px rgba(122, 0, 255, 0.30);
+    opacity: 0.95;
+  }
+  70% {
+    border-color: #FF00CC;
+    box-shadow: 0 0 18px rgba(255, 0, 204, 0.60), inset 0 0 10px rgba(255, 0, 204, 0.18);
+    opacity: 0.75;
+  }
+  80% {
+    border-color: #00FFCC;
+    box-shadow: 0 0 30px rgba(0, 255, 204, 0.95), inset 0 0 18px rgba(0, 255, 204, 0.35);
+    opacity: 1;
+  }
+  90% {
+    border-color: #FF4466;
+    box-shadow: 0 0 16px rgba(255, 68, 102, 0.55), inset 0 0 8px rgba(255, 68, 102, 0.15);
+    opacity: 0.70;
+  }
+  100% {
+    border-color: #FF0055;
+    box-shadow: 0 0 25px rgba(255, 0, 85, 0.85), inset 0 0 15px rgba(255, 0, 85, 0.25);
+    opacity: 0.95;
+  }
+}
+
+.animate-pulse-rainbow-20s {
+  animation: pulse-rainbow-20s 20s linear infinite;
+  animation-delay: var(--global-pulse-delay, 0s) !important;
+}
+
+@keyframes genre-trigger-jump {
+  0% {
+    opacity: 0.72;
+    transform: translateY(3px) scale(0.98);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-genre-jump {
+  animation: genre-trigger-jump 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}

@@ -21,8 +21,6 @@ import {
   FluxIcon,
   GoogleIcon,
   GrokIcon,
-  KlingIcon,
-  MultiReferenceIcon,
   OpenAIIcon,
   RecraftIcon,
   SeedreamIcon,
@@ -154,7 +152,14 @@ export interface ImageModel {
   isAdded?: boolean;
 }
 
-export const FEATURED_DROPDOWN_MODELS: ImageModel[] = [
+// Single unified models list (matches the higgsfield.ai reference: one
+// "Models" column, no Featured/All split). Trimmed down from the earlier
+// expanded catalog to the reference's 15 models — see imageDropdownData
+// git history for the removed extras (Seedream 4.0/4.5, base Nano
+// Banana/Higgsfield Soul, Face/Character Swap, Recraft V4.1 Utility,
+// Kling O1, FLUX.2 Flex/Max, Flux Kontext Max, base GPT Image, Multi
+// Reference, WAN 2.2) if any of those need to come back.
+export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
   {
     name: "Higgsfield Soul 2.0",
     meta: "Next generation ultra-realistic fashion visuals",
@@ -166,8 +171,18 @@ export const FEATURED_DROPDOWN_MODELS: ImageModel[] = [
     icon: Sparkles,
   },
   {
+    name: "Higgsfield Popcorn",
+    meta: "Fun, stylized quick-gen",
+    icon: Sparkles,
+  },
+  {
     name: "GPT Image 2",
     meta: "4K images with near-perfect text rendering",
+    icon: OpenAIIcon,
+  },
+  {
+    name: "GPT Image 1.5",
+    meta: "True-color precision rendering",
     icon: OpenAIIcon,
   },
   {
@@ -182,17 +197,6 @@ export const FEATURED_DROPDOWN_MODELS: ImageModel[] = [
     icon: SeedreamIcon,
   },
   {
-    name: "Seedream 4.5",
-    meta: "ByteDance's next-gen 4K image model",
-    icon: SeedreamIcon,
-    isAdded: true,
-  },
-  {
-    name: "Nano Banana Pro",
-    meta: "Google's flagship generation model",
-    icon: GoogleIcon,
-  },
-  {
     name: "Nano Banana 2",
     meta: "Pro quality at Flash speed",
     icon: GoogleIcon,
@@ -204,74 +208,19 @@ export const FEATURED_DROPDOWN_MODELS: ImageModel[] = [
     isAdded: true,
   },
   {
+    name: "Nano Banana Pro",
+    meta: "Google's flagship generation model",
+    icon: GoogleIcon,
+  },
+  {
     name: "Recraft V4.1",
     meta: "Photorealistic and expressive image generation",
     icon: RecraftIcon,
-  },
-];
-
-export const ALL_DROPDOWN_MODELS: ImageModel[] = [
-  {
-    name: "Nano Banana",
-    meta: "Google's standard generation model",
-    icon: GoogleIcon,
-    isAdded: true,
-  },
-  {
-    name: "Higgsfield Soul",
-    meta: "Ultra-realistic fashion visuals",
-    icon: Sparkles,
-    isAdded: true,
-  },
-  {
-    name: "Higgsfield Face Swap",
-    meta: "Seamless face swapping",
-    icon: Sparkles,
-    isAdded: true,
-  },
-  {
-    name: "Higgsfield Character Swap",
-    meta: "Seamless character swapping",
-    icon: Sparkles,
-    isAdded: true,
-  },
-  {
-    name: "Seedream 4.0",
-    meta: "ByteDance's advanced image editing model",
-    icon: SeedreamIcon,
-    isAdded: true,
-  },
-  {
-    name: "GPT Image 1.5",
-    meta: "True-color precision rendering",
-    icon: OpenAIIcon,
   },
   {
     name: "Grok Imagine",
     meta: "Versatile image styles by xAI",
     icon: GrokIcon,
-  },
-  {
-    name: "Recraft V4.1",
-    meta: "Photorealistic and expressive image generation",
-    icon: RecraftIcon,
-  },
-  {
-    name: "Recraft V4.1 Utility",
-    meta: "Simple scenes with flat, even lighting",
-    icon: RecraftIcon,
-    isAdded: true,
-  },
-  {
-    name: "Z-Image",
-    meta: "Instant lifelike portraits",
-    icon: WanIcon,
-  },
-  {
-    name: "Kling O1",
-    meta: "Kling's Photorealistic Image Model",
-    icon: KlingIcon,
-    isAdded: true,
   },
   {
     name: "FLUX.2 Pro",
@@ -280,54 +229,13 @@ export const ALL_DROPDOWN_MODELS: ImageModel[] = [
     isAdded: true,
   },
   {
-    name: "FLUX.2 Flex",
-    meta: "Next-gen image generation",
-    icon: FluxIcon,
-    isAdded: true,
-  },
-  {
-    name: "FLUX.2 Max",
-    meta: "Ultimate precision and speed",
-    icon: FluxIcon,
-    isAdded: true,
-  },
-  {
-    name: "Flux Kontext Max",
-    meta: "Edit with accuracy",
-    icon: FluxIcon,
-    isAdded: true,
-  },
-  {
-    name: "GPT Image",
-    meta: "Versatile text-to-image AI",
-    icon: OpenAIIcon,
-    isAdded: true,
-  },
-  {
-    name: "Multi Reference",
-    meta: "Multiple edits in one shot",
-    icon: MultiReferenceIcon,
-    isAdded: true,
-  },
-  {
-    name: "WAN 2.2",
-    meta: "High-fidelity cinematic visuals",
+    name: "Z-Image",
+    meta: "Instant lifelike portraits",
     icon: WanIcon,
-    isAdded: true,
   },
   {
     name: "Topaz",
     meta: "Upscale & restoration",
     icon: TopazIcon,
   },
-  {
-    name: "Higgsfield Popcorn",
-    meta: "Fun, stylized quick-gen",
-    icon: Sparkles,
-  },
-];
-
-export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
-  ...FEATURED_DROPDOWN_MODELS,
-  ...ALL_DROPDOWN_MODELS,
 ];

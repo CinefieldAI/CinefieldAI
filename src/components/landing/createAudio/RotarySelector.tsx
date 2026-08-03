@@ -43,8 +43,8 @@ export default function RotarySelector({ value, onChange }: RotarySelectorProps)
   return (
     <div className="w-[162px] shrink-0 self-end" style={{ height: 120 }}>
       <div className="relative h-full w-full">
-        {/* Outer illuminated glowing orange border shimmer */}
-        <div className="pointer-events-none absolute -inset-[1px] rounded-[21px] border-2 border-[#D97757] opacity-85 shadow-[0_0_20px_rgba(217,119,87,0.75)] animate-pulse z-30" />
+        {/* Outer illuminated glowing 20s multi-color rainbow spectrum border shimmer */}
+        <div className="pointer-events-none absolute -inset-[1px] rounded-[21px] border-2 animate-pulse-rainbow-20s z-30" />
 
         {/* Outer card shell */}
         <div

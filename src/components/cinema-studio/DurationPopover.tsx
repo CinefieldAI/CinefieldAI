@@ -31,7 +31,7 @@ interface DurationPopoverProps {
 
 /** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 export default function DurationPopover({
   value,
@@ -55,6 +55,9 @@ export default function DurationPopover({
   const max = Math.max(...durations);
   const showButtons = mode ? mode === "buttons" : durations.length > 2;
 
+  const defaultDuration = durations[0] ?? 5;
+  const isModified = value !== defaultDuration;
+
   return (
     <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
@@ -63,7 +66,11 @@ export default function DurationPopover({
           aria-label="Duration"
           aria-haspopup="dialog"
           aria-expanded={controlledOpen}
-          className={PILL}
+          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            controlledOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+          }`}
         >
           <Clock className="size-3.5 text-neutral-400" />
           {value}s
@@ -81,7 +88,7 @@ export default function DurationPopover({
         >
           <div className="flex flex-col gap-2 rounded-xl p-1">
             <div className="px-2 py-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+              <span className="text-[11px] font-bold tracking-wider text-white/40">
                 Duration
               </span>
             </div>
@@ -117,9 +124,9 @@ export default function DurationPopover({
                   max={max}
                   value={value}
                   onChange={(e) => onChange(Number(e.target.value))}
-                  className="absolute inset-0 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:rounded [&::-webkit-slider-thumb]:bg-[#00e5ff] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-1 [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:rounded [&::-moz-range-thumb]:bg-[#00e5ff] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
+                  className="absolute inset-0 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:rounded [&::-webkit-slider-thumb]:bg-[#D97757] [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-1 [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:rounded [&::-moz-range-thumb]:bg-[#D97757] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
                   style={{
-                    background: `linear-gradient(to right, #00e5ff 0%, #00e5ff ${
+                    background: `linear-gradient(to right, #D97757 0%, #D97757 ${
                       ((value - min) / (max - min)) * 100
                     }%, rgba(255,255,255,0.05) ${
                       ((value - min) / (max - min)) * 100

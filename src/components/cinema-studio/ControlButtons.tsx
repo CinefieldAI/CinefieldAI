@@ -33,23 +33,25 @@ function ControlButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-8 items-center gap-1.5 rounded-[18px] px-2 py-1 text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[#00e5ff] ${
+      className={`flex h-8 items-center gap-1.5 rounded-[18px] px-2 py-1 text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[#D97757] ${
         active
-          ? "bg-[#00e5ff]/10 text-[#00e5ff]"
+          ? "bg-[#D97757]/10 text-[#D97757]"
           : "bg-[rgba(255,255,255,0.05)] text-neutral-300 hover:bg-[rgba(255,255,255,0.08)]"
       }`}
     >
-      {/* Small circular preview */}
-      <span
-        className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
-          active ? "border-[#00e5ff]/60" : "border-white/10"
-        }`}
-        style={{ background: preview }}
-      >
-        <Icon className="size-3 text-white/80" />
+      <span key={value} className="inline-flex items-center gap-1.5 animate-genre-jump">
+        {/* Small circular preview */}
+        <span
+          className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
+            active ? "border-[#D97757]/60" : "border-white/10"
+          }`}
+          style={{ background: preview }}
+        >
+          <Icon className="size-3 text-white/80" />
+        </span>
+        <span className="text-neutral-500">{label}</span>
+        <span className="max-w-[160px] truncate">{value}</span>
       </span>
-      <span className="text-neutral-500">{label}</span>
-      <span className="max-w-[160px] truncate">{value}</span>
     </button>
   );
 }

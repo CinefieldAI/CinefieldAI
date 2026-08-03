@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
@@ -16,6 +16,13 @@ interface AppShellProps {
 export default function AppShell({ initialView = "default", initialPanel = null }: AppShellProps) {
   const [activePanel, setActivePanel] = useState<PanelKey | null>(initialPanel);
   const [activeView, setActiveView] = useState<ActiveView>(initialView);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const delay = `-${((Date.now() % 20000) / 1000).toFixed(2)}s`;
+      document.documentElement.style.setProperty("--global-pulse-delay", delay);
+    }
+  }, []);
 
   // Shared Audio mode/model — single source of truth for both the top-nav
   // Audio mega-dropdown (Navbar) and the bottom rotary selector + prompt bar

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, type ReactNode } from "react";
-import { Upload, X, Heart, ImageIcon } from "lucide-react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import { X, Heart, ImageIcon } from "lucide-react";
 
 export interface UploadedMedia {
   id: string;
@@ -20,31 +20,6 @@ interface MediaAttachPanelProps {
 }
 
 type MediaTab = "uploads" | "imageGenerations" | "liked";
-
-function TabButton({
-  tab,
-  label,
-  activeTab,
-  onSelect,
-}: {
-  tab: MediaTab;
-  label: string;
-  activeTab: MediaTab;
-  onSelect: (tab: MediaTab) => void;
-}) {
-  return (
-    <button
-      onClick={() => onSelect(tab)}
-      className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
-        activeTab === tab
-          ? "bg-white/20 text-white"
-          : "bg-white/5 text-white/60 hover:bg-white/10"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
 function EmptyState({
   icon,
@@ -75,10 +50,18 @@ export default function MediaAttachPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<MediaTab>("uploads");
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia[]>([]);
-  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(
-    new Set()
-  );
+  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -97,9 +80,7 @@ export default function MediaAttachPanel({
 
     Array.from(files).forEach((file) => {
       if (!validMimeTypes.includes(file.type)) {
-        setError(
-          "Unsupported file type. Please upload JPG, PNG, WEBP, HEIC, or HEIF."
-        );
+        setError("Unsupported file type. Please upload JPG, PNG, WEBP, HEIC, or HEIF.");
         return;
       }
 
@@ -116,7 +97,6 @@ export default function MediaAttachPanel({
       setUploadedMedia((prev) => [...prev, newMedia]);
     });
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -133,168 +113,180 @@ export default function MediaAttachPanel({
   };
 
   const handleAttach = () => {
-    const selectedItems = uploadedMedia.filter((media) =>
-      selectedMediaIds.has(media.id)
-    );
+    const selectedItems = uploadedMedia.filter((media) => selectedMediaIds.has(media.id));
     if (selectedItems.length > 0) {
       onAttach(selectedItems);
       onClose();
     }
   };
 
-  const handleCancel = () => {
-    onClose();
-  };
-
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[998] bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-[998] bg-black/40 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in duration-300"
         onClick={onClose}
       />
 
-      {/* Panel */}
+      {/* Main Panel Container */}
       <div
-        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(720px,calc(100vw-48px))] h-[min(560px,calc(100vh-48px))] rounded-[24px] border border-white/10 bg-[#0f1b15] text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-all duration-300 ${
-          promptBarDock === "bottom"
-            ? "bottom-[160px]"
-            : "top-[160px]"
+        className={`fixed z-[999] left-1/2 -translate-x-1/2 w-[min(720px,calc(100vw-48px))] h-[522px] rounded-3xl border border-white/10 bg-[#131517] text-white shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-out animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 ${
+          promptBarDock === "bottom" ? "bottom-[140px]" : "top-[325px]"
         }`}
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER WITH TABS AND CLOSE */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/5">
-          {/* Tabs */}
-          <div className="flex gap-2">
-            <TabButton tab="uploads" label="Uploads" activeTab={activeTab} onSelect={setActiveTab} />
-            <TabButton
-              tab="imageGenerations"
-              label="Image Generations"
-              activeTab={activeTab}
-              onSelect={setActiveTab}
-            />
-            <TabButton tab="liked" label="Liked" activeTab={activeTab} onSelect={setActiveTab} />
-          </div>
+        {/* CLOSE BUTTON */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-2.5 right-2.5 z-10 flex size-7 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Close"
+        >
+          <X className="size-4" />
+        </button>
 
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white shrink-0"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        {/* INNER GRADIENT CARD WRAPPER */}
+        <div className="min-h-0 flex-1 p-2">
+          <div className="flex flex-col h-full overflow-hidden gap-2 p-1.5 rounded-[20px] backdrop-blur-[20px] shadow-[0_12px_8px_0_rgba(0,0,0,0.20),inset_0_0_0_1px_rgba(255,255,255,0.08)] bg-[linear-gradient(0deg,rgba(21,21,21,0.88)_0%,rgba(21,21,21,0.88)_100%),linear-gradient(41deg,rgba(101,189,235,0.24)_25.53%,rgba(101,189,235,0.00)_63.06%)]">
+            {/* TABS */}
+            <div className="flex h-9 items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("uploads")}
+                className={`text-xs font-medium border h-7 px-3 py-1 rounded-full transition-all duration-300 ease-out whitespace-nowrap shrink-0 text-center ${
+                  activeTab === "uploads"
+                    ? "bg-white text-black border-transparent font-semibold shadow-sm"
+                    : "bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                Uploads
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("imageGenerations")}
+                className={`text-xs font-medium border h-7 px-3 py-1 rounded-full transition-all duration-300 ease-out whitespace-nowrap shrink-0 text-center ${
+                  activeTab === "imageGenerations"
+                    ? "bg-white text-black border-transparent font-semibold shadow-sm"
+                    : "bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                Image Generations
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("liked")}
+                className={`text-xs font-medium border h-7 px-3 py-1 rounded-full transition-all duration-300 ease-out whitespace-nowrap shrink-0 text-center ${
+                  activeTab === "liked"
+                    ? "bg-white text-black border-transparent font-semibold shadow-sm"
+                    : "bg-white/5 text-white/70 border-transparent hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                Liked
+              </button>
+            </div>
 
-        {/* CONTENT AREA */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          {/* Uploads Tab */}
-          {activeTab === "uploads" && (
-            <div className="flex-1 overflow-y-auto p-6">
+            {/* TAB CONTENT */}
+            <div className="flex-1 overflow-auto rounded-2xl bg-white/[0.03] p-2">
               {error && (
-                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-200">
+                <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-xs text-red-200">
                   {error}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Upload Media Tile */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 border-dashed border-white/20 bg-white/5 hover:bg-white/8 transition-colors cursor-pointer aspect-square"
-                >
-                  <Upload className="h-8 w-8 text-white/50" />
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-white">
-                      Upload media
-                    </p>
-                    <p className="text-[10px] text-white/50 mt-1">
-                      Protected content is not allowed
-                    </p>
+              {activeTab === "uploads" && (
+                <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
+                  {/* UPLOAD TILE CARD */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative overflow-clip col-span-2 min-h-[110px] rounded-2xl bg-white/5 border border-white/5 transition-colors cursor-pointer hover:bg-white/10 flex flex-col justify-between"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-1.5 flex-1 p-4">
+                      <div className="flex shrink-0 items-center justify-center rounded-full bg-white/10 text-white/90 shadow-[0_10px_21px_rgba(0,0,0,0.2),inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-colors size-8">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="size-5">
+                          <path stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" d="M12 5.25V12m0 0v6.75M12 12H5.25M12 12h6.75" />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-semibold text-white">Upload media</span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-1 bg-white/5 rounded-t-[4px] px-2 py-1.5">
+                      <svg className="size-3 shrink-0 text-white/50" aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.2618 2 12 2ZM10 11C10 10.5858 10.3358 10.25 10.75 10.25H12C12.4142 10.25 12.75 10.5858 12.75 11L12.75 16.25C12.75 16.6642 12.4142 17 12 17C11.5858 17 11.25 16.6642 11.25 16.25L11.25 11.75H10.75C10.3358 11.75 10 11.4142 10 11ZM12 7.25C11.5858 7.25 11.25 7.58579 11.25 8C11.25 8.41421 11.5858 8.75 12 8.75C12.4142 8.75 12.75 8.41421 12.75 8C12.75 7.58579 12.4142 7.25 12 7.25Z" fill="currentColor" />
+                      </svg>
+                      <span className="text-[10px] font-medium text-white/50">Protected content is not allowed</span>
+                    </div>
                   </div>
-                </button>
 
-                {/* Uploaded Media Thumbnails */}
-                {uploadedMedia.map((media) => {
-                  const isSelected = selectedMediaIds.has(media.id);
-                  return (
-                    <button
-                      key={media.id}
-                      onClick={() => toggleMediaSelection(media.id)}
-                      className={`relative rounded-2xl overflow-hidden aspect-square transition-all ${
-                        isSelected
-                          ? "ring-2 ring-cyan-400"
-                          : "hover:ring-1 hover:ring-white/50"
-                      }`}
-                    >
-                      <img
-                        src={media.previewUrl}
-                        alt={media.name}
-                        className="w-full h-full object-cover"
-                      />
-                      {isSelected && (
-                        <div className="absolute inset-0 bg-cyan-400/20 flex items-center justify-center">
-                          <div className="w-6 h-6 rounded-full bg-cyan-400 flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">
+                  {/* UPLOADED MEDIA ITEMS */}
+                  {uploadedMedia.map((media) => {
+                    const isSelected = selectedMediaIds.has(media.id);
+                    return (
+                      <div
+                        key={media.id}
+                        onClick={() => toggleMediaSelection(media.id)}
+                        className={`relative rounded-2xl overflow-hidden aspect-square cursor-pointer transition-all ${
+                          isSelected ? "ring-2 ring-[#d97757]" : "hover:ring-1 hover:ring-white/40"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={media.previewUrl} alt={media.name} className="w-full h-full object-cover" />
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-[#d97757]/30 flex items-center justify-center">
+                            <div className="w-6 h-6 rounded-full bg-[#d97757] text-black flex items-center justify-center font-bold text-xs">
                               ✓
-                            </span>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-          {/* Image Generations Tab */}
-          {activeTab === "imageGenerations" && (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState
-                icon={<ImageIcon className="h-12 w-12" />}
-                title="No generations yet"
-                description="Start generating images and they will appear here"
-              />
-            </div>
-          )}
+              {activeTab === "imageGenerations" && (
+                <EmptyState
+                  icon={<ImageIcon className="h-10 w-10" />}
+                  title="No image generations"
+                  description="Your generated images will appear here"
+                />
+              )}
 
-          {/* Liked Tab */}
-          {activeTab === "liked" && (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState
-                icon={<Heart className="h-12 w-12" />}
-                title="No liked images yet"
-                description="Like your image generations and they will appear here"
-              />
+              {activeTab === "liked" && (
+                <EmptyState
+                  icon={<Heart className="h-10 w-10" />}
+                  title="No liked items"
+                  description="Your liked images will appear here"
+                />
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* FOOTER */}
-        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-white/5">
+        {/* FOOTER BAR */}
+        <div className="flex items-center justify-between px-4 py-3 shrink-0">
           <button
-            onClick={handleCancel}
-            className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition-colors"
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium text-xs min-w-[96px] transition-colors"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleAttach}
             disabled={selectedMediaIds.size === 0}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-xl font-semibold text-xs min-w-[96px] transition-colors ${
               selectedMediaIds.size === 0
-                ? "bg-white/5 text-white/50 cursor-not-allowed"
-                : "bg-cyan-400 text-black hover:bg-cyan-300"
+                ? "bg-white/10 text-white/40 cursor-not-allowed"
+                : "bg-white text-black hover:bg-white/90"
             }`}
           >
             Attach
           </button>
         </div>
 
-        {/* Hidden File Input */}
+        {/* HIDDEN FILE INPUT */}
         <input
           ref={fileInputRef}
           type="file"

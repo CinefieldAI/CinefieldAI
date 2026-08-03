@@ -127,7 +127,7 @@ export default function CameraModal({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
             Focal Length
           </p>
-          <span className="text-sm font-semibold text-[#00e5ff]">{focal}mm</span>
+          <span className="text-sm font-semibold text-[#D97757]">{focal}mm</span>
         </div>
         <input
           type="range"
@@ -138,7 +138,7 @@ export default function CameraModal({
             onChange({ ...value, focalLength: Number(e.target.value) })
           }
           aria-label="Focal length"
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[#00e5ff] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[#D97757] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         />
       </div>
     </ModalShell>

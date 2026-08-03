@@ -61,7 +61,11 @@ export default function SeedControl({
           aria-label="Seed"
           aria-haspopup="dialog"
           aria-expanded={controlledOpen}
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-card text-neutral-400 transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className={`flex h-8 w-8 items-center justify-center rounded-lg border text-neutral-400 transition-all duration-200 ease-out focus:outline-none ${
+            controlledOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)] text-white"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)] hover:text-white"
+          }`}
         >
           <Dices className="size-4" />
         </button>
@@ -93,7 +97,7 @@ export default function SeedControl({
                     aria-label={locked ? "Unlock seed" : "Lock seed"}
                     onClick={() => onLockedChange(!locked)}
                     className={`ml-1 flex items-center justify-center transition-colors ${
-                      locked ? "text-[#00e5ff]" : "text-white/60 hover:text-white/70"
+                      locked ? "text-[#D97757]" : "text-white/60 hover:text-white/70"
                     }`}
                   >
                     <LockIcon />

@@ -9,9 +9,10 @@ interface ModelItemProps {
   model: CreateImageModel;
   isSelected: boolean;
   onSelect: (name: string) => void;
+  isContinuation?: boolean;
 }
 
-export default function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
+export default function ModelItem({ model, isSelected, onSelect, isContinuation }: ModelItemProps) {
   const sharedIcon = getSharedModelIcon(model.name);
   const IconComp = (sharedIcon ?? (typeof model.icon === "function" ? model.icon : null)) as React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null;
   const iconSrc = typeof model.icon === "string" ? model.icon : null;
@@ -29,17 +30,27 @@ export default function ModelItem({ model, isSelected, onSelect }: ModelItemProp
       }`}
     >
       {/* Selected Indicator: 3px Rounded Accent Line (#D97757) */}
-      {isSelected && (
+      {isSelected ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
         />
-      )}
+      ) : isContinuation ? (
+        <span
+          aria-hidden
+          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            boxShadow:
+              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
+          }}
+        />
+      ) : null}
 
       {/* 40x40 Icon Container with Hard Horizontal Split Two-Tone Neon Border (Top White / Bottom Orange) */}
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
-          isSelected
+          isSelected || isContinuation
             ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
             : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
         }`}

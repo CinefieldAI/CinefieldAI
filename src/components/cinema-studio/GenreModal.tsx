@@ -26,16 +26,25 @@ function genreFor(name: string) {
   return GENRES.find((g) => g.name === name) ?? GENRES[0];
 }
 
-/** Genre circle — plays its preview clip if one exists, else a gradient. */
+/**
+ * Genre circle — plays its preview clip if one exists, else a gradient.
+ * `live` gates the actual <video>: with the wheel looping there can be up to
+ * 3 rendered copies of every list icon at once, so only the centered/active
+ * one plays — the rest fall back to the gradient. This is also what fixed
+ * the small icons randomly rendering blank: too many simultaneous autoplay
+ * decodes were racing each other.
+ */
 function GenreVisual({
   name,
   className,
+  live = true,
 }: {
   name: string;
   className?: string;
+  live?: boolean;
 }) {
   const genre = genreFor(name);
-  if (genre.video) {
+  if (genre.video && live) {
     return (
       <video
         key={genre.video}
@@ -169,6 +178,7 @@ export default function GenreModal({
                 value={current}
                 onChange={pick}
                 fade={genreFade}
+                loop
                 className="h-full w-[220px] flex-none"
                 gapClass="gap-2"
                 renderItem={(name, { active }) => (
@@ -179,7 +189,7 @@ export default function GenreModal({
                       }`}
                       style={{ minWidth: "2.75rem", minHeight: "2.75rem", flexShrink: 0 }}
                     >
-                      <GenreVisual name={name} className="h-full w-full" />
+                      <GenreVisual name={name} className="h-full w-full" live={active} />
                     </span>
                     <span
                       className={`truncate text-lg tracking-[-0.18px] ${

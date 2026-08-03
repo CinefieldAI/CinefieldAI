@@ -34,7 +34,7 @@ export default function ResolutionPopover({
           sideOffset={8}
           className="z-[100000] w-56 rounded-xl border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] py-3 px-2 shadow-xl"
         >
-          <div className="px-3 py-1 text-[10px] font-semibold uppercase text-zinc-400 mb-2">
+          <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 mb-2">
             Select resolution
           </div>
           <div className="flex flex-col gap-1">

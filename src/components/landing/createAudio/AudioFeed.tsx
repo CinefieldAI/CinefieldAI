@@ -34,17 +34,20 @@ function CornerGuides() {
       <span className="absolute left-0 top-0 h-4 w-px -translate-y-[22px] bg-white/20" />
       <span className="absolute right-0 top-0 h-px w-4 translate-x-[22px] bg-white/20" />
       <span className="absolute right-0 top-0 h-4 w-px -translate-y-[22px] bg-white/20" />
-      <span className="absolute bottom-0 left-0 h-px w-4 -translate-x-[22px] bg-white/20" />
-      <span className="absolute bottom-0 left-0 h-4 w-px translate-y-[22px] bg-white/20" />
-      <span className="absolute bottom-0 right-0 h-px w-4 translate-x-[22px] bg-white/20" />
-      <span className="absolute bottom-0 right-0 h-4 w-px translate-y-[22px] bg-white/20" />
+      <span className="absolute bottom-0 left-0 ml-4 h-px w-4 -translate-x-[22px] bg-white/20" />
+      <span className="absolute bottom-0 left-0 ml-4 h-4 w-px translate-y-[22px] bg-white/20" />
+      <span className="absolute bottom-0 right-0 mr-4 h-px w-4 translate-x-[22px] bg-white/20" />
+      <span className="absolute bottom-0 right-0 mr-4 h-4 w-px translate-y-[22px] bg-white/20" />
     </div>
   );
 }
 
 function EmptyState({ liked }: { liked: boolean }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 pb-[120px]">
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center gap-6 pb-[200px]"
+      data-ignore-marquee="true"
+    >
       <div className="relative flex flex-col items-center">
         <p className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
           Audio
@@ -252,13 +255,15 @@ export default function AudioFeed({
 
       {/* Bottom audio wave visual (behind/above the composer) — matches the
           reference: one image, full width, native 246px height, 30% opacity. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[246px] w-full opacity-30">
-        <img
-          src="/waves.svg"
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+      <div className="pointer-events-none absolute bottom-0 h-[246px] w-full">
+        <figure className="group relative h-full w-full opacity-30">
+          <img
+            src="/assets/higgsfield/audio/waves.svg"
+            alt="audio waves"
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </figure>
       </div>
     </div>
   );

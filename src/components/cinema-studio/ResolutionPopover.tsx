@@ -39,6 +39,9 @@ export default function ResolutionPopover({
     onOpenChange?.(newOpen);
   };
 
+  const defaultRes = options[0] ?? "720p";
+  const isModified = value !== defaultRes;
+
   return (
     <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
@@ -47,7 +50,11 @@ export default function ResolutionPopover({
           aria-label="Resolution"
           aria-haspopup="listbox"
           aria-expanded={controlledOpen}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            controlledOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+          }`}
         >
           <MonitorPlay className="size-4" />
           <span className="min-w-[40px] text-center">{value}</span>
@@ -66,7 +73,7 @@ export default function ResolutionPopover({
           style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >
           <div className="px-3 py-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+            <span className="text-[11px] font-bold tracking-wider text-white/40">
               Resolution
             </span>
           </div>

@@ -84,6 +84,8 @@ export default function Kling3AspectRatioControl({
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
 
+  const isModified = value !== "16:9";
+
   const handleOpenChange = (newOpen: boolean) => {
     if (isOpen === undefined) setOpen(newOpen);
     onOpenChange?.(newOpen);
@@ -97,7 +99,11 @@ export default function Kling3AspectRatioControl({
           aria-label="Aspect ratio"
           aria-haspopup="listbox"
           aria-expanded={controlledOpen}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            controlledOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+          }`}
         >
           <DynamicAspectIcon value={value} />
           <span className="min-w-[24px]">{value}</span>
@@ -108,7 +114,7 @@ export default function Kling3AspectRatioControl({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
+          className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#18191c]/95 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.75)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[210px]"
         >
           {KLING3_ASPECT_RATIOS.map((opt) => {
             const selected = opt.value === value;
@@ -124,7 +130,7 @@ export default function Kling3AspectRatioControl({
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
                   selected
-                    ? "bg-white/10 text-white font-semibold"
+                    ? "bg-[#24262b] text-white font-semibold border border-white/10"
                     : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
@@ -132,9 +138,6 @@ export default function Kling3AspectRatioControl({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-white">
                     {opt.value}
-                  </span>
-                  <span className="block truncate text-xs text-white/50">
-                    {opt.description}
                   </span>
                 </span>
                 {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}

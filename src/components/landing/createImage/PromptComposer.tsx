@@ -1127,10 +1127,10 @@ export default function PromptComposer({
             </div>
           </div>
 
-          {/* Right Column: Generate button centered vertically (flex h-full shrink-0 self-center) */}
-          <div className="flex h-full shrink-0 items-center justify-center gap-2 self-center">
+          {/* Right Column: Generate button (flex h-[96px] shrink-0 items-end self-end) */}
+          <div className="flex h-[96px] shrink-0 items-end justify-center gap-2 self-end">
             <GenerateButton
-              height={88}
+              height={96}
               creditCost={40}
               onGenerate={handleGenerate}
               mode="image"

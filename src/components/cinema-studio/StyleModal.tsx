@@ -133,7 +133,7 @@ function Column({
                 <div className="absolute inset-0 rounded-[inherit] bg-white/10 backdrop-blur-[12px]" />
                 <Sparkles
                   className={`relative size-5 ${
-                    autoActive ? "text-[#00e5ff]" : "text-white"
+                    autoActive ? "text-[#D97757]" : "text-white"
                   }`}
                 />
                 <span className="relative text-xs font-medium text-white">Auto</span>
@@ -155,7 +155,7 @@ function Column({
                     type="button"
                     onClick={() => onToggle(name)}
                     className={`relative flex h-[100px] w-[156px] items-end justify-center overflow-hidden rounded-[56px] border-[1.5px] p-4 text-center transition-all duration-200 ease-out active:scale-95 ${
-                      active ? "border-[#00e5ff]" : "border-white/10"
+                      active ? "border-[#D97757]" : "border-white/10"
                     }`}
                     style={{
                       background: !isVideo && media
@@ -241,7 +241,7 @@ export default function StyleModal({
           onClick={() => setManual((m) => !m)}
           className={`flex h-8 items-center gap-1.5 rounded-[18px] px-3 text-xs font-medium transition-all duration-200 ease-out active:scale-95 ${
             manual
-              ? "bg-[#00e5ff]/10 text-[#00e5ff]"
+              ? "bg-[#D97757]/10 text-[#D97757]"
               : "bg-white/5 text-neutral-300 hover:bg-white/10"
           }`}
         >

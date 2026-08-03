@@ -40,9 +40,9 @@ import BitrateControl from "./BitrateControl";
 import SeedControl from "./SeedControl";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 
-const DEFAULT_GENERATE_PROMPT_WIDTH = 1060;
+const DEFAULT_GENERATE_PROMPT_WIDTH = 880;
 const MAX_GENERATE_PROMPT_WIDTH = 1240;
-const DEFAULT_GENERATE_PROMPT_HEIGHT = 140;
+const DEFAULT_GENERATE_PROMPT_HEIGHT = 128;
 const MAX_GENERATE_PROMPT_HEIGHT = 360;
 const GENERATE_VIEWPORT_GUTTER = 16;
 
@@ -152,7 +152,7 @@ function PlusAtButtons({
         onClick={onOpenPicker}
         aria-label="Add assets"
         title="Add assets"
-        className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(4,4,5,0.98)] text-neutral-400 hover:bg-[rgba(16,16,17,0.98)] transition-colors"
       >
         <Plus className="size-4" />
       </button>
@@ -163,7 +163,7 @@ function PlusAtButtons({
         title={mentionAriaLabel}
         aria-haspopup={onMentionClick ? "dialog" : undefined}
         aria-expanded={onMentionClick ? mentionOpen : undefined}
-        className={`flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors${
+        className={`flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(4,4,5,0.98)] text-neutral-400 hover:bg-[rgba(16,16,17,0.98)] transition-colors${
           mentionClassName ? ` ${mentionClassName}` : ""
         }`}
       >
@@ -191,7 +191,7 @@ function AutoSettingsToggle({
 }) {
   return (
     <div
-      className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-white/[0.04] px-2 py-1"
+      className="flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[rgba(4,4,5,0.98)] px-2 py-1"
       onClick={wholeRowClickable ? onToggle : undefined}
     >
       <span className="whitespace-nowrap px-1 text-xs font-semibold text-white">
@@ -224,7 +224,7 @@ function AutoSettingsToggle({
 
 /** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
@@ -514,7 +514,10 @@ export default function PromptBar(props: PromptBarProps) {
   const [promptHeight, setPromptHeight] = useState(DEFAULT_GENERATE_PROMPT_HEIGHT);
   const [maxPromptWidth, setMaxPromptWidth] = useState(MAX_GENERATE_PROMPT_WIDTH);
   const [maxPromptHeight, setMaxPromptHeight] = useState(MAX_GENERATE_PROMPT_HEIGHT);
-  const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   // Cinema Studio 2.5 — all five reference/frame entry points (As Reference /
   // As Start Frame / As End Frame from the "+" popover, plus the Start Frame
@@ -934,7 +937,7 @@ export default function PromptBar(props: PromptBarProps) {
     defaultHeight: DEFAULT_GENERATE_PROMPT_HEIGHT,
     setWidth: setPromptWidth,
     setHeight: setPromptHeight,
-    storageKey: "generatePromptDimensions",
+    storageKey: "generatePromptDimensionsCompactV3",
   });
 
   // Track composer position for portal rendering
@@ -972,8 +975,8 @@ export default function PromptBar(props: PromptBarProps) {
           height: promptHeight,
         }}
       >
-      {/* Full frame glowing pulsing orange border shimmer overlay */}
-      <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30" />
+      {/* Full frame glowing pulsing 20s multi-color rainbow spectrum border shimmer overlay */}
+      <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 animate-pulse-rainbow-20s z-30" />
       <div
         ref={composerRef}
         className={`absolute inset-x-0 bottom-0 flex min-w-0 items-stretch rounded-[24px] p-1 opacity-100 ${
@@ -1033,7 +1036,7 @@ export default function PromptBar(props: PromptBarProps) {
             {/* Assets Picker Buttons - Cinema Studio 3.5 and 3.0 only */}
             {(isCinema35 || isCinema30) && (
               <>
-                <div className="flex h-8 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112]">
+                <div className="flex h-8 items-center rounded-lg border border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 transition-colors">
                   <button
                     type="button"
                     onClick={() => {
@@ -1093,7 +1096,11 @@ export default function PromptBar(props: PromptBarProps) {
                   <button
                     type="button"
                     aria-label="Shot Control"
-                    className={PILL}
+                    className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+                      activePromptPopover === "shotControl"
+                        ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                        : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+                    }`}
                   >
                     <ChevronDown className="size-3.5 text-neutral-400" />
                     {shotControl === "smart" ? "Smart" : "Custom Multishot"}
@@ -1173,7 +1180,7 @@ export default function PromptBar(props: PromptBarProps) {
 
             {/* Seedance 2.0 Family Controls - Plus and Mention Buttons */}
             {isSeedance2Family && (
-              <div className="flex items-center gap-0 rounded-lg bg-[rgba(255,255,255,0.05)]">
+              <div className="flex items-center gap-0 rounded-lg bg-[rgba(4,4,5,0.98)]">
                 <button
                   type="button"
                   onClick={() => {
@@ -1229,7 +1236,7 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 aria-label="Add assets"
                 title="Add assets"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(4,4,5,0.98)] text-neutral-400 hover:bg-[rgba(16,16,17,0.98)] transition-colors"
               >
                 <Plus className="size-4" />
               </button>
@@ -1364,7 +1371,7 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 aria-label="Add assets"
                 title="Add assets"
-                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(255,255,255,0.05)] text-neutral-400 hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(4,4,5,0.98)] text-neutral-400 hover:bg-[rgba(16,16,17,0.98)] transition-colors"
               >
                 <Plus className="size-4" />
               </button>

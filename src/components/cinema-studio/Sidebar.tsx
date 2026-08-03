@@ -76,14 +76,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       role="navigation"
       aria-label="Cinema Studio"
-      className="fixed left-2 top-[72px] z-30 hidden h-[calc(100vh-88px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex"
+      className="fixed left-2 top-16 z-30 hidden h-[calc(100vh-80px)] flex-col gap-2 overflow-hidden rounded-[1.25rem] border border-white/[0.04] bg-[#18191C] p-2 md:flex"
       style={{ width: collapsed ? 52 : 231, transition: "width 300ms ease-out" }}
     >
       {/* Header */}
       <div className="flex h-11 items-center justify-between px-1.5">
         <div className="flex min-w-0 items-center gap-2">
           <Image
-            src="/b1459dcb-c6e3-4060-b155-466a24ced9de.png"
+            src="/cinefield-logo.png"
             alt="CINEFIELD"
             width={28}
             height={28}

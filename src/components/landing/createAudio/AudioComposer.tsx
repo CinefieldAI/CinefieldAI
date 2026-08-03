@@ -9,6 +9,7 @@ import {
   Loader2,
   Music2,
   Plus,
+  Search,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -38,7 +39,7 @@ const MAX_PROMPT_HEIGHT = 420;
 const PROMPT_VIEWPORT_SAFE_OFFSET = 160;
 const PROMPT_RESIZE_STEP = 16;
 const PROMPT_SINGLE_LINE_SCROLL_HEIGHT = 40;
-const DEFAULT_COMPOSER_WIDTH = 1040;
+const DEFAULT_COMPOSER_WIDTH = 962;
 const MAX_COMPOSER_WIDTH = 1180;
 const COMPOSER_VIEWPORT_GUTTER = 32;
 
@@ -154,7 +155,7 @@ function SliderPopover({
         <button
           type="button"
           title={label}
-          className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+          className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.35)] bg-[#101112] px-2 text-xs font-medium text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
         >
           {format(value)}
           <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
@@ -252,7 +253,7 @@ function SelectPopover({
           type="button"
           aria-haspopup="listbox"
           aria-expanded={open}
-          className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/[0.05] px-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.09]"
+          className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.35)] bg-[#101112] px-2 text-xs font-medium text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
         >
           {triggerLabel}
           <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
@@ -413,6 +414,7 @@ export default function AudioComposer({
   onQwenSettingsChange,
 }: AudioComposerProps) {
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
   const [addReferenceOpen, setAddReferenceOpen] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [sampleRateMenuOpen, setSampleRateMenuOpen] = useState(false);
@@ -509,7 +511,7 @@ export default function AudioComposer({
     defaultHeight: DEFAULT_PROMPT_HEIGHT,
     setWidth: setComposerWidth,
     setHeight: setPromptHeightFromCorner,
-    storageKey: "audioPromptDimensions",
+    storageKey: "audioPromptDimensionsCompact",
     step: PROMPT_RESIZE_STEP,
     onManualResize: handleCornerManualResize,
   });
@@ -635,8 +637,8 @@ export default function AudioComposer({
             WebkitBackdropFilter: "blur(12px)",
           }}
         >
-          {/* Full frame glowing pulsing orange border shimmer overlay around prompt bar */}
-          <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 border-[#D97757] opacity-85 shadow-[0_0_25px_rgba(217,119,87,0.75)] animate-pulse z-30" />
+          {/* Full frame glowing pulsing 20s multi-color rainbow spectrum border shimmer overlay around prompt bar */}
+          <div className="pointer-events-none absolute -inset-[1px] rounded-[25px] border-2 animate-pulse-rainbow-20s z-30" />
 
           <div
             className="relative flex min-w-0 flex-1 items-end gap-2 overflow-hidden rounded-[20px] p-2 bg-transparent"
@@ -747,16 +749,16 @@ export default function AudioComposer({
               </div>
             </button>
 
-            {/* Generate — orange accent, fixed height self-end (never stretches) */}
+            {/* Generate — orange accent, 96px height self-end (matching /generate and /image) */}
             <button
               type="button"
               onClick={onGenerate}
               disabled={isGenerating}
-              className="flex h-20 w-[120px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-[96px] w-[135px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-xl text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
                 boxShadow:
-                  "0 12px 24px rgba(217,119,87,0.25), inset 0px -3px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
+                  "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #8A4A32, inset 0px -2px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
               }}
             >
               {isGenerating ? (
@@ -799,13 +801,19 @@ export default function AudioComposer({
               {/* Active model pill (bottom-left, dynamic) — a real Popover so the
                   six-model list is a temporary, portal-rendered, collision-aware
                   popup anchored to this trigger (never a page-level element). */}
-              <Popover.Root open={modelMenuOpen} onOpenChange={setModelMenuOpen}>
+              <Popover.Root
+                open={modelMenuOpen}
+                onOpenChange={(open) => {
+                  setModelMenuOpen(open);
+                  if (!open) setModelSearch("");
+                }}
+              >
                 <Popover.Trigger asChild>
                   <button
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={modelMenuOpen}
-                    className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg bg-white/[0.05] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+                    className="inline-flex h-8 min-w-[90px] shrink-0 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.35)] bg-[#101112] px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
                   >
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded">
                       {activeModel.iconSrc ? (
@@ -834,19 +842,14 @@ export default function AudioComposer({
                     collisionPadding={12}
                     role="listbox"
                     aria-label="Audio model"
-                    className="z-[100000] w-[300px] overflow-hidden rounded-2xl border border-white/10 p-1.5"
+                    className="z-[100000] w-[320px] overflow-hidden rounded-2xl border border-white/10 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
                     style={{
                       ...POPOVER_SURFACE,
                       maxHeight: "min(420px, var(--radix-popover-content-available-height, 420px))",
                       overflowY: "auto",
                     }}
                   >
-                    {/* Decorative top glow */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 top-0 h-[37px]"
-                      style={{ background: "rgba(139,213,244,0.24)", filter: "blur(50px)" }}
-                    />
-                    <div className="relative flex flex-col gap-2">
+                    <div className="relative flex flex-col gap-1.5">
                       {AUDIO_MODELS.map((model, i) => {
                         const Icon = model.icon;
                         const active = i === selectedModel;
@@ -860,36 +863,52 @@ export default function AudioComposer({
                               onSelectModel(i);
                               setModelMenuOpen(false);
                             }}
-                            className="group/model-row flex h-[52px] w-full items-center gap-3 rounded-xl px-2 text-left transition-colors duration-200 hover:bg-white/5 focus-visible:outline-none cursor-pointer"
+                            className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-[220ms] ease-out cursor-pointer hover:-translate-y-[1px] focus-visible:outline-none ${
+                              active
+                                ? "bg-[rgba(217,119,87,0.075)] border border-[rgba(217,119,87,0.24)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+                                : "bg-[rgba(255,255,255,0.035)] hover:bg-[rgba(255,255,255,0.065)] border border-white/[0.045] hover:border-white/[0.08]"
+                            }`}
                           >
                             <div
-                              className={`size-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
+                              className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out mr-3 ${
                                 active
-                                  ? "bg-[rgba(217,119,87,0.20)] text-[#D97757] border border-[rgba(217,119,87,0.50)] shadow-[0_0_14px_rgba(217,119,87,0.40)]"
-                                  : "bg-white/5 text-gray-400 border border-white/5 shadow-[inset_0px_2px_3px_0px_rgba(255,255,255,0.03)] group-hover/model-row:bg-[rgba(217,119,87,0.22)] group-hover/model-row:text-[#D97757] group-hover/model-row:border-[#D97757]/40 group-hover/model-row:shadow-[0_0_16px_rgba(217,119,87,0.45)]"
+                                  ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)]"
+                                  : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02]"
                               }`}
+                              style={{
+                                background:
+                                  "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                              }}
                             >
-                              {model.iconSrc ? (
-                                <img
-                                  src={model.iconSrc}
-                                  alt=""
-                                  className="h-4 w-4 object-contain"
-                                />
-                              ) : (
-                                <Icon
-                                  className="h-4 w-4"
-                                  aria-hidden="true"
-                                />
-                              )}
+                              <div className="w-full h-full rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)] flex items-center justify-center">
+                                {model.iconSrc ? (
+                                  <img
+                                    src={model.iconSrc}
+                                    alt=""
+                                    className="size-4.5 object-contain"
+                                  />
+                                ) : (
+                                  <Icon
+                                    className="size-4.5 text-white"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </div>
                             </div>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5">
-                                <span className="truncate text-xs font-semibold text-white">
+                            <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`truncate text-xs font-semibold ${
+                                    active
+                                      ? "text-white font-bold"
+                                      : "text-white/90 group-hover/model-row:text-white"
+                                  }`}
+                                >
                                   {model.title}
                                 </span>
                                 {model.badge && (
                                   <span
-                                    className="rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
+                                    className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none"
                                     style={{
                                       background: "rgba(209,254,23,0.18)",
                                       color: "#D1FE17",
@@ -898,14 +917,16 @@ export default function AudioComposer({
                                     {model.badge}
                                   </span>
                                 )}
-                              </span>
-                              <span className="block truncate text-[10px] text-zinc-500">
+                              </div>
+                              <span className="block truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
                                 {model.description}
                               </span>
-                            </span>
-                            <span className="flex w-5 shrink-0 items-center justify-center">
-                              {active && <Check className="h-4 w-4 text-[#D97757]" />}
-                            </span>
+                            </div>
+                            <div className="size-5 shrink-0 flex items-center justify-center ml-1">
+                              {active && (
+                                <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />
+                              )}
+                            </div>
                           </button>
                         );
                       })}
@@ -923,8 +944,7 @@ export default function AudioComposer({
                     <button
                       type="button"
                       aria-label="Add audio reference"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-white transition-colors hover:bg-white/[0.09]"
-                      style={{ boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06)" }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.35)] bg-[#101112] text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -1170,18 +1190,16 @@ export default function AudioComposer({
             </div>
           </button>
 
-          {/* Generate — orange accent, matching the other audio modes.
-              h-full so it always fits the gray surface's actual height and
-              never overflows past the chassis edge. */}
+          {/* Generate — orange accent, 96px height self-end (matching /generate and /image) */}
           <button
             type="button"
             onClick={onGenerate}
             disabled={isGenerating}
-            className="flex h-20 w-[120px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-[18px] text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-[96px] w-[135px] shrink-0 self-end flex-col items-center justify-center gap-1 rounded-xl text-sm font-bold uppercase tracking-wide text-black transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               background: "linear-gradient(135deg, #D97757 0%, #B85A3E 100%)",
               boxShadow:
-                "0 12px 24px rgba(217,119,87,0.25), inset 0px -3px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
+                "10px 34px 24px 0 rgba(0,0,0,0.15), 8px 21px 6px 0 rgba(0,0,0,0.01), 3px 7px 5px 0 rgba(0,0,0,0.25), 1px 3px 4px 0 rgba(0,0,0,0.43), 0 1px 2px 0 rgba(0,0,0,0.49), inset 0px -3px 0px 0px #8A4A32, inset 0px -2px 0px 0px #8A4A32, inset 0px 1px 0px 0px #F0A98C",
             }}
           >
             {isGenerating ? (

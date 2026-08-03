@@ -11,7 +11,7 @@ export default function KlingMotionCard({ onClick }: KlingMotionCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex h-7 items-center gap-1.5 rounded-lg bg-card px-3 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+      className="flex h-7 items-center gap-1.5 rounded-lg bg-[rgba(4,4,5,0.98)] px-3 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
     >
       <Play className="size-3.5 text-neutral-400" />
       Motion

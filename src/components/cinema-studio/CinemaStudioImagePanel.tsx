@@ -135,6 +135,74 @@ export default function CinemaStudioImagePanel({
     });
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
+
+  const handleFilesUpload = (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (fileArray.length === 0) return;
+
+    setAttachments((prev) => {
+      const currentCount = prev.length;
+      const MAX_IMAGES = 50;
+      if (currentCount >= MAX_IMAGES) {
+        alert("Maximum limit of 50 images reached for this session.");
+        return prev;
+      }
+
+      const availableSlots = MAX_IMAGES - currentCount;
+      const filesToProcess = fileArray.slice(0, availableSlots);
+
+      if (fileArray.length > availableSlots) {
+        alert(`Maximum session limit is 50 images. Uploaded ${availableSlots} of ${fileArray.length} selected files.`);
+      }
+
+      const newAttachments: ReferenceAttachment[] = filesToProcess.map((file, idx) => ({
+        id: `att-${Date.now()}-${currentCount + idx}-${Math.random().toString(36).substring(2, 6)}`,
+        url: URL.createObjectURL(file),
+        name: file.name,
+        loading: false,
+      }));
+
+      return [...prev, ...newAttachments];
+    });
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFilesUpload(e.dataTransfer.files);
+    }
+  };
+
   const [promptWidth, setPromptWidth] = useState(1060);
   const [promptHeight, setPromptHeight] = useState(160);
 
@@ -153,7 +221,24 @@ export default function CinemaStudioImagePanel({
   });
 
   return (
-    <div className="relative w-full">
+    <div
+      className="relative w-full"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) handleFilesUpload(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <PromptResizeHandles
         verticalHandleProps={promptResize.verticalHandleProps}
         cornerHandleProps={promptResize.cornerHandleProps}
@@ -175,6 +260,14 @@ export default function CinemaStudioImagePanel({
           WebkitBackdropFilter: "blur(12px)",
         }}
       >
+        {isDragging && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center rounded-[20px] bg-[#141414]/90 border-2 border-dashed border-[#D97757] backdrop-blur-md transition-all duration-150">
+            <div className="flex flex-col items-center gap-2 text-[#D97757]">
+              <Plus className="size-8 animate-bounce" />
+              <span className="text-sm font-semibold text-white">Drop images here (Max 50)</span>
+            </div>
+          </div>
+        )}
         <div className="prompt-shimmer-light pointer-events-none absolute left-3 top-2.5 z-0 h-10 w-48 opacity-40" />
         <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-between gap-2">
           {attachments.length > 0 && (
@@ -183,11 +276,12 @@ export default function CinemaStudioImagePanel({
 
           <div className="flex min-w-0 items-start gap-2">
             {showPlus && (
-              <div className="flex h-8 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112]">
+              <div className="flex h-8 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(5,5,6,0.96)]">
                 <button
                   type="button"
-                  onClick={() => setAssetsPickerOpen(true)}
-                  aria-label="Add reference"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Add image"
+                  title="Upload images (Max 50)"
                   className="flex h-8 w-8 items-center justify-center rounded-l-lg text-neutral-400 hover:bg-white/10 transition-colors"
                 >
                   <Plus className="size-4 text-white/80" />

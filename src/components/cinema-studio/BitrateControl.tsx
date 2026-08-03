@@ -54,7 +54,11 @@ export default function BitrateControl({
           aria-label="Bitrate"
           aria-haspopup="listbox"
           aria-expanded={controlledOpen}
-          className="flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            controlledOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+          }`}
         >
           <BitrateIcon />
           {value}
@@ -68,7 +72,7 @@ export default function BitrateControl({
           className="z-[100000] w-60 overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto"
         >
           <div className="px-3 py-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <span className="text-xs font-semibold tracking-wider text-gray-400">
               Bitrate
             </span>
           </div>
@@ -93,7 +97,7 @@ export default function BitrateControl({
                   <span className="block truncate text-sm font-medium text-white">{opt.value}</span>
                   <span className="block truncate text-xs text-gray-400">{opt.description}</span>
                 </span>
-                {selected && <Check className="size-4 shrink-0 text-[#00e5ff]" />}
+                {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>
             );
           })}

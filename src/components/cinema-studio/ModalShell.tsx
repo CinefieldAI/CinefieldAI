@@ -50,7 +50,7 @@ export default function ModalShell({
         >
           <div
             onClick={onClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-[40px]"
+            className="absolute inset-0 bg-black/35 backdrop-blur-[16px]"
           />
           <motion.div
             initial={{ scale: 0.96, y: 12, opacity: 0 }}

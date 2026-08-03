@@ -80,7 +80,7 @@ export default function ReferencesControl({
           aria-label="References"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          className="flex h-8 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+          className="flex h-8 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
         >
           <PlusIcon />
         </button>
@@ -93,7 +93,7 @@ export default function ReferencesControl({
           className="z-[100000] overflow-hidden rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[220px] pointer-events-auto"
         >
           <div className="px-3 py-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <span className="text-xs font-semibold tracking-wider text-gray-400">
               References
             </span>
           </div>

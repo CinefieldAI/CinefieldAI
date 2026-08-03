@@ -26,7 +26,7 @@ export const genrePresets: GenrePreset[] = [
   },
   {
     label: "Drama",
-    src: "/assets/higgsfield/generate/cinema-genres/Intimate%201.mp4"
+    src: "/assets/higgsfield/generate/cinema-genres/Intimate%25201.mp4"
   },
   {
     label: "Epic",

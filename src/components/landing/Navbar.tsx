@@ -61,12 +61,9 @@ function CinefieldLogo() {
       aria-label="CINEFIELD"
       className="flex shrink-0 items-center"
     >
-      <Image
-        src="/b1459dcb-c6e3-4060-b155-466a24ced9de.png"
+      <img
+        src="/cinefield-logo.png"
         alt="CINEFIELD"
-        width={36}
-        height={36}
-        priority
         className="h-9 w-9 rounded-xl object-cover drop-shadow-[0_0_8px_rgba(217,119,87,0.5)]"
       />
     </Link>
@@ -101,9 +98,6 @@ function PricingUpgradeLink() {
     >
       <Rocket className="h-4 w-4 text-magenta-400" />
       Pricing
-      <span className="absolute -top-2 -right-3 rounded-full bg-[radial-gradient(39.71%_136.54%_at_51.64%_117.31%,#33eaff_0%,#00b8cc_100%)] px-2 py-0.5 text-[10px] font-bold text-white shadow-lg shadow-magenta-500/30">
-        30% OFF
-      </span>
     </a>
   );
 }
@@ -139,9 +133,6 @@ function PricingAction() {
         />
       </svg>
       Pricing
-      <span className="absolute -top-2 -right-3 rounded-full bg-[radial-gradient(39.71%_136.54%_at_51.64%_117.31%,#33eaff_0%,#00b8cc_100%)] px-2 py-0.5 text-[10px] font-bold text-white shadow-lg shadow-magenta-500/30">
-        30% OFF
-      </span>
     </Link>
   );
 }
@@ -332,7 +323,14 @@ export default function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-51 grid h-16 w-full grid-cols-[1fr_auto] items-center bg-black/90 pr-4 backdrop-blur-md md:grid-cols-[auto_1fr_auto]">
+    <header
+      className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 md:grid-cols-[auto_1fr_auto]"
+      style={{
+        background: "rgba(35,38,42,0.75)",
+        backdropFilter: "blur(40px)",
+        WebkitBackdropFilter: "blur(40px)",
+      }}
+    >
       {/* Column 1: logo */}
       <div className="flex items-center gap-2 pl-4 md:pl-6">
         <CinefieldLogo />
@@ -345,7 +343,7 @@ export default function Navbar({
           value={openNavItem}
           onValueChange={setOpenNavItem}
         >
-          <NavigationMenuList className="flex-nowrap gap-0.5 overflow-x-auto px-2 [scrollbar-width:none]">
+          <NavigationMenuList className="flex-nowrap gap-1 overflow-x-auto px-2 [scrollbar-width:none]">
             {LINKS_LEFT.map((link) => (
               <NavigationMenuItem key={link.label}>
                 <NavigationMenuLink
@@ -362,7 +360,7 @@ export default function Navbar({
             {/* Image: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={`text-[20px] ${
+                className={`text-[14px] ${
                   activePanel === "image"
                     ? "bg-white/10 text-[#D97757]"
                     : ""
@@ -381,7 +379,7 @@ export default function Navbar({
             {/* Video: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={`text-[20px] ${
+                className={`text-[14px] ${
                   activePanel === "video" ||
                   pathname.startsWith("/video/")
                     ? "bg-white/10 text-[#D97757]"
@@ -401,7 +399,7 @@ export default function Navbar({
             {/* Audio: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
-                className={`text-[20px] ${
+                className={`text-[14px] ${
                   activePanel === "audio" ||
                   pathname.startsWith("/audio/")
                     ? "bg-white/10 text-[#D97757]"

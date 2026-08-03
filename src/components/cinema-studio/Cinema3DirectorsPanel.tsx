@@ -67,7 +67,7 @@ function GridItem({
     <button
       onClick={onClick}
       className={`group relative flex flex-col items-center gap-1.5 rounded-2xl overflow-hidden transition-all duration-200 ${
-        isSelected ? "ring-2 ring-[#00e5ff]" : "hover:ring-1 hover:ring-[#00e5ff]/50"
+        isSelected ? "ring-2 ring-[#D97757]" : "hover:ring-1 hover:ring-[#D97757]/50"
       }`}
     >
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-black/30">
@@ -81,13 +81,13 @@ function GridItem({
         />
         {isSelected && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <Check className="w-6 h-6 text-[#00e5ff]" />
+            <Check className="w-6 h-6 text-[#D97757]" />
           </div>
         )}
       </div>
 
       <span className={`text-xs font-semibold text-center truncate px-1 ${
-        isSelected ? "text-[#00e5ff]" : "text-white"
+        isSelected ? "text-[#D97757]" : "text-white"
       }`}>
         {name}
       </span>

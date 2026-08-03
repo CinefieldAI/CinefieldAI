@@ -23,7 +23,7 @@ const CLIPS = [
   "/Video/grok-video-cf4abeca-f4a1-4ef3-a014-8c8961cdb722.mp4",
 ];
 
-const AVATAR = "/b1459dcb-c6e3-4060-b155-466a24ced9de.png";
+const AVATAR = "/marketing-logo.png";
 
 /** Exactly nine community entries — a fixed local array, no backend call. */
 const COMMUNITY_ITEMS: CommunityItem[] = [
@@ -49,10 +49,19 @@ const COMMUNITY_ITEMS: CommunityItem[] = [
  * Community grid sitting on solid black directly under the video hero —
  * exactly nine cards, 3/2/1 columns with a 16px gap.
  */
-export default function CommunitySection() {
+export default function CommunitySection({
+  sidebarWidth = 52,
+}: {
+  /** Current Cinema Generate sidebar width (px) — keeps this grid's left edge
+   *  lined up under the independent hero/composer panel above it. */
+  sidebarWidth?: number;
+}) {
   return (
     <section className="w-full bg-black">
-      <div className="mx-auto w-full max-w-[1320px] px-4 py-10 md:pl-[68px]">
+      <div
+        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-[padding-left] duration-300 ease-out md:pl-[calc(var(--cinema-sidebar-w)+16px)]"
+        style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
+      >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {COMMUNITY_ITEMS.map((item) => (
             <CommunityCard key={item.id} item={item} />

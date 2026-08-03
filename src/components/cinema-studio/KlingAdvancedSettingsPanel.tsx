@@ -28,7 +28,15 @@ export default function KlingAdvancedSettingsPanel({
   return (
     <Popover.Root open={isOpen} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label="Advanced Settings" className={PILL}>
+        <button
+          type="button"
+          aria-label="Advanced Settings"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            isOpen
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+          }`}
+        >
           <Settings2 className="size-3.5 text-neutral-400" />
           Advanced Settings
         </button>

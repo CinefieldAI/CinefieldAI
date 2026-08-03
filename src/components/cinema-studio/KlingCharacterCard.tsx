@@ -11,7 +11,7 @@ export default function KlingCharacterCard({ onClick }: KlingCharacterCardProps)
     <button
       type="button"
       onClick={onClick}
-      className="flex h-7 items-center gap-1.5 rounded-lg bg-card px-3 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00e5ff]"
+      className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 bg-[rgba(18,19,21,0.95)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
     >
       <User className="size-3.5 text-neutral-400" />
       Character

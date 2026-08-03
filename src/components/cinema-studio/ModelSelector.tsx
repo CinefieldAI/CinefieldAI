@@ -95,12 +95,14 @@ function ImageRow({
   onSelect,
   focused,
   buttonRef,
+  isContinuation,
 }: {
   model: ModelInfo;
   value: string;
   onSelect: (id: string) => void;
   focused?: boolean;
   buttonRef?: (el: HTMLButtonElement | null) => void;
+  isContinuation?: boolean;
 }) {
   const sharedIcon = getSharedModelIcon(model.name);
   const IconComponent = sharedIcon ?? (typeof model.icon === "function" ? model.icon : null);
@@ -121,15 +123,25 @@ function ImageRow({
           : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
       }`}
     >
-      {active && (
+      {active ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
         />
-      )}
+      ) : isContinuation ? (
+        <span
+          aria-hidden
+          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            boxShadow:
+              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
+          }}
+        />
+      ) : null}
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
-          active
+          active || isContinuation
             ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
             : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
         }`}
@@ -169,6 +181,7 @@ function VideoFlatRow({
   onSelect,
   focused,
   buttonRef,
+  isContinuation,
 }: {
   model: ModelInfo;
   value: string;
@@ -176,6 +189,7 @@ function VideoFlatRow({
   focused?: boolean;
   buttonRef?: (el: HTMLButtonElement | null) => void;
   skin?: RowSkin;
+  isContinuation?: boolean;
 }) {
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
@@ -195,15 +209,25 @@ function VideoFlatRow({
           : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
       }`}
     >
-      {active && (
+      {active ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
         />
-      )}
+      ) : isContinuation ? (
+        <span
+          aria-hidden
+          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            boxShadow:
+              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
+          }}
+        />
+      ) : null}
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
-          active
+          active || isContinuation
             ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
             : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
         }`}
@@ -264,6 +288,7 @@ function VideoParentRow({
   keyboardOpen,
   activeSubIndex,
   onSubRefsChange,
+  isContinuation,
 }: {
   model: ModelInfo;
   value: string;
@@ -274,6 +299,7 @@ function VideoParentRow({
   activeSubIndex?: number;
   onSubRefsChange?: (refs: (HTMLButtonElement | null)[]) => void;
   skin?: RowSkin;
+  isContinuation?: boolean;
 }) {
   const subs = model.submodels ?? [];
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
@@ -344,15 +370,25 @@ function VideoParentRow({
             : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
         }`}
       >
-        {active && (
+        {active ? (
           <span
             aria-hidden
             className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
           />
-        )}
+        ) : isContinuation ? (
+          <span
+            aria-hidden
+            className="w-[2px] h-7 rounded-full shrink-0 mr-2"
+            style={{
+              background: "rgba(255, 255, 255, 0.95)",
+              boxShadow:
+                "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
+            }}
+          />
+        ) : null}
         <div
           className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
-            active
+            active || isContinuation
               ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
               : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
           }`}
@@ -483,6 +519,7 @@ export default function ModelSelector({
   const [subRowRefs, setSubRowRefs] = useState<(HTMLButtonElement | null)[]>([]);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const select = (id: string) => {
     onChange(id);
@@ -490,18 +527,65 @@ export default function ModelSelector({
     setQuery("");
   };
 
+  useEffect(() => {
+    if (open && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [open]);
+
   const categories = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return source;
+    if (!q) {
+      if (!value) return source;
+
+      // Flatten all models with their category label in canonical original order
+      const allFlatModels: { model: ModelInfo; categoryLabel: string }[] = [];
+      for (const cat of source) {
+        for (const m of cat.models) {
+          allFlatModels.push({ model: m, categoryLabel: cat.label });
+        }
+      }
+
+      // Find selected model index (direct match or submodel match)
+      const selectedIdx = allFlatModels.findIndex(
+        (item) => item.model.id === value || item.model.submodels?.some((sub) => sub.id === value)
+      );
+
+      if (selectedIdx < 0) return source;
+
+      // Rotate model list so selected model is first, followed by original next items, then wrapped start items
+      const rotatedList = [
+        ...allFlatModels.slice(selectedIdx),
+        ...allFlatModels.slice(0, selectedIdx),
+      ];
+
+      // Group consecutive models belonging to the same category
+      const rotatedCategories: { label: string; models: ModelInfo[] }[] = [];
+      for (const item of rotatedList) {
+        const lastCat = rotatedCategories[rotatedCategories.length - 1];
+        if (lastCat && lastCat.label === item.categoryLabel) {
+          lastCat.models.push(item.model);
+        } else {
+          rotatedCategories.push({
+            label: item.categoryLabel,
+            models: [item.model],
+          });
+        }
+      }
+
+      return rotatedCategories;
+    }
+
     const match = (m: ModelInfo) =>
       m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+
     return source
       .map((c) => ({
         ...c,
         models: c.models.filter((m) => match(m) || m.submodels?.some(match)),
       }))
       .filter((c) => c.models.length > 0);
-  }, [query, source]);
+  }, [query, source, value]);
 
   /** Flat, top-to-bottom list of every rendered row — used for Up/Down/Right/Enter. */
   const flatEntries = useMemo<FlatEntry[]>(() => {
@@ -634,10 +718,10 @@ export default function ModelSelector({
               aria-haspopup="listbox"
               aria-expanded={open}
               aria-label={`Model: ${selected.name}`}
-              className="flex h-7 items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+              className="flex h-7 items-center gap-1.5 rounded-full bg-[rgba(4,4,5,0.98)] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
             >
               {triggerIconPath ? (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[rgba(4,4,5,0.98)]">
                   <img
                     src={triggerIconPath}
                     alt=""
@@ -645,7 +729,7 @@ export default function ModelSelector({
                   />
                 </span>
               ) : (
-                <SelectedIcon className="h-5 w-5" style={{ color: "#D97757" }} aria-hidden="true" />
+                <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
               <span className="max-w-[140px] truncate text-xs font-semibold text-white">
                 {selected.name}
@@ -659,12 +743,12 @@ export default function ModelSelector({
               aria-label={`Model: ${selected.name}`}
               className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
                 open
-                  ? "border-[#D97757] bg-[#181a1d] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
-                  : "border-[rgba(217,119,87,0.45)] bg-[#101112] hover:border-[#D97757] hover:bg-[#181a1d]"
+                  ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                  : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
               }`}
             >
               {triggerIconPath ? (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[rgba(4,4,5,0.98)]">
                   <img
                     src={triggerIconPath}
                     alt=""
@@ -672,7 +756,7 @@ export default function ModelSelector({
                   />
                 </span>
               ) : (
-                <SelectedIcon className="h-5 w-5" style={{ color: "#D97757" }} aria-hidden="true" />
+                <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
               <span className="max-w-[140px] truncate text-white">
                 {selected.name}
@@ -709,7 +793,8 @@ export default function ModelSelector({
 
               {/* Internal scroll area */}
               <div
-                className="relative z-10 flex-1 min-h-0 overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent]"
+                ref={scrollContainerRef}
+                className="relative z-10 flex-1 min-h-0 overflow-y-auto p-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0"
                 role="listbox"
                 aria-label="AI models"
                 onWheel={(e) => e.stopPropagation()}
@@ -719,27 +804,54 @@ export default function ModelSelector({
                     No models match &quot;{query}&quot;.
                   </p>
                 )}
-                {categories.map((cat) => (
-                  <div key={cat.label} className="mb-2">
-                    <p className="flex items-center gap-1.5 px-3 pt-2 pb-2 text-xs font-medium text-gray-400">
-                      {isKlingTurboSkin ? (
-                        cat.label === "All models" ? (
-                          <Grid3x3 className="size-3" />
+                {categories.map((cat, catIdx) => {
+                  const isAll = cat.label.toLowerCase().includes("all");
+                  return (
+                    <div key={`${cat.label}-${catIdx}`} className="mb-2">
+                      <p className="flex items-center gap-1.5 px-3 pt-2 pb-2 text-xs font-medium text-gray-400">
+                        {isAll ? (
+                          <svg
+                            aria-hidden="true"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            className="size-3.5 text-white/40 shrink-0"
+                          >
+                            <path
+                              d="M14.25 6.75C13.0074 6.75 12 7.75736 12 9C12 10.2426 13.0074 11.25 14.25 11.25C15.4926 11.25 16.5 10.2426 16.5 9C16.5 7.75736 15.4926 6.75 14.25 6.75Z"
+                              fill="currentColor"
+                            />
+                            <path
+                              fillRule="evenodd"
+                              clipRule="evenodd"
+                              d="M3 4.75C3 3.7835 3.7835 3 4.75 3H19.25C20.2165 3 21 3.7835 21 4.75V19.25C21 20.2165 20.2165 21 19.25 21H4.75C3.7835 21 3 20.2165 3 19.25V4.75ZM19.5 18.4394L14.8839 13.8232C14.3957 13.3351 13.6043 13.3351 13.1161 13.8232L12.1768 14.7626C12.0791 14.8602 11.9209 14.8602 11.8232 14.7626L8.87333 11.8127C8.3956 11.3349 7.62472 11.3233 7.13274 11.7863L4.5 14.2642V4.75C4.5 4.61193 4.61193 4.5 4.75 4.5H19.25C19.3881 4.5 19.5 4.61193 19.5 4.75V18.4394Z"
+                              fill="currentColor"
+                            />
+                          </svg>
                         ) : (
-                          <Diamond className="size-3" />
-                        )
-                      ) : isImage || cat.label !== "All models" ? (
-                        <Sparkles className="size-3" />
-                      ) : (
-                        <Film className="size-3" />
-                      )}
-                      {cat.label}
-                    </p>
+                          <svg
+                            aria-hidden="true"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            className="size-3.5 text-white/40 shrink-0"
+                          >
+                            <path
+                              d="M12.7368 2.60967C12.6694 2.25593 12.3601 2 12 2C11.6399 2 11.3306 2.25593 11.2632 2.60967C10.7844 5.12353 9.83969 7.03715 8.43842 8.43842C7.03715 9.83969 5.12353 10.7844 2.60967 11.2632C2.25593 11.3306 2 11.6399 2 12C2 12.3601 2.25593 12.6694 2.60967 12.7368C5.12353 13.2156 7.03715 14.1603 8.43842 15.5616C9.83969 16.9629 10.7844 18.8765 11.2632 21.3903C11.3306 21.7441 11.6399 22 12 22C12.3601 22 12.6694 21.7441 12.7368 21.3903C13.2156 18.8765 14.1603 16.9629 15.5616 15.5616C16.9629 14.1603 18.8765 13.2156 21.3903 12.7368C21.7441 12.6694 22 12.3601 22 12C22 11.6399 21.7441 11.3306 21.3903 11.2632C18.8765 10.7844 16.9629 9.83969 15.5616 8.43842C14.1603 7.03715 13.2156 5.12353 12.7368 2.60967Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        )}
+                        {cat.label}
+                      </p>
                     <div className="space-y-1">
                       {cat.models.map((m, i) => {
                         const key = `${m.id}-${i}`;
                         const entryIndex = flatIndexById.get(m.id) ?? 0;
                         const focused = open && openParentIndex === null && activeIndex === entryIndex;
+                        const isContinuation = !query.trim() && entryIndex === 1;
                         const registerRef = (el: HTMLButtonElement | null) => {
                           rowRefs.current[entryIndex] = el;
                         };
@@ -753,6 +865,7 @@ export default function ModelSelector({
                               onSelect={select}
                               focused={focused}
                               buttonRef={registerRef}
+                              isContinuation={isContinuation}
                             />
                           );
                         return m.submodels?.length ? (
@@ -767,6 +880,7 @@ export default function ModelSelector({
                             activeSubIndex={activeSubIndex}
                             onSubRefsChange={setSubRowRefs}
                             skin={rowSkin}
+                            isContinuation={isContinuation}
                           />
                         ) : (
                           <VideoFlatRow
@@ -777,13 +891,15 @@ export default function ModelSelector({
                             focused={focused}
                             buttonRef={registerRef}
                             skin={rowSkin}
+                            isContinuation={isContinuation}
                           />
                         );
                       })}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
             </div>
           </Popover.Content>
         </Popover.Portal>

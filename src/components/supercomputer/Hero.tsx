@@ -150,7 +150,7 @@ export default function Hero() {
       <div className="flex flex-col items-center gap-1">
         {/* Logo */}
         <img
-          src="/b1459dcb-c6e3-4060-b155-466a24ced9de.png"
+          src="/cinefield-logo.png"
           alt="Higgsfield"
           className="w-[3.3125rem] h-[3.3125rem] rounded-md object-cover drop-shadow-[0_0_12px_rgba(217,119,87,0.6)]"
         />

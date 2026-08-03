@@ -43,7 +43,7 @@ export default function KlingMotionModal({ isOpen, onClose }: KlingMotionModalPr
             onClick={() => setActiveTab("upload")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "upload"
-                ? "text-[#00e5ff] border-b-2 border-[#00e5ff]"
+                ? "text-[#D97757] border-b-2 border-[#D97757]"
                 : "text-neutral-400 hover:text-white"
             }`}
           >
@@ -54,7 +54,7 @@ export default function KlingMotionModal({ isOpen, onClose }: KlingMotionModalPr
             onClick={() => setActiveTab("library")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "library"
-                ? "text-[#00e5ff] border-b-2 border-[#00e5ff]"
+                ? "text-[#D97757] border-b-2 border-[#D97757]"
                 : "text-neutral-400 hover:text-white"
             }`}
           >
