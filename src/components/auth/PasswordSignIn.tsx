@@ -29,36 +29,33 @@ export default function PasswordSignIn({ onSuccess, onBack }: PasswordSignInProp
       setLoading(true);
 
       try {
-        await signIn.password({
+        const result = await signIn.password({
           identifier,
           password,
         });
 
-        const currentSignIn = signIn;
-        if (currentSignIn?.status === "complete") {
-          await setActive({ session: currentSignIn.createdSessionId });
+        if (result.error) {
+          setError(result.error.message || "Sign in failed");
+          return;
+        }
+
+        if (signIn.status === "complete") {
+          await setActive({ session: signIn.createdSessionId });
           onSuccess?.();
         } else if (
-          currentSignIn?.status === "needs_first_factor" ||
-          currentSignIn?.status === "needs_second_factor"
+          signIn.status === "needs_first_factor" ||
+          signIn.status === "needs_second_factor"
         ) {
           setError("Additional verification required. Please check your email.");
-        } else if (currentSignIn?.status === "needs_new_password") {
+        } else if (signIn.status === "needs_new_password") {
           setError("Password reset required. Please check your email.");
-        } else if (currentSignIn?.status === "needs_client_trust") {
-          setError("Device verification required. Please check your email.");
-        } else if (currentSignIn?.status === "needs_protect_check") {
-          setError("Account protection verification required.");
-        } else if (currentSignIn?.status === "needs_identifier") {
-          setError("Please provide a valid email or username.");
         } else {
           setError("Sign in incomplete. Please try again.");
         }
       } catch (err) {
         let errorMessage = "Sign in failed";
-        if (err && typeof err === "object" && "errors" in err) {
-          const clerkError = err as { errors?: Array<{ message: string }> };
-          errorMessage = clerkError.errors?.[0]?.message || errorMessage;
+        if (err && typeof err === "object" && "message" in err) {
+          errorMessage = (err as any).message;
         } else if (err instanceof Error) {
           errorMessage = err.message;
         }
