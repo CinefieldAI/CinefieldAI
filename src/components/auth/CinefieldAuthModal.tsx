@@ -8,13 +8,9 @@ import { useAuthModal } from "@/context/AuthModalContext";
 
 export default function CinefieldAuthModal() {
   const { isOpen, mode, closeModal } = useAuthModal();
-  const [mounted, setMounted] = useState(false);
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-    setPortalRoot(document.body);
-  }, []);
+  const [portalRoot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.body : null
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -44,7 +40,7 @@ export default function CinefieldAuthModal() {
     };
   }, [isOpen, closeModal]);
 
-  if (!mounted || !isOpen || !portalRoot) return null;
+  if (!isOpen || !portalRoot) return null;
 
   const overlayRef = (el: HTMLDivElement | null) => {
     if (el && isOpen) {
@@ -154,6 +150,7 @@ export default function CinefieldAuthModal() {
 
             {mode === "signin" ? (
               <SignIn
+                routing="hash"
                 appearance={{
                   variables: {
                     colorBackground: "#000000",
@@ -164,25 +161,37 @@ export default function CinefieldAuthModal() {
                     card: "bg-black shadow-none border-0 rounded-2xl p-0",
                     cardBox: "shadow-none border-0",
                     headerTitle: "text-white text-2xl font-bold",
-                    headerSubtitle: "text-zinc-400",
-                    dividerLine: "bg-white/10",
-                    dividerText: "text-zinc-500",
-                    formFieldLabel: "text-white font-medium",
+                    headerSubtitle: "text-gray-300",
+                    dividerLine: "bg-gray-700",
+                    dividerText: "text-gray-400",
+                    formFieldLabel: "text-gray-200 font-medium",
                     formFieldInput:
-                      "bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl",
+                      "bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
                     formButtonPrimary:
                       "bg-[#D97757] hover:bg-[#c9684a] text-white font-semibold rounded-xl",
                     formResendCodeLink: "text-[#D97757] hover:text-[#e98566]",
                     socialButton:
-                      "border border-zinc-700 hover:bg-white/5 text-white rounded-xl",
+                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
                     socialButtonText: "text-white",
-                    footerActionText: "text-zinc-400",
+                    socialButtonsBlockButton:
+                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
+                    socialButtonsBlockButtonText: "text-white",
+                    footerActionText: "text-gray-400",
                     footerActionLink: "text-[#D97757] hover:text-[#e98566]",
+                    identityPreviewText: "text-gray-300",
+                    formFieldErrorText: "text-red-400",
+                    alertText: "text-red-400",
+                    otpCodeFieldInput:
+                      "bg-gray-800 border border-gray-600 text-white text-center text-lg tracking-widest rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
+                    footer: "text-gray-500",
+                    footerPages: "text-gray-500",
+                    badge: "bg-gray-800 text-gray-300",
                   },
                 }}
               />
             ) : (
               <SignUp
+                routing="hash"
                 appearance={{
                   variables: {
                     colorBackground: "#000000",
@@ -193,20 +202,31 @@ export default function CinefieldAuthModal() {
                     card: "bg-black shadow-none border-0 rounded-2xl p-0",
                     cardBox: "shadow-none border-0",
                     headerTitle: "text-white text-2xl font-bold",
-                    headerSubtitle: "text-zinc-400",
-                    dividerLine: "bg-white/10",
-                    dividerText: "text-zinc-500",
-                    formFieldLabel: "text-white font-medium",
+                    headerSubtitle: "text-gray-300",
+                    dividerLine: "bg-gray-700",
+                    dividerText: "text-gray-400",
+                    formFieldLabel: "text-gray-200 font-medium",
                     formFieldInput:
-                      "bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl",
+                      "bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
                     formButtonPrimary:
                       "bg-[#D97757] hover:bg-[#c9684a] text-white font-semibold rounded-xl",
                     formResendCodeLink: "text-[#D97757] hover:text-[#e98566]",
                     socialButton:
-                      "border border-zinc-700 hover:bg-white/5 text-white rounded-xl",
+                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
                     socialButtonText: "text-white",
-                    footerActionText: "text-zinc-400",
+                    socialButtonsBlockButton:
+                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
+                    socialButtonsBlockButtonText: "text-white",
+                    footerActionText: "text-gray-400",
                     footerActionLink: "text-[#D97757] hover:text-[#e98566]",
+                    identityPreviewText: "text-gray-300",
+                    formFieldErrorText: "text-red-400",
+                    alertText: "text-red-400",
+                    otpCodeFieldInput:
+                      "bg-gray-800 border border-gray-600 text-white text-center text-lg tracking-widest rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
+                    footer: "text-gray-500",
+                    footerPages: "text-gray-500",
+                    badge: "bg-gray-800 text-gray-300",
                   },
                 }}
               />
