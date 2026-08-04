@@ -60,7 +60,7 @@ export default function CinefieldAuthModal({
       role="presentation"
     >
       <div
-        className="relative h-screen max-h-[90vh] w-screen max-w-4xl grid grid-cols-1 md:grid-cols-2 bg-black rounded-2xl overflow-hidden shadow-2xl"
+        className="relative w-screen max-w-3xl h-auto grid grid-cols-1 md:grid-cols-2 bg-black rounded-2xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
