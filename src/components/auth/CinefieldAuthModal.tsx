@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { SignIn, SignUp } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { useAuthModal } from "@/context/AuthModalContext";
+import PasswordSignIn from "./PasswordSignIn";
 
 export default function CinefieldAuthModal() {
   const { isOpen, mode, closeModal } = useAuthModal();
@@ -115,46 +116,7 @@ export default function CinefieldAuthModal() {
             </div>
 
             {mode === "signin" ? (
-              <SignIn
-                routing="hash"
-                appearance={{
-                  variables: {
-                    colorBackground: "#000000",
-                    colorPrimary: "#D97757",
-                    borderRadius: "12px",
-                  },
-                  elements: {
-                    card: "bg-black shadow-none border-0 rounded-2xl p-0",
-                    cardBox: "shadow-none border-0",
-                    headerTitle: "text-white text-2xl font-bold",
-                    headerSubtitle: "text-gray-300",
-                    dividerLine: "bg-gray-700",
-                    dividerText: "text-gray-400",
-                    formFieldLabel: "text-gray-200 font-medium",
-                    formFieldInput:
-                      "bg-gray-800 border border-gray-600 text-white placeholder-gray-500 rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
-                    formButtonPrimary:
-                      "bg-[#D97757] hover:bg-[#c9684a] text-white font-semibold rounded-xl",
-                    formResendCodeLink: "text-[#D97757] hover:text-[#e98566]",
-                    socialButton:
-                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
-                    socialButtonText: "text-white",
-                    socialButtonsBlockButton:
-                      "border border-gray-600 hover:border-gray-500 hover:bg-gray-800 text-white rounded-xl",
-                    socialButtonsBlockButtonText: "text-white",
-                    footerActionText: "text-gray-400",
-                    footerActionLink: "text-[#D97757] hover:text-[#e98566]",
-                    identityPreviewText: "text-gray-300",
-                    formFieldErrorText: "text-red-400",
-                    alertText: "text-red-400",
-                    otpCodeFieldInput:
-                      "w-10 h-12 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-md focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757] focus:outline-none",
-                    footer: "text-gray-500",
-                    footerPages: "text-gray-500",
-                    badge: "bg-gray-800 text-gray-300",
-                  },
-                }}
-              />
+              <PasswordSignIn onSuccess={closeModal} />
             ) : (
               <SignUp
                 routing="hash"
