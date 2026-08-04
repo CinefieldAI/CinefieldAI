@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthModalProvider } from "@/context/AuthModalContext";
-import CinefieldAuthModal from "@/components/auth/CinefieldAuthModal";
 import ProfileSynchronizer from "@/components/auth/ProfileSynchronizer";
+import CinefieldAuthModal from "@/components/auth/CinefieldAuthModal";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,7 +36,7 @@ export default function RootLayout({
         >
           <body className="min-h-full flex flex-col">
             {children}
-            <CinefieldAuthModal />
+            {/* <CinefieldAuthModal /> */}
           </body>
         </html>
       </AuthModalProvider>

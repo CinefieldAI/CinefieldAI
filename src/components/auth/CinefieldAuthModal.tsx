@@ -11,7 +11,6 @@ export default function CinefieldAuthModal() {
   const { isOpen, mode, closeModal } = useAuthModal();
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     setPortalRoot(document.body);
   }, []);
@@ -22,7 +21,6 @@ export default function CinefieldAuthModal() {
     } else {
       document.body.style.overflow = "";
     }
-
     return () => {
       document.body.style.overflow = "";
     };
@@ -34,11 +32,9 @@ export default function CinefieldAuthModal() {
         closeModal();
       }
     };
-
     if (isOpen) {
       document.addEventListener("keydown", handleEscape);
     }
-
     return () => {
       document.removeEventListener("keydown", handleEscape);
     };
@@ -46,79 +42,47 @@ export default function CinefieldAuthModal() {
 
   if (!isOpen || !portalRoot) return null;
 
+  const signInMode = mode === "signin";
+  const signUpMode = mode === "signup";
+
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-modal-overlay-in"
-      style={{ width: "100vw", height: "100dvh", minHeight: "100dvh" }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={closeModal}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="relative w-full max-w-[900px] h-auto max-h-[calc(100dvh-48px)] bg-black rounded-xl overflow-x-hidden overflow-y-auto shadow-2xl grid grid-cols-1 md:grid-cols-[45%_55%] animate-modal-card-in border border-gray-800"
-        style={{ margin: 0, position: "relative" }}
+        className="relative w-full max-w-[900px] bg-black rounded-xl shadow-2xl grid grid-cols-1 md:grid-cols-[45%_55%] border border-gray-800"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
         <button
           onClick={closeModal}
-          className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
-          aria-label="Close modal"
+          className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-white/10"
         >
           <X className="h-5 w-5 text-white" />
         </button>
 
-        {/* Left Promo Panel */}
-        <div className="hidden md:flex flex-col justify-center items-center p-12 bg-gradient-to-br from-black via-slate-900 to-black relative overflow-hidden">
-          {/* Decorative gradient overlay */}
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute top-0 left-0 w-96 h-96 bg-[#D97757] rounded-full blur-3xl opacity-20" />
-            <div className="absolute bottom-0 right-0 w-96 h-96 bg-slate-700 rounded-full blur-3xl opacity-20" />
-          </div>
-
-          {/* Content */}
-          <div className="relative z-10 text-center max-w-sm">
-            <div className="mb-8">
-              <img
-                src="/cinefield-logo.png"
-                alt="CINEFIELD"
-                className="h-16 w-16 rounded-xl mx-auto object-cover drop-shadow-[0_0_8px_rgba(217,119,87,0.5)]"
-              />
-            </div>
-
+        <div className="hidden md:flex flex-col justify-center items-center p-12 bg-gradient-to-br from-black via-slate-900 to-black">
+          <div className="text-center max-w-sm">
+            <img
+              src="/cinefield-logo.png"
+              alt="CINEFIELD"
+              className="h-16 w-16 rounded-xl mx-auto mb-8"
+            />
             <h2 className="text-3xl font-bold text-white mb-4">
               Create with AI Power
             </h2>
-
-            <p className="text-zinc-300 text-base leading-relaxed mb-8">
-              Access advanced video, image, and audio generation tools. Join
-              creators pushing the boundaries of content.
+            <p className="text-zinc-300 text-base mb-8">
+              Access advanced video, image, and audio generation tools
             </p>
-
-            <div className="flex items-center justify-center gap-2">
-              <div className="h-1 w-8 bg-[#D97757] rounded-full" />
-              <span className="text-sm text-zinc-400 uppercase tracking-widest">
-                Premium Creation
-              </span>
-              <div className="h-1 w-8 bg-[#D97757] rounded-full" />
-            </div>
           </div>
         </div>
 
-        {/* Right Auth Panel */}
-        <div className="flex flex-col justify-center items-center p-6 md:p-8 bg-black min-h-[500px]">
+        <div className="flex flex-col justify-center items-center p-6 md:p-8 bg-black">
           <div className="w-full max-w-sm">
-            <div className="mb-8 text-center md:hidden">
-              <img
-                src="/cinefield-logo.png"
-                alt="CINEFIELD"
-                className="h-12 w-12 rounded-lg mx-auto object-cover drop-shadow-[0_0_8px_rgba(217,119,87,0.5)]"
-              />
-            </div>
-
-            {mode === "signin" ? (
-              <PasswordSignIn onSuccess={closeModal} />
-            ) : mode === "signup" ? (
+            {signInMode && <PasswordSignIn onSuccess={closeModal} />}
+            {signUpMode && (
               <SignUp
                 routing="hash"
                 appearance={{
@@ -155,14 +119,14 @@ export default function CinefieldAuthModal() {
                     formFieldErrorText: "text-red-400 text-sm",
                     alertText: "text-red-400 text-sm",
                     otpCodeFieldInput:
-                      "w-12 h-14 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-lg focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757] focus:outline-none",
+                      "w-12 h-14 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-lg focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757]",
                     footer: "text-gray-500 text-xs",
                     footerPages: "text-gray-500 text-xs",
                     badge: "bg-gray-800 text-gray-300 text-xs",
                   },
                 }}
               />
-            ) : null}
+            )}
           </div>
         </div>
       </div>
