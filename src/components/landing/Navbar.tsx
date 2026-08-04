@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { useAuth, UserButton } from "@clerk/nextjs";
+import CinefieldAuthModal from "@/components/auth/CinefieldAuthModal";
 import {
   Film,
   ImageIcon,
@@ -235,6 +236,8 @@ export default function Navbar({
   const { isSignedIn } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNavItem, setOpenNavItem] = useState("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
@@ -467,22 +470,26 @@ export default function Navbar({
               className="mx-2.5 hidden h-5 w-px bg-white/10 sm:block"
             />
             <div className="flex items-center gap-1.5">
-              <SignInButton mode="modal">
-                <button
-                  type="button"
-                  className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
-                >
-                  Login
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
-                >
-                  Sign up
-                </button>
-              </SignUpButton>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signin");
+                  setIsAuthModalOpen(true);
+                }}
+                className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setIsAuthModalOpen(true);
+                }}
+                className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
+              >
+                Sign up
+              </button>
             </div>
           </div>
         )}
@@ -496,6 +503,13 @@ export default function Navbar({
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
+
+      {/* Auth Modal */}
+      <CinefieldAuthModal
+        isOpen={isAuthModalOpen}
+        mode={authMode}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
 
       {/* Mobile menu */}
       {mobileOpen && (
