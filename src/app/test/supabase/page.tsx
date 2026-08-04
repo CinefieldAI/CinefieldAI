@@ -1,17 +1,57 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useClerkSupabaseClient } from "@/lib/supabase/useClerkSupabaseClient";
+import { Profile } from "@/types/database";
 
 /**
- * Development-only test page to verify Supabase client creation.
- * Does not query any tables (they don't exist yet).
- * Safely reports Clerk auth state and Supabase client status.
+ * Development-only test page to verify Supabase client creation and profile sync.
+ * Queries the profiles table to verify ProfileSynchronizer is working.
  *
  * Access: http://localhost:3000/test/supabase
  * Remove this page before production.
  */
 export default function SupabaseTestPage() {
   const { supabase, isLoaded, isSignedIn, error } = useClerkSupabaseClient();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+  // Fetch profile data when authenticated
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !supabase) {
+      setProfile(null);
+      setProfileError(null);
+      return;
+    }
+
+    setIsLoadingProfile(true);
+    setProfileError(null);
+
+    (async () => {
+      try {
+        const { data, error: queryError } = await supabase
+          .from("profiles")
+          .select("*")
+          .single();
+
+        if (queryError) {
+          setProfileError(`Query error: ${queryError.message}`);
+          setProfile(null);
+          return;
+        }
+
+        setProfile(data as Profile);
+      } catch (err) {
+        setProfileError(
+          err instanceof Error ? err.message : "Failed to fetch profile"
+        );
+        setProfile(null);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    })();
+  }, [isLoaded, isSignedIn, supabase]);
 
   return (
     <div className="min-h-screen bg-black text-white p-8">
@@ -68,6 +108,84 @@ export default function SupabaseTestPage() {
               {isLoaded && !isSignedIn && supabase && (
                 <p className="text-green-400">
                   ✓ Supabase client ready (unsigned).
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Profile Sync Status */}
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Profile Synchronization</h2>
+            <div className="space-y-2 text-sm text-zinc-300">
+              {!isLoaded && <p>⏳ Waiting for Clerk to load...</p>}
+
+              {isLoaded && !isSignedIn && (
+                <p className="text-amber-400">
+                  ℹ️ Signed out: Profile sync not active.
+                </p>
+              )}
+
+              {isLoaded && isSignedIn && isLoadingProfile && (
+                <p className="text-blue-400">⏳ Fetching profile...</p>
+              )}
+
+              {isLoaded && isSignedIn && profileError && (
+                <p className="text-red-400">
+                  ✗ Profile fetch error: {profileError}
+                </p>
+              )}
+
+              {isLoaded && isSignedIn && !isLoadingProfile && profile && (
+                <div className="space-y-1">
+                  <p className="text-green-400">✓ Profile row found</p>
+                  <p>
+                    <span className="font-medium">Clerk User ID:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.clerk_user_id ? "✓ configured" : "✗ missing"}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Username:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.username ? "✓ configured" : "✗ missing"}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Email:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.email ? "✓ configured" : "✗ missing"}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Display Name:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.display_name ? "✓ configured" : "✗ missing"}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Avatar:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.avatar_url ? "✓ configured" : "✗ missing"}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Credits:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.credits}
+                    </code>
+                  </p>
+                  <p>
+                    <span className="font-medium">Plan:</span>{" "}
+                    <code className="bg-zinc-800 px-2 py-1 rounded text-xs">
+                      {profile.plan}
+                    </code>
+                  </p>
+                </div>
+              )}
+
+              {isLoaded && isSignedIn && !isLoadingProfile && !profile && !profileError && (
+                <p className="text-amber-400">
+                  ℹ️ No profile row found. ProfileSynchronizer may not have synced yet.
                 </p>
               )}
             </div>
