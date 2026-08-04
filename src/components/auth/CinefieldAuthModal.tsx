@@ -1,26 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { SignIn, SignUp } from "@clerk/nextjs";
 import { X } from "lucide-react";
+import { useAuthModal } from "@/context/AuthModalContext";
 
-type AuthMode = "signin" | "signup";
-
-interface CinefieldAuthModalProps {
-  isOpen: boolean;
-  mode: AuthMode;
-  onClose: () => void;
-}
-
-export default function CinefieldAuthModal({
-  isOpen,
-  mode,
-  onClose,
-}: CinefieldAuthModalProps) {
+export default function CinefieldAuthModal() {
+  const { isOpen, mode, closeModal } = useAuthModal();
   const [mounted, setMounted] = useState(false);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    setPortalRoot(document.body);
   }, []);
 
   useEffect(() => {
@@ -38,7 +31,7 @@ export default function CinefieldAuthModal({
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
-        onClose();
+        closeModal();
       }
     };
 
@@ -49,23 +42,62 @@ export default function CinefieldAuthModal({
     return () => {
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, closeModal]);
 
-  if (!mounted || !isOpen) return null;
+  if (!mounted || !isOpen || !portalRoot) return null;
 
-  return (
+  const overlayRef = (el: HTMLDivElement | null) => {
+    if (el && isOpen) {
+      const rect = el.getBoundingClientRect();
+      if (typeof window !== "undefined") {
+        console.log("[Modal Overlay] viewport rect:", {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          dvh: `calc(100dvh) = ${window.innerHeight}px`,
+        });
+        console.log("[Modal Overlay] overlay bounding rect:", {
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    }
+  };
+
+  const modalRef = (el: HTMLDivElement | null) => {
+    if (el && isOpen) {
+      const rect = el.getBoundingClientRect();
+      const centerY = window.innerHeight / 2;
+      console.log("[Modal Card] bounding rect:", {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        centerY: rect.top + rect.height / 2,
+        expectedCenterY: centerY,
+        centered: Math.abs(rect.top + rect.height / 2 - centerY) < 10,
+      });
+    }
+  };
+
+  const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+      ref={overlayRef}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      style={{ width: "100vw", height: "100dvh", minHeight: "100dvh" }}
+      onClick={closeModal}
       role="presentation"
     >
       <div
-        className="relative w-full max-w-[820px] h-auto max-h-[calc(100vh-48px)] grid grid-cols-1 md:grid-cols-2 bg-black rounded-2xl overflow-x-hidden overflow-y-auto shadow-2xl"
+        ref={modalRef}
+        className="relative w-full max-w-[820px] h-auto max-h-[calc(100dvh-32px)] bg-black rounded-2xl overflow-x-hidden overflow-y-auto shadow-2xl grid grid-cols-1 md:grid-cols-2"
+        style={{ margin: 0, position: "relative" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={closeModal}
           className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
           aria-label="Close modal"
         >
@@ -184,4 +216,6 @@ export default function CinefieldAuthModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, portalRoot);
 }

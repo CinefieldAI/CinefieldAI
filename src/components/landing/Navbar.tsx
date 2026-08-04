@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
-import CinefieldAuthModal from "@/components/auth/CinefieldAuthModal";
+import { useAuthModal } from "@/context/AuthModalContext";
 import {
   Film,
   ImageIcon,
@@ -234,10 +234,9 @@ export default function Navbar({
   const router = useRouter();
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
+  const { openModal } = useAuthModal();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNavItem, setOpenNavItem] = useState("");
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
@@ -472,20 +471,14 @@ export default function Navbar({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  setAuthMode("signin");
-                  setIsAuthModalOpen(true);
-                }}
+                onClick={() => openModal("signin")}
                 className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
               >
                 Login
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setAuthMode("signup");
-                  setIsAuthModalOpen(true);
-                }}
+                onClick={() => openModal("signup")}
                 className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
               >
                 Sign up
@@ -503,13 +496,6 @@ export default function Navbar({
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
-
-      {/* Auth Modal */}
-      <CinefieldAuthModal
-        isOpen={isAuthModalOpen}
-        mode={authMode}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
 
       {/* Mobile menu */}
       {mobileOpen && (
