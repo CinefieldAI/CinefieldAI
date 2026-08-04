@@ -12,29 +12,42 @@ if (!supabaseUrl || !supabaseKey) {
 /**
  * Browser-side Supabase client factory.
  * Must be called within a component tree where useAuth() is available.
+ *
+ * Uses a custom fetch wrapper to inject the current Clerk session token
+ * dynamically for each request. This ensures expired JWTs are refreshed
+ * automatically by Clerk before each Supabase operation.
  */
 export async function getClerkSupabaseClient(
   getToken: (options?: { template?: string }) => Promise<string | null>
 ): Promise<SupabaseClient> {
-  const token = await getToken();
+  // Create a custom fetch function that injects the current Clerk token
+  // into every Supabase request, dynamically fetching a fresh token each time
+  const customFetch = async (
+    url: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    // Get the current Clerk session token (refreshed if needed)
+    const token = await getToken();
 
-  if (!token) {
-    // Signed out: return a client without auth headers
-    return createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
+    // Build headers
+    const headers = new Headers(init?.headers || {});
+
+    // Inject authorization header if token is available
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    // Make the request with the fresh token
+    return fetch(url, {
+      ...init,
+      headers,
     });
-  }
+  };
 
-  // Signed in: return a client with Clerk session token
+  // Create Supabase client with custom fetch that injects fresh tokens
   return createClient(supabaseUrl, supabaseKey, {
     global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      fetch: customFetch,
     },
     auth: {
       persistSession: false,
