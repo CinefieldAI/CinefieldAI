@@ -55,12 +55,12 @@ export default function CinefieldAuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="relative w-screen max-w-3xl h-auto grid grid-cols-1 md:grid-cols-2 bg-black rounded-2xl overflow-hidden shadow-2xl"
+        className="relative w-full max-w-[820px] h-auto max-h-[calc(100vh-48px)] grid grid-cols-1 md:grid-cols-2 bg-black rounded-2xl overflow-x-hidden overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -110,8 +110,8 @@ export default function CinefieldAuthModal({
         </div>
 
         {/* Right Auth Panel */}
-        <div className="flex flex-col justify-center items-center p-8 md:p-12 bg-black overflow-y-auto">
-          <div className="w-full max-w-sm">
+        <div className="flex flex-col justify-center items-center p-8 md:p-12 bg-black">
+          <div className="w-full">
             <div className="mb-8 text-center md:hidden">
               <img
                 src="/cinefield-logo.png"
