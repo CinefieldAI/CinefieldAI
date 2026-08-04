@@ -8,12 +8,14 @@ import { useAuthModal } from "@/context/AuthModalContext";
 
 export default function CinefieldAuthModal() {
   const { isOpen, mode, closeModal } = useAuthModal();
-  const [portalRoot] = useState<HTMLElement | null>(() =>
-    typeof document !== "undefined" ? document.body : null
-  );
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    setPortalRoot(document.body);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && portalRoot) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -22,7 +24,7 @@ export default function CinefieldAuthModal() {
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [isOpen, portalRoot]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
