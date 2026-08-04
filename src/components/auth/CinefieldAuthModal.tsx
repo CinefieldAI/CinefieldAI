@@ -42,52 +42,16 @@ export default function CinefieldAuthModal() {
 
   if (!isOpen || !portalRoot) return null;
 
-  const overlayRef = (el: HTMLDivElement | null) => {
-    if (el && isOpen) {
-      const rect = el.getBoundingClientRect();
-      if (typeof window !== "undefined") {
-        console.log("[Modal Overlay] viewport rect:", {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          dvh: `calc(100dvh) = ${window.innerHeight}px`,
-        });
-        console.log("[Modal Overlay] overlay bounding rect:", {
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-        });
-      }
-    }
-  };
-
-  const modalRef = (el: HTMLDivElement | null) => {
-    if (el && isOpen) {
-      const rect = el.getBoundingClientRect();
-      const centerY = window.innerHeight / 2;
-      console.log("[Modal Card] bounding rect:", {
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-        centerY: rect.top + rect.height / 2,
-        expectedCenterY: centerY,
-        centered: Math.abs(rect.top + rect.height / 2 - centerY) < 10,
-      });
-    }
-  };
-
   const modal = (
     <div
-      ref={overlayRef}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-modal-overlay-in"
       style={{ width: "100vw", height: "100dvh", minHeight: "100dvh" }}
       onClick={closeModal}
-      role="presentation"
+      role="dialog"
+      aria-modal="true"
     >
       <div
-        ref={modalRef}
-        className="relative w-full max-w-[820px] h-auto max-h-[calc(100dvh-32px)] bg-black rounded-2xl overflow-x-hidden overflow-y-auto shadow-2xl grid grid-cols-1 md:grid-cols-2"
+        className="relative w-full max-w-[900px] h-auto max-h-[calc(100dvh-48px)] bg-black rounded-xl overflow-x-hidden overflow-y-auto shadow-2xl grid grid-cols-1 md:grid-cols-[45%_55%] animate-modal-card-in border border-gray-800"
         style={{ margin: 0, position: "relative" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -138,8 +102,8 @@ export default function CinefieldAuthModal() {
         </div>
 
         {/* Right Auth Panel */}
-        <div className="flex flex-col justify-center items-center p-8 md:p-12 bg-black">
-          <div className="w-full">
+        <div className="flex flex-col justify-center items-center p-6 md:p-8 bg-black min-h-[500px]">
+          <div className="w-full max-w-sm">
             <div className="mb-8 text-center md:hidden">
               <img
                 src="/cinefield-logo.png"
@@ -182,7 +146,7 @@ export default function CinefieldAuthModal() {
                     formFieldErrorText: "text-red-400",
                     alertText: "text-red-400",
                     otpCodeFieldInput:
-                      "bg-gray-800 border border-gray-600 text-white text-center text-lg tracking-widest rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
+                      "w-10 h-12 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-md focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757] focus:outline-none",
                     footer: "text-gray-500",
                     footerPages: "text-gray-500",
                     badge: "bg-gray-800 text-gray-300",
@@ -223,7 +187,7 @@ export default function CinefieldAuthModal() {
                     formFieldErrorText: "text-red-400",
                     alertText: "text-red-400",
                     otpCodeFieldInput:
-                      "bg-gray-800 border border-gray-600 text-white text-center text-lg tracking-widest rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
+                      "w-10 h-12 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-md focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757] focus:outline-none",
                     footer: "text-gray-500",
                     footerPages: "text-gray-500",
                     badge: "bg-gray-800 text-gray-300",

@@ -36,7 +36,7 @@ export default function SignUpPage() {
               formFieldErrorText: "text-red-400",
               alertText: "text-red-400",
               otpCodeFieldInput:
-                "bg-gray-800 border border-gray-600 text-white text-center text-lg tracking-widest rounded-xl focus:border-[#D97757] focus:ring-1 focus:ring-[#D97757]",
+                "w-10 h-12 bg-zinc-800 border border-gray-500 text-white text-center text-lg font-bold rounded-md focus:border-[#D97757] focus:ring-2 focus:ring-[#D97757] focus:outline-none",
               footer: "text-gray-500",
               footerPages: "text-gray-500",
               badge: "bg-gray-800 text-gray-300",

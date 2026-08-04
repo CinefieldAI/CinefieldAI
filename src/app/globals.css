@@ -457,3 +457,69 @@ body {
 .animate-genre-jump {
   animation: genre-trigger-jump 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* Modal animations */
+@keyframes modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-overlay-in {
+  animation: modal-overlay-in 220ms ease-out;
+}
+
+.animate-modal-card-in {
+  animation: modal-card-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modal-overlay-in,
+  .animate-modal-card-in {
+    animation: none;
+  }
+}
+
+/* Clerk OTP input field - make visible and readable */
+[data-otp-input],
+.cl-formfield__otp,
+.cl-otp-input,
+input[autocomplete="one-time-code"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  color: #FFFFFF !important;
+  caret-color: #FFFFFF !important;
+  background-color: #18181b !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 10px !important;
+  padding: 0 14px !important;
+  font-size: 20px !important;
+  letter-spacing: 0.35em !important;
+  text-align: center !important;
+}
+
+[data-otp-input]:focus,
+.cl-formfield__otp:focus,
+.cl-otp-input:focus,
+input[autocomplete="one-time-code"]:focus {
+  border-color: #D97757 !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.2), 0 0 0 4px #D97757 !important;
+  outline: none !important;
+}
