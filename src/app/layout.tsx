@@ -36,7 +36,7 @@ export default function RootLayout({
         >
           <body className="min-h-full flex flex-col">
             {children}
-            {/* <CinefieldAuthModal /> */}
+            <CinefieldAuthModal />
           </body>
         </html>
       </AuthModalProvider>

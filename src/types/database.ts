@@ -57,3 +57,42 @@ export interface ProjectUpdatePayload {
   title: string;
   description?: string | null;
 }
+
+/**
+ * Database type for public.generations table.
+ */
+export interface Generation {
+  id: string;
+  project_id: string;
+  clerk_user_id: string;
+  generation_type: "image" | "video" | "audio";
+  provider: string;
+  model: string;
+  prompt: string;
+  negative_prompt: string | null;
+  status: "queued" | "processing" | "completed" | "failed";
+  input_url: string | null;
+  output_url: string | null;
+  thumbnail_url: string | null;
+  error_message: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+/**
+ * Insert payload for generation creation.
+ * Only these fields are permitted via browser client due to RLS policies.
+ * Other fields are assigned or defaulted by backend/triggers.
+ */
+export interface GenerationInsertPayload {
+  project_id: string;
+  generation_type: "image" | "video" | "audio";
+  provider: string;
+  model: string;
+  prompt: string;
+  negative_prompt?: string | null;
+  input_url?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
