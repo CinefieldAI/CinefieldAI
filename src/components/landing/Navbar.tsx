@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { useAuth, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import {
   Film,
   ImageIcon,
@@ -231,20 +232,9 @@ export default function Navbar({
 }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isSignedIn } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  // One controlled open state for the desktop nav's mega-menus (Image, Video,
-  // Audio, Supercomputer, MCP & CLI). "" = closed, matches Radix's own
-  // closed-value convention. Needed so selecting a row inside the Audio menu
-  // (feature or model) can explicitly force it closed instead of relying on
-  // Radix's default hover/focus-driven open state, which never closes on a
-  // content click.
   const [openNavItem, setOpenNavItem] = useState("");
-  // Demo auth flag — no real backend exists yet. Logged-out shows
-  // Pricing/Login/Sign up; Login or Sign up flips this to reveal the
-  // previous authenticated controls (Search, Pricing pill, Assets, avatar).
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const handleLogin = () => setIsAuthenticated(true);
-  const handleSignUp = () => setIsAuthenticated(true);
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
@@ -454,12 +444,20 @@ export default function Navbar({
 
       {/* Column 3: actions */}
       <div className="flex items-center justify-end gap-2.5">
-        {isAuthenticated ? (
+        {isSignedIn ? (
           <>
             <SearchButton />
             <PricingUpgradeLink />
             <AssetsButton />
-            <ProfileAvatar />
+            <UserButton
+              appearance={{
+                elements: {
+                  userButtonAvatarBox: "h-9 w-9",
+                  userButtonTrigger:
+                    "rounded-full hover:opacity-80 transition-opacity",
+                },
+              }}
+            />
           </>
         ) : (
           <div className="flex items-center">
@@ -469,20 +467,22 @@ export default function Navbar({
               className="mx-2.5 hidden h-5 w-px bg-white/10 sm:block"
             />
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleLogin}
-                className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={handleSignUp}
-                className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
-              >
-                Sign up
-              </button>
+              <SignInButton mode="modal">
+                <button
+                  type="button"
+                  className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
+                >
+                  Login
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
+                >
+                  Sign up
+                </button>
+              </SignUpButton>
             </div>
           </div>
         )}
