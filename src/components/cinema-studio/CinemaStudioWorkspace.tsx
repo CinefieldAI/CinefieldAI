@@ -2,7 +2,19 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX, Paperclip, X } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { useClerkSupabaseClient } from "@/lib/supabase/useClerkSupabaseClient";
+import type { Project, GenerationInsertPayload } from "@/types/database";
+import {
+  ALLOWED_INPUT_MIME_TYPES,
+  MAX_INPUT_FILE_SIZE,
+  buildInputStoragePath,
+} from "@/lib/storageUpload";
+import {
+  mapCinemaModeToGenerationType,
+  deriveProviderFromModelId,
+} from "@/lib/cinemaGenerationMapping";
 import Navbar from "@/components/landing/Navbar";
 import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
@@ -20,13 +32,18 @@ import CinemaStudioImagePanel from "./CinemaStudioImagePanel";
 import ImageForm from "@/components/image-tools/ImageForm";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
-import type { GenerateVideoRequest } from "@/lib/jobs";
 
 type ModalKey = "genre" | "style" | "camera" | null;
+
+type GenerationFlowStatus = "idle" | "uploading" | "queued" | "success" | "error";
 
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
   const promptBarWrapperRef = useRef<HTMLDivElement>(null);
+  const { user, isLoaded: userLoaded } = useUser();
+  const { supabase, isSignedIn } = useClerkSupabaseClient();
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const generateInFlightRef = useRef(false);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
 
@@ -100,6 +117,68 @@ export default function CinemaStudioWorkspace() {
   const [modal, setModal] = useState<ModalKey>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Supabase generation queueing — active project, attachment, and flow feedback.
+  // Additive only: does not alter any existing prompt bar UI or state above.
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [flowStatus, setFlowStatus] = useState<GenerationFlowStatus>("idle");
+  const [flowMessage, setFlowMessage] = useState<string | null>(null);
+
+  // Auto-select the user's most recently created project — no project
+  // picker exists on this page today, so this reuses the same "most recent
+  // first" convention already established in /test/generations-storage.
+  useEffect(() => {
+    if (!isSignedIn || !supabase) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (cancelled) return;
+
+      if (!error && data && data.length > 0) {
+        setActiveProject(data[0] as Project);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, supabase]);
+
+  const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!ALLOWED_INPUT_MIME_TYPES.includes(file.type)) {
+      setFlowStatus("error");
+      setFlowMessage(`File type not allowed: ${file.type || "unknown"}`);
+      return;
+    }
+    if (file.size > MAX_INPUT_FILE_SIZE) {
+      setFlowStatus("error");
+      setFlowMessage("File exceeds the 50 MB limit");
+      return;
+    }
+
+    setFlowStatus("idle");
+    setFlowMessage(null);
+    setAttachedFile(file);
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachedFile(null);
+    if (flowStatus === "error") {
+      setFlowStatus("idle");
+      setFlowMessage(null);
+    }
+  };
+
   const selectedModel = getModel(model);
 
   // Selecting a model applies its model-specific default settings.
@@ -156,64 +235,115 @@ export default function CinemaStudioWorkspace() {
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
 
-  // Generate video handler
+  // Queues one generation row in Supabase (and optionally uploads an
+  // attachment to generation-inputs first). Does not call any AI provider,
+  // create a worker, or produce an output — this only records the request.
   const handleGenerate = async () => {
-    try {
-      setIsGenerating(true);
-      const isKling3MotionControl = model === "kling-3.0-motion-control";
-      const isKling3Turbo = model === "kling-3.0-turbo";
-      const effectivePrompt = prompt || klingAdvancedPrompt;
+    if (generateInFlightRef.current) return;
 
-      if (!effectivePrompt.trim()) {
-        console.warn("Prompt is empty");
-        return;
+    if (!userLoaded || !user) {
+      setFlowStatus("error");
+      setFlowMessage("Please sign in to generate.");
+      return;
+    }
+    if (!supabase) {
+      setFlowStatus("error");
+      setFlowMessage("Not connected. Please try again.");
+      return;
+    }
+    if (!activeProject) {
+      setFlowStatus("error");
+      setFlowMessage("No project available. Create a project first.");
+      return;
+    }
+
+    const effectivePrompt = (prompt || klingAdvancedPrompt).trim();
+    if (!effectivePrompt && !attachedFile) {
+      setFlowStatus("error");
+      setFlowMessage("Enter a prompt or attach a file.");
+      return;
+    }
+
+    generateInFlightRef.current = true;
+    setIsGenerating(true);
+    setFlowStatus(attachedFile ? "uploading" : "queued");
+    setFlowMessage(null);
+
+    let uploadedPath: string | null = null;
+
+    try {
+      const effectiveModel = mode === "image" ? imageModel : model;
+      const generationType = mapCinemaModeToGenerationType(mode);
+      const provider = deriveProviderFromModelId(effectiveModel);
+
+      if (attachedFile) {
+        const path = buildInputStoragePath(
+          user.id,
+          activeProject.id,
+          attachedFile.name
+        );
+        const { error: uploadError } = await supabase.storage
+          .from("generation-inputs")
+          .upload(path, attachedFile, { cacheControl: "3600", upsert: false });
+
+        if (uploadError) {
+          setFlowStatus("error");
+          setFlowMessage(`Upload failed: ${uploadError.message}`);
+          return;
+        }
+        uploadedPath = path;
+        setFlowStatus("queued");
       }
 
-      // Genre/Style/Camera are only surfaced in the UI for Cinema Studio 3.5
-      // (ControlButtons + docked panels). Omitting them for every other model
-      // — including other Cinema Studio versions — avoids sending stale
-      // values left over from a prior 3.5 session.
-      // Kling 3.0 Turbo uses its own isolated aspectRatio/resolution rather
-      // than the shared state (see kling3TurboSettings above).
-      const payload: GenerateVideoRequest = {
-        model,
-        prompt: isKling3MotionControl ? undefined : effectivePrompt,
-        advancedPrompt: isKling3MotionControl ? effectivePrompt : undefined,
-        resolution: isKling3Turbo ? kling3TurboSettings.resolution : resolution,
-        aspectRatio: isKling3Turbo ? kling3TurboSettings.aspectRatio : aspectRatio,
-        duration,
-        batchSize: batch ? parseInt(batch.split("/")[0]) : undefined,
-        sound,
-        quality,
-        genre: isCinema35 ? genre : undefined,
-        style: isCinema35 ? style : undefined,
-        camera: isCinema35 ? camera : undefined,
+      const metadata: Record<string, unknown> = {
+        source_page: "/generate",
+        ui_mode: mode,
+      };
+      if (attachedFile && uploadedPath) {
+        metadata.original_file_name = attachedFile.name;
+        metadata.file_size = attachedFile.size;
+        metadata.mime_type = attachedFile.type;
+        metadata.storage_bucket = "generation-inputs";
+        metadata.storage_object_path = uploadedPath;
+      }
+
+      const payload: GenerationInsertPayload = {
+        project_id: activeProject.id,
+        generation_type: generationType,
+        provider,
+        model: effectiveModel,
+        prompt: effectivePrompt,
+        negative_prompt: null,
+        input_url: uploadedPath,
+        metadata,
       };
 
-      const response = await fetch("/api/generate-video", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const { data, error: insertError } = await supabase
+        .from("generations")
+        .insert([payload])
+        .select()
+        .single();
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("Generation error:", error);
+      if (insertError) {
+        if (uploadedPath) {
+          await supabase.storage.from("generation-inputs").remove([uploadedPath]);
+        }
+        setFlowStatus("error");
+        setFlowMessage(`Failed to queue generation: ${insertError.message}`);
         return;
       }
 
-      const result = await response.json();
-      console.log("Video generation queued:", result);
-
-      // Optionally show toast notification
-      // toast.success(`Video queued: ${result.jobId}`);
+      setFlowStatus("success");
+      setFlowMessage(`Generation queued (${String(data.id).slice(0, 8)}...)`);
+      setAttachedFile(null);
     } catch (error) {
-      console.error("Failed to generate video:", error);
-      // toast.error("Failed to queue video generation");
+      setFlowStatus("error");
+      setFlowMessage(
+        error instanceof Error ? error.message : "Failed to queue generation"
+      );
     } finally {
       setIsGenerating(false);
+      generateInFlightRef.current = false;
     }
   };
 
@@ -316,6 +446,69 @@ export default function CinemaStudioWorkspace() {
 
         {/* Mode toggle (left sidebar) + prompt bar + Cinema 3.0 Panel */}
         <div className="relative w-full">
+          {/*
+            Attachment control + generation flow feedback — additive only,
+            rendered as a new sibling above the existing composer row. Does
+            not modify PromptBar, ModeToggle, or any existing element below.
+          */}
+          <div className="relative z-50 mx-auto mb-2 flex w-full max-w-[962px] flex-wrap items-center gap-2">
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              accept={ALLOWED_INPUT_MIME_TYPES.join(",")}
+              className="hidden"
+              onChange={handleAttachmentSelect}
+            />
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-[rgba(4,4,5,0.98)] px-2.5 text-xs font-semibold text-neutral-300 transition-colors hover:border-[#D97757] hover:text-white"
+            >
+              <Paperclip className="size-3.5" />
+              {attachedFile ? "Replace attachment" : "Attach file"}
+            </button>
+
+            {attachedFile && (
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[rgba(4,4,5,0.98)] px-2.5 py-1.5 text-xs text-neutral-300">
+                <span className="max-w-[180px] truncate font-medium text-white">
+                  {attachedFile.name}
+                </span>
+                <span className="text-neutral-500">
+                  {attachedFile.type || "unknown"}
+                </span>
+                <span className="text-neutral-500">
+                  {(attachedFile.size / (1024 * 1024)).toFixed(2)} MB
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemoveAttachment}
+                  aria-label="Remove attachment"
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+
+            {flowStatus !== "idle" && (
+              <span
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                  flowStatus === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-300"
+                    : flowStatus === "success"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-white/10 bg-white/5 text-neutral-300"
+                }`}
+              >
+                {flowStatus === "uploading"
+                  ? "Uploading attachment..."
+                  : flowStatus === "queued" && !flowMessage
+                    ? "Queuing generation..."
+                    : flowMessage}
+              </span>
+            )}
+          </div>
+
           {/*
             Composer row: ModeToggle is a fixed-width sibling, outside the
             width-shared column. For Cinema Studio 2.5, Director Panel and
