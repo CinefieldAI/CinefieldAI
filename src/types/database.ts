@@ -70,7 +70,7 @@ export interface Generation {
   model: string;
   prompt: string;
   negative_prompt: string | null;
-  status: "queued" | "processing" | "completed" | "failed";
+  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
   input_url: string | null;
   output_url: string | null;
   thumbnail_url: string | null;
