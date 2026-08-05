@@ -64,6 +64,19 @@ export default function AssetsPickerModal({
 }: AssetsPickerModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
+  // This modal is mounted once and toggled via `isOpen` rather than being
+  // conditionally rendered, so `useState(defaultTab)` only captures the
+  // initial value. Re-derive the active tab during render on the
+  // closed→open transition (React's recommended "adjusting state when a
+  // prop changes" pattern) so callers targeting a specific tab (e.g.
+  // Elements) land on the correct one, without altering any other
+  // tab/navigation behavior.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setActiveTab(defaultTab);
+  }
+
   if (!isOpen) return null;
 
   if (variant === "geminiOmniFlash") {
