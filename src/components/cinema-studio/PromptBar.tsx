@@ -98,6 +98,11 @@ export interface PromptBarProps {
   onCinema25AssignReference: (slotIndex: number, url: string | null) => void;
   cinema25ReferencesPopoverOpen: boolean;
   onCinema25ReferencesPopoverOpenChange: (open: boolean) => void;
+
+  // Nano Banana 2 Lite — "Thinking" control value. Lifted to the workspace
+  // so its current selection can be captured into generation metadata.
+  nanoBanana2LiteThinking: "High" | "Minimal";
+  onNanoBanana2LiteThinkingChange: (value: "High" | "Minimal") => void;
 }
 
 /** Verbatim reference icon — three sparkle stars + a pencil stroke (Kling 2.6's Enhance chip). */
@@ -400,12 +405,6 @@ export default function PromptBar(props: PromptBarProps) {
   const [o1VideoEditAutoSettings, setO1VideoEditAutoSettings] = useState(true);
   const [o1VideoEditVideoReference, setO1VideoEditVideoReference] = useState<string | null>(null);
 
-  // Nano Banana 2 Lite — "Thinking" control (replaces resolution for this
-  // model only). Local UI state only; not yet wired to any AI provider.
-  const [nanoBanana2LiteThinking, setNanoBanana2LiteThinking] = useState<
-    "High" | "Minimal"
-  >("High");
-
   // Kling Motion Control (non-3.0) — isolated from the LOCKED Kling 3.0 Motion
   // Control's state entirely; reuses the same generic sub-components.
   const [klingMcSettings, setKlingMcSettings] = useState({
@@ -570,6 +569,8 @@ export default function PromptBar(props: PromptBarProps) {
     onCinema25AssignReference,
     cinema25ReferencesPopoverOpen,
     onCinema25ReferencesPopoverOpenChange,
+    nanoBanana2LiteThinking,
+    onNanoBanana2LiteThinkingChange,
   } = props;
 
   const isVideo = mode === "video";
@@ -1726,7 +1727,7 @@ export default function PromptBar(props: PromptBarProps) {
                         key={option}
                         type="button"
                         onClick={() => {
-                          setNanoBanana2LiteThinking(option);
+                          onNanoBanana2LiteThinkingChange(option);
                           setActivePromptPopover(null);
                         }}
                         className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${

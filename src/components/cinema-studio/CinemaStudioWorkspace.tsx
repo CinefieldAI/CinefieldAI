@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Paperclip, X } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
@@ -15,6 +15,12 @@ import {
   mapCinemaModeToGenerationType,
   deriveProviderFromModelId,
 } from "@/lib/cinemaGenerationMapping";
+import { isSupportedNanoBananaModel } from "@/lib/gemini/geminiModelMapping";
+import {
+  isMockOrchestrationModel,
+  getMockModelGenerationType,
+  MOCK_PROVIDER_ID,
+} from "@/lib/orchestration/mock-models";
 import Navbar from "@/components/landing/Navbar";
 import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
@@ -35,7 +41,13 @@ import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
-type GenerationFlowStatus = "idle" | "uploading" | "queued" | "success" | "error";
+type GenerationFlowStatus =
+  | "idle"
+  | "uploading"
+  | "queued"
+  | "processing"
+  | "success"
+  | "error";
 
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
@@ -74,6 +86,23 @@ export default function CinemaStudioWorkspace() {
   });
   const [imageModel, setImageModel] = useState("nano-banana-pro");
   const [isDrawOpen, setIsDrawOpen] = useState(false);
+
+  /**
+   * Development-only mock orchestration override.
+   *
+   * `?model=mock-image` forces the model used for the generation row and for
+   * orchestration, independent of the model picker. The picker keeps its own
+   * state and its existing fallback label — it is never modified — because
+   * mock ids are deliberately absent from the visible model catalog, and any
+   * picker interaction would otherwise overwrite a URL-seeded state value.
+   *
+   * Null unless the URL explicitly names a registered mock model, so no real
+   * model can ever be redirected to the Mock Provider.
+   */
+  const mockModelOverride = useMemo(() => {
+    const requested = searchParams.get("model");
+    return requested && isMockOrchestrationModel(requested) ? requested : null;
+  }, [searchParams]);
 
   const [genre, setGenre] = useState<string | undefined>();
   const [style, setStyle] = useState<NonNullable<CinemaStudioSettings["style"]>>({});
@@ -123,6 +152,14 @@ export default function CinemaStudioWorkspace() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [flowStatus, setFlowStatus] = useState<GenerationFlowStatus>("idle");
   const [flowMessage, setFlowMessage] = useState<string | null>(null);
+  const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
+
+  // Nano Banana 2 Lite's "Thinking" control — lifted here (from PromptBar's
+  // former local state) so its current value can be captured into
+  // generation metadata when queuing a generation.
+  const [nanoBanana2LiteThinking, setNanoBanana2LiteThinking] = useState<
+    "High" | "Minimal"
+  >("High");
 
   // Auto-select the user's most recently created project — no project
   // picker exists on this page today, so this reuses the same "most recent
@@ -272,9 +309,15 @@ export default function CinemaStudioWorkspace() {
     let uploadedPath: string | null = null;
 
     try {
-      const effectiveModel = mode === "image" ? imageModel : model;
-      const generationType = mapCinemaModeToGenerationType(mode);
-      const provider = deriveProviderFromModelId(effectiveModel);
+      // The dev mock override wins over the picker so the inserted row and
+      // the orchestration run always agree. Without an override this is
+      // exactly the previous behavior for every real model.
+      const effectiveModel = mockModelOverride ?? (mode === "image" ? imageModel : model);
+      const mockGenerationType = getMockModelGenerationType(effectiveModel);
+      const generationType = mockGenerationType ?? mapCinemaModeToGenerationType(mode);
+      const provider = mockGenerationType
+        ? MOCK_PROVIDER_ID
+        : deriveProviderFromModelId(effectiveModel);
 
       if (attachedFile) {
         const path = buildInputStoragePath(
@@ -298,7 +341,13 @@ export default function CinemaStudioWorkspace() {
       const metadata: Record<string, unknown> = {
         source_page: "/generate",
         ui_mode: mode,
+        aspect_ratio: aspectRatio,
+        resolution,
+        image_count: batch,
       };
+      if (effectiveModel === "nano-banana-2-lite") {
+        metadata.thinking = nanoBanana2LiteThinking;
+      }
       if (attachedFile && uploadedPath) {
         metadata.original_file_name = attachedFile.name;
         metadata.file_size = attachedFile.size;
@@ -333,8 +382,88 @@ export default function CinemaStudioWorkspace() {
         return;
       }
 
-      setFlowStatus("success");
-      setFlowMessage(`Generation queued (${String(data.id).slice(0, 8)}...)`);
+      const generationId = String(data.id);
+
+      // Cinefield mock orchestration — development-only. Runs ONLY when the
+      // model id is one of the explicit mock registry entries, which no
+      // production model picker entry uses. Every real model falls through
+      // to its existing behavior untouched.
+      if (isMockOrchestrationModel(effectiveModel)) {
+        setFlowStatus("processing");
+        setFlowMessage(null);
+        setResultImageUrl(null);
+
+        try {
+          const execResponse = await fetch("/api/orchestration/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ generationId }),
+          });
+          const execJson = await execResponse.json();
+
+          if (!execResponse.ok || execJson.status !== "completed") {
+            setFlowStatus("error");
+            setFlowMessage(
+              typeof execJson.error === "string" ? execJson.error : "Mock orchestration failed."
+            );
+          } else {
+            const firstOutput = Array.isArray(execJson.outputs) ? execJson.outputs[0] : null;
+            setFlowStatus("success");
+            setFlowMessage(
+              "Cinefield mock orchestration test completed. No real AI provider was used."
+            );
+            setResultImageUrl(
+              firstOutput && typeof firstOutput.signedUrl === "string"
+                ? firstOutput.signedUrl
+                : null
+            );
+          }
+        } catch {
+          setFlowStatus("error");
+          setFlowMessage("Mock orchestration failed. Please try again.");
+        }
+
+        setAttachedFile(null);
+        return;
+      }
+
+      // Gemini image generation runs only for the three Nano Banana models
+      // in Image mode. Every other model/mode keeps the exact prior
+      // behavior: the row stays queued and no server execution is triggered.
+      if (mode === "image" && isSupportedNanoBananaModel(effectiveModel)) {
+        setFlowStatus("processing");
+        setFlowMessage(null);
+        setResultImageUrl(null);
+
+        try {
+          const execResponse = await fetch(`/api/generations/${generationId}/execute`, {
+            method: "POST",
+          });
+          const execJson = await execResponse.json();
+
+          if (!execResponse.ok || execJson.status !== "completed") {
+            setFlowStatus("error");
+            setFlowMessage(
+              typeof execJson.error === "string" ? execJson.error : "Generation failed."
+            );
+          } else {
+            setFlowStatus("success");
+            setFlowMessage(
+              typeof execJson.warning === "string"
+                ? `Generation completed. ${execJson.warning}`
+                : "Generation completed."
+            );
+            setResultImageUrl(typeof execJson.signedUrl === "string" ? execJson.signedUrl : null);
+          }
+        } catch {
+          setFlowStatus("error");
+          setFlowMessage("Generation failed. Please try again.");
+        }
+      } else {
+        setFlowStatus("success");
+        setFlowMessage(`Generation queued (${generationId.slice(0, 8)}...)`);
+      }
+
       setAttachedFile(null);
     } catch (error) {
       setFlowStatus("error");
@@ -504,8 +633,22 @@ export default function CinemaStudioWorkspace() {
                   ? "Uploading attachment..."
                   : flowStatus === "queued" && !flowMessage
                     ? "Queuing generation..."
-                    : flowMessage}
+                    : flowStatus === "processing"
+                      ? "Processing..."
+                      : flowMessage}
               </span>
+            )}
+
+            {/* Minimal result preview — Nano Banana Gemini output only.
+                Additive only; no existing result area exists on this page. */}
+            {resultImageUrl && (
+              <div className="w-full basis-full">
+                <img
+                  src={resultImageUrl}
+                  alt="Generated result"
+                  className="max-h-64 rounded-lg border border-white/10 object-contain"
+                />
+              </div>
             )}
           </div>
 
@@ -557,6 +700,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             ) : isCinema25 ? (
@@ -615,6 +760,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             ) : (
@@ -664,6 +811,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             )}
