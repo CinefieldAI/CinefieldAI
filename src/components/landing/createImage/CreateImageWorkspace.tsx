@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Wand2 } from "lucide-react";
 import HeroSection from "@/components/image-tools/HeroSection";
 import ImageAtmosphereBackground from "./ImageAtmosphereBackground";
@@ -17,6 +17,14 @@ interface CreateImageWorkspaceProps {
 export default function CreateImageWorkspace({ onBack, initialModel }: CreateImageWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState(initialModel ?? FEATURED_MODELS[0].name);
+
+  // useState only reads initialModel on first mount, so picking a model from
+  // the navbar while this workspace is already open would otherwise leave the
+  // composer on the previous one. Syncing here keeps the navbar and composer
+  // in agreement without remounting (which would discard the typed prompt).
+  useEffect(() => {
+    if (initialModel) setSelectedModel(initialModel);
+  }, [initialModel]);
 
   const handleGenerate = async () => {
     // Simulate render latency so the composer can show its loading state

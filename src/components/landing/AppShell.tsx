@@ -6,6 +6,7 @@ import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
 import CreateImageWorkspace from "@/components/landing/createImage/CreateImageWorkspace";
+import { MASTER_IMAGE_MODELS } from "@/components/landing/createImage/createImageData";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
 import {
   AUDIO_MODE_ORDER,
@@ -56,7 +57,21 @@ export default function AppShell({ initialView = "default", initialPanel = null 
   // the full Create Image workspace with that model preselected, instead of
   // always opening the same generic side panel regardless of which model
   // was clicked.
-  const [selectedImageModel, setSelectedImageModel] = useState<string | undefined>(undefined);
+  //
+  // Also seeded from the URL (same reason as the audio state above), and
+  // validated against the master model list so a hand-edited or stale link
+  // cannot surface a bogus model name in the picker.
+  //
+  // Validated against MASTER_IMAGE_MODELS, not ALL_MODELS: the latter is only
+  // the picker's "all models" tab and deliberately excludes every featured
+  // model, so checking against it would reject valid featured selections.
+  const [selectedImageModel, setSelectedImageModel] = useState<string | undefined>(() => {
+    const requested = searchParams.get("model");
+    return requested &&
+      Object.values(MASTER_IMAGE_MODELS).some((model) => model.name === requested)
+      ? requested
+      : undefined;
+  });
 
   const openImagePanel = () => {
     setActivePanel("image");

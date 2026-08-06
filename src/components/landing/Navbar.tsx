@@ -240,12 +240,14 @@ export default function Navbar({
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
-      onSetView("createImage");
+      goToWorkspace({ path: "/image", inPlace: () => onSetView("createImage") });
     } else if (key === "canvas") {
-      onSetView("canvas");
+      goToWorkspace({ path: "/canvas", inPlace: () => onSetView("canvas") });
     } else if (key === "moodboard") {
+      // No /moodboard route exists yet, so this stays an in-page view switch.
       onSetView("moodboard");
     } else if (key === "character") {
+      // No /character route exists yet, so this stays an in-page view switch.
       onSetView("character");
     } else {
       onOpenImagePanel();
@@ -269,7 +271,12 @@ export default function Navbar({
       onOpenImagePanel();
       return;
     }
-    onOpenImageModel(IMAGE_DROPDOWN_TO_WORKSPACE_MODEL[name] ?? name);
+    const workspaceModel = IMAGE_DROPDOWN_TO_WORKSPACE_MODEL[name] ?? name;
+    goToWorkspace({
+      path: "/image",
+      query: `model=${encodeURIComponent(workspaceModel)}`,
+      inPlace: () => onOpenImageModel(workspaceModel),
+    });
   };
 
   const handleVideoFeatureSelect = (title: string) => {
@@ -296,26 +303,38 @@ export default function Navbar({
   const activeAudioModelTitle = AUDIO_MODELS[audioModelIndex ?? 0]?.title;
 
   /**
-   * Opens the Audio workspace at its own URL (/audio/create) instead of only
-   * switching the in-page view, so the address bar, browser back button, and
-   * shared links all reflect what is on screen.
+   * Opens a workspace at its own URL instead of only switching the in-page
+   * view, so the address bar, browser back button, and shared links all
+   * reflect what is on screen.
    *
-   * The chosen mode/model travels in the query string because navigating
-   * remounts AppShell — without carrying them, the user's selection would be
-   * silently reset to the defaults on arrival. When already on /audio/create
-   * we switch in place instead, avoiding a redundant navigation.
+   * Any selection (audio mode/model, image model) travels in the query string
+   * because navigating remounts AppShell — without carrying it, the user's
+   * choice would be silently reset to the defaults on arrival. When already
+   * on the destination we switch in place instead, avoiding a redundant
+   * navigation that would remount the workspace.
+   *
+   * Only used for views that have a real route. Views without one
+   * (moodboard, character) keep switching in place.
    */
-  const goToAudioWorkspace = (params: { mode: AudioMode; modelIndex?: number }) => {
+  const goToWorkspace = (params: { path: string; query?: string; inPlace: () => void }) => {
     setOpenNavItem("");
 
-    if (pathname === "/audio/create") {
-      onOpenAudioPanel();
+    if (pathname === params.path) {
+      params.inPlace();
       return;
     }
 
+    router.push(params.query ? `${params.path}?${params.query}` : params.path);
+  };
+
+  const goToAudioWorkspace = (params: { mode: AudioMode; modelIndex?: number }) => {
     const query = new URLSearchParams({ mode: params.mode });
     if (params.modelIndex !== undefined) query.set("model", String(params.modelIndex));
-    router.push(`/audio/create?${query.toString()}`);
+    goToWorkspace({
+      path: "/audio/create",
+      query: query.toString(),
+      inPlace: onOpenAudioPanel,
+    });
   };
 
   const handleAudioFeatureSelect = (title: string) => {
