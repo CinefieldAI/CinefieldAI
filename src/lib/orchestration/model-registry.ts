@@ -141,8 +141,45 @@ const MOCK_MODELS: ModelRegistryEntry[] = [
   },
 ];
 
+/**
+ * Real provider models. Adding another fal endpoint is an entry here — no
+ * new adapter, route, or handler is required.
+ *
+ * `fal-flux-schnell` uses an id that deliberately does not collide with any
+ * id in the visible model catalog, so no existing model card can be routed
+ * to fal by accident.
+ */
+const FAL_MODELS: ModelRegistryEntry[] = [
+  {
+    id: "fal-flux-schnell",
+    label: "FLUX.1 [schnell] (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/flux/schnell",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // Only ratios that map onto a documented fal image_size preset.
+      supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "16:9", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+];
+
 const REGISTRY: ReadonlyMap<string, ModelRegistryEntry> = new Map(
-  MOCK_MODELS.map((model) => [model.id, model])
+  [...MOCK_MODELS, ...FAL_MODELS].map((model) => [model.id, model])
 );
 
 /** Returns the entry, or undefined when the model is not orchestratable. */

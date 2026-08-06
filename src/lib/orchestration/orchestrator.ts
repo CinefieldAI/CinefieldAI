@@ -11,6 +11,7 @@ import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
 import { getProviderAdapter } from "./provider-registry";
+import { releaseFalResult } from "./providers/fal-provider";
 import { registerMockRequest, releaseMockRequest } from "./providers/mock-provider";
 import { claimGeneration, markCompleted, markFailed, setStage } from "./status-manager";
 import { resolveWorkflow } from "./workflow-router";
@@ -335,8 +336,13 @@ export async function executeGeneration(params: {
 
     throw error;
   } finally {
+    // Release any in-memory handoff state held between submit() and
+    // getResult(), including on the failure path.
     if (model.isMock) {
       releaseMockRequest(generationId);
+    }
+    if (model.providerId === "fal") {
+      releaseFalResult(generationId);
     }
   }
 }

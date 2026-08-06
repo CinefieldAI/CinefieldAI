@@ -17,10 +17,11 @@ import {
 } from "@/lib/cinemaGenerationMapping";
 import { isSupportedNanoBananaModel } from "@/lib/gemini/geminiModelMapping";
 import {
+  isOrchestrationModel,
   isMockOrchestrationModel,
-  getMockModelGenerationType,
-  MOCK_PROVIDER_ID,
-} from "@/lib/orchestration/mock-models";
+  getOrchestrationGenerationType,
+  getOrchestrationProvider,
+} from "@/lib/orchestration/orchestration-models";
 import Navbar from "@/components/landing/Navbar";
 import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
@@ -88,20 +89,21 @@ export default function CinemaStudioWorkspace() {
   const [isDrawOpen, setIsDrawOpen] = useState(false);
 
   /**
-   * Development-only mock orchestration override.
+   * Development-only orchestration model override.
    *
-   * `?model=mock-image` forces the model used for the generation row and for
-   * orchestration, independent of the model picker. The picker keeps its own
-   * state and its existing fallback label — it is never modified — because
-   * mock ids are deliberately absent from the visible model catalog, and any
+   * `?model=<orchestration-model-id>` (e.g. `mock-image`, `fal-flux-schnell`)
+   * forces the model used for the generation row and for orchestration,
+   * independent of the model picker. The picker keeps its own state and its
+   * existing fallback label — it is never modified — because orchestration
+   * ids are deliberately absent from the visible model catalog, and any
    * picker interaction would otherwise overwrite a URL-seeded state value.
    *
-   * Null unless the URL explicitly names a registered mock model, so no real
-   * model can ever be redirected to the Mock Provider.
+   * Null unless the URL explicitly names a registered orchestration model,
+   * so no real catalog model is ever rerouted to an orchestration provider.
    */
-  const mockModelOverride = useMemo(() => {
+  const orchestrationModelOverride = useMemo(() => {
     const requested = searchParams.get("model");
-    return requested && isMockOrchestrationModel(requested) ? requested : null;
+    return requested && isOrchestrationModel(requested) ? requested : null;
   }, [searchParams]);
 
   const [genre, setGenre] = useState<string | undefined>();
@@ -309,15 +311,14 @@ export default function CinemaStudioWorkspace() {
     let uploadedPath: string | null = null;
 
     try {
-      // The dev mock override wins over the picker so the inserted row and
-      // the orchestration run always agree. Without an override this is
-      // exactly the previous behavior for every real model.
-      const effectiveModel = mockModelOverride ?? (mode === "image" ? imageModel : model);
-      const mockGenerationType = getMockModelGenerationType(effectiveModel);
-      const generationType = mockGenerationType ?? mapCinemaModeToGenerationType(mode);
-      const provider = mockGenerationType
-        ? MOCK_PROVIDER_ID
-        : deriveProviderFromModelId(effectiveModel);
+      // The dev orchestration override wins over the picker so the inserted
+      // row and the orchestration run always agree. Without an override this
+      // is exactly the previous behavior for every real catalog model.
+      const effectiveModel = orchestrationModelOverride ?? (mode === "image" ? imageModel : model);
+      const orchestrationType = getOrchestrationGenerationType(effectiveModel);
+      const generationType = orchestrationType ?? mapCinemaModeToGenerationType(mode);
+      const provider =
+        getOrchestrationProvider(effectiveModel) ?? deriveProviderFromModelId(effectiveModel);
 
       if (attachedFile) {
         const path = buildInputStoragePath(
@@ -384,11 +385,12 @@ export default function CinemaStudioWorkspace() {
 
       const generationId = String(data.id);
 
-      // Cinefield mock orchestration — development-only. Runs ONLY when the
-      // model id is one of the explicit mock registry entries, which no
-      // production model picker entry uses. Every real model falls through
-      // to its existing behavior untouched.
-      if (isMockOrchestrationModel(effectiveModel)) {
+      // Cinefield orchestration pipeline. Runs ONLY for explicit
+      // orchestration registry ids, none of which appear in the visible
+      // model catalog — every catalog model falls through to its existing
+      // behavior untouched. One shared endpoint serves every provider.
+      if (isOrchestrationModel(effectiveModel)) {
+        const usesMockProvider = isMockOrchestrationModel(effectiveModel);
         setFlowStatus("processing");
         setFlowMessage(null);
         setResultImageUrl(null);
@@ -404,13 +406,15 @@ export default function CinemaStudioWorkspace() {
           if (!execResponse.ok || execJson.status !== "completed") {
             setFlowStatus("error");
             setFlowMessage(
-              typeof execJson.error === "string" ? execJson.error : "Mock orchestration failed."
+              typeof execJson.error === "string" ? execJson.error : "Generation failed."
             );
           } else {
             const firstOutput = Array.isArray(execJson.outputs) ? execJson.outputs[0] : null;
             setFlowStatus("success");
             setFlowMessage(
-              "Cinefield mock orchestration test completed. No real AI provider was used."
+              usesMockProvider
+                ? "Cinefield mock orchestration test completed. No real AI provider was used."
+                : "Generation completed."
             );
             setResultImageUrl(
               firstOutput && typeof firstOutput.signedUrl === "string"
@@ -420,7 +424,7 @@ export default function CinemaStudioWorkspace() {
           }
         } catch {
           setFlowStatus("error");
-          setFlowMessage("Mock orchestration failed. Please try again.");
+          setFlowMessage("Generation failed. Please try again.");
         }
 
         setAttachedFile(null);
