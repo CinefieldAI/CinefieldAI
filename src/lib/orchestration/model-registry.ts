@@ -6,10 +6,10 @@ import type { GenerationType, WorkflowType } from "./types";
  *
  * IMPORTANT: this registry is intentionally NOT a mirror of the model picker
  * in the UI. It contains only models the orchestration chain is allowed to
- * execute. In this first phase that is the three explicit mock entries below.
- * Real provider models (Gemini/Nano Banana, Kling, Seedance, Veo, …) are
- * deliberately absent, so the orchestrator refuses to run them rather than
- * silently redirecting them to the mock provider.
+ * execute — the explicit mock entries below, plus real provider entries
+ * (currently fal.ai only). Other visible-catalog models (Gemini/Nano Banana,
+ * Kling, Seedance, Veo, …) are deliberately absent, so the orchestrator
+ * refuses to run them rather than silently redirecting them to a provider.
  */
 
 export interface ModelCapabilities {
@@ -21,7 +21,15 @@ export interface ModelCapabilities {
   supportsThinking: boolean;
   supportedThinkingValues: string[];
   requiresPrompt: boolean;
+  /** For audio models, this is the TTS input-text character limit. */
   maxPromptLength: number;
+  /** Audio-only capabilities. Omitted entirely for image/video models. */
+  supportedAudioFormats?: string[];
+  requiresVoice?: boolean;
+  /** e.g. ["en", "de", "tr"], or ["any"] for provider-agnostic multilingual support. */
+  supportedLanguages?: string[];
+  /** Descriptive ceiling on synthesized output length; not validated against a user setting. */
+  maxAudioDurationSeconds?: number;
 }
 
 export interface ModelRegistryEntry {
@@ -136,6 +144,45 @@ const MOCK_MODELS: ModelRegistryEntry[] = [
       maxPromptLength: 10_000,
     },
     defaults: { aspectRatio: "16:9", resolution: "720p", durationSeconds: 8, outputCount: 1 },
+    enabled: true,
+    isMock: true,
+  },
+  {
+    id: "mock-tts",
+    label: "Cinefield Mock TTS",
+    providerId: "mock",
+    providerModelId: "mock-tts-v1",
+    generationType: "audio",
+    supportedWorkflows: ["text-to-speech"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // Audio has no aspect ratio / resolution / thinking concept, but the
+      // browser unconditionally sends aspect_ratio/resolution in metadata
+      // regardless of generation type. Permissive (not empty) here for the
+      // same reason as every other mock entry above: an irrelevant-but-
+      // inevitable UI value must never fail validation on its own.
+      supportedAspectRatios: UI_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      // Unlike aspect ratio/resolution, one-output-per-request is a real
+      // constraint for TTS (one text in, one audio file out) — left at 1
+      // deliberately, not loosened for UI permissiveness.
+      minOutputCount: 1,
+      maxOutputCount: 1,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      // Doubles as the TTS input-text character limit, matching common
+      // real-provider per-request limits (order of magnitude, not exact).
+      maxPromptLength: 5_000,
+      supportedAudioFormats: ["audio/wav"],
+      requiresVoice: false,
+      supportedLanguages: ["any"],
+      maxAudioDurationSeconds: 300,
+    },
+    defaults: { outputCount: 1 },
     enabled: true,
     isMock: true,
   },

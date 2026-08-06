@@ -63,6 +63,11 @@ function readNumber(source: Record<string, unknown>, key: string): number | unde
  * Turns the persisted generations row into a provider-neutral request.
  * Settings originate from the metadata the browser wrote at insert time, but
  * every one of them is re-validated afterwards by the capability validator.
+ *
+ * For text-to-speech, `generation.prompt` IS the text to speak — read
+ * verbatim from the database column with no transformation, exactly as for
+ * any other workflow, so the original Unicode text is preserved byte-for-
+ * byte through this step.
  */
 function normalizeRequest(params: {
   generation: Generation;
@@ -101,6 +106,8 @@ function normalizeRequest(params: {
     durationSeconds: readNumber(metadata, "duration_seconds"),
     outputCount,
     thinking: readString(metadata, "thinking"),
+    voice: readString(metadata, "voice"),
+    language: readString(metadata, "language"),
     // Carries mock_mode through to the mock provider without leaking
     // provider-specific concepts into the typed settings surface.
     extra: metadata,

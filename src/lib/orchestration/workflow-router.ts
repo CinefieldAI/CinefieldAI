@@ -67,12 +67,16 @@ export function resolveWorkflow(
       break;
 
     case "audio":
+      // Only text-to-speech exists today, so any audio-generationType model
+      // with no input resolves there. A future speech-to-speech workflow
+      // would branch on inputCategory === "audio" here, the same way video
+      // already branches on image/video/audio inputs above.
       if (inputCategory !== null) {
         throw new OrchestrationError("UNSUPPORTED_INPUT_TYPE", {
           context: { modelId: model.id, inputCategory },
         });
       }
-      workflow = "text-to-audio";
+      workflow = "text-to-speech";
       break;
   }
 

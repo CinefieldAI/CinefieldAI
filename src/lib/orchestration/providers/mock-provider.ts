@@ -1,6 +1,7 @@
 import "server-only";
 import { OrchestrationError } from "../errors";
 import { encodePng, paintMockCard } from "./png-encoder";
+import { encodeWav, synthesizeMockTone, wavDurationSeconds } from "./wav-encoder";
 import type { ProviderAdapter } from "./provider-adapter";
 import type {
   NormalizedGenerationRequest,
@@ -13,10 +14,12 @@ import type {
 /**
  * Cinefield Mock Provider — deterministic, server-only, offline.
  *
- * Calls no external API of any kind. It encodes a small, genuine PNG
+ * Calls no external API of any kind. It encodes a small, genuine PNG or WAV
  * artifact in-process so the full orchestration chain (routing → validation →
  * submission → normalization → Storage upload → completion) can be proven
- * end-to-end before any real provider adapter exists.
+ * end-to-end before any real provider adapter exists — for image and audio
+ * generation types. Video mock output remains intentionally unimplemented
+ * (see the MOCK_VIDEO_NOT_IMPLEMENTED branch below).
  *
  * Test modes are selected through the `mock_mode` key inside the
  * generation's existing metadata JSON (see resolveMockMode). Absent or
@@ -99,6 +102,41 @@ function buildMockPng(request: NormalizedGenerationRequest, index: number): Norm
   };
 }
 
+/**
+ * Builds a deterministic mock TTS output: a genuine, spec-valid WAV tone
+ * (see wav-encoder.ts) whose pitch is derived from the generation id and
+ * whose duration loosely tracks the input text's length. This is NOT
+ * text-to-speech — it never reads or transforms the prompt text beyond its
+ * length, so the original Unicode text (already unchanged in `request.prompt`
+ * at this point) is never touched, translated, or re-encoded by this step.
+ * It exists only to prove the audio orchestration chain end-to-end.
+ */
+function buildMockAudio(request: NormalizedGenerationRequest, index: number): NormalizedOutput {
+  const samples = synthesizeMockTone({
+    seed: `${request.generationId}:${index}`,
+    textLength: request.prompt.length,
+  });
+  const bytes = encodeWav(samples);
+
+  return {
+    type: "audio",
+    mimeType: "audio/wav",
+    fileExtension: "wav",
+    bytes,
+    durationSeconds: wavDurationSeconds(samples),
+    metadata: {
+      mock: true,
+      mockNotice: "Cinefield mock TTS output. No real TTS provider was used.",
+      provider: "mock",
+      workflow: request.workflow,
+      textLength: request.prompt.length,
+      voice: request.settings.voice ?? null,
+      language: request.settings.language ?? null,
+      outputIndex: index,
+    },
+  };
+}
+
 class MockProvider implements ProviderAdapter {
   readonly providerId = "mock";
 
@@ -167,15 +205,12 @@ class MockProvider implements ProviderAdapter {
       });
     }
 
+    const count = request.settings.outputCount ?? 1;
+
     if (request.generationType === "audio") {
-      throw new OrchestrationError("MOCK_VIDEO_NOT_IMPLEMENTED", {
-        context: { provider: "mock", generationType: "audio" },
-        userMessage:
-          "Mock audio output is not implemented. Use a mock image model to test orchestration.",
-      });
+      return Array.from({ length: count }, (_, index) => buildMockAudio(request, index));
     }
 
-    const count = request.settings.outputCount ?? 1;
     return Array.from({ length: count }, (_, index) => buildMockPng(request, index));
   }
 }

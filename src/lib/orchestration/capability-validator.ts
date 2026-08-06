@@ -129,4 +129,22 @@ export function validateCapabilities(params: {
       userMessage: "Seed must be an integer.",
     });
   }
+
+  // ---- Audio (text-to-speech and future audio workflows) ----
+  if (capabilities.requiresVoice && !settings.voice) {
+    throw new OrchestrationError("REQUIRED_INPUT_MISSING", {
+      context: { modelId: model.id },
+      userMessage: "A voice is required for this model.",
+    });
+  }
+
+  if (settings.language !== undefined && capabilities.supportedLanguages) {
+    const allowsAny = capabilities.supportedLanguages.includes("any");
+    if (!allowsAny && !capabilities.supportedLanguages.includes(settings.language)) {
+      throw new OrchestrationError("CAPABILITY_NOT_SUPPORTED", {
+        context: { modelId: model.id, language: settings.language },
+        userMessage: `Language "${settings.language}" is not supported by this model.`,
+      });
+    }
+  }
 }

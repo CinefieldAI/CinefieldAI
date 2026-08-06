@@ -10,7 +10,15 @@
 /** Matches the existing public.generations.generation_type CHECK constraint. */
 export type GenerationType = "image" | "video" | "audio";
 
-/** The concrete transformation a request performs. */
+/**
+ * The concrete transformation a request performs.
+ *
+ * Audio currently supports only "text-to-speech". Future audio workflows
+ * (text-to-music, speech-to-speech, audio enhancement) are deliberately not
+ * declared yet — adding one is a single union entry here plus a
+ * workflow-router.ts branch and a model-registry.ts entry, the same pattern
+ * every existing workflow already follows.
+ */
 export type WorkflowType =
   | "text-to-image"
   | "image-to-image"
@@ -18,7 +26,7 @@ export type WorkflowType =
   | "image-to-video"
   | "video-to-video"
   | "audio-to-video"
-  | "text-to-audio"
+  | "text-to-speech"
   | "image-upscale"
   | "video-upscale"
   | "background-remove"
@@ -62,6 +70,10 @@ export interface GenerationSettings {
   outputCount?: number;
   thinking?: string;
   seed?: number;
+  /** Voice identifier for text-to-speech (and future speech-to-speech). */
+  voice?: string;
+  /** BCP-47-ish language hint (e.g. "en", "de", "tr") for audio workflows. */
+  language?: string;
   extra?: Record<string, unknown>;
 }
 

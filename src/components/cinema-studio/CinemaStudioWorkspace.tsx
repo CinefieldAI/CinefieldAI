@@ -55,6 +55,13 @@ interface GenerationTerminalRow {
   status: string;
   error_message: string | null;
   output_url: string | null;
+  generation_type: string;
+}
+
+/** What the result preview is currently showing, so rendering never assumes image. */
+interface GenerationResultPreview {
+  url: string;
+  type: "image" | "video" | "audio";
 }
 
 const TRIGGER_POLL_INTERVAL_MS = 1500;
@@ -75,7 +82,7 @@ async function pollGenerationUntilTerminal(
   for (let attempt = 0; attempt < TRIGGER_POLL_MAX_ATTEMPTS; attempt++) {
     const { data } = await supabase
       .from("generations")
-      .select("status, error_message, output_url")
+      .select("status, error_message, output_url, generation_type")
       .eq("id", generationId)
       .maybeSingle();
 
@@ -86,6 +93,11 @@ async function pollGenerationUntilTerminal(
     await new Promise((resolve) => setTimeout(resolve, TRIGGER_POLL_INTERVAL_MS));
   }
   return null;
+}
+
+/** Narrows an arbitrary generation_type/output type string safely; unknown values render as image (today's only other real case). */
+function toPreviewType(value: unknown): GenerationResultPreview["type"] {
+  return value === "audio" || value === "video" ? value : "image";
 }
 
 export default function CinemaStudioWorkspace() {
@@ -192,7 +204,7 @@ export default function CinemaStudioWorkspace() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [flowStatus, setFlowStatus] = useState<GenerationFlowStatus>("idle");
   const [flowMessage, setFlowMessage] = useState<string | null>(null);
-  const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
+  const [resultPreview, setResultPreview] = useState<GenerationResultPreview | null>(null);
 
   // Nano Banana 2 Lite's "Thinking" control — lifted here (from PromptBar's
   // former local state) so its current value can be captured into
@@ -431,7 +443,7 @@ export default function CinemaStudioWorkspace() {
         const usesMockProvider = isMockOrchestrationModel(effectiveModel);
         setFlowStatus("processing");
         setFlowMessage(null);
-        setResultImageUrl(null);
+        setResultPreview(null);
 
         try {
           const execResponse = await fetch("/api/orchestration/execute", {
@@ -468,7 +480,9 @@ export default function CinemaStudioWorkspace() {
                   ? "Cinefield mock orchestration test completed. No real AI provider was used."
                   : "Generation completed."
               );
-              setResultImageUrl(signedUrl);
+              setResultPreview(
+                signedUrl ? { url: signedUrl, type: toPreviewType(finalRow.generation_type) } : null
+              );
             }
           } else if (execJson.status !== "completed") {
             setFlowStatus("error");
@@ -483,9 +497,9 @@ export default function CinemaStudioWorkspace() {
                 ? "Cinefield mock orchestration test completed. No real AI provider was used."
                 : "Generation completed."
             );
-            setResultImageUrl(
+            setResultPreview(
               firstOutput && typeof firstOutput.signedUrl === "string"
-                ? firstOutput.signedUrl
+                ? { url: firstOutput.signedUrl, type: toPreviewType(firstOutput.type) }
                 : null
             );
           }
@@ -504,7 +518,7 @@ export default function CinemaStudioWorkspace() {
       if (mode === "image" && isSupportedNanoBananaModel(effectiveModel)) {
         setFlowStatus("processing");
         setFlowMessage(null);
-        setResultImageUrl(null);
+        setResultPreview(null);
 
         try {
           const execResponse = await fetch(`/api/generations/${generationId}/execute`, {
@@ -524,7 +538,11 @@ export default function CinemaStudioWorkspace() {
                 ? `Generation completed. ${execJson.warning}`
                 : "Generation completed."
             );
-            setResultImageUrl(typeof execJson.signedUrl === "string" ? execJson.signedUrl : null);
+            setResultPreview(
+              typeof execJson.signedUrl === "string"
+                ? { url: execJson.signedUrl, type: "image" }
+                : null
+            );
           }
         } catch {
           setFlowStatus("error");
@@ -710,15 +728,26 @@ export default function CinemaStudioWorkspace() {
               </span>
             )}
 
-            {/* Minimal result preview — Nano Banana Gemini output only.
-                Additive only; no existing result area exists on this page. */}
-            {resultImageUrl && (
+            {/* Minimal result preview. Additive only; no existing result area
+                existed on this page before. Image rendering is unchanged;
+                audio results (e.g. mock-tts) render a native player instead
+                of a broken <img>, since the signed URL is never an image. */}
+            {resultPreview && (
               <div className="w-full basis-full">
-                <img
-                  src={resultImageUrl}
-                  alt="Generated result"
-                  className="max-h-64 rounded-lg border border-white/10 object-contain"
-                />
+                {resultPreview.type === "audio" ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption -- mock/dev result preview, not user-facing content
+                  <audio
+                    controls
+                    src={resultPreview.url}
+                    className="w-full max-w-md"
+                  />
+                ) : (
+                  <img
+                    src={resultPreview.url}
+                    alt="Generated result"
+                    className="max-h-64 rounded-lg border border-white/10 object-contain"
+                  />
+                )}
               </div>
             )}
           </div>

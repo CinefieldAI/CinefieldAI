@@ -18,7 +18,7 @@
 export type OrchestrationProviderId = "mock" | "fal";
 
 interface OrchestrationModelDescriptor {
-  generationType: "image" | "video";
+  generationType: "image" | "video" | "audio";
   provider: OrchestrationProviderId;
   /** True for offline development models that never call an external API. */
   isMock: boolean;
@@ -28,6 +28,7 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "mock-image": { generationType: "image", provider: "mock", isMock: true },
   "mock-image-edit": { generationType: "image", provider: "mock", isMock: true },
   "mock-video": { generationType: "video", provider: "mock", isMock: true },
+  "mock-tts": { generationType: "audio", provider: "mock", isMock: true },
   "fal-flux-schnell": { generationType: "image", provider: "fal", isMock: false },
 };
 
@@ -43,7 +44,9 @@ export function isOrchestrationModel(modelId: string): boolean {
  * the browser insert a row that is self-consistent with the server registry;
  * the registry remains authoritative at execution time.
  */
-export function getOrchestrationGenerationType(modelId: string): "image" | "video" | null {
+export function getOrchestrationGenerationType(
+  modelId: string
+): "image" | "video" | "audio" | null {
   return ORCHESTRATION_MODELS[modelId]?.generationType ?? null;
 }
 
