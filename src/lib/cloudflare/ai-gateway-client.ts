@@ -64,19 +64,20 @@ export class CloudflareAiGatewayError extends Error {
 }
 
 /**
- * Calls Cloudflare's universal AI Gateway run endpoint:
+ * Centralized request construction. Both the JSON function and the binary
+ * function call this exact same helper, so the endpoint, headers,
+ * feature-flag enforcement, cache policy, and AbortSignal support can never
+ * drift apart between them — a future call site cannot accidentally omit
+ * the privacy header or the enablement gate by going around this function,
+ * since there is no other way to reach Cloudflare from this module.
  *
- *   POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run
- *
- * Not called anywhere in this codebase yet — this function exists as
- * inactive foundation only. A future caller (a later, separate phase) must
- * continue to respect the "never log payload/headers/tokens" rule this
- * function itself already follows.
+ * Returns the raw, unread Response — callers decide how to read the body
+ * (JSON envelope vs. binary audio).
  */
-export async function runCloudflareAiGateway(
+async function performCloudflareRequest(
   request: CloudflareAiRunRequest,
   options?: { signal?: AbortSignal }
-): Promise<CloudflareAiRunEnvelope> {
+): Promise<Response> {
   // Credential presence alone must never be enough to fire a request —
   // CLOUDFLARE_AI_ENABLED must also explicitly be "true". This check must
   // stay first: it must run before any config is even read.
@@ -99,9 +100,8 @@ export async function runCloudflareAiGateway(
 
   const url = `${CLOUDFLARE_API_BASE}/accounts/${config.accountId}/ai/run`;
 
-  let response: Response;
   try {
-    response = await fetch(url, {
+    return await fetch(url, {
       method: "POST",
       cache: "no-store",
       signal: options?.signal,
@@ -121,6 +121,23 @@ export async function runCloudflareAiGateway(
     }
     throw new CloudflareAiGatewayError("Cloudflare AI Gateway request failed.", { httpStatus: 0 });
   }
+}
+
+/**
+ * Calls Cloudflare's universal AI Gateway run endpoint and reads the
+ * response as the standard JSON envelope:
+ *
+ *   POST https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run
+ *
+ * Preserved exactly as before — its contract is unchanged by the addition
+ * of runCloudflareAiGatewayBinary() below. Not called anywhere in this
+ * codebase yet.
+ */
+export async function runCloudflareAiGateway(
+  request: CloudflareAiRunRequest,
+  options?: { signal?: AbortSignal }
+): Promise<CloudflareAiRunEnvelope> {
+  const response = await performCloudflareRequest(request, options);
 
   let envelope: CloudflareAiRunEnvelope;
   try {
@@ -140,4 +157,71 @@ export async function runCloudflareAiGateway(
   }
 
   return envelope;
+}
+
+export interface CloudflareAiRunBinaryResult {
+  bytes: Uint8Array;
+  mimeType: string;
+}
+
+const EXPECTED_AUDIO_MIME_TYPE = "audio/mpeg";
+
+/**
+ * Calls the same universal AI Gateway run endpoint via the same centralized
+ * request helper, but expects a binary audio response instead of the JSON
+ * envelope — for models (e.g. text-to-speech) that return raw audio bytes.
+ *
+ * Per Cloudflare's own documentation, a model like this can return either a
+ * JSON object or raw binary audio depending on account/endpoint behavior
+ * that is not fully specified. This function never guesses: if a
+ * "successful" (2xx) response is not audio/mpeg, it fails explicitly rather
+ * than attempting to invent or locate a base64 audio field inside a JSON
+ * body. Non-success responses only ever expose an HTTP status and, best
+ * effort, a Cloudflare numeric error code — never a raw body.
+ */
+export async function runCloudflareAiGatewayBinary(
+  request: CloudflareAiRunRequest,
+  options?: { signal?: AbortSignal }
+): Promise<CloudflareAiRunBinaryResult> {
+  const response = await performCloudflareRequest(request, options);
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+
+  if (!response.ok) {
+    // Best-effort safe error code extraction from a JSON error envelope.
+    // Never surfaces the raw body either way.
+    let cloudflareErrorCode: number | undefined;
+    if (contentType.includes("application/json")) {
+      try {
+        const envelope = (await response.json()) as CloudflareAiRunEnvelope;
+        cloudflareErrorCode = envelope.errors?.[0]?.code;
+      } catch {
+        // Body unreadable/not JSON — fall through with status only.
+      }
+    }
+    throw new CloudflareAiGatewayError("Cloudflare AI Gateway request was not successful.", {
+      httpStatus: response.status,
+      cloudflareErrorCode,
+    });
+  }
+
+  if (!contentType.startsWith(EXPECTED_AUDIO_MIME_TYPE)) {
+    // A successful response that isn't audio is unexpected — most likely
+    // Cloudflare returned its JSON envelope shape instead of binary for
+    // this model/account. Fail explicitly rather than guessing at a JSON
+    // audio/base64 structure that may not exist. Reports only the observed
+    // content type, never the body.
+    throw new CloudflareAiGatewayError(
+      `Cloudflare AI Gateway returned content type "${contentType || "unknown"}" (expected ${EXPECTED_AUDIO_MIME_TYPE}).`,
+      { httpStatus: response.status }
+    );
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0) {
+    throw new CloudflareAiGatewayError("Cloudflare AI Gateway returned an empty audio response.", {
+      httpStatus: response.status,
+    });
+  }
+
+  return { bytes, mimeType: EXPECTED_AUDIO_MIME_TYPE };
 }

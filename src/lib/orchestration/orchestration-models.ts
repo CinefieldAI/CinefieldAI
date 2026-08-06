@@ -15,7 +15,7 @@
  * model card can be routed to an orchestration provider by accident.
  */
 
-export type OrchestrationProviderId = "mock" | "fal";
+export type OrchestrationProviderId = "mock" | "fal" | "cloudflare-workers-ai";
 
 interface OrchestrationModelDescriptor {
   generationType: "image" | "video" | "audio";
@@ -30,6 +30,10 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "mock-video": { generationType: "video", provider: "mock", isMock: true },
   "mock-tts": { generationType: "audio", provider: "mock", isMock: true },
   "fal-flux-schnell": { generationType: "image", provider: "fal", isMock: false },
+  // Registered here for id/type consistency with the server registry, but
+  // disabled there (model-registry.ts: enabled: false) — Cloudflare stays
+  // inactive until a later, separate phase.
+  "cloudflare-melotts": { generationType: "audio", provider: "cloudflare-workers-ai", isMock: false },
 };
 
 export const ORCHESTRATION_MODEL_IDS = Object.keys(ORCHESTRATION_MODELS);

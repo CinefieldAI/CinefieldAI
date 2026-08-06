@@ -21,27 +21,40 @@ const REQUIRED_VAR_NAMES = [
 
 type RequiredVarName = (typeof REQUIRED_VAR_NAMES)[number];
 
-function isNonEmpty(value: string | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+/**
+ * Reads a Cloudflare environment variable and normalizes surrounding
+ * whitespace. Copy-pasting a credential into .env.local very easily leaves a
+ * trailing space, which would otherwise be sent verbatim inside the
+ * Authorization header and rejected by Cloudflare as an invalid token. Every
+ * read below goes through this one helper so no call site can skip it.
+ *
+ * Returns the normalized value, or undefined when unset/blank. Never logs.
+ */
+function readNormalized(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 /**
  * True only when all three Cloudflare credential/configuration variables are
- * present and non-empty. Never reads a value out to the caller — boolean
- * only.
+ * present and non-empty after normalization. Never reads a value out to the
+ * caller — boolean only.
  */
 export function isCloudflareConfigured(): boolean {
-  return REQUIRED_VAR_NAMES.every((name) => isNonEmpty(process.env[name]));
+  return REQUIRED_VAR_NAMES.every((name) => readNormalized(name) !== undefined);
 }
 
 /**
- * True only when CLOUDFLARE_AI_ENABLED is exactly "true" AND every
- * credential is present. Credential presence alone must never activate
- * Cloudflare — this is the same double-gate execution-mode.ts already uses
- * for Trigger.dev (GENERATION_EXECUTION_MODE + TRIGGER_SECRET_KEY).
+ * True only when CLOUDFLARE_AI_ENABLED is exactly "true" (after whitespace
+ * normalization) AND every credential is present. Credential presence alone
+ * must never activate Cloudflare — this is the same double-gate
+ * execution-mode.ts already uses for Trigger.dev
+ * (GENERATION_EXECUTION_MODE + TRIGGER_SECRET_KEY).
  */
 export function isCloudflareEnabled(): boolean {
-  return process.env.CLOUDFLARE_AI_ENABLED === "true" && isCloudflareConfigured();
+  return readNormalized("CLOUDFLARE_AI_ENABLED") === "true" && isCloudflareConfigured();
 }
 
 export interface CloudflareGatewayConfig {
@@ -58,16 +71,18 @@ export interface CloudflareGatewayConfig {
  */
 export function getCloudflareConfig(): CloudflareGatewayConfig {
   const missing: RequiredVarName[] = REQUIRED_VAR_NAMES.filter(
-    (name) => !isNonEmpty(process.env[name])
+    (name) => readNormalized(name) === undefined
   );
 
   if (missing.length > 0) {
     throw new Error(`Cloudflare AI Gateway is not configured: ${missing[0]} is missing.`);
   }
 
+  // Normalized values only — a stray trailing newline/space from .env.local
+  // must never reach an Authorization header or a request URL.
   return {
-    accountId: process.env.CLOUDFLARE_ACCOUNT_ID as string,
-    gatewayId: process.env.CLOUDFLARE_AI_GATEWAY_ID as string,
-    apiToken: process.env.CLOUDFLARE_API_TOKEN as string,
+    accountId: readNormalized("CLOUDFLARE_ACCOUNT_ID") as string,
+    gatewayId: readNormalized("CLOUDFLARE_AI_GATEWAY_ID") as string,
+    apiToken: readNormalized("CLOUDFLARE_API_TOKEN") as string,
   };
 }

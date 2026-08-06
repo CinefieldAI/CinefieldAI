@@ -7,9 +7,10 @@ import type { GenerationType, WorkflowType } from "./types";
  * IMPORTANT: this registry is intentionally NOT a mirror of the model picker
  * in the UI. It contains only models the orchestration chain is allowed to
  * execute — the explicit mock entries below, plus real provider entries
- * (currently fal.ai only). Other visible-catalog models (Gemini/Nano Banana,
- * Kling, Seedance, Veo, …) are deliberately absent, so the orchestrator
- * refuses to run them rather than silently redirecting them to a provider.
+ * (fal.ai, and Cloudflare Workers AI — currently disabled). Other
+ * visible-catalog models (Gemini/Nano Banana, Kling, Seedance, Veo, …) are
+ * deliberately absent, so the orchestrator refuses to run them rather than
+ * silently redirecting them to a provider.
  */
 
 export interface ModelCapabilities {
@@ -21,8 +22,12 @@ export interface ModelCapabilities {
   supportsThinking: boolean;
   supportedThinkingValues: string[];
   requiresPrompt: boolean;
-  /** For audio models, this is the TTS input-text character limit. */
-  maxPromptLength: number;
+  /**
+   * For audio models, this is the TTS input-text character limit. Optional:
+   * omit it entirely when no documented limit exists rather than guessing a
+   * number — the validator only enforces this when it is actually defined.
+   */
+  maxPromptLength?: number;
   /** Audio-only capabilities. Omitted entirely for image/video models. */
   supportedAudioFormats?: string[];
   requiresVoice?: boolean;
@@ -225,8 +230,69 @@ const FAL_MODELS: ModelRegistryEntry[] = [
   },
 ];
 
+/**
+ * Real Cloudflare Workers AI models, routed through Cloudflare AI Gateway.
+ * `providerId` names the actual inference provider ("cloudflare-workers-ai")
+ * — the gateway itself ("cloudflare-ai-gateway") is never a provider value
+ * anywhere in this registry; it is recorded only in output metadata by the
+ * adapter (cloudflare-workers-ai-provider.ts).
+ *
+ * `enabled: true` here does NOT by itself allow a real Cloudflare request.
+ * The adapter (cloudflare-workers-ai-provider.ts) and the shared client
+ * (ai-gateway-client.ts) both separately require isCloudflareEnabled() —
+ * CLOUDFLARE_AI_ENABLED="true" plus every credential present — before any
+ * fetch is attempted. Registry `enabled` only controls whether the
+ * orchestrator's existing MODEL_DISABLED check lets a request reach the
+ * adapter at all; it stays true so a controlled real test (a later, separate
+ * step) only needs the env var flipped, not a code change.
+ */
+const CLOUDFLARE_MODELS: ModelRegistryEntry[] = [
+  {
+    id: "cloudflare-melotts",
+    label: "MeloTTS (Cloudflare Workers AI)",
+    providerId: "cloudflare-workers-ai",
+    providerModelId: "@cf/myshell-ai/melotts",
+    generationType: "audio",
+    supportedWorkflows: ["text-to-speech"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // Audio has no aspect ratio / resolution concept for this model, but
+      // the browser unconditionally sends aspect_ratio/resolution in
+      // metadata regardless of generation type. Permissive here for the
+      // same reason as mock-tts above (see its own comment) — this is a UI
+      // transport workaround, not a real MeloTTS capability.
+      supportedAspectRatios: UI_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      // One text in, one audio file out — a real MeloTTS constraint, not a
+      // UI compatibility loosening.
+      minOutputCount: 1,
+      maxOutputCount: 1,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      // maxPromptLength intentionally omitted: Cloudflare does not publish
+      // a MeloTTS-specific character limit anywhere. maxPromptLength is
+      // optional precisely so this can stay unset instead of guessing a
+      // number — the validator simply does not enforce a ceiling here.
+      supportedAudioFormats: ["audio/mpeg"],
+      requiresVoice: false,
+      // supportedLanguages, maxAudioDurationSeconds intentionally omitted:
+      // MeloTTS's own docs mention an optional "lang" input but do not
+      // enumerate which languages (including Turkish or German) actually
+      // work, and no duration ceiling is documented. Do not invent either
+      // until a controlled test proves them.
+    },
+    defaults: { outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+];
+
 const REGISTRY: ReadonlyMap<string, ModelRegistryEntry> = new Map(
-  [...MOCK_MODELS, ...FAL_MODELS].map((model) => [model.id, model])
+  [...MOCK_MODELS, ...FAL_MODELS, ...CLOUDFLARE_MODELS].map((model) => [model.id, model])
 );
 
 /** Returns the entry, or undefined when the model is not orchestratable. */

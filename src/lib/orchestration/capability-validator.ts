@@ -37,7 +37,10 @@ export function validateCapabilities(params: {
       userMessage: "A prompt is required for this model.",
     });
   }
-  if (trimmedPrompt.length > model.capabilities.maxPromptLength) {
+  if (
+    model.capabilities.maxPromptLength !== undefined &&
+    trimmedPrompt.length > model.capabilities.maxPromptLength
+  ) {
     throw new OrchestrationError("INVALID_INPUT", {
       context: { modelId: model.id, promptLength: trimmedPrompt.length },
       userMessage: `The prompt exceeds the ${model.capabilities.maxPromptLength} character limit.`,
