@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import AppShell from "@/components/landing/AppShell";
 
 export default function CanvasPage() {
-  return <AppShell initialView="canvas" />;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <AppShell initialView="canvas" />
+    </Suspense>
+  );
 }

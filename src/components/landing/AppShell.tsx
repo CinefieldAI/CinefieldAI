@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
 import CreateImageWorkspace from "@/components/landing/createImage/CreateImageWorkspace";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
-import type { AudioMode } from "@/components/landing/audioMenuData";
+import {
+  AUDIO_MODE_ORDER,
+  AUDIO_MODELS,
+  type AudioMode,
+} from "@/components/landing/audioMenuData";
 
 interface AppShellProps {
   initialView?: ActiveView;
@@ -28,8 +33,24 @@ export default function AppShell({ initialView = "default", initialPanel = null 
   // Audio mega-dropdown (Navbar) and the bottom rotary selector + prompt bar
   // (CreateAudioWorkspace). Lives here since Navbar and the workspace are
   // siblings that both need to read and write it.
-  const [audioMode, setAudioMode] = useState<AudioMode>("voiceover");
-  const [audioModelIndex, setAudioModelIndex] = useState(0);
+  //
+  // Seeded from the URL so a navbar selection survives navigation to
+  // /audio/create — without this, routing there would remount AppShell and
+  // silently reset the user's chosen mode/model back to the defaults.
+  // Unrecognized values fall back to the defaults rather than throwing.
+  const searchParams = useSearchParams();
+
+  const [audioMode, setAudioMode] = useState<AudioMode>(() => {
+    const requested = searchParams.get("mode");
+    return AUDIO_MODE_ORDER.includes(requested as AudioMode)
+      ? (requested as AudioMode)
+      : "voiceover";
+  });
+
+  const [audioModelIndex, setAudioModelIndex] = useState(() => {
+    const parsed = Number.parseInt(searchParams.get("model") ?? "", 10);
+    return Number.isInteger(parsed) && parsed >= 0 && parsed < AUDIO_MODELS.length ? parsed : 0;
+  });
 
   // Model clicked in the navbar's Image mega-dropdown — routes straight into
   // the full Create Image workspace with that model preselected, instead of

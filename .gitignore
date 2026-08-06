@@ -48,3 +48,7 @@ next-env.d.ts
 .claude/launch.json
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Cinefield handoff paketi (ChatGPT icin, repoya girmesin)
+cinefield-handoff/
+cinefield-handoff.zip

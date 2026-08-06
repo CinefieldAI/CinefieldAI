@@ -295,11 +295,33 @@ export default function Navbar({
   )?.title;
   const activeAudioModelTitle = AUDIO_MODELS[audioModelIndex ?? 0]?.title;
 
+  /**
+   * Opens the Audio workspace at its own URL (/audio/create) instead of only
+   * switching the in-page view, so the address bar, browser back button, and
+   * shared links all reflect what is on screen.
+   *
+   * The chosen mode/model travels in the query string because navigating
+   * remounts AppShell — without carrying them, the user's selection would be
+   * silently reset to the defaults on arrival. When already on /audio/create
+   * we switch in place instead, avoiding a redundant navigation.
+   */
+  const goToAudioWorkspace = (params: { mode: AudioMode; modelIndex?: number }) => {
+    setOpenNavItem("");
+
+    if (pathname === "/audio/create") {
+      onOpenAudioPanel();
+      return;
+    }
+
+    const query = new URLSearchParams({ mode: params.mode });
+    if (params.modelIndex !== undefined) query.set("model", String(params.modelIndex));
+    router.push(`/audio/create?${query.toString()}`);
+  };
+
   const handleAudioFeatureSelect = (title: string) => {
     const feature = AUDIO_FEATURES.find((f) => f.title === title);
     if (feature) onAudioModeChange?.(feature.mode);
-    onOpenAudioPanel();
-    setOpenNavItem("");
+    goToAudioWorkspace({ mode: feature?.mode ?? "voiceover" });
   };
 
   const handleAudioModelSelect = (title: string) => {
@@ -310,8 +332,7 @@ export default function Navbar({
     // Translate) the composer shows no model controls and nothing visibly
     // changes. Mirrors how selecting a Feature updates the composer.
     onAudioModeChange?.("voiceover");
-    onOpenAudioPanel();
-    setOpenNavItem("");
+    goToAudioWorkspace({ mode: "voiceover", modelIndex: index >= 0 ? index : 0 });
   };
 
   return (
