@@ -1,0 +1,1504 @@
+HIGGSFIELD BENZERİ AI PLATFORMU — ANA MİMARİ SÖZLEŞMESİ
+
+Bu belge projenin en üst seviye teknik mimari talimatıdır.
+
+Bu projede herhangi bir özellik geliştirilmeden, provider bağlanmadan, veritabanı tablosu değiştirilmeden veya mevcut kod yeniden düzenlenmeden önce bu kurallar dikkate alınmalıdır.
+
+Amaç, Higgsfield benzeri çok modelli bir AI görsel ve video üretim platformu kurmaktır. Ancak başka bir şirketin özel kodu, ticari sırrı veya bilinmeyen iç altyapısı taklit edilmeyecektir. Yalnızca gözlemlenebilen ürün davranışları temel alınarak bağımsız ve sürdürülebilir bir sistem geliştirilecektir.
+
+1. EN TEMEL MİMARİ KURALI
+
+Bu proje tek bir AI modelinden veya tek bir API bağlantısından oluşmaz.
+
+Sistem şu bağımsız katmanlardan oluşmalıdır:
+
+1. Kullanıcı arayüzü
+2. Kimlik doğrulama
+3. Proje ve medya yönetimi
+4. Kredi ve abonelik sistemi
+5. Generation API
+6. İş kuyruğu ve uzun görev sistemi
+7. AI Director
+8. Prompt compiler
+9. Model registry
+10. Provider router
+11. Provider adapter’ları
+12. Generation worker
+13. Webhook ve polling sistemi
+14. Dosya depolama
+15. Medya işleme
+16. Güvenlik ve moderasyon
+17. Loglama ve gözlemlenebilirlik
+18. Topluluk ve paylaşım
+19. MCP entegrasyonu
+20. Yönetim paneli
+
+Bu katmanların sorumlulukları birbirine karıştırılmamalıdır.
+
+2. HEDEF SİSTEM MİMARİSİ
+                        KULLANICI
+                            │
+                            ▼
+                    Next.js Frontend
+                            │
+               ┌────────────┴────────────┐
+               ▼                         ▼
+             Clerk                 Upload sistemi
+       Kimlik doğrulama            Signed URL
+               │                         │
+               └────────────┬────────────┘
+                            ▼
+                   Next.js Backend API
+                            │
+            ┌───────────────┼────────────────┐
+            ▼               ▼                ▼
+       Yetki kontrolü   Kredi kontrolü   Input doğrulama
+            │               │                │
+            └───────────────┼────────────────┘
+                            ▼
+                     Supabase Database
+                            │
+                    Generation kaydı
+                            │
+                            ▼
+                       Trigger.dev
+                            │
+                            ▼
+                       Cinema Worker
+                            │
+       ┌────────────────────┼─────────────────────┐
+       ▼                    ▼                     ▼
+  AI Director         Prompt Compiler       Asset Analyzer
+       │                    │                     │
+       └────────────────────┼─────────────────────┘
+                            ▼
+                    Cloudflare AI Gateway
+                            │
+            ┌───────────────┼────────────────┐
+            ▼               ▼                ▼
+       Metin modeli     Vision modeli    Moderasyon
+                            │
+                            ▼
+                     Provider Router
+                            │
+       ┌────────────┬───────┼────────┬────────────┐
+       ▼            ▼       ▼        ▼            ▼
+     fal.ai       Runway   Google   Kling API   Diğerleri
+                         Veo API
+       │            │       │        │            │
+       └────────────┴───────┼────────┴────────────┘
+                            ▼
+                 Webhook / Polling Manager
+                            │
+                            ▼
+                      Result Normalizer
+                            │
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+             R2        Supabase DB       FFmpeg
+              │             │             │
+              └─────────────┼─────────────┘
+                            ▼
+                     Kullanıcı sonucu
+3. FRONTEND’İN SORUMLULUĞU
+
+Frontend yalnızca kullanıcı deneyimini yönetmelidir.
+
+Frontend’in görevleri:
+
+Kullanıcı giriş ve kayıt ekranları
+Model seçme ekranı
+Prompt alanı
+Referans görsel ve video yükleme
+Çözünürlük seçimi
+En-boy oranı seçimi
+Video süresi seçimi
+Kamera ve stil ayarları
+Proje oluşturma
+Generation durumunu gösterme
+Sonuç galerisi
+Kredi bilgisini gösterme
+Kullanıcının geçmiş üretimlerini gösterme
+Proje paylaşımı
+Hata mesajlarını anlaşılır biçimde gösterme
+
+Frontend’in yapmaması gerekenler:
+
+Provider API anahtarı taşımak
+Doğrudan fal.ai çağırmak
+Doğrudan Runway çağırmak
+Kredi hesaplamak
+Model fiyatına karar vermek
+Provider endpoint seçmek
+Uzun süreli job beklemek
+Kullanıcının gönderdiği model kimliğine güvenmek
+
+Frontend backend’e yalnızca güvenli ve sınırlı parametreler göndermelidir.
+
+Örnek:
+
+{
+  "projectId": "project_123",
+  "modelKey": "runway-image-to-video",
+  "prompt": "A cinematic fashion scene",
+  "aspectRatio": "16:9",
+  "durationSeconds": 5,
+  "assetIds": ["asset_456"]
+}
+
+Frontend hiçbir zaman şunu göndermemelidir:
+
+{
+  "providerEndpoint": "https://provider.example/generate",
+  "providerApiKey": "...",
+  "rawProviderModelId": "..."
+}
+4. MODEL, PROVIDER VE ÖZELLİK AYRIMI
+
+Bu üç kavram kesinlikle birbirinden ayrılmalıdır.
+
+Provider
+
+API hizmetini sunan şirket veya platformdur.
+
+Örnek:
+
+fal
+runway
+google
+replicate
+cloudflare
+openai
+Model
+
+Üretimi yapan AI modelidir.
+
+Örnek:
+
+Veo
+Kling
+Seedance
+Runway Gen
+FLUX
+Whisper
+Llama
+Qwen
+Özellik veya ürün modu
+
+Kullanıcıya gösterilen üretim deneyimidir.
+
+Örnek:
+
+Cinema Studio
+Image-to-Video
+Product Commercial
+AI Director
+Character Builder
+Storyboard
+Upscaler
+Lip Sync
+Camera Motion
+
+Bir özellik tek modele eşit değildir.
+
+Örneğin:
+
+Cinema Studio ≠ tek bir video modeli
+
+Cinema Studio tipi bir özellik aşağıdaki parçaların birleşimidir:
+
+AI Director
++ prompt compiler
++ kamera ayarları
++ karakter referansları
++ model seçimi
++ video generation
++ sonuç işleme
+5. MODEL REGISTRY TEK GERÇEK KAYNAK OLMALIDIR
+
+Platformda desteklenen bütün modeller merkezi bir registry içinde tanımlanmalıdır.
+
+Örnek:
+
+type ModelDefinition = {
+  key: string;
+  displayName: string;
+  provider: string;
+  providerModelId: string;
+  adapter: string;
+
+  capabilities: {
+    textToImage: boolean;
+    imageToImage: boolean;
+    textToVideo: boolean;
+    imageToVideo: boolean;
+    videoToVideo: boolean;
+    audio: boolean;
+    lipSync: boolean;
+  };
+
+  limits: {
+    durations?: number[];
+    aspectRatios?: string[];
+    maxReferenceImages?: number;
+    maxPromptLength?: number;
+    supportedResolutions?: string[];
+  };
+
+  pricing: {
+    internalCreditCost: number;
+    estimatedProviderCost?: number;
+  };
+
+  availability: {
+    enabled: boolean;
+    maintenanceMode: boolean;
+    allowedPlans: string[];
+  };
+};
+
+Frontend’de elle yazılmış ayrı model listeleri oluşturulmamalıdır.
+
+Model listesi backend registry’den alınmalıdır.
+
+Model kartı, fiyat, desteklenen süre, çözünürlük ve en-boy oranları aynı registry verisinden üretilmelidir.
+
+6. PROVIDER ADAPTER KURALI
+
+Her sağlayıcı ayrı adapter kullanmalıdır.
+
+providers/
+  fal/
+  runway/
+  google/
+  kling/
+  replicate/
+  cloudflare/
+
+Her adapter aşağıdaki temel işlemleri standart biçimde sunmalıdır:
+
+interface GenerationProviderAdapter {
+  validateInput(input: NormalizedGenerationInput): Promise<void>;
+
+  createJob(
+    input: NormalizedGenerationInput
+  ): Promise<ProviderJobResponse>;
+
+  getJobStatus(
+    externalJobId: string
+  ): Promise<ProviderJobStatus>;
+
+  cancelJob?(
+    externalJobId: string
+  ): Promise<void>;
+
+  normalizeResult(
+    rawResult: unknown
+  ): Promise<NormalizedGenerationResult>;
+
+  normalizeError(
+    error: unknown
+  ): NormalizedProviderError;
+}
+
+Provider’a özel request ve response tipleri adapter dışına çıkmamalıdır.
+
+Uygulamanın diğer bölümleri fal.ai veya Runway’in ham cevap formatını bilmemelidir.
+
+7. NORMALIZE EDİLMİŞ GENERATION INPUT
+
+Bütün provider çağrılarından önce ortak bir input formatı oluşturulmalıdır.
+
+type NormalizedGenerationInput = {
+  generationId: string;
+  userId: string;
+  projectId: string;
+
+  taskType:
+    | "text-to-image"
+    | "image-to-image"
+    | "text-to-video"
+    | "image-to-video"
+    | "video-to-video"
+    | "upscale"
+    | "lip-sync";
+
+  provider: string;
+  modelKey: string;
+  providerModelId: string;
+
+  originalPrompt: string;
+  enhancedPrompt?: string;
+  negativePrompt?: string;
+
+  inputAssets: Array<{
+    assetId: string;
+    url: string;
+    type: "image" | "video" | "audio";
+    role:
+      | "start-frame"
+      | "end-frame"
+      | "character-reference"
+      | "style-reference"
+      | "source-video"
+      | "audio";
+  }>;
+
+  settings: {
+    aspectRatio?: string;
+    resolution?: string;
+    durationSeconds?: number;
+    seed?: number;
+    numberOfOutputs?: number;
+    cameraMotion?: string;
+    stylePreset?: string;
+  };
+};
+
+Her provider adapter bu ortak inputu kendi API formatına çevirmelidir.
+
+8. GENERATION DURUM MAKİNESİ
+
+Generation status değerleri gelişi güzel değiştirilmemelidir.
+
+Standart durumlar:
+
+draft
+validating
+queued
+submitted
+processing
+post_processing
+uploading
+completed
+failed
+cancel_requested
+cancelled
+expired
+
+Geçiş örneği:
+
+draft
+  ↓
+validating
+  ↓
+queued
+  ↓
+submitted
+  ↓
+processing
+  ↓
+post_processing
+  ↓
+uploading
+  ↓
+completed
+
+Hata durumunda:
+
+processing
+  ↓
+failed
+
+Bir generation tamamlandıktan sonra tekrar processing durumuna dönmemelidir.
+
+Durum güncellemeleri idempotent olmalıdır.
+
+9. IDEMPOTENCY KURALI
+
+Kullanıcının butona iki kez basması iki kez para harcanmasına neden olmamalıdır.
+
+Her generation isteğinde bir idempotency key kullanılmalıdır.
+
+user_id
++ project_id
++ client_request_id
+
+Aynı istek tekrar geldiğinde sistem:
+
+Yeni kredi düşmemeli
+Yeni provider job oluşturmamalı
+Mevcut generation kaydını döndürmeli
+
+Webhook iki kez gelirse sonuç iki kez işlenmemelidir.
+
+10. KREDİ VE MALİYET SİSTEMİ
+
+Platform kredisi provider maliyetinden ayrı tutulmalıdır.
+
+Aşağıdaki kavramlar karıştırılmamalıdır:
+
+Provider maliyeti
+Platform kredi bedeli
+Kullanıcı aboneliği
+Promosyon kredisi
+İade edilen kredi
+
+Önerilen tablolar:
+
+credit_wallets
+credit_ledger
+subscriptions
+model_pricing
+provider_cost_records
+
+Kredi hareketleri değiştirilemez muhasebe kayıtları şeklinde tutulmalıdır.
+
+Örnek:
+
++500 subscription_credit
+-80 generation_reservation
++80 generation_refund
+-60 final_generation_charge
+
+Doğru yöntem:
+
+Generation başında tahmini kredi rezerve et.
+Provider isteğini gönder.
+Generation başarılı olursa gerçek bedeli kesinleştir.
+Başarısız olursa kurala göre krediyi iade et.
+Bütün hareketleri ledger tablosuna yaz.
+
+Yalnızca kullanıcı tablosundaki tek bir credits sayısını azaltmak yeterli değildir.
+
+11. PROVIDER MALİYET KORUMASI
+
+Her model için şu değerler tanımlanmalıdır:
+
+estimated_cost
+maximum_allowed_cost
+user_credit_cost
+timeout
+retry_policy
+
+Bir job başlatılmadan önce:
+
+Kullanıcının kredisi kontrol edilmeli
+Model kullanıcının planında açık olmalı
+Tahmini provider maliyeti hesaplanmalı
+Günlük harcama limiti kontrol edilmeli
+Provider bakım durumunda olmamalı
+
+Aylık harcama sınırı aşılırsa sistem kontrolsüz biçimde üretime devam etmemelidir.
+
+12. RETRY VE FALLBACK KURALLARI
+
+Her hata retry edilmemelidir.
+
+Retry yapılabilecek hatalar
+429 rate limit
+502 bad gateway
+503 service unavailable
+504 timeout
+geçici network hatası
+Retry yapılmaması gereken hatalar
+401 yanlış API anahtarı
+403 yetki yok
+400 geçersiz parametre
+unsupported resolution
+unsupported duration
+moderation rejection
+insufficient provider balance
+
+Retry işlemleri exponential backoff kullanmalıdır.
+
+Örnek:
+
+30 saniye
+2 dakika
+5 dakika
+15 dakika
+
+Aynı provider üzerinde sınırlı retry yapılmalıdır.
+
+Provider fallback yalnızca uyumlu model varsa uygulanmalıdır.
+
+Kullanıcı belirli bir model seçmişse izinsiz şekilde başka modele geçirilmemelidir.
+
+13. AI DIRECTOR’IN GÖREVİ
+
+AI Director üretimi yapan model değildir.
+
+AI Director şu görevleri yapar:
+
+Kullanıcı amacını anlamak
+Sahne türünü belirlemek
+Promptu yapılandırmak
+Kamera önerisi oluşturmak
+Lens ve ışık seçmek
+Hareket yoğunluğunu belirlemek
+Karakter ve ortam referanslarını açıklamak
+Uygun model adaylarını sıralamak
+Gerekli generation ayarlarını oluşturmak
+
+Örnek çıktı:
+
+{
+  "taskType": "image-to-video",
+  "sceneIntent": "luxury fashion commercial",
+  "enhancedPrompt": "...",
+  "negativePrompt": "...",
+  "camera": {
+    "movement": "slow dolly in",
+    "lens": "50mm",
+    "shotType": "medium close-up"
+  },
+  "recommendedModels": [
+    {
+      "modelKey": "runway-image-to-video",
+      "score": 0.91
+    },
+    {
+      "modelKey": "fal-kling-image-to-video",
+      "score": 0.84
+    }
+  ]
+}
+
+AI Director’ın çıktısı Zod veya benzeri bir şema ile doğrulanmalıdır.
+
+AI Director doğrudan:
+
+Kredi düşmemeli
+API anahtarı seçmemeli
+Serbest endpoint çağırmamalı
+Registry dışında model uydurmamalı
+Veritabanında kontrolsüz değişiklik yapmamalı
+14. PROMPT COMPILER KATMANI
+
+Tek bir genel prompt bütün video modellerine gönderilmemelidir.
+
+Her model ailesi için ayrı prompt compiler kullanılmalıdır.
+
+Örnek:
+
+prompt-compilers/
+  runway.ts
+  kling.ts
+  veo.ts
+  seedance.ts
+  image-model.ts
+
+Ortak yaratıcı brief:
+
+Subject
+Action
+Environment
+Camera
+Lighting
+Style
+Timing
+Constraints
+Negative instructions
+
+Daha sonra compiler bunu seçilen modele uygun biçime dönüştürmelidir.
+
+Provider adapter request gönderir.
+
+Prompt compiler sanatsal ve model-spesifik promptu hazırlar.
+
+Bu ikisi aynı şey değildir.
+
+15. KARAKTER TUTARLILIĞI
+
+Karakter tutarlılığı yalnızca prompt içinde isim yazılarak sağlanmaz.
+
+Sistemde ayrı entity’ler bulunmalıdır:
+
+characters
+character_versions
+character_reference_assets
+character_embeddings
+character_usage
+
+Karakter kaydı şunları içerebilir:
+
+İsim
+Açıklama
+Yüz özellikleri
+Saç
+Kıyafet
+Yaş görünümü
+Renk paleti
+Referans görseller
+Onaylanmış ana görsel
+Negatif özellikler
+Model-spesifik ayarlar
+
+Bir karakter güncellendiğinde eski projelerin referansları bozulmamalıdır.
+
+Bu nedenle versiyonlama kullanılmalıdır.
+
+16. ORTAK CREATIVE ASSET SİSTEMİ
+
+Sistem yalnızca dosya listesi tutmamalıdır.
+
+Aşağıdaki reusable varlıklar desteklenmelidir:
+
+Character
+Location
+Prop
+Product
+Style
+Color palette
+Camera preset
+Voice
+Music
+Logo
+Brand kit
+
+Her varlık:
+
+Bir projeye bağlı olabilir
+Bir workspace’e bağlı olabilir
+Birden fazla sahnede kullanılabilir
+Versiyonlanabilir
+Silinmeden arşivlenebilir
+17. PROJE, SAHNE VE SHOT HİYERARŞİSİ
+
+Bir film projesi tek bir generation kaydı değildir.
+
+Önerilen yapı:
+
+Workspace
+  └── Project
+       └── Sequence
+            └── Scene
+                 └── Shot
+                      └── Generation
+                           └── Output Asset
+
+Örnek:
+
+Project: Luxury Car Commercial
+  Scene 1: City at night
+    Shot 1: Wide establishing shot
+    Shot 2: Wheel close-up
+    Shot 3: Interior dashboard
+
+Bir shot için birden fazla generation denemesi olabilir.
+
+Kullanıcı bunlardan birini selected output olarak işaretleyebilmelidir.
+
+18. HERO FRAME FIRST İŞ AKIŞI
+
+Sinematik video üretiminde doğrudan video başlatmak yerine şu akış desteklenmelidir:
+
+Creative brief
+  ↓
+Storyboard
+  ↓
+Hero frame oluşturma
+  ↓
+Hero frame onayı
+  ↓
+Image-to-video
+  ↓
+Post-processing
+  ↓
+Final edit
+
+Bu yaklaşım karakter, ışık, kompozisyon ve sanat yönetimini video başlamadan önce sabitlemeye yardımcı olur.
+
+19. ASSET UPLOAD MİMARİSİ
+
+Büyük dosyalar Next.js server üzerinden geçirilmemelidir.
+
+Doğru akış:
+
+Frontend
+  ↓
+Backend’den signed upload URL alır
+  ↓
+Dosyayı doğrudan R2’ye yükler
+  ↓
+Backend asset kaydını doğrular
+
+Upload sırasında:
+
+MIME type kontrolü
+Dosya boyutu kontrolü
+Uzantı kontrolü
+Görsel çözünürlük kontrolü
+Video süre kontrolü
+Zararlı dosya taraması
+Metadata temizleme
+
+uygulanmalıdır.
+
+Kullanıcının sunduğu harici URL doğrudan provider’a gönderilmemelidir.
+
+Önce güvenli biçimde sisteme alınmalı veya doğrulanmalıdır.
+
+20. DEPOLAMA YAPISI
+
+Örnek R2 klasörleme:
+
+users/{userId}/
+  projects/{projectId}/
+    source/
+    references/
+    generations/{generationId}/
+      raw/
+      processed/
+      thumbnails/
+      previews/
+
+Dosya adı kullanıcının yüklediği özgün isimden doğrudan oluşturulmamalıdır.
+
+UUID veya güvenli internal ID kullanılmalıdır.
+
+Private asset’ler signed URL ile sunulmalıdır.
+
+Public community içerikleri ayrı public delivery alanında bulunmalıdır.
+
+21. FFmpeg VE POST-PROCESSING
+
+FFmpeg şu görevler için kullanılabilir:
+
+Format dönüştürme
+Codec standardizasyonu
+Thumbnail üretme
+Preview oluşturma
+Video birleştirme
+Ses ekleme
+Fade işlemleri
+Resize ve crop
+Frame çıkarma
+Metadata temizleme
+
+FFmpeg işlemleri Next.js request içinde çalıştırılmamalıdır.
+
+Ayrı worker veya Trigger.dev görevi kullanılmalıdır.
+
+Ham provider çıktısı korunmalı; işlenmiş çıktı ayrı asset olarak kaydedilmelidir.
+
+22. WEBHOOK GÜVENLİĞİ
+
+Provider webhook’ları doğrudan güvenilir kabul edilmemelidir.
+
+Webhook endpoint şu kontrolleri yapmalıdır:
+
+İmza doğrulaması
+Timestamp kontrolü
+Replay koruması
+Bilinen provider kontrolü
+Bilinen external job ID kontrolü
+Idempotency
+Geçerli status geçişi
+Payload şema doğrulaması
+
+Webhook sadece job durumunu güncellemeli ve gerekli devam görevini kuyruğa eklemelidir.
+
+Ağır medya işlemleri webhook request’i içinde yapılmamalıdır.
+
+23. POLLING KURALI
+
+Webhook desteklemeyen provider’lar için polling kullanılmalıdır.
+
+Polling:
+
+Sınırsız sürmemeli
+Exponential veya kontrollü aralık kullanmalı
+Maksimum job süresine sahip olmalı
+Provider rate limitine uymalı
+Job tamamlandığında durmalı
+İptal edilmiş job’ları tekrar sorgulamamalı
+
+Örnek:
+
+10 saniye
+20 saniye
+30 saniye
+60 saniye
+60 saniye
+24. CLOUDFARE’IN KONUMU
+
+Cloudflare bu sistemde aşağıdaki amaçlarla kullanılabilir:
+
+AI Gateway
+Workers AI
+Rate limiting
+WAF
+Bot koruması
+DDoS koruması
+R2 depolama
+CDN
+Signed delivery
+Queues veya yardımcı edge görevleri
+
+Cloudflare AI Gateway şu kısa AI görevlerinde kullanılabilir:
+
+Prompt enhancement
+Görsel analiz
+Task classification
+Moderasyon
+Embedding
+Reranking
+Metin modeli fallback
+Kullanım loglama
+
+Cloudflare AI Gateway uzun video job orkestratörü değildir.
+
+Cloudflare Workers AI, Runway veya fal.ai değildir.
+
+Cloudflare R2, generation veritabanı değildir.
+
+Her ürün kendi görevinde kullanılmalıdır.
+
+25. TRIGGER.DEV’İN KONUMU
+
+Trigger.dev şu işleri yürütmelidir:
+
+Uzun video generation job’ları
+Retry
+Polling
+Provider durum kontrolü
+Sonuç indirme
+Post-processing
+R2 yükleme
+Supabase durum güncelleme
+Kredi kesinleştirme veya iade
+Thumbnail üretimi
+Bildirim oluşturma
+
+Trigger.dev bir model değildir.
+
+Trigger.dev provider değildir.
+
+Trigger.dev yalnızca güvenilir görev yürütme ve orkestrasyon katmanıdır.
+
+26. SUPABASE’İN KONUMU
+
+Supabase aşağıdaki kayıtların ana kaynağıdır:
+
+profiles
+workspaces
+workspace_members
+projects
+sequences
+scenes
+shots
+generations
+assets
+characters
+locations
+props
+styles
+credit_wallets
+credit_ledger
+subscriptions
+provider_jobs
+webhook_events
+model_registry
+notifications
+community_posts
+comments
+likes
+
+Supabase büyük video dosyalarının tek zorunlu storage çözümü değildir.
+
+Büyük medya için R2 kullanılabilir; Supabase dosyanın metadata ve sahiplik kaydını tutabilir.
+
+27. CLERK VE SUPABASE KULLANICI EŞLEŞMESİ
+
+Clerk kullanıcı kimliğinin kaynağıdır.
+
+Supabase application profile ve business data kaynağıdır.
+
+Örnek eşleşme:
+
+Clerk user ID → profiles.clerk_user_id
+
+Frontend’den gelen userId değerine güvenilmemelidir.
+
+Backend kullanıcı ID’sini doğrulanmış Clerk session’dan almalıdır.
+
+Supabase Row Level Security uygulanmalıdır.
+
+Service role key frontend’e asla gönderilmemelidir.
+
+28. STRIPE VE ABONELİK SİSTEMİ
+
+Stripe yalnızca ödeme alma aracı değildir.
+
+Aşağıdaki akış kurulmalıdır:
+
+Checkout
+  ↓
+Stripe webhook
+  ↓
+Webhook doğrulama
+  ↓
+Subscription kaydını güncelle
+  ↓
+Kredi paketini ledger’a ekle
+
+Frontend ödeme başarılı dediği için kredi verilmemelidir.
+
+Kredi yalnızca doğrulanmış Stripe webhook’undan sonra eklenmelidir.
+
+Şu olaylar işlenmelidir:
+
+checkout completed
+subscription created
+subscription updated
+subscription cancelled
+invoice paid
+invoice payment failed
+refund
+chargeback
+29. TOPLULUK SİSTEMİ
+
+Community içeriği generation tablosundan ayrı bir publication katmanına sahip olmalıdır.
+
+Kullanıcı bir içeriği yayınladığında:
+
+Public başlık
+Açıklama
+Thumbnail
+Kullanılan modelin gösterilebilir adı
+Kullanılan ayarların paylaşım izni
+Remix izni
+Görünürlük
+Moderasyon durumu
+
+kaydedilmelidir.
+
+Özel promptlar ve gizli provider verileri otomatik olarak public olmamalıdır.
+
+Bir kullanıcı public projeyi remix ettiğinde yeni bağımsız proje oluşturulmalıdır.
+
+Orijinal proje değiştirilmemelidir.
+
+30. COLLABORATION VE WORKSPACE
+
+İleride ekip özelliği için şu roller desteklenebilir:
+
+owner
+admin
+editor
+viewer
+billing
+
+Her proje bir kullanıcı yerine workspace’e bağlanmalıdır.
+
+Bu sayede ileride:
+
+Takım üyeleri
+Ortak projeler
+Yorumlar
+Onay sistemi
+Paylaşılan kredi havuzu
+Brand kit
+
+eklenebilir.
+
+İlk sürümde tek kullanıcı olsa bile veri modeli workspace’e hazır kurulmalıdır.
+
+31. MCP MİMARİSİ
+
+MCP, AI ajanlarının projedeki araçları güvenli şekilde çağırmasını sağlar.
+
+MCP server doğrudan provider API anahtarlarını ajanlara vermemelidir.
+
+MCP araçları backend service katmanını çağırmalıdır.
+
+Örnek araçlar:
+
+list_models
+create_project
+list_projects
+upload_reference
+generate_image
+generate_video
+get_generation_status
+list_generations
+get_generation_result
+cancel_generation
+list_characters
+create_character
+
+MCP çağrıları da normal web uygulamasıyla aynı kurallardan geçmelidir:
+
+Kullanıcı doğrulaması
+Yetki
+Kredi
+Model registry
+Moderasyon
+Rate limit
+Provider adapter
+Audit log
+
+Web uygulaması ve MCP için iki ayrı generation sistemi oluşturulmamalıdır.
+
+İkisi aynı core service’i kullanmalıdır.
+
+32. MCP İÇİN ASENKRONİK SONUÇ
+
+Video generation MCP request’i içinde dakikalarca açık tutulmamalıdır.
+
+Doğru cevap:
+
+{
+  "generationId": "gen_123",
+  "status": "queued",
+  "message": "Generation started."
+}
+
+Ajan daha sonra:
+
+get_generation_status
+
+aracını çağırmalıdır.
+
+Tamamlandığında sonuç güvenli URL ile döndürülmelidir.
+
+33. GÜVENLİK VE MODERASYON
+
+Aşağıdaki kontroller bulunmalıdır:
+
+Prompt moderasyonu
+Upload moderasyonu
+Rate limiting
+IP abuse kontrolü
+Kullanıcı bazlı limit
+Şüpheli hesap tespiti
+Zararlı URL engelleme
+SSRF koruması
+Dosya doğrulama
+API anahtarı koruması
+Webhook doğrulama
+Audit log
+Admin ban sistemi
+
+Kullanıcı promptları loglanırken kişisel ve hassas veri politikaları dikkate alınmalıdır.
+
+34. OBSERVABILITY
+
+Her generation için izlenebilir bir correlation ID bulunmalıdır.
+
+Örnek:
+
+request_id
+generation_id
+provider_job_id
+trigger_run_id
+user_id
+project_id
+
+Loglarda şu bilgiler bulunabilir:
+
+Hangi endpoint çağrıldı?
+Hangi model seçildi?
+Hangi provider kullanıldı?
+Kaç kez retry edildi?
+Provider ne kadar sürdü?
+Hangi hata oluştu?
+Kredi ne zaman rezerve edildi?
+Kredi iade edildi mi?
+Dosya storage’a yüklendi mi?
+
+Ancak loglarda şu bilgiler bulunmamalıdır:
+
+API anahtarı
+Authorization header
+Stripe secret
+Supabase service role key
+Tam hassas kullanıcı verisi
+
+Sentry uygulama hataları için, Cloudflare AI Gateway AI çağrıları için, Trigger.dev ise görev geçmişi için kullanılabilir.
+
+35. ADMIN PANELİ
+
+Admin panelinde en az şu alanlar bulunmalıdır:
+
+Kullanıcılar
+Abonelikler
+Kredi hareketleri
+Generation kayıtları
+Provider job’ları
+Başarısız görevler
+Model durumu
+Provider durumu
+Model fiyatları
+Kullanım maliyeti
+Moderasyon kayıtları
+Community içerikleri
+Webhook olayları
+Sistem duyuruları
+
+Admin paneli üzerinden:
+
+Model kapatma
+Model bakım moduna alma
+Fiyat değiştirme
+Kullanıcıya kredi ekleme
+Generation yeniden deneme
+İçerik gizleme
+Kullanıcı askıya alma
+
+işlemleri yapılabilir.
+
+Her admin işlemi audit log’a yazılmalıdır.
+
+36. FEATURE FLAG SİSTEMİ
+
+Yeni modeller doğrudan tüm kullanıcılara açılmamalıdır.
+
+Feature flag desteği bulunmalıdır.
+
+Örnek:
+
+runway_gen_new_enabled
+cinema_studio_beta
+mcp_enabled
+community_publish_enabled
+auto_model_routing_enabled
+
+Flag şu seviyelerde çalışabilir:
+
+global
+plan
+workspace
+user
+percentage rollout
+37. MODEL SAĞLIK SİSTEMİ
+
+Her provider ve model için sağlık durumu takip edilmelidir:
+
+operational
+degraded
+rate_limited
+maintenance
+disabled
+
+Provider hata oranı yükselirse sistem:
+
+Yeni job kabulünü durdurabilir
+Model kartında uyarı gösterebilir
+Otomatik seçimde modeli dışlayabilir
+Admin’e bildirim gönderebilir
+
+Bu karar yalnızca AI modeline bırakılmamalıdır.
+
+38. MODEL ROUTING KURALLARI
+
+Otomatik model seçimi deterministik kurallarla sınırlandırılmalıdır.
+
+Değerlendirilecek alanlar:
+
+Task türü
+Input türü
+İstenen kalite
+Süre
+Çözünürlük
+En-boy oranı
+Karakter tutarlılığı ihtiyacı
+Kamera kontrolü
+Ses ihtiyacı
+Kullanıcının planı
+Kullanıcının kredisi
+Provider durumu
+Tahmini maliyet
+Tahmini üretim süresi
+
+AI Director öneri sunabilir.
+
+Backend registry ve policy engine nihai kararı verir.
+
+39. DATABASE MIGRATION KURALI
+
+Production veritabanı elle ve kontrolsüz biçimde değiştirilmemelidir.
+
+Her değişiklik migration ile yapılmalıdır.
+
+Migration öncesi:
+
+Mevcut veriler incelenmeli
+Geriye uyumluluk kontrol edilmeli
+Rollback planı hazırlanmalı
+Index ihtiyacı değerlendirilmelidir
+
+Tablo veya alan isimleri provider’a aşırı bağımlı yapılmamalıdır.
+
+Yanlış:
+
+fal_video_jobs
+
+Daha sürdürülebilir:
+
+provider_jobs
+
+Provider’a özel ham payload gerekirse JSONB alanında veya ayrı provider metadata tablosunda tutulabilir.
+
+40. GELİŞTİRME ORTAMLARI
+
+En az üç ortam kullanılmalıdır:
+
+development
+preview/staging
+production
+
+Her ortamın ayrı:
+
+Supabase projesi veya güvenli schema ayrımı
+Clerk yapılandırması
+Stripe modu
+Cloudflare gateway
+R2 bucket
+Trigger.dev environment
+Provider API anahtarları
+
+bulunmalıdır.
+
+Development anahtarları production’da kullanılmamalıdır.
+
+Stripe test ve live anahtarları karıştırılmamalıdır.
+
+41. TEST STRATEJİSİ
+
+En az şu test türleri bulunmalıdır:
+
+Unit test
+Model registry
+Kredi hesaplama
+Prompt compiler
+Input validation
+Status transition
+Error normalization
+Integration test
+Supabase kayıtları
+Clerk doğrulaması
+Stripe webhook
+Provider adapter
+R2 upload
+Trigger.dev task
+Contract test
+
+Provider request ve response formatlarının değişmediğini kontrol eder.
+
+End-to-end test
+Kullanıcı giriş yapar
+→ proje oluşturur
+→ asset yükler
+→ video generation başlatır
+→ kredi rezerve edilir
+→ job tamamlanır
+→ video görünür
+
+Gerçek ücretli provider çağrıları her testte yapılmamalıdır.
+
+Mock provider adapter bulunmalıdır.
+
+42. MOCK PROVIDER
+
+Geliştirme sırasında para harcamadan akış testi için mock provider oluşturulmalıdır.
+
+providers/mock/
+
+Mock provider:
+
+Sahte job ID üretir
+Bir süre processing döndürür
+Test videosu döndürür
+Kontrollü hata üretir
+Timeout simüle eder
+Rate limit simüle eder
+
+Bu sayede kredi, retry, webhook ve UI durumları gerçek provider maliyeti olmadan test edilir.
+
+43. DEPLOYMENT KURALI
+
+Next.js uygulaması Vercel gibi bir platformda çalışabilir.
+
+Ancak şu ağır görevler frontend deployment request’lerine bağlanmamalıdır:
+
+Uzun polling
+FFmpeg
+Büyük dosya indirme
+Büyük dosya upload
+Uzun generation bekleme
+
+Bunlar Trigger.dev worker veya uygun compute ortamında yürütülmelidir.
+
+Her deployment öncesi:
+
+TypeScript kontrolü
+Lint
+Unit test
+Migration kontrolü
+Environment variable kontrolü
+Build
+Smoke test
+
+çalıştırılmalıdır.
+
+44. PROJEYİ ÇÖKERTECEK HATALAR
+
+Aşağıdaki değişiklikler yapılmamalıdır:
+
+fal.ai ve Runway’i aynı provider saymak.
+Provider adını model adı olarak kullanmak.
+Cloudflare’ı video üreticisi sanmak.
+Trigger.dev’i model router sanmak.
+Frontend’den provider API çağırmak.
+API anahtarını NEXT_PUBLIC_ değişkenine koymak.
+Generation tamamlanana kadar Next.js endpoint’ini açık tutmak.
+Tek generateVideo dosyasına bütün provider koşullarını doldurmak.
+Frontend model listesini backend’den bağımsız tutmak.
+Kredi düşümünü yalnızca frontend’de yapmak.
+Provider hatasında kontrolsüz fallback uygulamak.
+Aynı webhook’u iki kez işlemek.
+Büyük videoyu veritabanına base64 olarak kaydetmek.
+Supabase service role key’i tarayıcıya göndermek.
+Kullanıcının gönderdiği storage URL’sine körü körüne güvenmek.
+Bütün AI işlerini tek LLM’e vermek.
+AI Director’ın uydurduğu model ID’sini doğrudan çağırmak.
+Production veritabanını migrationsız değiştirmek.
+Provider maliyetini takip etmeden limitsiz üretim açmak.
+Test ortamında production Stripe veya provider anahtarı kullanmak.
+45. UYGULAMA SIRASI
+
+Proje aşağıdaki sırayla kurulmalıdır.
+
+Faz 1 — Temel platform
+Next.js
+Clerk
+Supabase
+Temel kullanıcı profili
+Workspace
+Project
+Asset upload
+R2
+Faz 2 — Generation çekirdeği
+Generation tablosu
+Model registry
+Provider interface
+Mock provider
+Trigger.dev
+Status machine
+Kredi rezervasyonu
+Faz 3 — İlk gerçek provider
+fal.ai adapter
+Tek görsel modeli
+Tek video modeli
+Polling veya webhook
+Result normalization
+
+Önce tek provider kusursuz çalışmalıdır.
+
+Faz 4 — İkinci bağımsız provider
+Runway adapter
+Ayrı API client
+Ayrı schema
+Ayrı error mapping
+Ayrı provider job handling
+
+Runway fal.ai kodunun içine eklenmemelidir.
+
+Faz 5 — Cloudflare AI katmanı
+AI Gateway
+Prompt enhancement
+Vision analysis
+Moderasyon
+Rate limit
+AI loglama
+Faz 6 — Cinema sistemi
+AI Director
+Prompt compiler
+Camera presets
+Style presets
+Characters
+Locations
+Props
+Hero frame
+Scene ve shot yapısı
+Faz 7 — Ödeme
+Stripe
+Subscription
+Credit ledger
+Model pricing
+Refund policy
+Usage dashboard
+Faz 8 — Community
+Publish
+Profile
+Project page
+Remix
+Like
+Comment
+Moderasyon
+Faz 9 — MCP
+MCP authentication
+Tool definitions
+Generation service bağlantısı
+Async status
+Audit log
+Rate limit
+Faz 10 — Ölçeklendirme
+Provider health
+Feature flags
+Cost analytics
+Admin panel
+Queue concurrency
+CDN optimizasyonu
+Observability
+Backup
+Disaster recovery
+
+Bir sonraki faza geçmeden önce mevcut faz test edilmelidir.
+
+46. CHATGPT VE KOD AJANLARI İÇİN ÇALIŞMA KURALI
+
+Bu projede değişiklik yapmadan önce:
+
+Mevcut repository yapısını incele.
+İlgili dosyaları oku.
+Mevcut database schema’yı kontrol et.
+Aynı özelliğin başka implementasyonu var mı araştır.
+Hangi mimari katmana dokunacağını belirt.
+Provider, model ve feature ayrımını doğrula.
+Küçük ve geri alınabilir değişiklik yap.
+TypeScript ve testleri çalıştır.
+Var olan çalışan provider’ları bozmadığını kontrol et.
+Yapılan değişikliği dosya bazında raporla.
+
+Var olan kod görülmeden klasör, tablo, environment variable veya endpoint mevcutmuş gibi varsayılmamalıdır.
+
+Eksik bilgi olduğunda uydurma kod bağlantıları oluşturulmamalıdır.
+
+47. NİHAİ MİMARİ PRENSİBİ
+
+Sistemin beyni tek bir AI modeli değildir.
+
+AI Director yaratıcı karar üretir.
+Policy engine kararı doğrular.
+Model registry izin verilen modelleri belirler.
+Provider router doğru adapter’ı seçer.
+Provider adapter gerçek API çağrısını yapar.
+Trigger.dev uzun görevi yürütür.
+Cloudflare AI çağrılarını kontrol eder.
+Supabase sistemi kaydeder.
+R2 medyayı saklar.
+FFmpeg sonucu işler.
+Clerk kullanıcıyı doğrular.
+Stripe ödemeyi yönetir.
+
+Her katman yalnızca kendi sorumluluğunu yerine getirmelidir.
+
+Projenin sürdürülebilirliği, provider’ların birbirine karıştırılmamasına ve ortak generation çekirdeğinin korunmasına bağlıdır.
+
+Yeni bir provider eklenirken mevcut sistemi yeniden yazmak gerekmemelidir.
+
+Yeni bir model eklemek çoğunlukla:
+
+Registry kaydı
++ ilgili adapter desteği
++ prompt compiler ayarı
++ fiyatlandırma
++ test
+
+ile tamamlanabilmelidir.
+
+Bu mimari sözleşmesine aykırı bir değişiklik önerildiğinde değişiklik uygulanmadan önce risk açıkça belirtilmelidir.
