@@ -3,26 +3,13 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Paperclip, X } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { useClerkSupabaseClient } from "@/lib/supabase/useClerkSupabaseClient";
-import type { Project, GenerationInsertPayload } from "@/types/database";
 import {
   ALLOWED_INPUT_MIME_TYPES,
   MAX_INPUT_FILE_SIZE,
-  buildInputStoragePath,
 } from "@/lib/storageUpload";
-import {
-  mapCinemaModeToGenerationType,
-  deriveProviderFromModelId,
-} from "@/lib/cinemaGenerationMapping";
 import { isSupportedNanoBananaModel } from "@/lib/gemini/geminiModelMapping";
-import {
-  isOrchestrationModel,
-  isMockOrchestrationModel,
-  getOrchestrationGenerationType,
-  getOrchestrationProvider,
-} from "@/lib/orchestration/orchestration-models";
+import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
+import { useGeneration, type LegacyExecutionOutcome } from "@/hooks/useGeneration";
 import Navbar from "@/components/landing/Navbar";
 import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
@@ -43,71 +30,24 @@ import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
-type GenerationFlowStatus =
-  | "idle"
-  | "uploading"
-  | "queued"
-  | "processing"
-  | "success"
-  | "error";
-
-interface GenerationTerminalRow {
-  status: string;
-  error_message: string | null;
-  output_url: string | null;
-  generation_type: string;
-}
-
-/** What the result preview is currently showing, so rendering never assumes image. */
-interface GenerationResultPreview {
-  url: string;
-  type: "image" | "video" | "audio";
-}
-
-const TRIGGER_POLL_INTERVAL_MS = 1500;
-const TRIGGER_POLL_MAX_ATTEMPTS = 40; // ~60s, generous headroom over the orchestrator's own provider timeouts
-
-/**
- * Trigger-mode dispatch (`/api/orchestration/execute` returning status
- * "queued") only acknowledges that the background job was accepted — the
- * actual run happens outside the request via the Trigger.dev task, which
- * updates the same `generations` row through status-manager.ts. The browser
- * has no other signal, so it polls that row until status reaches a terminal
- * value. Direct mode never calls this: it already gets a synchronous result.
- */
-async function pollGenerationUntilTerminal(
-  supabase: SupabaseClient,
-  generationId: string
-): Promise<GenerationTerminalRow | null> {
-  for (let attempt = 0; attempt < TRIGGER_POLL_MAX_ATTEMPTS; attempt++) {
-    const { data } = await supabase
-      .from("generations")
-      .select("status, error_message, output_url, generation_type")
-      .eq("id", generationId)
-      .maybeSingle();
-
-    if (data && (data.status === "completed" || data.status === "failed")) {
-      return data as GenerationTerminalRow;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, TRIGGER_POLL_INTERVAL_MS));
-  }
-  return null;
-}
-
-/** Narrows an arbitrary generation_type/output type string safely; unknown values render as image (today's only other real case). */
-function toPreviewType(value: unknown): GenerationResultPreview["type"] {
-  return value === "audio" || value === "video" ? value : "image";
-}
-
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
   const promptBarWrapperRef = useRef<HTMLDivElement>(null);
-  const { user, isLoaded: userLoaded } = useUser();
-  const { supabase, isSignedIn } = useClerkSupabaseClient();
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const generateInFlightRef = useRef(false);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Shared generation workflow — project resolution, upload, row insert,
+  // orchestration dispatch, polling, signed URL, and flow state all live in
+  // the hook. Renamed locals keep the existing render JSX untouched.
+  const {
+    status: flowStatus,
+    message: flowMessage,
+    result: resultPreview,
+    isGenerating,
+    generate,
+    reset: resetFlow,
+    setError: setFlowError,
+  } = useGeneration({ sourcePage: "/generate" });
   const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
 
   // Sidebar state
@@ -196,15 +136,10 @@ export default function CinemaStudioWorkspace() {
 
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Supabase generation queueing — active project, attachment, and flow feedback.
-  // Additive only: does not alter any existing prompt bar UI or state above.
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  // Attachment — page-level UI state; validation happens at select time for
+  // instant feedback, before anything reaches the shared generation flow.
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [flowStatus, setFlowStatus] = useState<GenerationFlowStatus>("idle");
-  const [flowMessage, setFlowMessage] = useState<string | null>(null);
-  const [resultPreview, setResultPreview] = useState<GenerationResultPreview | null>(null);
 
   // Nano Banana 2 Lite's "Thinking" control — lifted here (from PromptBar's
   // former local state) so its current value can be captured into
@@ -213,58 +148,28 @@ export default function CinemaStudioWorkspace() {
     "High" | "Minimal"
   >("High");
 
-  // Auto-select the user's most recently created project — no project
-  // picker exists on this page today, so this reuses the same "most recent
-  // first" convention already established in /test/generations-storage.
-  useEffect(() => {
-    if (!isSignedIn || !supabase) return;
-    let cancelled = false;
-
-    (async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (cancelled) return;
-
-      if (!error && data && data.length > 0) {
-        setActiveProject(data[0] as Project);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isSignedIn, supabase]);
-
   const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
 
     if (!ALLOWED_INPUT_MIME_TYPES.includes(file.type)) {
-      setFlowStatus("error");
-      setFlowMessage(`File type not allowed: ${file.type || "unknown"}`);
+      setFlowError(`File type not allowed: ${file.type || "unknown"}`);
       return;
     }
     if (file.size > MAX_INPUT_FILE_SIZE) {
-      setFlowStatus("error");
-      setFlowMessage("File exceeds the 50 MB limit");
+      setFlowError("File exceeds the 50 MB limit");
       return;
     }
 
-    setFlowStatus("idle");
-    setFlowMessage(null);
+    resetFlow();
     setAttachedFile(file);
   };
 
   const handleRemoveAttachment = () => {
     setAttachedFile(null);
     if (flowStatus === "error") {
-      setFlowStatus("idle");
-      setFlowMessage(null);
+      resetFlow();
     }
   };
 
@@ -324,245 +229,71 @@ export default function CinemaStudioWorkspace() {
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
 
-  // Queues one generation row in Supabase (and optionally uploads an
-  // attachment to generation-inputs first). Does not call any AI provider,
-  // create a worker, or produce an output — this only records the request.
+  /**
+   * Legacy Gemini execution for the three Nano Banana models in Image mode —
+   * page-specific behavior that predates the orchestration pipeline, passed
+   * into the shared hook so provider-specific routing never lives inside it.
+   */
+  const executeNanoBananaLegacy = async (
+    generationId: string,
+  ): Promise<LegacyExecutionOutcome> => {
+    const execResponse = await fetch(`/api/generations/${generationId}/execute`, {
+      method: "POST",
+    });
+    const execJson = await execResponse.json();
+
+    if (!execResponse.ok || execJson.status !== "completed") {
+      return {
+        ok: false,
+        error: typeof execJson.error === "string" ? execJson.error : "Generation failed.",
+      };
+    }
+    return {
+      ok: true,
+      url: typeof execJson.signedUrl === "string" ? execJson.signedUrl : null,
+      type: "image",
+      message:
+        typeof execJson.warning === "string"
+          ? `Generation completed. ${execJson.warning}`
+          : "Generation completed.",
+    };
+  };
+
+  // Queues one generation via the shared workflow (upload, row insert,
+  // orchestration dispatch, polling, signed URL). The page contributes only
+  // what it uniquely knows: the effective model, mode, prompt sources, and
+  // its own metadata extras.
   const handleGenerate = async () => {
-    if (generateInFlightRef.current) return;
+    // The dev orchestration override wins over the picker so the inserted
+    // row and the orchestration run always agree. Without an override this
+    // is exactly the previous behavior for every real catalog model.
+    const effectiveModel =
+      orchestrationModelOverride ?? (mode === "image" ? imageModel : model);
 
-    if (!userLoaded || !user) {
-      setFlowStatus("error");
-      setFlowMessage("Please sign in to generate.");
-      return;
-    }
-    if (!supabase) {
-      setFlowStatus("error");
-      setFlowMessage("Not connected. Please try again.");
-      return;
-    }
-    if (!activeProject) {
-      setFlowStatus("error");
-      setFlowMessage("No project available. Create a project first.");
-      return;
+    const metadata: Record<string, unknown> = {
+      aspect_ratio: aspectRatio,
+      resolution,
+      image_count: batch,
+    };
+    if (effectiveModel === "nano-banana-2-lite") {
+      metadata.thinking = nanoBanana2LiteThinking;
     }
 
-    const effectivePrompt = (prompt || klingAdvancedPrompt).trim();
-    if (!effectivePrompt && !attachedFile) {
-      setFlowStatus("error");
-      setFlowMessage("Enter a prompt or attach a file.");
-      return;
-    }
+    const useNanoBananaLegacy =
+      mode === "image" &&
+      !isOrchestrationModel(effectiveModel) &&
+      isSupportedNanoBananaModel(effectiveModel);
 
-    generateInFlightRef.current = true;
-    setIsGenerating(true);
-    setFlowStatus(attachedFile ? "uploading" : "queued");
-    setFlowMessage(null);
+    await generate({
+      model: effectiveModel,
+      uiMode: mode,
+      prompt: prompt || klingAdvancedPrompt,
+      attachedFile,
+      metadata,
+      executeLegacy: useNanoBananaLegacy ? executeNanoBananaLegacy : undefined,
+    });
 
-    let uploadedPath: string | null = null;
-
-    try {
-      // The dev orchestration override wins over the picker so the inserted
-      // row and the orchestration run always agree. Without an override this
-      // is exactly the previous behavior for every real catalog model.
-      const effectiveModel = orchestrationModelOverride ?? (mode === "image" ? imageModel : model);
-      const orchestrationType = getOrchestrationGenerationType(effectiveModel);
-      const generationType = orchestrationType ?? mapCinemaModeToGenerationType(mode);
-      const provider =
-        getOrchestrationProvider(effectiveModel) ?? deriveProviderFromModelId(effectiveModel);
-
-      if (attachedFile) {
-        const path = buildInputStoragePath(
-          user.id,
-          activeProject.id,
-          attachedFile.name
-        );
-        const { error: uploadError } = await supabase.storage
-          .from("generation-inputs")
-          .upload(path, attachedFile, { cacheControl: "3600", upsert: false });
-
-        if (uploadError) {
-          setFlowStatus("error");
-          setFlowMessage(`Upload failed: ${uploadError.message}`);
-          return;
-        }
-        uploadedPath = path;
-        setFlowStatus("queued");
-      }
-
-      const metadata: Record<string, unknown> = {
-        source_page: "/generate",
-        ui_mode: mode,
-        aspect_ratio: aspectRatio,
-        resolution,
-        image_count: batch,
-      };
-      if (effectiveModel === "nano-banana-2-lite") {
-        metadata.thinking = nanoBanana2LiteThinking;
-      }
-      if (attachedFile && uploadedPath) {
-        metadata.original_file_name = attachedFile.name;
-        metadata.file_size = attachedFile.size;
-        metadata.mime_type = attachedFile.type;
-        metadata.storage_bucket = "generation-inputs";
-        metadata.storage_object_path = uploadedPath;
-      }
-
-      const payload: GenerationInsertPayload = {
-        project_id: activeProject.id,
-        generation_type: generationType,
-        provider,
-        model: effectiveModel,
-        prompt: effectivePrompt,
-        negative_prompt: null,
-        input_url: uploadedPath,
-        metadata,
-      };
-
-      const { data, error: insertError } = await supabase
-        .from("generations")
-        .insert([payload])
-        .select()
-        .single();
-
-      if (insertError) {
-        if (uploadedPath) {
-          await supabase.storage.from("generation-inputs").remove([uploadedPath]);
-        }
-        setFlowStatus("error");
-        setFlowMessage(`Failed to queue generation: ${insertError.message}`);
-        return;
-      }
-
-      const generationId = String(data.id);
-
-      // Cinefield orchestration pipeline. Runs ONLY for explicit
-      // orchestration registry ids, none of which appear in the visible
-      // model catalog — every catalog model falls through to its existing
-      // behavior untouched. One shared endpoint serves every provider.
-      if (isOrchestrationModel(effectiveModel)) {
-        const usesMockProvider = isMockOrchestrationModel(effectiveModel);
-        setFlowStatus("processing");
-        setFlowMessage(null);
-        setResultPreview(null);
-
-        try {
-          const execResponse = await fetch("/api/orchestration/execute", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ generationId }),
-          });
-          const execJson = await execResponse.json();
-
-          if (!execResponse.ok) {
-            setFlowStatus("error");
-            setFlowMessage(
-              typeof execJson.error === "string" ? execJson.error : "Generation failed."
-            );
-          } else if (execJson.mode === "trigger" && execJson.status === "queued") {
-            // Dispatch only, not a result — poll the row the Trigger.dev
-            // task updates until it reaches "completed" or "failed".
-            const finalRow = await pollGenerationUntilTerminal(supabase, generationId);
-
-            if (!finalRow || finalRow.status !== "completed") {
-              setFlowStatus("error");
-              setFlowMessage(finalRow?.error_message ?? "Generation failed.");
-            } else {
-              let signedUrl: string | null = null;
-              if (finalRow.output_url) {
-                const { data: signedData } = await supabase.storage
-                  .from("generation-outputs")
-                  .createSignedUrl(finalRow.output_url, 3600);
-                signedUrl = signedData?.signedUrl ?? null;
-              }
-              setFlowStatus("success");
-              setFlowMessage(
-                usesMockProvider
-                  ? "Cinefield mock orchestration test completed. No real AI provider was used."
-                  : "Generation completed."
-              );
-              setResultPreview(
-                signedUrl ? { url: signedUrl, type: toPreviewType(finalRow.generation_type) } : null
-              );
-            }
-          } else if (execJson.status !== "completed") {
-            setFlowStatus("error");
-            setFlowMessage(
-              typeof execJson.error === "string" ? execJson.error : "Generation failed."
-            );
-          } else {
-            const firstOutput = Array.isArray(execJson.outputs) ? execJson.outputs[0] : null;
-            setFlowStatus("success");
-            setFlowMessage(
-              usesMockProvider
-                ? "Cinefield mock orchestration test completed. No real AI provider was used."
-                : "Generation completed."
-            );
-            setResultPreview(
-              firstOutput && typeof firstOutput.signedUrl === "string"
-                ? { url: firstOutput.signedUrl, type: toPreviewType(firstOutput.type) }
-                : null
-            );
-          }
-        } catch {
-          setFlowStatus("error");
-          setFlowMessage("Generation failed. Please try again.");
-        }
-
-        setAttachedFile(null);
-        return;
-      }
-
-      // Gemini image generation runs only for the three Nano Banana models
-      // in Image mode. Every other model/mode keeps the exact prior
-      // behavior: the row stays queued and no server execution is triggered.
-      if (mode === "image" && isSupportedNanoBananaModel(effectiveModel)) {
-        setFlowStatus("processing");
-        setFlowMessage(null);
-        setResultPreview(null);
-
-        try {
-          const execResponse = await fetch(`/api/generations/${generationId}/execute`, {
-            method: "POST",
-          });
-          const execJson = await execResponse.json();
-
-          if (!execResponse.ok || execJson.status !== "completed") {
-            setFlowStatus("error");
-            setFlowMessage(
-              typeof execJson.error === "string" ? execJson.error : "Generation failed."
-            );
-          } else {
-            setFlowStatus("success");
-            setFlowMessage(
-              typeof execJson.warning === "string"
-                ? `Generation completed. ${execJson.warning}`
-                : "Generation completed."
-            );
-            setResultPreview(
-              typeof execJson.signedUrl === "string"
-                ? { url: execJson.signedUrl, type: "image" }
-                : null
-            );
-          }
-        } catch {
-          setFlowStatus("error");
-          setFlowMessage("Generation failed. Please try again.");
-        }
-      } else {
-        setFlowStatus("success");
-        setFlowMessage(`Generation queued (${generationId.slice(0, 8)}...)`);
-      }
-
-      setAttachedFile(null);
-    } catch (error) {
-      setFlowStatus("error");
-      setFlowMessage(
-        error instanceof Error ? error.message : "Failed to queue generation"
-      );
-    } finally {
-      setIsGenerating(false);
-      generateInFlightRef.current = false;
-    }
+    setAttachedFile(null);
   };
 
   return (
