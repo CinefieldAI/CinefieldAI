@@ -32,6 +32,7 @@ export type OrchestrationErrorCode =
   | "DATABASE_UPDATE_FAILED"
   | "DUPLICATE_EXECUTION"
   | "MOCK_VIDEO_NOT_IMPLEMENTED"
+  | "TRIGGER_DISPATCH_FAILED"
   | "INTERNAL_ERROR";
 
 interface ErrorDefinition {
@@ -127,6 +128,11 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "Mock video generation is not implemented.",
     status: 501,
     retryable: false,
+  },
+  TRIGGER_DISPATCH_FAILED: {
+    message: "The background job could not be queued. Please try again.",
+    status: 503,
+    retryable: true,
   },
   INTERNAL_ERROR: { message: "Something went wrong. Please try again.", status: 500, retryable: false },
 };

@@ -138,6 +138,44 @@ export async function markCompleted(
 }
 
 /**
+ * Requeues a row that `executeGeneration` already marked "failed" so a
+ * Trigger.dev-scheduled retry attempt can claim it again.
+ *
+ * `executeGeneration` always calls `markFailed` before rethrowing, which sets
+ * status = "failed" — a terminal state as far as `claimGeneration`'s
+ * `.eq("status", "queued")` compare-and-set is concerned. Without this reset,
+ * a second Trigger.dev attempt would immediately bounce off
+ * DUPLICATE_EXECUTION instead of actually retrying the provider call. Only
+ * the Trigger.dev task path calls this; the direct/HTTP path has no
+ * automatic retry loop and never touches it, so its behavior is unchanged.
+ *
+ * Scoped to `.eq("status", "failed")` so this is itself a safe compare-and-
+ * set — it only ever moves a row that is genuinely in the terminal state
+ * `markFailed` just put it in.
+ */
+export async function resetForRetry(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null
+): Promise<void> {
+  const { error } = await admin
+    .from("generations")
+    .update({
+      status: "queued",
+      error_message: null,
+      metadata: mergeOrchestrationMetadata(existingMetadata, { stage: "validating" }),
+    })
+    .eq("id", generationId)
+    .eq("status", "failed");
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "resetForRetry" },
+    });
+  }
+}
+
+/**
  * Best-effort failure recording. Never throws — it runs inside a catch block
  * and must not mask the original error.
  */

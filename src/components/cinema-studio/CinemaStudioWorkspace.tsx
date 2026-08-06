@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Volume2, VolumeX, Paperclip, X } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { useClerkSupabaseClient } from "@/lib/supabase/useClerkSupabaseClient";
 import type { Project, GenerationInsertPayload } from "@/types/database";
 import {
@@ -49,6 +50,43 @@ type GenerationFlowStatus =
   | "processing"
   | "success"
   | "error";
+
+interface GenerationTerminalRow {
+  status: string;
+  error_message: string | null;
+  output_url: string | null;
+}
+
+const TRIGGER_POLL_INTERVAL_MS = 1500;
+const TRIGGER_POLL_MAX_ATTEMPTS = 40; // ~60s, generous headroom over the orchestrator's own provider timeouts
+
+/**
+ * Trigger-mode dispatch (`/api/orchestration/execute` returning status
+ * "queued") only acknowledges that the background job was accepted — the
+ * actual run happens outside the request via the Trigger.dev task, which
+ * updates the same `generations` row through status-manager.ts. The browser
+ * has no other signal, so it polls that row until status reaches a terminal
+ * value. Direct mode never calls this: it already gets a synchronous result.
+ */
+async function pollGenerationUntilTerminal(
+  supabase: SupabaseClient,
+  generationId: string
+): Promise<GenerationTerminalRow | null> {
+  for (let attempt = 0; attempt < TRIGGER_POLL_MAX_ATTEMPTS; attempt++) {
+    const { data } = await supabase
+      .from("generations")
+      .select("status, error_message, output_url")
+      .eq("id", generationId)
+      .maybeSingle();
+
+    if (data && (data.status === "completed" || data.status === "failed")) {
+      return data as GenerationTerminalRow;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, TRIGGER_POLL_INTERVAL_MS));
+  }
+  return null;
+}
 
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
@@ -403,7 +441,36 @@ export default function CinemaStudioWorkspace() {
           });
           const execJson = await execResponse.json();
 
-          if (!execResponse.ok || execJson.status !== "completed") {
+          if (!execResponse.ok) {
+            setFlowStatus("error");
+            setFlowMessage(
+              typeof execJson.error === "string" ? execJson.error : "Generation failed."
+            );
+          } else if (execJson.mode === "trigger" && execJson.status === "queued") {
+            // Dispatch only, not a result — poll the row the Trigger.dev
+            // task updates until it reaches "completed" or "failed".
+            const finalRow = await pollGenerationUntilTerminal(supabase, generationId);
+
+            if (!finalRow || finalRow.status !== "completed") {
+              setFlowStatus("error");
+              setFlowMessage(finalRow?.error_message ?? "Generation failed.");
+            } else {
+              let signedUrl: string | null = null;
+              if (finalRow.output_url) {
+                const { data: signedData } = await supabase.storage
+                  .from("generation-outputs")
+                  .createSignedUrl(finalRow.output_url, 3600);
+                signedUrl = signedData?.signedUrl ?? null;
+              }
+              setFlowStatus("success");
+              setFlowMessage(
+                usesMockProvider
+                  ? "Cinefield mock orchestration test completed. No real AI provider was used."
+                  : "Generation completed."
+              );
+              setResultImageUrl(signedUrl);
+            }
+          } else if (execJson.status !== "completed") {
             setFlowStatus("error");
             setFlowMessage(
               typeof execJson.error === "string" ? execJson.error : "Generation failed."
