@@ -53,17 +53,38 @@ export const generationTask = task({
       // Retryable and another attempt is coming: requeue the row so the
       // next attempt's claimGeneration() can claim it again instead of
       // bouncing off DUPLICATE_EXECUTION (claim requires status="queued").
-      const admin = getSupabaseAdminClient();
-      const { data } = await admin
-        .from("generations")
-        .select("metadata")
-        .eq("id", payload.generationId)
-        .maybeSingle();
-      const currentMetadata = (data?.metadata ?? null) as Record<string, unknown> | null;
-      await resetForRetry(admin, payload.generationId, currentMetadata);
+      //
+      // The preparation itself is protected and verified. Rethrowing the
+      // retryable error without a confirmed reset would schedule an attempt
+      // that is guaranteed to fail on the claim, burning a retry slot and
+      // masking the real provider error behind DUPLICATE_EXECUTION.
+      let didReset: boolean;
+      try {
+        const admin = getSupabaseAdminClient();
+        const { data } = await admin
+          .from("generations")
+          .select("metadata")
+          .eq("id", payload.generationId)
+          .maybeSingle();
+        const currentMetadata = (data?.metadata ?? null) as Record<string, unknown> | null;
+        didReset = await resetForRetry(admin, payload.generationId, currentMetadata);
+      } catch {
+        // Retry preparation failed outright (client, read, or write). Stop
+        // rather than retry blindly. The message carries only the original
+        // error code — never a database payload or environment value.
+        throw new AbortTaskRunError(`${error.code}: retry preparation failed`);
+      }
 
-      // Rethrow the original error (not Abort) so Trigger.dev's own backoff
-      // schedules the next attempt per trigger.config.ts's retry policy.
+      if (!didReset) {
+        // No eligible row was reset: the generation completed, was
+        // cancelled, is owned by another execution, or its failure was not
+        // marked retryable. Any of those make a retry incorrect.
+        throw new AbortTaskRunError(`${error.code}: generation is not eligible for retry`);
+      }
+
+      // Reset confirmed. Rethrow the ORIGINAL provider error (not Abort, and
+      // not a substituted one) so Trigger.dev's own backoff schedules the
+      // next attempt per trigger.config.ts's retry policy.
       throw error;
     }
   },

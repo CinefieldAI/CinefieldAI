@@ -149,30 +149,50 @@ export async function markCompleted(
  * the Trigger.dev task path calls this; the direct/HTTP path has no
  * automatic retry loop and never touches it, so its behavior is unchanged.
  *
- * Scoped to `.eq("status", "failed")` so this is itself a safe compare-and-
- * set — it only ever moves a row that is genuinely in the terminal state
- * `markFailed` just put it in.
+ * Eligibility is enforced atomically inside the UPDATE itself, so a row can
+ * never be revived by a check that raced ahead of the write:
+ *   - status must still be exactly "failed" (never completed, cancelled,
+ *     processing, or already requeued)
+ *   - metadata.orchestration.retryable must be exactly true, which
+ *     `markFailed` writes from the same `isRetryable()` classification the
+ *     caller uses. A missing flag yields SQL NULL, matches nothing, and is
+ *     therefore rejected rather than assumed retryable.
+ *
+ * Returns true only when exactly one eligible row was actually reset. A
+ * zero-row UPDATE is NOT success: PostgREST reports `error: null` when
+ * nothing matches, so without the `.select()` round-trip below this would
+ * silently no-op and the next attempt would fail with DUPLICATE_EXECUTION —
+ * which is precisely the defect this contract exists to prevent.
  */
 export async function resetForRetry(
   admin: SupabaseClient,
   generationId: string,
   existingMetadata: Record<string, unknown> | null
-): Promise<void> {
-  const { error } = await admin
+): Promise<boolean> {
+  const { data, error } = await admin
     .from("generations")
     .update({
       status: "queued",
       error_message: null,
+      // markFailed stamps completed_at; a requeued generation is no longer
+      // terminal, and the generations_completed_at_check constraint requires
+      // completed_at to be NULL outside completed/failed/cancelled anyway.
+      completed_at: null,
       metadata: mergeOrchestrationMetadata(existingMetadata, { stage: "validating" }),
     })
     .eq("id", generationId)
-    .eq("status", "failed");
+    .eq("status", "failed")
+    .eq("metadata->orchestration->>retryable", "true")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
       context: { generationId, operation: "resetForRetry" },
     });
   }
+
+  return data !== null;
 }
 
 /**
