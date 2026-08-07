@@ -2,20 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth, UserButton } from "@clerk/nextjs";
-import { useAuthModal } from "@/context/AuthModalContext";
-import {
-  Film,
-  ImageIcon,
-  Menu,
-  Music2,
-  Search,
-  X,
-  Rocket,
-  FolderClosed,
-} from "lucide-react";
+import { Film, ImageIcon, Menu, Music2, X } from "lucide-react";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -28,6 +16,7 @@ import ImageMegaDropdown from "./ImageMegaDropdown";
 import VideoMegaDropdown from "./VideoMegaDropdown";
 import AudioMegaDropdown from "./AudioMegaDropdown";
 import CompactDropdown from "./CompactDropdown";
+import NavbarActions from "./NavbarActions";
 import type { ImageFeatureKey } from "./imageDropdownData";
 import type { ActiveView, PanelKey } from "./panelData";
 import { AUDIO_FEATURES, AUDIO_MODELS, type AudioMode } from "./audioMenuData";
@@ -78,127 +67,6 @@ function CinefieldLogo() {
   );
 }
 
-function SearchButton() {
-  return (
-    <button
-      type="button"
-      className="hidden items-center gap-2 rounded-[10px] bg-white/5 px-2.5 h-9 text-neutral-400 backdrop-blur-md transition-colors hover:bg-white/10 hover:text-neutral-200 sm:flex"
-    >
-      <Search className="h-4 w-4" />
-      <span className="text-sm">Search</span>
-      <span className="ml-1 flex items-center gap-0.5">
-        <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
-          Ctrl
-        </kbd>
-        <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
-          K
-        </kbd>
-      </span>
-    </button>
-  );
-}
-
-function PricingUpgradeLink() {
-  return (
-    <a
-      href="/pricing"
-      className="relative hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 h-9 text-sm font-medium text-white transition-colors hover:bg-white/10 sm:flex"
-    >
-      <Rocket className="h-4 w-4 text-magenta-400" />
-      Pricing
-    </a>
-  );
-}
-
-/**
- * Logged-out top-right action group: Pricing (routes to /pricing) →
- * separator → Login / Sign up. Login and Sign up currently just flip the
- * local `isAuthenticated` demo flag in Navbar (no real backend exists yet),
- * which reveals the previous authenticated controls (Search, Pricing pill,
- * Assets, avatar) below — see the "authenticated" branch in Navbar's render.
- */
-function PricingAction() {
-  return (
-    <Link
-      href="/pricing"
-      title="View Cinefield AI pricing plans and subscription options"
-      className="relative hidden items-center gap-1.5 rounded-[10px] bg-white/5 px-3 h-9 text-sm font-medium text-white transition-colors hover:bg-white/10 active:bg-white/15 sm:flex"
-    >
-      <svg
-        className="size-4"
-        aria-hidden="true"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M6.56218 3.52331C6.89119 3.18855 7.34089 3 7.81027 3H16.186C16.6554 3 17.1051 3.18855 17.4341 3.52331L22.5881 8.76722C23.2614 9.45231 23.2567 10.5521 22.5774 11.2313L13.2356 20.5732C12.5521 21.2566 11.4441 21.2566 10.7607 20.5732L1.41881 11.2313C0.73957 10.5521 0.734815 9.45231 1.40816 8.76722L6.56218 3.52331ZM9.02845 7.21967C9.32135 7.51256 9.32135 7.98744 9.02845 8.28033L7.30878 10L9.02845 11.7197C9.32135 12.0126 9.32135 12.4874 9.02845 12.7803C8.73556 13.0732 8.26069 13.0732 7.96779 12.7803L5.71779 10.5303C5.4249 10.2374 5.4249 9.76256 5.71779 9.46967L7.96779 7.21967C8.26069 6.92678 8.73556 6.92678 9.02845 7.21967Z"
-          fill="currentColor"
-        />
-      </svg>
-      Pricing
-    </Link>
-  );
-}
-
-function AssetsButton() {
-  return (
-    <a
-      href="/asset/all"
-      className="relative hidden items-center gap-2 overflow-hidden rounded-[10px] h-9 px-3 text-sm text-neutral-300 backdrop-blur-md transition-colors hover:text-white md:flex"
-    >
-      <span
-        className="absolute inset-0 rounded-[10px]"
-        style={{ background: "rgba(255,255,255,0.05)" }}
-      />
-      <FolderClosed className="relative z-10 h-4 w-4" />
-      <span className="relative z-10">Assets</span>
-    </a>
-  );
-}
-
-function ProfileAvatar() {
-  const progress = 68;
-  const circumference = 100;
-  return (
-    <button
-      type="button"
-      aria-label="Workspace profile"
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-    >
-      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 36 36">
-        <circle
-          cx={18}
-          cy={18}
-          r={16}
-          fill="none"
-          strokeWidth={2}
-          className="stroke-white/10"
-        />
-        <circle
-          cx={18}
-          cy={18}
-          r={16}
-          fill="none"
-          strokeWidth={2}
-          strokeLinecap="round"
-          pathLength={circumference}
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference - progress}
-          className="stroke-current text-magenta-500 transition-all duration-500"
-        />
-      </svg>
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-zinc-700 to-zinc-900 text-xs font-semibold text-white">
-        C
-      </span>
-    </button>
-  );
-}
-
 interface NavbarProps {
   activePanel: PanelKey | null;
   onOpenImagePanel: () => void;
@@ -239,8 +107,6 @@ export default function Navbar({
 }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isSignedIn } = useAuth();
-  const { openModal } = useAuthModal();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNavItem, setOpenNavItem] = useState("");
 
@@ -515,48 +381,10 @@ export default function Navbar({
         </NavigationMenu>
       </div>
 
-      {/* Column 3: actions */}
+      {/* Column 3: actions — shared with /marketing-studio/product, which
+          renders no navbar but still surfaces this group. */}
       <div className="flex items-center justify-end gap-2.5">
-        {isSignedIn ? (
-          <>
-            <SearchButton />
-            <PricingUpgradeLink />
-            <AssetsButton />
-            <UserButton
-              appearance={{
-                elements: {
-                  userButtonAvatarBox: "h-9 w-9",
-                  userButtonTrigger:
-                    "rounded-full hover:opacity-80 transition-opacity",
-                },
-              }}
-            />
-          </>
-        ) : (
-          <div className="flex items-center">
-            <PricingAction />
-            <span
-              aria-hidden="true"
-              className="mx-2.5 hidden h-5 w-px bg-white/10 sm:block"
-            />
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => openModal("signin")}
-                className="hidden h-9 items-center rounded-[10px] px-3.5 text-sm font-medium text-white transition-colors hover:bg-white/10 md:inline-flex"
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => openModal("signup")}
-                className="inline-flex h-9 items-center rounded-[10px] bg-white px-3.5 text-sm font-semibold text-black transition-colors hover:bg-white/90 active:bg-white/80"
-              >
-                Sign up
-              </button>
-            </div>
-          </div>
-        )}
+        <NavbarActions />
 
         <button
           type="button"
