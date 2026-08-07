@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import Navbar from "@/components/landing/Navbar";
 import { X } from "lucide-react";
 import { marketingStyleCards } from "@/data/marketingStyleCards";
 import MediaAttachPanel, { UploadedMedia } from "@/components/marketing-studio/MediaAttachPanel";
@@ -43,7 +42,6 @@ interface StyleCard {
 
 export default function MarketingStudioProductWorkspace() {
   const searchParams = useSearchParams();
-  const noop = () => {};
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
@@ -69,7 +67,6 @@ export default function MarketingStudioProductWorkspace() {
   const [showYourAppModal, setShowYourAppModal] = useState(false);
   const [hasApp, setHasApp] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-  const [isNavbarVisible, setIsNavbarVisible] = useState(false);
   const promptBarDock = "bottom" as const;
 
   // Shared generation workflow — same hook /generate, /image, and
@@ -98,39 +95,13 @@ export default function MarketingStudioProductWorkspace() {
     }
   }, []);
 
-  // Hover-reveal & Scroll-triggered Navbar logic for /marketing-studio/product
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsNavbarVisible(true);
-      } else {
-        setIsNavbarVisible(false);
-      }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      // Do NOT reveal navbar when hovering over sidebar or toggle button region (X < 350px)
-      if (e.clientX < 350) {
-        if (window.scrollY <= 20) {
-          setIsNavbarVisible(false);
-        }
-        return;
-      }
-
-      if (e.clientY <= 60) {
-        setIsNavbarVisible(true);
-      } else if (e.clientY > 110 && window.scrollY <= 20) {
-        setIsNavbarVisible(false);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, []);
+  /*
+   * The hover-reveal / scroll-reveal top Navbar was removed from this page
+   * only. It was unreliable to trigger and got in the way; navigation here
+   * runs through the left sidebar instead (its Cinefield AI entry links to
+   * the site home page). Every other page renders Navbar exactly as before —
+   * nothing about the shared component changed.
+   */
 
   // Composer wrapper ref for sticky behavior
   const composerWrapperRef = useRef<HTMLDivElement>(null);
@@ -404,28 +375,8 @@ export default function MarketingStudioProductWorkspace() {
       }}
     >
 
-      {/* TOP HOVER SENSOR STRIP (Excludes sidebar & toggle button region X < 350px) */}
-      <div
-        onMouseEnter={() => setIsNavbarVisible(true)}
-        className="fixed top-0 left-[350px] right-0 h-4 z-40"
-      />
-
-      {/* HOVER-REVEAL NAVBAR (Only on /marketing-studio/product) */}
-      <div
-        onMouseEnter={() => setIsNavbarVisible(true)}
-        onMouseLeave={() => setIsNavbarVisible(false)}
-        className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${
-          isNavbarVisible ? "translate-y-0" : "-translate-y-full"
-        }`}
-      >
-        <Navbar
-          activePanel={null}
-          onOpenImagePanel={noop}
-          onOpenVideoPanel={noop}
-          onOpenAudioPanel={noop}
-          onSetView={noop}
-        />
-      </div>
+      {/* No top Navbar on this page — see the note above the removed
+          hover-reveal effect. Navigation runs through the sidebar below. */}
 
       {/* OFFICIAL HIGGSFIELD SIDEBAR WITH COLLAPSE TOGGLE */}
       <MarketingStudioSidebar

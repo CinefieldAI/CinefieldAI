@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -130,9 +131,11 @@ export default function MarketingStudioSidebar({
                             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                             className="overflow-hidden flex flex-col gap-0.5 pt-0.5"
                           >
-                            {/* CINEFIELD AI */}
-                            <button
-                              type="button"
+                            {/* CINEFIELD AI — routes to the site home page. It
+                                was previously a button with no onClick, so
+                                clicking it did nothing. */}
+                            <Link
+                              href="/"
                               className="group flex h-9 w-full items-center gap-2.5 rounded-xl px-2.5 text-[#8E8E8E] hover:text-white transition-colors duration-150 hover:bg-white/5 cursor-pointer"
                             >
                               <img
@@ -149,7 +152,7 @@ export default function MarketingStudioSidebar({
                               >
                                 Cinefield AI
                               </span>
-                            </button>
+                            </Link>
                           </motion.div>
                         )}
                       </AnimatePresence>
