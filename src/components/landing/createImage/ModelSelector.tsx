@@ -129,7 +129,7 @@ export default function ModelSelector({
           aria-label={`Model: ${selected}`}
           className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
             open
-              ? "border-[#D97757] bg-[#181a1d] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              ? "border-[#D97757] bg-[#181a1d]"
               : "border-[rgba(217,119,87,0.45)] bg-[#101112] hover:border-[#D97757] hover:bg-[#181a1d]"
           }`}
         >
