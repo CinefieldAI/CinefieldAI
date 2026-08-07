@@ -169,16 +169,15 @@ body {
 }
 
 /* Keyboard focus inside a prompt-bar control row.
-   Scoped to .prompt-control-row so nothing else on the site is affected, and
-   keyed to :focus-visible so a mouse click never leaves a control lit — the
-   orange frame only appears while arrowing across the row. !important is
-   deliberate: the controls carry Tailwind's `focus:outline-none`, which is a
-   more specific selector than this one.
+   Deliberately identical to the mouse-hover look — the same thin orange edge,
+   no extra outline — so arrowing across the row and hovering it read the same.
+   Keyed to :focus-visible so a mouse click never leaves a control lit.
+   !important is needed because the controls carry Tailwind's
+   `focus:outline-none`, a more specific selector than this one.
    Any control added to the row later picks this up with no extra work. */
 .prompt-control-row :focus-visible {
-  outline: 2px solid #d97757 !important;
-  outline-offset: 1px !important;
-  border-radius: 0.5rem;
+  outline: none !important;
+  border-color: #d97757 !important;
 }
 
 /* Higgsfield-exact model-title typography — applied alongside each model
