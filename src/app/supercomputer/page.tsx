@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Layout from "@/components/supercomputer/Layout";
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function SupercomputerPage() {
-  return <Layout />;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a]" />}>
+      <Layout />
+    </Suspense>
+  );
 }

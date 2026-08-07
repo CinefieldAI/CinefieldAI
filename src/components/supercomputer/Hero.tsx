@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, ChevronDown } from "lucide-react";
 import ModelSelectorDropdown from "./ModelSelectorDropdown";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
+import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
+import { useGeneration } from "@/hooks/useGeneration";
 
 const PLACEHOLDERS = [
   "Make product shots for my campaign",
@@ -14,9 +17,36 @@ const PLACEHOLDERS = [
 ];
 
 export default function Hero() {
+  const searchParams = useSearchParams();
   const [placeholder, setPlaceholder] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+
+  // Shared generation workflow — same hook /generate, /image,
+  // /audio/create, and /marketing-studio/product use. Development-only
+  // orchestration model override (`?model=`), identical contract to the
+  // other connected pages: it must name a model registered in the
+  // orchestration pipeline; the visible DeepSeek/category-pill UI is
+  // deliberately never routed to a real provider by this override.
+  const {
+    status: flowStatus,
+    message: flowMessage,
+    result: resultPreview,
+    generate,
+  } = useGeneration({ sourcePage: "/supercomputer" });
+
+  const orchestrationModelOverride = useMemo(() => {
+    const requested = searchParams.get("model");
+    return requested && isOrchestrationModel(requested) ? requested : null;
+  }, [searchParams]);
+
+  // The submit (arrow) button previously had no handler at all — this page
+  // is a pure UI mockup with no prior generation wiring of any kind, so
+  // there is no pre-existing behavior to preserve for the no-override case.
+  const handleGenerate = async () => {
+    if (!orchestrationModelOverride || !inputValue) return;
+    await generate({ model: orchestrationModelOverride, uiMode: "image", prompt: inputValue });
+  };
 
   useEffect(() => {
     let phIndex = 0;
@@ -220,7 +250,12 @@ export default function Hero() {
                     <ChevronDown className="size-4" />
                   </button>
 
-                  <button disabled={!inputValue} className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:opacity-50 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerate()}
+                    disabled={!inputValue}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:opacity-50 transition-opacity"
+                  >
                     <svg className="size-4 text-white" viewBox="0 0 24 24" fill="currentColor">
                       <path fillRule="evenodd" clipRule="evenodd" d="M12 3C12.3315 3 12.6494 3.1317 12.8839 3.36612L18.6339 9.11612C19.122 9.60427 19.122 10.3957 18.6339 10.8839C18.1457 11.372 17.3543 11.372 16.8661 10.8839L13.25 7.26776V19.75C13.25 20.4404 12.6903 21 12 21C11.3096 21 10.75 20.4404 10.75 19.75V7.26777L7.13388 10.8839C6.64573 11.372 5.85427 11.372 5.36612 10.8839C4.87796 10.3957 4.87796 9.60427 5.36612 9.11612L11.1161 3.36612C11.3505 3.1317 11.6685 3 12 3Z" />
                     </svg>
@@ -230,6 +265,46 @@ export default function Hero() {
             </div>
           </div>
         </div>
+
+        {/* Generation flow feedback — additive only, a new sibling below the
+            composer. Does not modify the composer or category pills. Only
+            visible when the dev orchestration override (?model=) actually
+            dispatched a request. */}
+        {flowStatus !== "idle" && (
+          <div className="mt-3 flex w-full max-w-[39.1875rem] flex-col items-center gap-2">
+            <span
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                flowStatus === "error"
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : flowStatus === "success"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-white/10 bg-white/5 text-neutral-300"
+              }`}
+            >
+              {flowStatus === "uploading"
+                ? "Uploading attachment..."
+                : flowStatus === "queued" && !flowMessage
+                  ? "Queuing generation..."
+                  : flowStatus === "processing"
+                    ? "Processing..."
+                    : flowMessage}
+            </span>
+            {resultPreview &&
+              (resultPreview.type === "audio" ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption -- mock/dev result preview, not user-facing content
+                <audio controls src={resultPreview.url} className="w-full max-w-md" />
+              ) : resultPreview.type === "video" ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption -- mock/dev result preview, not user-facing content
+                <video controls src={resultPreview.url} className="max-h-48 rounded-lg border border-white/10" />
+              ) : (
+                <img
+                  src={resultPreview.url}
+                  alt="Generated result"
+                  className="max-h-48 rounded-lg border border-white/10 object-contain"
+                />
+              ))}
+          </div>
+        )}
 
         {/* Category Pills */}
         <div className="flex w-full justify-center overflow-x-auto px-2 mt-2">
