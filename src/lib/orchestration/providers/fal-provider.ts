@@ -199,11 +199,22 @@ class FalProvider implements ProviderAdapter {
       // aspect ratio directly as `aspect_ratio`. Registry-driven, never a
       // per-model-id branch — see ModelRegistryEntry.falSizeParam.
       if (model.falSizeParam === "aspect-ratio-string") {
-        if (request.settings.aspectRatio) input.aspect_ratio = request.settings.aspectRatio;
+        const ratio = request.settings.aspectRatio;
+        // fal spells the automatic option "auto"; the /image composer
+        // renders it as "Auto". Lowercasing only this one value keeps every
+        // real ratio ("3:4", "16:9", …) byte-identical.
+        if (ratio) input.aspect_ratio = ratio === "Auto" ? "auto" : ratio;
       } else {
         const imageSize = mapAspectRatioToFalImageSize(request.settings.aspectRatio);
         if (imageSize) input.image_size = imageSize;
       }
+
+      // Only endpoints that actually document a `resolution` input receive
+      // one — see ModelRegistryEntry.falSupportsResolution.
+      if (model.falSupportsResolution && request.settings.resolution) {
+        input.resolution = request.settings.resolution;
+      }
+
       if (typeof request.settings.seed === "number") input.seed = request.settings.seed;
 
       // `subscribe` waits for the queued job to finish, which keeps this a

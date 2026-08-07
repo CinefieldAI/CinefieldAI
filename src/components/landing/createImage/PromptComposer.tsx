@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import { useToolbarNav } from "@/hooks/useToolbarNav";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 
 const DEFAULT_IMAGE_PROMPT_WIDTH = 1060;
@@ -52,7 +53,19 @@ interface PromptComposerProps {
   onPromptChange: (value: string) => void;
   selectedModel: string;
   onSelectModel: (name: string) => void;
-  onGenerate: (payload: { prompt: string; model: string }) => Promise<void> | void;
+  /**
+   * The composer's own control values travel with the request. Which state
+   * they come from depends on whether the selected model is
+   * capability-driven (its own aspect/resolution/batch controls) or falls
+   * back to the shared legacy row — see handleGenerate below.
+   */
+  onGenerate: (payload: {
+    prompt: string;
+    model: string;
+    aspectRatio: string;
+    resolution: string;
+    outputCount: number;
+  }) => Promise<void> | void;
 }
 
 let attachmentCounter = 0;
@@ -407,7 +420,18 @@ export default function PromptComposer({
     if (!prompt.trim() && attachments.length === 0) return;
     setIsGenerating(true);
     try {
-      await onGenerate({ prompt, model: selectedModel });
+      // Capability-driven models render their own aspect/resolution/batch
+      // controls (modelAspectRatio / modelResolution / modelBatch); every
+      // other model shares the legacy row below them (aspectRatio / quality
+      // / outputCount). Read whichever set is actually on screen so the
+      // request carries what the user can see.
+      await onGenerate({
+        prompt,
+        model: selectedModel,
+        aspectRatio: capabilities ? modelAspectRatio : aspectRatio,
+        resolution: capabilities ? modelResolution : quality,
+        outputCount: capabilities ? modelBatch : outputCount,
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -460,6 +484,7 @@ export default function PromptComposer({
   });
 
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const toolbarNav = useToolbarNav();
 
   return (
     <>
@@ -596,7 +621,10 @@ export default function PromptComposer({
             </div>
 
             {/* Bottom control row: mt-auto */}
-            <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+            <div
+              {...toolbarNav.containerProps}
+              className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+            >
               <ModelSelector selected={selectedModel} onSelect={onSelectModel} portalContainer={portalRoot} />
 
               {capabilities ? (

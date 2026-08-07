@@ -35,6 +35,7 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "fal-recraft-v3": { generationType: "image", provider: "fal", isMock: false },
   "fal-z-image-turbo": { generationType: "image", provider: "fal", isMock: false },
   "fal-nano-banana": { generationType: "image", provider: "fal", isMock: false },
+  "fal-nano-banana-2": { generationType: "image", provider: "fal", isMock: false },
   // Registered here for id/type consistency with the server registry.
   // Real Cloudflare requests still require CLOUDFLARE_AI_ENABLED="true"
   // server-side (isCloudflareEnabled()) — this client descriptor alone

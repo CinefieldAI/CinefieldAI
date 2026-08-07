@@ -85,6 +85,14 @@ export interface ModelRegistryEntry {
    * specific model id.
    */
   cloudflareTextField?: "prompt" | "text";
+  /**
+   * Only meaningful for providerId "fal" — most fal image endpoints have no
+   * resolution input at all, but a few (nano-banana-2) document a
+   * `resolution` enum alongside aspect_ratio. Declarative so fal-provider.ts
+   * only sends the field to endpoints that actually accept it, rather than
+   * risking an INVALID_INPUT on the ones that do not.
+   */
+  falSupportsResolution?: boolean;
 }
 
 const MOCK_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -397,6 +405,44 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     enabled: true,
     isMock: false,
     falSizeParam: "aspect-ratio-string",
+  },
+  {
+    id: "fal-nano-banana-2",
+    label: "Nano Banana 2 (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/nano-banana-2",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // Exactly the values the /image composer can emit for this model
+      // (STANDARD_ASPECT_RATIOS in imageModelCapabilities.ts). Every one of
+      // them is in fal's own documented aspect_ratio enum for this endpoint;
+      // "Auto" is the composer's casing of fal's "auto" and the adapter
+      // lowercases it on the way out.
+      supportedAspectRatios: ["Auto", "1:1", "3:4", "9:16", "4:3", "16:9", "21:9"],
+      // fal documents 0.5K/1K/2K/4K here; the composer only offers the upper
+      // three (GPT_RESOLUTION_OPTIONS), and 0.5K is listed so a future
+      // control can use it without another registry change.
+      supportedResolutions: ["0.5K", "1K", "2K", "4K"],
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      // The composer's batch counter tops out at 4. fal documents num_images
+      // as an integer without publishing a ceiling, so this mirrors the UI
+      // rather than inventing a provider limit.
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "3:4", resolution: "2K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+    falSizeParam: "aspect-ratio-string",
+    falSupportsResolution: true,
   },
 ];
 

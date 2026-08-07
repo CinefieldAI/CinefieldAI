@@ -10,6 +10,20 @@ import { FEATURED_MODELS } from "./createImageData";
 import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
 import { useGeneration } from "@/hooks/useGeneration";
 
+/**
+ * Visible catalog display name → orchestration registry id.
+ *
+ * The composer identifies a model by its display name (ModelItem calls
+ * onSelect(model.name)), while the registry keys off its own ids, so the two
+ * are bridged here explicitly rather than by string munging. Only models
+ * that are actually registered and verified against the provider belong in
+ * this map — anything absent keeps the old placeholder behaviour instead of
+ * being silently routed somewhere it was never tested against.
+ */
+const CATALOG_TO_REGISTRY_MODEL: Record<string, string> = {
+  "Nano Banana 2": "fal-nano-banana-2",
+};
+
 interface CreateImageWorkspaceProps {
   onBack: () => void;
   /** Model clicked in the navbar's Image mega-dropdown — preselects the
@@ -53,13 +67,44 @@ export default function CreateImageWorkspace({ onBack, initialModel }: CreateIma
     return requested && isOrchestrationModel(requested) ? requested : null;
   }, [searchParams]);
 
-  const handleGenerate = async ({ prompt: submittedPrompt }: { prompt: string; model: string }) => {
-    if (orchestrationModelOverride) {
-      await generate({ model: orchestrationModelOverride, uiMode: "image", prompt: submittedPrompt });
+  const handleGenerate = async ({
+    prompt: submittedPrompt,
+    model: pickedModel,
+    aspectRatio,
+    resolution,
+    outputCount,
+  }: {
+    prompt: string;
+    model: string;
+    aspectRatio: string;
+    resolution: string;
+    outputCount: number;
+  }) => {
+    // The dev `?model=` override still wins when present; otherwise the
+    // model the user actually picked in the composer is looked up in the
+    // catalog→registry map above.
+    const registryModel =
+      orchestrationModelOverride ?? CATALOG_TO_REGISTRY_MODEL[pickedModel] ?? null;
+
+    if (registryModel) {
+      await generate({
+        model: registryModel,
+        uiMode: "image",
+        prompt: submittedPrompt,
+        // Key names match what the orchestrator reads out of metadata
+        // (orchestrator.ts's settings block): aspect_ratio, resolution and
+        // image_count, the last one parsed from its numerator.
+        metadata: {
+          aspect_ratio: aspectRatio,
+          resolution,
+          image_count: String(outputCount),
+        },
+      });
       return;
     }
-    // No registered model selected: preserve the existing placeholder delay
-    // for every visible-catalog model — unchanged behavior.
+
+    // Model has no registry entry yet: preserve the existing placeholder
+    // delay for every remaining visible-catalog model — unchanged behavior.
     await new Promise((resolve) => setTimeout(resolve, 1600));
   };
 
