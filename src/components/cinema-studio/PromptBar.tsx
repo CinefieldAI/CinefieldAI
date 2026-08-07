@@ -24,6 +24,7 @@ import KlingModeControl from "./KlingModeControl";
 import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
 import FrameCard from "./FrameCard";
 import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import { useToolbarNav } from "@/hooks/useToolbarNav";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import SoundOffConfirmDialog from "./SoundOffConfirmDialog";
 import ResolutionPopover from "./ResolutionPopover";
@@ -941,6 +942,8 @@ export default function PromptBar(props: PromptBarProps) {
     };
   }, []);
 
+  const toolbarNav = useToolbarNav();
+
   const promptResize = usePromptSurfaceResize({
     width: promptWidth,
     height: promptHeight,
@@ -1033,7 +1036,10 @@ export default function PromptBar(props: PromptBarProps) {
             />
           )}
 
-          <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+          <div
+            {...toolbarNav.containerProps}
+            className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+          >
             {/* Cinema Studio 2.5 References Button - exactly 3 options (As
                 Reference / As Start Frame / As End Frame). Each option opens
                 the one shared Cinema25AssetsPicker with the matching context;

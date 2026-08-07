@@ -109,6 +109,9 @@ function ImageRow({
   const IconComponent = sharedIcon ?? (typeof model.icon === "function" ? model.icon : null);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+  // The orange bar, orange card and checkmark ride the keyboard focus; the
+  // model itself still only changes on Enter/click.
+  const marked = focused || active;
 
   return (
     <button
@@ -119,14 +122,14 @@ function ImageRow({
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
-        active
+        marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : // Keyboard focus shows the same grey card as hover, so arrowing
             // through the list makes the current row visible.
             "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
-      {active ? (
+      {marked ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
@@ -161,7 +164,7 @@ function ImageRow({
         </p>
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757]" />}
+        {marked && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -187,6 +190,9 @@ function VideoFlatRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+  // The orange bar, orange card and checkmark ride the keyboard focus; the
+  // model itself still only changes on Enter/click.
+  const marked = focused || active;
 
   return (
     <button
@@ -197,14 +203,14 @@ function VideoFlatRow({
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
-        active
+        marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : // Keyboard focus shows the same grey card as hover, so arrowing
             // through the list makes the current row visible.
             "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
-      {active ? (
+      {marked ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
@@ -256,7 +262,7 @@ function VideoFlatRow({
         ) : null}
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757]" />}
+        {marked && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -290,6 +296,7 @@ function VideoParentRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value || subs.some((s) => s.id === value);
+  const marked = focused || active;
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

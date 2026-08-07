@@ -302,6 +302,8 @@ export default function ModelSelector({
                           isContinuation={isContinuation}
                           optionRef={optionProps.ref}
                           tabIndex={optionProps.tabIndex}
+                          isMarked={nav.activeIndex === rowIndex}
+                          onHover={((index) => () => nav.setActiveIndex(index))(rowIndex)}
                         />
                       );
                     })}

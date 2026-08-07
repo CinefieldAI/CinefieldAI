@@ -125,6 +125,9 @@ export function useListboxNav({
 
   return {
     activeIndex,
+    /** Move the marker without stealing focus — used for mouse hover, so the
+     *  pointer and the arrow keys share one highlighted row. */
+    setActiveIndex,
     handleKeyDown,
     handleOpenAutoFocus,
     handleEscapeKeyDown,

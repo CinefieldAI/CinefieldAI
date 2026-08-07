@@ -15,6 +15,14 @@ interface ModelItemProps {
    *  tabbable one and holds real focus while arrow keys move through the list. */
   optionRef?: (el: HTMLElement | null) => void;
   tabIndex?: number;
+  /**
+   * The row the arrow keys are sitting on. It wears the orange bar, the orange
+   * card and the checkmark so the marker travels with the keyboard — but the
+   * model itself only changes on Enter/click, because switching model resets
+   * every other control in the row.
+   */
+  isMarked?: boolean;
+  onHover?: () => void;
 }
 
 export default function ModelItem({
@@ -23,7 +31,11 @@ export default function ModelItem({
   onSelect,
   optionRef,
   tabIndex,
+  isMarked,
+  onHover,
 }: ModelItemProps) {
+  // Falls back to the committed selection when nothing is being navigated.
+  const marked = isMarked ?? isSelected;
   const sharedIcon = getSharedModelIcon(model.name);
   const IconComp = (sharedIcon ?? (typeof model.icon === "function" ? model.icon : null)) as React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null;
   const iconSrc = typeof model.icon === "string" ? model.icon : null;
@@ -36,8 +48,9 @@ export default function ModelItem({
       role="option"
       aria-selected={isSelected}
       onClick={() => onSelect(model.name)}
+      onMouseEnter={onHover}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
-        isSelected
+        marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : // Keyboard focus gets the same grey card the mouse hover uses, so
             // arrowing through the list visibly shows where you are.
@@ -47,14 +60,14 @@ export default function ModelItem({
       {/* Selected indicator: flat 3px accent line, no glow. The white
           continuation bar that used to sit here was pure light emission and
           has been dropped — selection reads from the fill and the checkmark. */}
-      {isSelected && (
+      {marked && (
         <span aria-hidden className="mr-2 h-7 w-[3px] shrink-0 rounded-full bg-[#D97757]" />
       )}
 
       {/* 40x40 Icon Container with Hard Horizontal Split Two-Tone Neon Border (Top White / Bottom Orange) */}
       <div
         className={`relative mr-3 size-10 shrink-0 rounded-[12px] p-[1.5px] transition-all duration-180 ease-out ${
-          isSelected ? "" : "group-hover/model-row:scale-[1.02]"
+          marked ? "" : "group-hover/model-row:scale-[1.02]"
         }`}
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -86,7 +99,7 @@ export default function ModelItem({
           className={`truncate text-xs font-semibold transition-colors duration-180 ${
             isBlockedModelLabel(model.name)
               ? BLOCKED_MODEL_LABEL_CLASS
-              : isSelected
+              : marked
                 ? "text-white font-bold"
                 : "text-white/90 group-hover/model-row:text-white"
           }`}
@@ -100,7 +113,7 @@ export default function ModelItem({
 
       {/* Selection Checkmark */}
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {isSelected && (
+        {marked && (
           <Check className="size-4 text-[#D97757]" />
         )}
       </div>
