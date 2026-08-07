@@ -43,6 +43,10 @@ const LISTBOX_SCROLL = "hide-scrollbar max-h-[264px] overflow-y-auto";
  *  visually distinct from the selected-row fill. */
 const OPTION_ACTIVE_RING = "ring-1 ring-inset ring-[rgba(217,119,87,0.55)]";
 
+/** Same keyboard-focus affordance without the orange tint, for panels spec'd
+ *  to have no coloured outline on individual rows (Multi Reference). */
+const OPTION_ACTIVE_RING_NEUTRAL = "ring-1 ring-inset ring-white/25";
+
 /**
  * Roving-tabindex keyboard navigation for a popover's option list.
  *
@@ -410,6 +414,7 @@ export function AspectRatioPopover({
   onChange,
   options,
   large,
+  plainRows,
   id,
   openId,
   onOpenIdChange,
@@ -419,6 +424,9 @@ export function AspectRatioPopover({
   options: AspectRatioChoice[];
   /** GPT Image 2's large 40px trigger; otherwise the 28px compact trigger. */
   large?: boolean;
+  /** Multi Reference's panel: value-only rows (no Portrait/Landscape/Custom
+   *  subtitle) and a neutral keyboard ring instead of the orange one. */
+  plainRows?: boolean;
 } & PopoverCoordination) {
   const active = options.find((r) => r.value === value) ?? options[0];
   const open = openId === id;
@@ -472,16 +480,24 @@ export function AspectRatioPopover({
                   selected
                     ? "bg-white/10 text-white font-semibold"
                     : "text-white/80 hover:bg-white/5 hover:text-white"
-                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
+                } ${
+                  open && index === activeIndex
+                    ? plainRows
+                      ? OPTION_ACTIVE_RING_NEUTRAL
+                      : OPTION_ACTIVE_RING
+                    : ""
+                }`}
               >
                 <RatioIcon ratio={ratio} active={selected} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-white">
                     {ratio.value}
                   </span>
-                  <span className="block truncate text-xs text-white/50">
-                    {ratio.description ?? getAspectRatioDescription(ratio.value)}
-                  </span>
+                  {!plainRows && (
+                    <span className="block truncate text-xs text-white/50">
+                      {ratio.description ?? getAspectRatioDescription(ratio.value)}
+                    </span>
+                  )}
                 </span>
                 {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>

@@ -87,6 +87,20 @@ export const RECRAFT_QUALITY_OPTIONS: { value: string; description: string }[] =
   { value: "Pro", description: "Higher fidelity, slower" },
 ];
 
+/** Multi Reference's own ratio set — order is part of the spec, don't sort it,
+ *  and don't share it with the Flux models that used to sit in the same row. */
+export const MULTI_REFERENCE_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "4:5", width: 16, height: 20 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "2:1", width: 22, height: 11 },
+  { value: "3:4", width: 15, height: 20 },
+];
+
 /** Recraft V4.1 needs the 4:5 social ratio, which the shared standard set omits. */
 export const RECRAFT_ASPECT_RATIOS: AspectRatioChoice[] = [
   { value: "1:1", width: 16, height: 16 },
@@ -215,6 +229,15 @@ const RECRAFT_CAPABILITIES: ImageModelCapabilities = {
   defaultColorTransfer: false,
   assetUpload: true,
   referenceSelection: true,
+};
+
+/** Recraft V4.1 Utility — the shared Recraft base, but showing the Standard
+ *  quality tier and the 4:5 default its toolbar is specified with. */
+const RECRAFT_V4_1_UTILITY_CAPABILITIES: ImageModelCapabilities = {
+  ...RECRAFT_CAPABILITIES,
+  defaultQuality: "Standard",
+  aspectRatioOptions: RECRAFT_ASPECT_RATIOS,
+  defaultAspectRatio: "4:5",
 };
 
 /** Recraft V4.1 (non-Utility) — identical to Recraft V4.1 Utility except it
@@ -359,15 +382,16 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     quality: false,
     resolution: false,
     aspectRatio: "simple",
-    aspectRatioOptions: REFERENCE_MODEL_RATIOS,
-    defaultAspectRatio: "3:4",
+    aspectRatioOptions: MULTI_REFERENCE_ASPECT_RATIOS,
+    defaultAspectRatio: "9:16",
     batchSize: true,
+    defaultBatchSize: 4,
     gridGeneration: false,
     enhancementToggle: true,
     defaultEnhancement: false,
     settingsTrigger: false,
-    assetUpload: true,
-    referenceSelection: true,
+    assetUpload: false,
+    referenceSelection: false,
   },
   "Flux Kontext Max": {
     modelTriggerSize: "compact",
@@ -435,7 +459,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // Recraft V4.1 and Recraft V4.1 Utility share one identical capability
   // set — the only differences between the two models are the name/id and
   // their own generation config, never the controls or panels they expose.
-  "Recraft V4.1 Utility": RECRAFT_CAPABILITIES,
+  "Recraft V4.1 Utility": RECRAFT_V4_1_UTILITY_CAPABILITIES,
   "Recraft V4.1": RECRAFT_V4_1_CAPABILITIES,
   "Grok Imagine": {
     modelTriggerSize: "compact",

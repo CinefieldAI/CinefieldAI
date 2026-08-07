@@ -187,10 +187,12 @@ export default function ModelSelector({
               </div>
             </div>
 
-            {/* Internal scroll area with professional thin scrollbar */}
+            {/* Internal scroll area — stays scrollable (wheel/trackpad/touch/
+                keyboard) with the scrollbar track and thumb hidden, matching
+                the rest of the app's panels via globals.css `.hide-scrollbar`. */}
             <div
               ref={scrollContainerRef}
-              className="relative z-10 flex-1 min-h-0 overflow-y-auto px-2.5 pb-2.5 space-y-1 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent] hover:[scrollbar-color:rgba(217,119,87,0.45)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#D97757]/50 transition-colors"
+              className="hide-scrollbar relative z-10 flex-1 min-h-0 overflow-y-auto px-2.5 pb-2.5 space-y-1 transition-colors"
               role="listbox"
               aria-label="AI models"
               onWheel={(e) => e.stopPropagation()}

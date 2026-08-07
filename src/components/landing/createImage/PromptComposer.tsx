@@ -521,40 +521,6 @@ export default function PromptComposer({
             }}
           />
 
-          {/* Recraft V4.1 Utility — single decorative centered utility shell */}
-          {selectedModel === "Recraft V4.1 Utility" && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-0.5 z-10 transition-opacity duration-200"
-              style={{
-                borderRadius: "20px",
-                left: "calc(50% + 38px)",
-                right: "auto",
-                transform: "translateX(-50%)",
-                width: "360px",
-                height: "56px",
-                top: "calc(100% - 58px)",
-                border: "1.5px solid rgba(209,254,23,0.9)",
-                boxShadow:
-                  "0 0 35px rgba(209,254,23,0.55), inset 0 0 20px rgba(209,254,23,0.35)",
-                background:
-                  "linear-gradient(180deg, rgba(209,254,23,0.12) 0%, rgba(209,254,23,0.03) 100%)",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-              }}
-            >
-              <div
-                className="absolute left-0 right-0 overflow-hidden"
-                style={{
-                  bottom: "calc(100% - 30px)",
-                  borderTopLeftRadius: "20px",
-                  borderTopRightRadius: "20px",
-                  background:
-                    "linear-gradient(180deg, rgba(209,254,23,0.08), rgba(209,254,23,0))",
-                }}
-              />
-            </div>
-          )}
 
           {/* Left Column: Text editor (top) + controls row (mt-auto bottom) */}
           <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -721,14 +687,37 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {(selectedModel === "Multi Reference" ||
-                    selectedModel === "Flux Kontext Max" ||
+                  {/* Multi Reference renders its own row (model, ratio, count,
+                      enhancement) — no assets group and no second model
+                      selector. Flux Kontext Max / FLUX.2 Max keep the original
+                      shared row below, unchanged. */}
+                  {selectedModel === "Multi Reference" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          plainRows
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <EnhancementToggle
+                        enabled={enhancementEnabled}
+                        onToggle={() => setEnhancementEnabled((v) => !v)}
+                      />
+                    </>
+                  )}
+
+                  {(selectedModel === "Flux Kontext Max" ||
                     selectedModel === "FLUX.2 Max") && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -750,9 +739,8 @@ export default function PromptComposer({
                   {selectedModel === "FLUX.2 Pro" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -780,7 +768,6 @@ export default function PromptComposer({
 
                   {selectedModel === "FLUX.2 Flex" && (
                     <>
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -815,10 +802,7 @@ export default function PromptComposer({
                   {(selectedModel === "🚫 Cinefield Soul 2.0" || selectedModel === "🚫 Cinefield Soul") && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -946,10 +930,7 @@ export default function PromptComposer({
                   {selectedModel === "Seedream 5.0 Lite" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -1069,7 +1050,8 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {selectedModel === "Recraft V4.1" && (
+                  {(selectedModel === "Recraft V4.1" ||
+                    selectedModel === "Recraft V4.1 Utility") && (
                     <>
                       <VectorModeToggle
                         enabled={vectorMode}
