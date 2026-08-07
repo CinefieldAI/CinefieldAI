@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, MapPin, Palette, Plus, Search, Check, Wand2 } from "lucide-react";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import { IMAGE_MODEL_CONFIGS, type ImageModelConfig } from "@/lib/imageModelConfig";
 import { useRouter, useSearchParams } from "next/navigation";
 import Cinema25AssetsPicker from "@/components/cinema-studio/Cinema25AssetsPicker";
@@ -114,7 +115,7 @@ function ModelIcon({
   );
 }
 
-const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+const PILL = "flex h-7 items-center gap-1.5 rounded-lg bg-card px-2 py-1 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none";
 
 /** Width/height pairs for every ratio string used across IMAGE_MODEL_CONFIGS,
  *  reusing the same icon-drawing convention as the createImage capability
@@ -219,26 +220,64 @@ function ModelSelectorDropdown({
   setModelSearch: (v: string) => void;
   onSelect: (id: string) => void;
 }) {
+  const matches = (m: ModelListItem) =>
+    m.label.toLowerCase().includes(modelSearch) ||
+    m.description.toLowerCase().includes(modelSearch);
+
+  /** Both sections flattened in render order so arrow keys walk the whole list. */
+  const flatRows = [...FEATURED_MODELS_LIST.filter(matches), ...ALL_MODELS_LIST.filter(matches)];
+
+  const nav = useListboxNav({
+    count: flatRows.length,
+    selectedIndex: flatRows.findIndex((m) => m.id === modelParam),
+    open: isOpen,
+    onSelect: (index) => {
+      const model = flatRows[index];
+      if (model) onSelect(model.id);
+    },
+  });
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /** Search keeps focus on open; ArrowDown hands off into the list. */
+  const handlePanelKeyDown = (event: React.KeyboardEvent) => {
+    if (event.target === searchInputRef.current) {
+      if (event.key === "ArrowUp") return;
+      if (event.key === " ") return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nav.moveTo(nav.activeIndex);
+        return;
+      }
+    }
+    nav.handleKeyDown(event);
+  };
+
+  // Running counter matching flatRows, advanced as each section renders.
+  let rowIndex = -1;
+
   const renderList = (list: ModelListItem[]) =>
     list
-      .filter(
-        (m) =>
-          m.label.toLowerCase().includes(modelSearch) ||
-          m.description.toLowerCase().includes(modelSearch),
-      )
+      .filter(matches)
       .map((model) => {
         const isSelected = modelParam === model.id;
+        rowIndex += 1;
+        const optionProps = nav.getOptionProps(rowIndex);
         return (
           <button
             key={model.id}
+            ref={optionProps.ref as React.Ref<HTMLButtonElement>}
+            tabIndex={optionProps.tabIndex}
             onClick={() => onSelect(model.id)}
             role="option"
             aria-selected={isSelected}
             aria-label={model.label}
-            className={`group/model w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
+            className={`group/model w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer outline-none hover:bg-white/5 focus-visible:bg-white/5 text-start ${
               isSelected
                 ? "bg-[rgba(217,119,87,0.10)] ring-1 ring-inset ring-[rgba(217,119,87,0.45)]"
-                : ""
+                : nav.activeIndex === rowIndex
+                  ? "bg-white/5"
+                  : ""
             }`}
           >
             <div
@@ -305,6 +344,7 @@ function ModelSelectorDropdown({
           side="top"
           align="start"
           sideOffset={12}
+          onKeyDown={handlePanelKeyDown}
           className="outline-none z-[100000] rounded-2xl shadow-none border border-white/10 bg-[rgba(28,30,32,0.95)] backdrop-blur-[32px] flex flex-col p-0 overflow-hidden transition-all duration-200 ease-out origin-bottom data-[state=open]:animate-popover-smooth-in data-[state=closed]:animate-popover-smooth-out"
         >
           <div className="relative rounded-2xl flex flex-col overflow-hidden w-screen h-screen md:h-[602px] md:w-[402px]">
@@ -336,6 +376,7 @@ function ModelSelectorDropdown({
             <label className="relative z-10 px-3 py-2 flex items-center gap-2 min-h-[41px] h-[41px] border-b border-white/10 cursor-text">
               <Search className="size-4 text-neutral-500" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search..."
                 value={modelSearch}
@@ -685,7 +726,7 @@ export default function ImageForm({
               <button
                 type="button"
                 onClick={openUploadsPicker}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-card shrink-0 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-card shrink-0 text-xs font-medium text-white transition-all duration-200 ease-out hover:bg-white/10 focus:outline-none"
               >
                 <Plus className="size-3.5" />
               </button>
@@ -1504,7 +1545,7 @@ export default function ImageForm({
         <button
           type="submit"
           aria-label="Generate"
-          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-2 focus:ring-[#D97757] focus:ring-offset-2 focus:ring-offset-black"
+          className="relative flex shrink-0 flex-col items-center justify-center gap-1 self-end overflow-hidden rounded-xl border-0 font-bold uppercase text-black transition-all duration-200 ease-out hover:brightness-90 active:brightness-[0.8] focus:outline-none focus:ring-offset-2 focus:ring-offset-black"
           style={{
             width: 120,
             height: 80,

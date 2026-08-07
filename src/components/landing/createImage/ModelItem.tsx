@@ -11,15 +11,27 @@ interface ModelItemProps {
   isSelected: boolean;
   onSelect: (name: string) => void;
   isContinuation?: boolean;
+  /** Roving-tabindex wiring from useListboxNav — the active row is the only
+   *  tabbable one and holds real focus while arrow keys move through the list. */
+  optionRef?: (el: HTMLElement | null) => void;
+  tabIndex?: number;
 }
 
-export default function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
+export default function ModelItem({
+  model,
+  isSelected,
+  onSelect,
+  optionRef,
+  tabIndex,
+}: ModelItemProps) {
   const sharedIcon = getSharedModelIcon(model.name);
   const IconComp = (sharedIcon ?? (typeof model.icon === "function" ? model.icon : null)) as React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null;
   const iconSrc = typeof model.icon === "string" ? model.icon : null;
 
   return (
     <button
+      ref={optionRef}
+      tabIndex={tabIndex}
       type="button"
       role="option"
       aria-selected={isSelected}

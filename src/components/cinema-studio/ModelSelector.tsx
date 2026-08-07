@@ -657,8 +657,13 @@ export default function ModelSelector({
       if (openParentIndex !== null) {
         const len = flatEntries[openParentIndex]?.model.submodels?.length ?? 0;
         setActiveSubIndex((i) => Math.min(len - 1, i + 1));
+      } else if (inSearchInput) {
+        // Handing off from the search box targets row 0, which is usually
+        // already activeIndex — setState would bail out and the focus effect
+        // would never re-run, so move focus directly instead.
+        rowRefs.current[activeIndex]?.focus();
       } else {
-        setActiveIndex((i) => Math.min(flatEntries.length - 1, (inSearchInput ? -1 : i) + 1));
+        setActiveIndex((i) => Math.min(flatEntries.length - 1, i + 1));
       }
       return;
     }
@@ -725,7 +730,7 @@ export default function ModelSelector({
               aria-haspopup="listbox"
               aria-expanded={open}
               aria-label={`Model: ${selected.name}`}
-              className="flex h-7 items-center gap-1.5 rounded-full bg-[rgba(4,4,5,0.98)] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+              className="flex h-7 items-center gap-1.5 rounded-full bg-[rgba(4,4,5,0.98)] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none"
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[rgba(4,4,5,0.98)]">

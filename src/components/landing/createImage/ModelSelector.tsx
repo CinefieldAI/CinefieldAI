@@ -5,6 +5,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, Search, Sparkles } from "lucide-react";
 import ModelItem from "./ModelItem";
 import { ALL_MODELS, FEATURED_MODELS, type CreateImageModel } from "./createImageData";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import { getSharedModelIcon } from "@/lib/modelIconRegistry";
 import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 
@@ -119,6 +120,43 @@ export default function ModelSelector({
 
   const hasNoResults = categories.length === 0;
 
+  /** Every row in render order, duplicates included, so each rendered option
+   *  gets its own index (a few models appear under more than one category). */
+  const flatRows = useMemo(
+    () => categories.flatMap((cat) => cat.models),
+    [categories],
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const nav = useListboxNav({
+    count: flatRows.length,
+    selectedIndex: flatRows.findIndex((m) => m.name === selected),
+    open,
+    onSelect: (index) => {
+      const model = flatRows[index];
+      if (model) handleSelect(model.name);
+    },
+  });
+
+  /** The search box keeps focus on open so the user can type straight away.
+   *  ArrowDown hands off to the list instead of stepping past the first row. */
+  const handlePanelKeyDown = (event: React.KeyboardEvent) => {
+    const inSearch = event.target === searchInputRef.current;
+    if (inSearch) {
+      if (event.key === "ArrowUp") return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nav.moveTo(nav.activeIndex);
+        return;
+      }
+      if (event.key === " ") return; // typing a space must stay a space
+    }
+    nav.handleKeyDown(event);
+  };
+
+  // Running counter matching flatRows, incremented as rows render below.
+  let rowIndex = -1;
+
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
@@ -163,6 +201,7 @@ export default function ModelSelector({
           collisionPadding={16}
           data-page="image"
           data-image-model-dropdown="true"
+          onKeyDown={handlePanelKeyDown}
           className="outline-none z-[100000] rounded-2xl border border-white/[0.08] bg-[rgba(25,27,30,0.76)] backdrop-blur-[28px] backdrop-saturate-[125%] shadow-[0_20px_60px_rgba(0,0,0,0.45)] flex flex-col pointer-events-auto transition-all duration-[170ms] ease-out origin-bottom animate-in fade-in-0 slide-in-from-bottom-2 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
         >
           <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
@@ -177,6 +216,7 @@ export default function ModelSelector({
               <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06]">
                 <Search className="size-4 shrink-0 text-white/40 transition-colors duration-200 group-focus-within/search:text-[#F19A72]" />
                 <input
+                  ref={searchInputRef}
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -251,6 +291,8 @@ export default function ModelSelector({
                     {cat.models.map((model) => {
                       const entryIndex = flatIndexByName.get(model.name) ?? 0;
                       const isContinuation = !query.trim() && entryIndex === 1;
+                      rowIndex += 1;
+                      const optionProps = nav.getOptionProps(rowIndex);
                       return (
                         <ModelItem
                           key={`${catIdx}-${model.id}`}
@@ -258,6 +300,8 @@ export default function ModelSelector({
                           isSelected={selected === model.name}
                           onSelect={handleSelect}
                           isContinuation={isContinuation}
+                          optionRef={optionProps.ref}
+                          tabIndex={optionProps.tabIndex}
                         />
                       );
                     })}

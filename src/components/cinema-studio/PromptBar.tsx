@@ -212,7 +212,7 @@ function AutoSettingsToggle({
           if (wholeRowClickable) e.stopPropagation();
           onToggle();
         }}
-        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#D97757] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
           checked ? "bg-emerald-500" : "bg-white/20"
         }`}
       >
@@ -229,7 +229,7 @@ function AutoSettingsToggle({
 
 /** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none";
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
