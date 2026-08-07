@@ -31,11 +31,7 @@ import CompactDropdown from "./CompactDropdown";
 import type { ImageFeatureKey } from "./imageDropdownData";
 import type { ActiveView, PanelKey } from "./panelData";
 import { AUDIO_FEATURES, AUDIO_MODELS, type AudioMode } from "./audioMenuData";
-import {
-  MCP_CLI_ITEMS,
-  SUPERCOMPUTER_ITEMS,
-  type CompactItem,
-} from "./compactMenuData";
+import { MCP_CLI_ITEMS, type CompactItem } from "./compactMenuData";
 
 interface NavLink {
   label: string;
@@ -44,8 +40,18 @@ interface NavLink {
 
 const LINKS_LEFT: NavLink[] = [{ label: "Explore", href: "/" }];
 
+/**
+ * Supercomputer is a direct route, not a dropdown. It used to open a
+ * CompactDropdown of placeholder capabilities; the /supercomputer page is
+ * the real surface, so the trigger became a plain link — the same treatment
+ * the Image and Audio menu entries already got.
+ */
+const SUPERCOMPUTER_LINK: NavLink = {
+  label: "Supercomputer",
+  href: "/supercomputer",
+};
+
 const DROPDOWN_LINKS: { label: string; items: CompactItem[] }[] = [
-  { label: "Supercomputer", items: SUPERCOMPUTER_ITEMS },
   { label: "MCP & CLI", items: MCP_CLI_ITEMS },
 ];
 
@@ -450,18 +456,24 @@ export default function Navbar({
               </NavigationMenuContent>
             </NavigationMenuItem>
 
+            {/* Supercomputer: direct route, keeps its original slot between
+                Audio and MCP & CLI. */}
+            <NavigationMenuItem>
+              <NavigationMenuLink
+                href={SUPERCOMPUTER_LINK.href}
+                className={
+                  pathname.startsWith(SUPERCOMPUTER_LINK.href)
+                    ? "text-[#D97757]"
+                    : undefined
+                }
+              >
+                {SUPERCOMPUTER_LINK.label}
+              </NavigationMenuLink>
+            </NavigationMenuItem>
+
             {DROPDOWN_LINKS.map((link) => (
               <NavigationMenuItem key={link.label}>
-                <NavigationMenuTrigger
-                  className={
-                    link.label === "Supercomputer" &&
-                    pathname.startsWith("/supercomputer")
-                      ? "bg-white/10 text-[#D97757]"
-                      : undefined
-                  }
-                >
-                  {link.label}
-                </NavigationMenuTrigger>
+                <NavigationMenuTrigger>{link.label}</NavigationMenuTrigger>
                 <NavigationMenuContent>
                   <CompactDropdown items={link.items} />
                 </NavigationMenuContent>
@@ -583,6 +595,15 @@ export default function Navbar({
               <Music2 className="h-3.5 w-3.5" />
               Audio
             </button>
+            {/* Supercomputer is a real link on mobile too — it used to render
+                as an inert <span> alongside the other dropdown labels. */}
+            <Link
+              href={SUPERCOMPUTER_LINK.href}
+              onClick={() => setMobileOpen(false)}
+              className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-zinc-200"
+            >
+              {SUPERCOMPUTER_LINK.label}
+            </Link>
             {DROPDOWN_LINKS.map((link) => (
               <span
                 key={link.label}

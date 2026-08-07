@@ -1,13 +1,9 @@
 import {
   BookOpen,
-  Cpu,
   KeyRound,
-  Layers,
-  Route,
   SquareTerminal,
   Server,
   Terminal,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,13 +13,13 @@ export interface CompactItem {
   icon: LucideIcon;
 }
 
-export const SUPERCOMPUTER_ITEMS: CompactItem[] = [
-  { label: "GPU Cloud", description: "Dedicated render capacity", icon: Cpu },
-  { label: "Batch Generation", description: "Queue large generation jobs", icon: Layers },
-  { label: "Model Routing", description: "Auto-select the fastest model", icon: Route },
-  { label: "Fast Queue", description: "Priority render lane", icon: Zap },
-  { label: "API Access", description: "Programmatic compute access", icon: SquareTerminal },
-];
+/*
+ * SUPERCOMPUTER_ITEMS was removed deliberately. The navbar's Supercomputer
+ * entry no longer opens a dropdown of placeholder capabilities (GPU Cloud,
+ * Batch Generation, Model Routing, Fast Queue, API Access) — it now routes
+ * straight to /supercomputer, which is the real working surface. See
+ * Navbar.tsx's SUPERCOMPUTER_LINK.
+ */
 
 export const MCP_CLI_ITEMS: CompactItem[] = [
   { label: "MCP Server", description: "Connect agents over MCP", icon: Server },
