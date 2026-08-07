@@ -33,19 +33,22 @@ const POPOVER_SURFACE =
 
 /** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
-  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none";
 
 /** Scrollable option list: the bar stays hidden (globals.css `.hide-scrollbar`)
  *  but wheel/trackpad/touch/keyboard scrolling all keep working. */
 const LISTBOX_SCROLL = "hide-scrollbar max-h-[264px] overflow-y-auto";
 
-/** Ring shown on the option the arrow keys are currently sitting on, kept
- *  visually distinct from the selected-row fill. */
-const OPTION_ACTIVE_RING = "ring-1 ring-inset ring-[rgba(217,119,87,0.55)]";
-
-/** Same keyboard-focus affordance without the orange tint, for panels spec'd
- *  to have no coloured outline on individual rows (Multi Reference). */
-const OPTION_ACTIVE_RING_NEUTRAL = "ring-1 ring-inset ring-white/25";
+/**
+ * Background for one option row. Keyboard focus is shown with the same quiet
+ * fill the mouse uses — no ring and no glow — so the panels read like the model
+ * list. Rows also carry `outline-none`, otherwise the browser paints its own
+ * white focus ring on top once an option takes real DOM focus.
+ */
+function optionSurface(selected: boolean, active: boolean, selectedClass = "bg-white/10") {
+  if (selected) return selectedClass;
+  return active ? "bg-white/[0.06]" : "hover:bg-white/[0.06]";
+}
 
 /**
  * Roving-tabindex keyboard navigation for a popover's option list.
@@ -287,9 +290,10 @@ export function QualityPopover({
                 role="option"
                 aria-selected={selected}
                 onClick={() => select(index)}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -376,13 +380,11 @@ export function ResolutionPopover({
                 role="option"
                 aria-selected={selected}
                 onClick={() => select(index)}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
-                  selected
-                    ? lime
-                      ? "bg-[rgba(255,255,255,0.08)]"
-                      : "bg-white/10"
-                    : "hover:bg-white/[0.06]"
-                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                  lime ? "bg-[rgba(255,255,255,0.08)]" : "bg-white/10",
+                )}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -476,16 +478,12 @@ export function AspectRatioPopover({
                 role="option"
                 aria-selected={selected}
                 onClick={() => select(index)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-all duration-150 ${
                   selected
-                    ? "bg-white/10 text-white font-semibold"
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
-                } ${
-                  open && index === activeIndex
-                    ? plainRows
-                      ? OPTION_ACTIVE_RING_NEUTRAL
-                      : OPTION_ACTIVE_RING
-                    : ""
+                    ? "bg-white/10 font-semibold text-white"
+                    : open && index === activeIndex
+                      ? "bg-white/5 text-white"
+                      : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <RatioIcon ratio={ratio} active={selected} />
@@ -641,9 +639,10 @@ export function ThinkingPopover({
                 role="option"
                 aria-selected={selected}
                 onClick={() => select(index)}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
               >
                 {opt}
                 {selected && <Check className="h-4 w-4 shrink-0 text-[#D97757]" />}
@@ -805,9 +804,10 @@ export function GridGenerationPopover({
                 role="option"
                 aria-selected={selected}
                 onClick={() => select(index)}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
               >
                 {opt}
                 {selected && <Check className="h-4 w-4 shrink-0" style={{ color: LIME }} />}
