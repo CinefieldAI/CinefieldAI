@@ -60,7 +60,7 @@ export interface GenerateRequest {
   /** Effective model id — the caller resolves picker state / dev overrides. */
   model: string;
   /** UI mode fallback used when the model is not an orchestration model. */
-  uiMode: "image" | "video";
+  uiMode: "image" | "video" | "audio";
   prompt: string;
   attachedFile?: File | null;
   /** Page-specific metadata (aspect_ratio, resolution, image_count, ...). */

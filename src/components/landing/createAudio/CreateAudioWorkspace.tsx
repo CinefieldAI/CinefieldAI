@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AudioComposer from "./AudioComposer";
 import SelectVoiceModal from "./SelectVoiceModal";
 import ChooseLanguageModal from "./ChooseLanguageModal";
@@ -17,6 +18,8 @@ import {
   type SeedAudioSettings,
   type QwenSettings,
 } from "./voiceoverModelConfig";
+import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
+import { useGeneration } from "@/hooks/useGeneration";
 
 interface CreateAudioWorkspaceProps {
   onBack: () => void;
@@ -37,10 +40,34 @@ export default function CreateAudioWorkspace({
   audioModelIndex,
   onAudioModelIndexChange,
 }: CreateAudioWorkspaceProps) {
+  const searchParams = useSearchParams();
+
   // Composer / generation
   const [script, setScript] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [clips, setClips] = useState<AudioClip[]>([]);
+
+  // Shared generation workflow — same hook /generate and /image use. Gated to
+  // Voiceover mode only (feature === 0): Change Voice and Translate are not
+  // text-to-speech workflows, and the registry has no model for either yet.
+  const {
+    status: flowStatus,
+    message: flowMessage,
+    result: resultPreview,
+    generate,
+  } = useGeneration({ sourcePage: "/audio/create" });
+
+  /**
+   * Development-only orchestration model override — identical contract to
+   * CinemaStudioWorkspace.tsx / CreateImageWorkspace.tsx. `?model=` must name
+   * a model registered in the orchestration pipeline (model-registry.ts);
+   * the visible Voiceover model catalog (voiceoverModelConfig.ts) is
+   * deliberately never routed to a real provider by this override.
+   */
+  const orchestrationModelOverride = useMemo(() => {
+    const requested = searchParams.get("model");
+    return requested && isOrchestrationModel(requested) ? requested : null;
+  }, [searchParams]);
 
   // Rotary mode (0 Voiceover · 1 Change Voice · 2 Translate) — derived from
   // the shared AudioMode so the rotary selector, the top Audio panel, and
@@ -86,6 +113,15 @@ export default function CreateAudioWorkspace({
   const handleGenerate = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
+
+    if (orchestrationModelOverride && feature === 0) {
+      try {
+        await generate({ model: orchestrationModelOverride, uiMode: "audio", prompt: script });
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
 
     // Build a model-aware payload: only the fields the selected Voiceover
     // model actually supports are included (no Seed Audio image reference
@@ -164,6 +200,45 @@ export default function CreateAudioWorkspace({
         density={density}
         onToggleLike={toggleLike}
       />
+
+      {/* Generation flow feedback — additive only, a new sibling positioned
+          just above the fixed composer. Does not modify AudioComposer or
+          AudioFeed. Only visible when the dev orchestration override
+          (?model=, Voiceover mode) actually dispatched a request. */}
+      {flowStatus !== "idle" && (
+        <div className="pointer-events-none fixed bottom-[170px] left-1/2 z-[100] w-full max-w-[calc(100vw-32px)] -translate-x-1/2 px-2">
+          <div className="pointer-events-auto mx-auto flex w-fit flex-col items-center gap-2">
+            <span
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                flowStatus === "error"
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : flowStatus === "success"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-white/10 bg-white/5 text-neutral-300"
+              }`}
+            >
+              {flowStatus === "uploading"
+                ? "Uploading attachment..."
+                : flowStatus === "queued" && !flowMessage
+                  ? "Queuing generation..."
+                  : flowStatus === "processing"
+                    ? "Processing..."
+                    : flowMessage}
+            </span>
+            {resultPreview &&
+              (resultPreview.type === "audio" ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption -- mock/dev result preview, not user-facing content
+                <audio controls src={resultPreview.url} className="w-full max-w-md" />
+              ) : (
+                <img
+                  src={resultPreview.url}
+                  alt="Generated result"
+                  className="max-h-48 rounded-lg border border-white/10 object-contain"
+                />
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Bottom composer — rotary + prompt(model pill) + Choose Voice + Generate */}
       <AudioComposer

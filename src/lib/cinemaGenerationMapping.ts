@@ -3,11 +3,12 @@ import type { Generation } from "@/types/database";
 type GenerationType = Generation["generation_type"];
 
 /**
- * Maps Cinema Studio's UI mode to the generations.generation_type column.
- * Cinema Studio currently only exposes image/video modes.
+ * Maps a page's UI mode to the generations.generation_type column. Cinema
+ * Studio only exposes image/video; "audio" was added for /audio/create
+ * (Phase 5F.3), which has no image/video mode at all.
  */
 export function mapCinemaModeToGenerationType(
-  mode: "image" | "video"
+  mode: "image" | "video" | "audio"
 ): GenerationType {
   return mode;
 }
