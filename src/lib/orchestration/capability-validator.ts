@@ -141,6 +141,15 @@ export function validateCapabilities(params: {
     });
   }
 
+  if (settings.voice !== undefined && capabilities.supportedVoices) {
+    if (!capabilities.supportedVoices.includes(settings.voice)) {
+      throw new OrchestrationError("CAPABILITY_NOT_SUPPORTED", {
+        context: { modelId: model.id, voice: settings.voice },
+        userMessage: `Voice "${settings.voice}" is not supported by this model.`,
+      });
+    }
+  }
+
   if (settings.language !== undefined && capabilities.supportedLanguages) {
     const allowsAny = capabilities.supportedLanguages.includes("any");
     if (!allowsAny && !capabilities.supportedLanguages.includes(settings.language)) {

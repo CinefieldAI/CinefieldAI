@@ -35,10 +35,12 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "fal-recraft-v3": { generationType: "image", provider: "fal", isMock: false },
   "fal-z-image-turbo": { generationType: "image", provider: "fal", isMock: false },
   "fal-nano-banana": { generationType: "image", provider: "fal", isMock: false },
-  // Registered here for id/type consistency with the server registry, but
-  // disabled there (model-registry.ts: enabled: false) — Cloudflare stays
-  // inactive until a later, separate phase.
+  // Registered here for id/type consistency with the server registry.
+  // Real Cloudflare requests still require CLOUDFLARE_AI_ENABLED="true"
+  // server-side (isCloudflareEnabled()) — this client descriptor alone
+  // never activates anything.
   "cloudflare-melotts": { generationType: "audio", provider: "cloudflare-workers-ai", isMock: false },
+  "cloudflare-aura-2-en": { generationType: "audio", provider: "cloudflare-workers-ai", isMock: false },
 };
 
 export const ORCHESTRATION_MODEL_IDS = Object.keys(ORCHESTRATION_MODELS);

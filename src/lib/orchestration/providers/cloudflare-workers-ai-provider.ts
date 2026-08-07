@@ -5,6 +5,7 @@ import {
 } from "@/lib/cloudflare/ai-gateway-client";
 import { isCloudflareEnabled } from "@/lib/cloudflare/gateway-config";
 import { OrchestrationError } from "../errors";
+import { findModel } from "../model-registry";
 import type { ProviderAdapter } from "./provider-adapter";
 import type {
   NormalizedGenerationRequest,
@@ -15,7 +16,12 @@ import type {
 } from "../types";
 
 /**
- * Cloudflare Workers AI provider adapter — MeloTTS (@cf/myshell-ai/melotts).
+ * Cloudflare Workers AI provider adapter — text-to-speech models
+ * (MeloTTS @cf/myshell-ai/melotts, Aura-2 @cf/deepgram/aura-2-en). Generic
+ * across both: the endpoint id and its input-schema shape come from the
+ * model registry (providerModelId, cloudflareTextField), so adding another
+ * Cloudflare TTS endpoint is a registry entry — never a new adapter, route,
+ * or handler.
  *
  * providerId is "cloudflare-workers-ai": the actual inference provider of
  * record. Cloudflare AI Gateway ("cloudflare-ai-gateway") is only the
@@ -23,11 +29,10 @@ import type {
  * it is never itself registered as a provider (see provider-registry.ts).
  *
  * Synchronous, single-output, text-to-speech only. The exact user text is
- * sent to MeloTTS unchanged — never translated, rewritten, trimmed, or
- * normalized. Disabled at the registry level (model-registry.ts) and gated
- * again here via isCloudflareEnabled(), which itself requires
- * CLOUDFLARE_AI_ENABLED="true" — inactive until both are explicitly
- * switched on in a later, separate phase.
+ * sent to the provider unchanged — never translated, rewritten, trimmed, or
+ * normalized. Every real request is additionally gated by
+ * isCloudflareEnabled(), which itself requires CLOUDFLARE_AI_ENABLED="true"
+ * plus every credential present.
  */
 
 const PENDING_RESULTS_TTL_MS = 5 * 60_000; // 5 minutes — crash-protection ceiling only
@@ -111,13 +116,32 @@ class CloudflareWorkersAiProvider implements ProviderAdapter {
       });
     }
 
-    // The exact user text, unchanged. Never translated, rewritten, trimmed,
-    // or normalized.
-    const input: Record<string, unknown> = { prompt: request.prompt };
-    // lang is included only when an explicit language setting exists —
-    // never invented or inferred from the text itself.
-    if (request.settings.language) {
-      input.lang = request.settings.language;
+    const model = findModel(request.modelId);
+    if (!model) {
+      throw new OrchestrationError("UNKNOWN_MODEL", { context: { modelId: request.modelId } });
+    }
+
+    // Cloudflare's TTS endpoints are not input-schema-uniform — the field
+    // the text goes in, and which optional field pairs with it, are
+    // registry-driven (see ModelRegistryEntry.cloudflareTextField), never a
+    // per-model-id branch. The exact user text is always sent unchanged —
+    // never translated, rewritten, trimmed, or normalized.
+    const textField = model.cloudflareTextField ?? "prompt";
+    const input: Record<string, unknown> = { [textField]: request.prompt };
+
+    if (textField === "text") {
+      // Aura-2 schema: optional speaker (voice) selection. Never invented or
+      // defaulted here — Cloudflare applies its own documented default
+      // ("luna") when omitted.
+      if (request.settings.voice) {
+        input.speaker = request.settings.voice;
+      }
+    } else {
+      // MeloTTS schema: optional lang field. Never invented or inferred from
+      // the text itself.
+      if (request.settings.language) {
+        input.lang = request.settings.language;
+      }
     }
 
     let result;

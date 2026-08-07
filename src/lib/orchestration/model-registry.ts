@@ -35,6 +35,8 @@ export interface ModelCapabilities {
   supportedLanguages?: string[];
   /** Descriptive ceiling on synthesized output length; not validated against a user setting. */
   maxAudioDurationSeconds?: number;
+  /** Documented voice/speaker ids this audio model accepts. Validated when both this and settings.voice are present. */
+  supportedVoices?: string[];
 }
 
 export interface ModelRegistryEntry {
@@ -71,6 +73,17 @@ export interface ModelRegistryEntry {
    * this registry field, never on a specific model id.
    */
   falSizeParam?: "image-size-preset" | "aspect-ratio-string";
+  /**
+   * Only meaningful for providerId "cloudflare-workers-ai" — Cloudflare's
+   * own TTS endpoints are not input-schema-uniform. "prompt" (default when
+   * omitted) matches MeloTTS's own field name; "text" matches Deepgram
+   * Aura-2's. Also selects which optional field the adapter sends alongside
+   * it: "prompt" pairs with MeloTTS's `lang`, "text" pairs with Aura-2's
+   * `speaker`. Declarative so cloudflare-workers-ai-provider.ts stays one
+   * generic adapter — it branches on this registry field, never on a
+   * specific model id.
+   */
+  cloudflareTextField?: "prompt" | "text";
 }
 
 const MOCK_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -444,6 +457,56 @@ const CLOUDFLARE_MODELS: ModelRegistryEntry[] = [
     defaults: { outputCount: 1 },
     enabled: true,
     isMock: false,
+  },
+  {
+    id: "cloudflare-aura-2-en",
+    label: "Aura-2 English (Cloudflare Workers AI)",
+    providerId: "cloudflare-workers-ai",
+    providerModelId: "@cf/deepgram/aura-2-en",
+    generationType: "audio",
+    supportedWorkflows: ["text-to-speech"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // Same UI-transport workaround as mock-tts/cloudflare-melotts above —
+      // not a real Aura-2 capability.
+      supportedAspectRatios: UI_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      // One text in, one audio file out — a real Aura-2 constraint.
+      minOutputCount: 1,
+      maxOutputCount: 1,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      // maxPromptLength intentionally omitted: not documented for this
+      // endpoint — never guessed.
+      supportedAudioFormats: ["audio/mpeg"],
+      // `speaker` is optional (documented default: "luna") — not required.
+      requiresVoice: false,
+      // "aura-2-en" is the English-only endpoint id; Cloudflare's other
+      // Aura-2 language variants are separate model ids, not a parameter of
+      // this one, so only "en" is listed rather than inventing a broader set.
+      supportedLanguages: ["en"],
+      // maxAudioDurationSeconds intentionally omitted: not documented.
+      // Every speaker id from Cloudflare's own Aura-2 documentation —
+      // verified, not guessed. Validated by capability-validator.ts when a
+      // caller supplies settings.voice.
+      supportedVoices: [
+        "amalthea", "andromeda", "apollo", "arcas", "aries", "asteria",
+        "athena", "atlas", "aurora", "callista", "cora", "cordelia", "delia",
+        "draco", "electra", "harmonia", "helena", "hera", "hermes",
+        "hyperion", "iris", "janus", "juno", "jupiter", "luna", "mars",
+        "minerva", "neptune", "odysseus", "ophelia", "orion", "orpheus",
+        "pandora", "phoebe", "pluto", "saturn", "thalia", "theia", "vesta",
+        "zeus",
+      ],
+    },
+    defaults: { outputCount: 1 },
+    enabled: true,
+    isMock: false,
+    cloudflareTextField: "text",
   },
 ];
 
