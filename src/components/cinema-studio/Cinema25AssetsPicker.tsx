@@ -109,7 +109,7 @@ export default function Cinema25AssetsPicker({
                       onClick={() => setActiveTab(tab.id)}
                       className={`flex h-8 shrink-0 items-center rounded-full px-3 text-[12px] font-semibold leading-4 tracking-[0.2px] transition-colors ${
                         active
-                          ? "bg-white text-[#181a1e] shadow-[0_1px_2px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.6)]"
+                          ? "bg-white text-[#181a1e]"
                           : "bg-transparent text-white hover:bg-white/5"
                       }`}
                     >

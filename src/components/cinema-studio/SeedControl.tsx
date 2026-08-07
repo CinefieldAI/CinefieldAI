@@ -63,7 +63,7 @@ export default function SeedControl({
           aria-expanded={controlledOpen}
           className={`flex h-8 w-8 items-center justify-center rounded-lg border text-neutral-400 transition-all duration-200 ease-out focus:outline-none ${
             controlledOpen
-              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)] text-white"
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] text-white"
               : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)] hover:text-white"
           }`}
         >

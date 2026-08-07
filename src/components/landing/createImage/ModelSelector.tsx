@@ -174,8 +174,8 @@ export default function ModelSelector({
 
             {/* Search Header Container (Glass Field) */}
             <div className="relative z-10 p-2.5 pb-1">
-              <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.25)]">
-                <Search className="size-4 shrink-0 text-white/40 group-focus-within/search:text-[#F19A72] group-focus-within/search:drop-shadow-[0_0_5px_rgba(217,119,87,0.5)] transition-colors duration-200" />
+              <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06]">
+                <Search className="size-4 shrink-0 text-white/40 transition-colors duration-200 group-focus-within/search:text-[#F19A72]" />
                 <input
                   autoFocus
                   value={query}

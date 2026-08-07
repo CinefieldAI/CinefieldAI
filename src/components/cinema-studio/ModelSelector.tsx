@@ -127,7 +127,7 @@ function ImageRow({
       {active ? (
         <span
           aria-hidden
-          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
         />
       ) : isContinuation ? (
         <span
@@ -143,8 +143,8 @@ function ImageRow({
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active || isContinuation
-            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+            ? "mr-2.5"
+            : "group-hover/model-row:scale-[1.02] mr-3"
         }`}
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -169,7 +169,7 @@ function ImageRow({
         </p>
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+        {active && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -213,7 +213,7 @@ function VideoFlatRow({
       {active ? (
         <span
           aria-hidden
-          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
         />
       ) : isContinuation ? (
         <span
@@ -229,8 +229,8 @@ function VideoFlatRow({
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active || isContinuation
-            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+            ? "mr-2.5"
+            : "group-hover/model-row:scale-[1.02] mr-3"
         }`}
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -272,7 +272,7 @@ function VideoFlatRow({
         ) : null}
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+        {active && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -374,7 +374,7 @@ function VideoParentRow({
         {active ? (
           <span
             aria-hidden
-            className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
+            className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
           />
         ) : isContinuation ? (
           <span
@@ -390,8 +390,8 @@ function VideoParentRow({
         <div
           className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
             active || isContinuation
-              ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-              : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+              ? "mr-2.5"
+              : "group-hover/model-row:scale-[1.02] mr-3"
           }`}
           style={{
             background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -756,7 +756,7 @@ export default function ModelSelector({
               aria-label={`Model: ${selected.name}`}
               className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
                 open
-                  ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                  ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
                   : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
               }`}
             >
@@ -796,8 +796,8 @@ export default function ModelSelector({
             <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
               {/* Search Header Container (Glass Field matching screenshot) */}
               <div className="relative z-10 p-2.5 pb-1">
-                <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-[rgba(217,119,87,0.40)] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757] focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.30)]">
-                  <Search className="size-4 shrink-0 text-[#D97757] drop-shadow-[0_0_5px_rgba(217,119,87,0.5)]" />
+                <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-[rgba(217,119,87,0.40)] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757] focus-within:bg-white/[0.06]">
+                  <Search className="size-4 shrink-0 text-[#D97757]" />
                   <input
                     ref={searchInputRef}
                     autoFocus

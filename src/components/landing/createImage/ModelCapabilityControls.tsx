@@ -33,7 +33,7 @@ const POPOVER_SURFACE =
 
 /** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
-  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none";
 
 /** Scrollable option list: the bar stays hidden (globals.css `.hide-scrollbar`)
  *  but wheel/trackpad/touch/keyboard scrolling all keep working. */
@@ -203,7 +203,7 @@ export function AssetsButtonGroup({
   showElementButton?: boolean;
 }) {
   return (
-    <div className="group flex h-8 shrink-0 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="group flex h-8 shrink-0 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       <button
         type="button"
         onClick={onOpenPicker}
@@ -521,7 +521,7 @@ export function BatchSizeCounter({
   max?: number;
 }) {
   return (
-    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       <button
         type="button"
         disabled={value <= 1}
@@ -560,7 +560,7 @@ export function UnlimitedToggle({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       Unlimited
       <button
         type="button"
@@ -698,7 +698,7 @@ export function VectorModeToggle({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       <Info className="h-3.5 w-3.5 opacity-60" />
       Vector mode
       <button

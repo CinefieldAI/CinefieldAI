@@ -237,12 +237,12 @@ function ModelSelectorDropdown({
             aria-label={model.label}
             className={`group/model w-full flex gap-0 items-center pl-1.5 py-1.5 pr-3 rounded-xl transition-colors cursor-pointer hover:bg-white/5 focus-visible:bg-white/5 text-start ${
               isSelected
-                ? "bg-[rgba(217,119,87,0.10)] ring-1 ring-inset ring-[rgba(217,119,87,0.45)] shadow-[0_0_12px_rgba(217,119,87,0.12)]"
+                ? "bg-[rgba(217,119,87,0.10)] ring-1 ring-inset ring-[rgba(217,119,87,0.45)]"
                 : ""
             }`}
           >
             <div
-              className={`size-10 rounded-lg flex items-center justify-center shrink-0 mr-2 text-[#8a8a8a] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:text-[#D97757] group-hover/model:bg-[rgba(217,119,87,0.10)] group-hover/model:shadow-[0_0_14px_rgba(217,119,87,0.34)] ${
+              className={`size-10 rounded-lg flex items-center justify-center shrink-0 mr-2 text-[#8a8a8a] transition-[color,background-color,box-shadow,border-color] duration-150 group-hover/model:text-[#D97757] group-hover/model:bg-[rgba(217,119,87,0.10)] ${
                 isSelected ? "text-[#D97757]" : ""
               }`}
               style={

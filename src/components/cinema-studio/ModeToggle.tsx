@@ -58,7 +58,7 @@ function ToggleButton({
       aria-pressed={active}
       className={`flex w-full flex-1 flex-col items-center justify-center gap-1 rounded-[16px] border transition-all duration-200 active:scale-95 ${
         active
-          ? "border-[#D97757] bg-[#101112] text-white font-bold shadow-[0_0_12px_rgba(217,119,87,0.35)]"
+          ? "border-[#D97757] bg-[#101112] text-white font-bold"
           : "border-transparent bg-transparent text-neutral-400 hover:text-white hover:bg-white/5"
       }`}
     >

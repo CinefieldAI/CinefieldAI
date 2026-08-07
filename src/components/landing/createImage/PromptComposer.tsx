@@ -542,7 +542,7 @@ export default function PromptComposer({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     aria-label="Add reference image"
-                    className="group flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_12px_rgba(0,229,255,0.25)] active:scale-95"
+                    className="group flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white active:scale-95"
                   >
                     <ImagePlus className="h-4 w-4 transition-transform duration-200 ease-out group-hover:rotate-[3deg]" />
                   </button>
