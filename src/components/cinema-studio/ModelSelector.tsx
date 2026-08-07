@@ -111,7 +111,7 @@ function ImageRow({
   const active = model.id === value;
   // The orange bar, orange card and checkmark ride the keyboard focus; the
   // model itself still only changes on Enter/click.
-  const marked = focused || active;
+  const marked = !!focused;
 
   return (
     <button
@@ -192,7 +192,7 @@ function VideoFlatRow({
   const active = model.id === value;
   // The orange bar, orange card and checkmark ride the keyboard focus; the
   // model itself still only changes on Enter/click.
-  const marked = focused || active;
+  const marked = !!focused;
 
   return (
     <button
@@ -296,7 +296,7 @@ function VideoParentRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value || subs.some((s) => s.id === value);
-  const marked = focused || active;
+  const marked = !!focused;
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -599,7 +599,9 @@ export default function ModelSelector({
   const [prevResetKey, setPrevResetKey] = useState({ query, open });
   if (prevResetKey.query !== query || prevResetKey.open !== open) {
     setPrevResetKey({ query, open });
-    setActiveIndex(0);
+    // Start the marker on the model that is actually selected, so opening the
+    // panel doesn't jump the orange bar to the first row.
+    setActiveIndex(open && !query ? (flatIndexById.get(value) ?? 0) : 0);
     setOpenParentIndex(null);
     setActiveSubIndex(0);
   }
