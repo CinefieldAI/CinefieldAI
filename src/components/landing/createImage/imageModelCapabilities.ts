@@ -78,6 +78,8 @@ export interface ImageModelCapabilities {
   /** Seedream 5.0 Pro's Unlimited switch, rendered right of the batch counter. */
   unlimited?: boolean;
   defaultUnlimited?: boolean;
+  /** Nano Banana's Draw control — opens the existing draw mode. */
+  drawTool?: boolean;
 }
 
 export const RECRAFT_QUALITY_OPTIONS: { value: string; description: string }[] = [
@@ -230,10 +232,38 @@ const RECRAFT_V4_1_CAPABILITIES: ImageModelCapabilities = {
 /** Single-option "mode" popovers — reuse the Quality/Resolution popover
  *  mechanism for a one-choice display+control (never a decorative badge). */
 export const GROK_MODE_OPTIONS: { value: string; description: string }[] = [
-  { value: "Standard", description: "Default generation mode" },
+  { value: "Standard", description: "Standard generation mode" },
+  { value: "Quality", description: "Quality generation mode" },
 ];
 export const GROK_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "1K", description: "1024px" },
+];
+
+/** Grok Imagine's wide ratio list — order is part of the spec, don't sort it. */
+export const GROK_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "2:1", width: 22, height: 11 },
+  { value: "1:2", width: 11, height: 22 },
+];
+
+/** Nano Banana's own quality tiers — deliberately NOT the Low/Medium/High set
+ *  that GPT Image 2 owns (GPT_QUALITY_OPTIONS). Do not merge the two. */
+export const NANO_BANANA_QUALITY_OPTIONS: { value: string; description: string }[] = [
+  { value: "Basic", description: "1k quality and fast generation speed" },
+  { value: "High", description: "2k quality and fidelity, balanced speed" },
+];
+
+export const NANO_BANANA_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
 ];
 export const SEEDREAM_4_MODE_OPTIONS: { value: string; description: string }[] = [
   { value: "Basic", description: "Default generation mode" },
@@ -416,7 +446,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     resolutionOptions: GROK_RESOLUTION_OPTIONS,
     defaultResolution: "1K",
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    aspectRatioOptions: GROK_ASPECT_RATIOS,
     defaultAspectRatio: "Auto",
     batchSize: true,
     defaultBatchSize: 4,
@@ -613,11 +643,13 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // resolution) and renders it after batch, matching the supplied reference.
   "Nano Banana": {
     modelTriggerSize: "compact",
-    quality: false,
+    quality: true,
+    qualityOptions: NANO_BANANA_QUALITY_OPTIONS,
+    defaultQuality: "Basic",
     resolution: false,
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
-    defaultAspectRatio: "3:4",
+    aspectRatioOptions: NANO_BANANA_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
     batchSize: true,
     defaultBatchSize: 1,
     gridGeneration: false,
@@ -625,6 +657,8 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
+    elementReferences: false,
+    drawTool: true,
   },
   "🚫 Cinefield Soul": {
     modelTriggerSize: "compact",

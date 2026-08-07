@@ -36,6 +36,7 @@ import {
   AssetsButtonGroup,
   BatchSizeCounter,
   ColorTransferButton,
+  DrawToggle,
   EnhancementToggle,
   QualityPopover,
   ResolutionPopover,
@@ -283,6 +284,10 @@ export default function PromptComposer({
   const [prevModelForReset, setPrevModelForReset] = useState(selectedModel);
   if (selectedModel !== prevModelForReset) {
     setPrevModelForReset(selectedModel);
+    // Draw is shared between Nano Banana's capability control and the legacy
+    // row's chip, so it has to clear on every switch or an active draw state
+    // follows the user into the next model.
+    setDrawMode(false);
     if (capabilities) {
       setModelQuality(capabilities.defaultQuality ?? "Standard");
       setModelResolution(capabilities.defaultResolution ?? "2K");
@@ -842,7 +847,18 @@ export default function PromptComposer({
                   {selectedModel === "Grok Imagine" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          label="Select mode"
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -866,16 +882,6 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      {capabilities.qualityOptions && (
-                        <QualityPopover
-                          value={modelQuality}
-                          onChange={setModelQuality}
-                          options={capabilities.qualityOptions}
-                          id="quality"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                     </>
                   )}
 
@@ -1094,6 +1100,38 @@ export default function PromptComposer({
                         active={modelColorTransfer}
                         onToggle={() => setModelColorTransfer((v) => !v)}
                       />
+                    </>
+                  )}
+
+                  {selectedModel === "Nano Banana" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.drawTool && (
+                        <DrawToggle enabled={drawMode} onToggle={() => setDrawMode((v) => !v)} />
+                      )}
                     </>
                   )}
 

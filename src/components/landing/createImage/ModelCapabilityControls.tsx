@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   AtSign,
   Blend,
@@ -33,6 +34,83 @@ const POPOVER_SURFACE =
 /** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
   "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+
+/** Scrollable option list: the bar stays hidden (globals.css `.hide-scrollbar`)
+ *  but wheel/trackpad/touch/keyboard scrolling all keep working. */
+const LISTBOX_SCROLL = "hide-scrollbar max-h-[264px] overflow-y-auto";
+
+/** Ring shown on the option the arrow keys are currently sitting on, kept
+ *  visually distinct from the selected-row fill. */
+const OPTION_ACTIVE_RING = "ring-1 ring-inset ring-[rgba(217,119,87,0.55)]";
+
+/**
+ * Roving keyboard navigation for a popover's option list. Handlers are bound to
+ * the popover content, so arrow keys are only ever intercepted while that panel
+ * is open — nothing is registered at the document level. Escape/focus-return is
+ * left to Radix, which already does both.
+ */
+function useListboxNav({
+  count,
+  selectedIndex,
+  open,
+  onSelect,
+}: {
+  count: number;
+  selectedIndex: number;
+  open: boolean;
+  onSelect: (index: number) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(selectedIndex < 0 ? 0 : selectedIndex);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Only auto-scroll after a real arrow-key move, so merely opening the panel
+  // never yanks the surrounding page.
+  const navigatedRef = useRef(false);
+
+  useEffect(() => {
+    if (open) {
+      setActiveIndex(selectedIndex < 0 ? 0 : selectedIndex);
+      navigatedRef.current = false;
+    }
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (navigatedRef.current) {
+      optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex]);
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (count === 0) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      navigatedRef.current = true;
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((index) => (index + delta + count) % count);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      navigatedRef.current = true;
+      setActiveIndex(event.key === "Home" ? 0 : count - 1);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect(activeIndex);
+    }
+  };
+
+  const setOptionRef = (index: number) => (el: HTMLButtonElement | null) => {
+    optionRefs.current[index] = el;
+  };
+
+  return { activeIndex, handleKeyDown, setOptionRef };
+}
+
+/** Trigger a11y wiring shared by every option-list popover. */
+function triggerA11y(open: boolean) {
+  return { "aria-haspopup": "listbox" as const, "aria-expanded": open };
+}
 
 function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boolean }) {
   if (ratio.value === "Auto") {
@@ -126,6 +204,7 @@ export function QualityPopover({
   value,
   onChange,
   options = GPT_QUALITY_OPTIONS,
+  label = "Select quality",
   id,
   openId,
   onOpenIdChange,
@@ -133,11 +212,27 @@ export function QualityPopover({
   value: string;
   onChange: (v: string) => void;
   options?: { value: string; description: string }[];
+  /** Panel heading — Grok Imagine's tiers are modes, not quality levels. */
+  label?: string;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const select = (index: number) => {
+    const opt = options[index];
+    if (!opt) return;
+    onChange(opt.value);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((o) => o.value === value),
+    open,
+    onSelect: select,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </button>
@@ -146,25 +241,24 @@ export function QualityPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
         className={`w-[300px] ${POPOVER_SURFACE}`}
       >
-        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Select quality</p>
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((opt) => {
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
+        <div role="listbox" aria-label={label} className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                ref={setOptionRef(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt.value);
-                  onOpenIdChange(null);
-                }}
+                onClick={() => select(index)}
                 className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
                   selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                }`}
+                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -207,10 +301,24 @@ export function ResolutionPopover({
   /** Header caption shown when `detailed` — Seedream 5.0 Pro uses "QUALITY". */
   label?: string;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const select = (index: number) => {
+    const opt = options[index];
+    if (!opt) return;
+    onChange(opt.value);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((o) => o.value === value),
+    open,
+    onSelect: select,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </button>
@@ -219,31 +327,30 @@ export function ResolutionPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
         className={`${compactWidth ? "w-[160px]" : "w-[300px]"} ${POPOVER_SURFACE}`}
       >
         {detailed && (
           <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
         )}
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((opt) => {
+        <div role="listbox" aria-label={label} className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                ref={setOptionRef(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt.value);
-                  onOpenIdChange(null);
-                }}
+                onClick={() => select(index)}
                 className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
                   selected
                     ? lime
                       ? "bg-[rgba(255,255,255,0.08)]"
                       : "bg-white/10"
                     : "hover:bg-white/[0.06]"
-                }`}
+                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -286,12 +393,27 @@ export function AspectRatioPopover({
   large?: boolean;
 } & PopoverCoordination) {
   const active = options.find((r) => r.value === value) ?? options[0];
+  const open = openId === id;
+  const select = (index: number) => {
+    const ratio = options[index];
+    if (!ratio) return;
+    onChange(ratio.value);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((r) => r.value === value),
+    open,
+    onSelect: select,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           className={COMPACT_TRIGGER}
+          {...triggerA11y(open)}
         >
           <RatioIcon ratio={active} />
           {active.value}
@@ -302,26 +424,26 @@ export function AspectRatioPopover({
         side="top"
         align="start"
         sideOffset={8}
+        onKeyDown={handleKeyDown}
         className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
       >
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((ratio) => {
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
+        <div role="listbox" aria-label="Aspect ratio" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((ratio, index) => {
             const selected = ratio.value === value;
             return (
               <button
                 key={ratio.value}
+                ref={setOptionRef(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(ratio.value);
-                  onOpenIdChange(null);
-                }}
+                onClick={() => select(index)}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
                   selected
                     ? "bg-white/10 text-white font-semibold"
                     : "text-white/80 hover:bg-white/5 hover:text-white"
-                }`}
+                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
               >
                 <RatioIcon ratio={ratio} active={selected} />
                 <span className="min-w-0 flex-1">
@@ -432,10 +554,24 @@ export function ThinkingPopover({
   onChange: (v: string) => void;
   options: string[];
 } & PopoverCoordination) {
+  const open = openId === id;
+  const select = (index: number) => {
+    const opt = options[index];
+    if (opt === undefined) return;
+    onChange(opt);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.indexOf(value),
+    open,
+    onSelect: select,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </button>
@@ -444,25 +580,24 @@ export function ThinkingPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
         className={`w-[200px] ${POPOVER_SURFACE}`}
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Thinking</p>
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((opt) => {
+        <div role="listbox" aria-label="Thinking" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
             const selected = opt === value;
             return (
               <button
                 key={opt}
+                ref={setOptionRef(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt);
-                  onOpenIdChange(null);
-                }}
+                onClick={() => select(index)}
                 className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
                   selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                }`}
+                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
               >
                 {opt}
                 {selected && <Check className="h-4 w-4 shrink-0 text-[#D97757]" />}
@@ -472,6 +607,37 @@ export function ThinkingPopover({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Draw trigger (Nano Banana)                                           */
+/* ------------------------------------------------------------------ */
+
+export function DrawToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={enabled}
+      className={`${COMPACT_TRIGGER} ${enabled ? "border-[#D97757] bg-[#181a1d]" : ""}`}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 opacity-75">
+        <path
+          d="M7.55929 15.125C6.80178 14.9323 5.23971 14.4539 3.55888 12.743C0.749296 9.88327 0.0300494 5.97875 1.95239 4.02207C3.53188 2.41436 6.59253 2.53853 9.125 4.25M11.75 6.875C13.9356 9.44282 14.5373 11.8324 12.8604 13.1979C11.6042 14.2208 10.0146 13.0379 9.08705 12.126M6.875 9.125H8.71079C8.976 9.125 9.23036 9.01964 9.41789 8.83211L14.4156 3.83439C14.807 3.44298 14.806 2.80805 14.4133 2.4179L13.5684 1.57841C13.1772 1.1897 12.5451 1.1911 12.1556 1.58154L7.16703 6.58225C6.98002 6.76972 6.875 7.02371 6.875 7.2885V9.125Z"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Draw
+    </button>
   );
 }
 
@@ -547,10 +713,24 @@ export function GridGenerationPopover({
   value: string;
   onChange: (v: string) => void;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const select = (index: number) => {
+    const opt = GRID_GENERATION_OPTIONS[index];
+    if (opt === undefined) return;
+    onChange(opt);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+    count: GRID_GENERATION_OPTIONS.length,
+    selectedIndex: GRID_GENERATION_OPTIONS.indexOf(value as (typeof GRID_GENERATION_OPTIONS)[number]),
+    open,
+    onSelect: select,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           <Grid2x2 className="h-4 w-4" />
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -560,28 +740,27 @@ export function GridGenerationPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
         className={`w-[180px] ${POPOVER_SURFACE}`}
       >
         <div className="flex items-center gap-1.5 px-2 py-1.5">
           <p className="text-xs font-semibold text-white/70">Grid generation</p>
           <Info className="h-3.5 w-3.5 text-white/40" />
         </div>
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {GRID_GENERATION_OPTIONS.map((opt) => {
+        <div role="listbox" aria-label="Grid generation" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {GRID_GENERATION_OPTIONS.map((opt, index) => {
             const selected = opt === value;
             return (
               <button
                 key={opt}
+                ref={setOptionRef(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt);
-                  onOpenIdChange(null);
-                }}
+                onClick={() => select(index)}
                 className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
                   selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                }`}
+                } ${open && index === activeIndex ? OPTION_ACTIVE_RING : ""}`}
               >
                 {opt}
                 {selected && <Check className="h-4 w-4 shrink-0" style={{ color: LIME }} />}
