@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import Layout from "@/components/supercomputer/Layout";
 
 export const metadata = {
-  title: "Supercomputer | Higgsfield",
-  description: "Create with Higgsfield Supercomputer",
+  title: "Supercomputer | Cinefield",
+  description: "Create with Cinefield Supercomputer",
 };
 
 export default function SupercomputerPage() {

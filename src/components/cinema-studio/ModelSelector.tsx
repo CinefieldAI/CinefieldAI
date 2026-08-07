@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
+import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 import {
   Check,
   ChevronDown,
@@ -160,7 +161,7 @@ function ImageRow({
         </div>
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-        <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+        <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
           {model.name}
         </span>
         <p className="truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
@@ -247,7 +248,7 @@ function VideoFlatRow({
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
         <div className="flex items-center gap-1.5">
-          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -407,7 +408,7 @@ function VideoParentRow({
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.description && (
@@ -454,7 +455,13 @@ function VideoParentRow({
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-medium text-white">
+                      <span
+                        className={`truncate text-xs font-medium ${
+                          isBlockedModelLabel(s.name)
+                            ? BLOCKED_MODEL_LABEL_CLASS
+                            : "text-white"
+                        }`}
+                      >
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -731,7 +738,13 @@ export default function ModelSelector({
               ) : (
                 <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span className="max-w-[140px] truncate text-xs font-semibold text-white">
+              <span
+                className={`max-w-[140px] truncate text-xs font-semibold ${
+                  isBlockedModelLabel(selected.name)
+                    ? BLOCKED_MODEL_LABEL_CLASS
+                    : "text-white"
+                }`}
+              >
                 {selected.name}
               </span>
             </button>
@@ -758,7 +771,13 @@ export default function ModelSelector({
               ) : (
                 <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span className="max-w-[140px] truncate text-white">
+              <span
+                className={`max-w-[140px] truncate ${
+                  isBlockedModelLabel(selected.name)
+                    ? BLOCKED_MODEL_LABEL_CLASS
+                    : "text-white"
+                }`}
+              >
                 {selected.name}
               </span>
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${open ? "rotate-180 text-[#D97757]" : "text-neutral-400"}`} />

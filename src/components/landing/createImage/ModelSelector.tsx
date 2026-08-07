@@ -6,6 +6,7 @@ import { ChevronDown, Search, Sparkles } from "lucide-react";
 import ModelItem from "./ModelItem";
 import { ALL_MODELS, FEATURED_MODELS, type CreateImageModel } from "./createImageData";
 import { getSharedModelIcon } from "@/lib/modelIconRegistry";
+import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 
 interface ModelSelectorProps {
   selected: string;
@@ -139,7 +140,13 @@ export default function ModelSelector({
           ) : (
             <Sparkles className="h-4 w-4 text-[#D97757]" />
           )}
-          <span className="max-w-[140px] truncate text-white">{selected}</span>
+          <span
+            className={`max-w-[140px] truncate ${
+              isBlockedModelLabel(selected) ? BLOCKED_MODEL_LABEL_CLASS : "text-white"
+            }`}
+          >
+            {selected}
+          </span>
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${
               open ? "rotate-180 text-[#D97757]" : "text-neutral-400"

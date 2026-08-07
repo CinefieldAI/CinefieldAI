@@ -71,7 +71,7 @@ export const VIDEO_FEATURES: VideoFeature[] = [
   { title: "UGC Factory", description: "Build UGC video with avatar", icon: Users },
   { title: "Video Upscale", description: "Enhance video quality", icon: Maximize2 },
   {
-    title: "Higgsfield Animate",
+    title: "🚫 Cinefield Animate",
     description: "Video smart replacement",
     icon: Sparkles,
   },
@@ -161,7 +161,7 @@ export const VIDEO_DROPDOWN_MODELS: VideoModel[] = [
     icon: SeedanceIcon,
   },
   {
-    name: "Higgsfield DOP",
+    name: "🚫 Cinefield DOP",
     meta: "VFX and camera control",
     icon: Clapperboard,
   },

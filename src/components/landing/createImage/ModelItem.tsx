@@ -4,6 +4,7 @@ import React from "react";
 import { Check } from "lucide-react";
 import type { CreateImageModel } from "./createImageData";
 import { getSharedModelIcon } from "@/lib/modelIconRegistry";
+import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 
 interface ModelItemProps {
   model: CreateImageModel;
@@ -88,7 +89,11 @@ export default function ModelItem({ model, isSelected, onSelect, isContinuation 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
         <span
           className={`truncate text-xs font-semibold transition-colors duration-180 ${
-            isSelected ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"
+            isBlockedModelLabel(model.name)
+              ? BLOCKED_MODEL_LABEL_CLASS
+              : isSelected
+                ? "text-white font-bold"
+                : "text-white/90 group-hover/model-row:text-white"
           }`}
         >
           {model.name}

@@ -181,7 +181,7 @@ export default function Hero() {
         {/* Logo */}
         <img
           src="/cinefield-logo.png"
-          alt="Higgsfield"
+          alt="Cinefield"
           className="w-[3.3125rem] h-[3.3125rem] rounded-md object-cover drop-shadow-[0_0_12px_rgba(217,119,87,0.6)]"
         />
 

@@ -1,3 +1,4 @@
+import { isBlockedModelId } from "@/lib/blockedModels";
 import type { GenerationType, WorkflowType } from "./types";
 
 /**
@@ -514,16 +515,28 @@ const REGISTRY: ReadonlyMap<string, ModelRegistryEntry> = new Map(
   [...MOCK_MODELS, ...FAL_MODELS, ...CLOUDFLARE_MODELS].map((model) => [model.id, model])
 );
 
-/** Returns the entry, or undefined when the model is not orchestratable. */
+/**
+ * Returns the entry, or undefined when the model is not orchestratable.
+ *
+ * This is the single chokepoint every execution path goes through — the
+ * orchestrator resolves the model here before any provider adapter is
+ * reached. The blocked-model guard therefore lives here and nowhere else:
+ * a permanently blocked id can never resolve to a runnable entry, no matter
+ * which route, dev `?model=` override, or test tries it. See
+ * lib/blockedModels.ts for why these are blocked. Do not weaken this to
+ * "just try one once".
+ */
 export function findModel(modelId: string): ModelRegistryEntry | undefined {
+  if (isBlockedModelId(modelId)) return undefined;
   return REGISTRY.get(modelId);
 }
 
 /** True when this model id is wired into the orchestration chain. */
 export function isOrchestratableModel(modelId: string): boolean {
+  if (isBlockedModelId(modelId)) return false;
   return REGISTRY.has(modelId);
 }
 
 export function listModels(): ModelRegistryEntry[] {
-  return [...REGISTRY.values()];
+  return [...REGISTRY.values()].filter((model) => !isBlockedModelId(model.id));
 }

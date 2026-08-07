@@ -349,7 +349,7 @@ export default function CinemaStudioImagePanel({
                 </>
               )}
 
-              {selectedModel.name === "Higgsfield Soul Cinema" && (
+              {selectedModel.name === "🚫 Cinefield Soul Cinema" && (
                 <>
                   {capabilities.aspectRatioOptions && (
                     <AspectRatioPopover

@@ -121,7 +121,7 @@ function PricingAction() {
   return (
     <Link
       href="/pricing"
-      title="View Higgsfield AI pricing plans and subscription options"
+      title="View Cinefield AI pricing plans and subscription options"
       className="relative hidden items-center gap-1.5 rounded-[10px] bg-white/5 px-3 h-9 text-sm font-medium text-white transition-colors hover:bg-white/10 active:bg-white/15 sm:flex"
     >
       <svg
@@ -264,7 +264,7 @@ export default function Navbar({
   // generators — Popcorn is a storyboard tool, Topaz is an upscaler — so
   // they don't have a Create Image workspace destination yet and keep
   // falling back to the generic side panel.
-  const IMAGE_MODELS_WITHOUT_WORKSPACE = new Set(["Higgsfield Popcorn", "Topaz"]);
+  const IMAGE_MODELS_WITHOUT_WORKSPACE = new Set(["🚫 Cinefield Popcorn", "Topaz"]);
   // The dropdown's display names match the Create Image workspace's model
   // list 1:1 except for these two casing/naming differences.
   const IMAGE_DROPDOWN_TO_WORKSPACE_MODEL: Record<string, string> = {

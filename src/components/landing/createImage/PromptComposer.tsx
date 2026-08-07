@@ -659,7 +659,7 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {selectedModel === "Higgsfield Soul Cinema" && (
+                  {selectedModel === "🚫 Cinefield Soul Cinema" && (
                     <>
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -798,7 +798,7 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {(selectedModel === "Higgsfield Soul 2.0" || selectedModel === "Higgsfield Soul") && (
+                  {(selectedModel === "🚫 Cinefield Soul 2.0" || selectedModel === "🚫 Cinefield Soul") && (
                     <>
                       {capabilities.assetUpload && (
                         <AssetsButtonGroup

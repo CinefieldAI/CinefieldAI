@@ -18,8 +18,14 @@ import {
 } from "@/components/cinema-studio/icons/ProviderIcons";
 import WanIcon from "@/components/cinema-studio/icons/WanIcon";
 
+/**
+ * Blocked models carry a leading 🚫 marker in their display label (see
+ * lib/blockedModels.ts). Stripping it here keeps icon lookup working off the
+ * plain name, so the marker stays a pure presentation concern and every key
+ * in the table below can remain marker-free.
+ */
 export const normalizeModelName = (value: string): string =>
-  value.trim().toLowerCase().replace(/\s+/g, " ");
+  value.replace(/^\s*🚫\s*/, "").trim().toLowerCase().replace(/\s+/g, " ");
 
 export const MODEL_ICON_BY_NORMALIZED_NAME: Record<
   string,
@@ -53,14 +59,14 @@ export const MODEL_ICON_BY_NORMALIZED_NAME: Record<
   "wan 2.5 fast": WanIcon,
   "wan 2.6": WanIcon,
   "wan 2.7": WanIcon,
-  "higgsfield soul 2.0": HiggsfieldIcon,
-  "higgsfield soul cinema": HiggsfieldIcon,
-  "higgsfield soul": HiggsfieldIcon,
-  "higgsfield face swap": FaceSwapIcon,
-  "higgsfield character swap": CharacterSwapIcon,
-  "higgsfield lite": HiggsfieldIcon,
-  "higgsfield standard": HiggsfieldIcon,
-  "higgsfield turbo": HiggsfieldIcon,
+  "cinefield soul 2.0": HiggsfieldIcon,
+  "cinefield soul cinema": HiggsfieldIcon,
+  "cinefield soul": HiggsfieldIcon,
+  "cinefield face swap": FaceSwapIcon,
+  "cinefield character swap": CharacterSwapIcon,
+  "cinefield lite": HiggsfieldIcon,
+  "cinefield standard": HiggsfieldIcon,
+  "cinefield turbo": HiggsfieldIcon,
   "happyhorse": HappyHorseIcon,
   "multi reference": MultiReferenceIcon,
   "seedance 2.0": SeedanceIcon,

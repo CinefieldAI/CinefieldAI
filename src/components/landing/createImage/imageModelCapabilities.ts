@@ -268,7 +268,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     referenceSelection: true,
     elementReferences: true,
   },
-  "Higgsfield Soul Cinema": {
+  "🚫 Cinefield Soul Cinema": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
@@ -486,7 +486,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // (Character/General replace the element-reference concept for this
   // model). Character/General render as 80px cards beside Generate, never
   // inside the compact control row.
-  "Higgsfield Soul 2.0": {
+  "🚫 Cinefield Soul 2.0": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
@@ -601,7 +601,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     assetUpload: true,
     referenceSelection: true,
   },
-  "Higgsfield Soul": {
+  "🚫 Cinefield Soul": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,
@@ -616,7 +616,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     assetUpload: true,
     referenceSelection: true,
   },
-  "Higgsfield Face Swap": {
+  "🚫 Cinefield Face Swap": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,
@@ -631,7 +631,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     assetUpload: true,
     referenceSelection: true,
   },
-  "Higgsfield Character Swap": {
+  "🚫 Cinefield Character Swap": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,

@@ -161,17 +161,17 @@ export interface ImageModel {
 // Reference, WAN 2.2) if any of those need to come back.
 export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
   {
-    name: "Higgsfield Soul 2.0",
+    name: "🚫 Cinefield Soul 2.0",
     meta: "Next generation ultra-realistic fashion visuals",
     icon: Sparkles,
   },
   {
-    name: "Higgsfield Soul Cinema",
+    name: "🚫 Cinefield Soul Cinema",
     meta: "Cinema-grade visual creation",
     icon: Sparkles,
   },
   {
-    name: "Higgsfield Popcorn",
+    name: "🚫 Cinefield Popcorn",
     meta: "Fun, stylized quick-gen",
     icon: Sparkles,
   },
