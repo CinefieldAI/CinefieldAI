@@ -60,6 +60,17 @@ export interface ModelRegistryEntry {
   enabled: boolean;
   /** True for development-only entries that never call an external API. */
   isMock: boolean;
+  /**
+   * Only meaningful for providerId "fal" — fal.ai's own image endpoints are
+   * not input-schema-uniform. "image-size-preset" (default when omitted)
+   * maps Cinefield's aspectRatio onto fal's `image_size` enum
+   * (square_hd/landscape_16_9/...), the schema flux/seedream/recraft/z-image
+   * all share. "aspect-ratio-string" instead passes the aspect ratio through
+   * verbatim as fal's `aspect_ratio` enum value (nano-banana's schema).
+   * Declarative so fal-provider.ts stays one generic adapter — it branches on
+   * this registry field, never on a specific model id.
+   */
+  falSizeParam?: "image-size-preset" | "aspect-ratio-string";
 }
 
 const MOCK_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -197,10 +208,21 @@ const MOCK_MODELS: ModelRegistryEntry[] = [
  * Real provider models. Adding another fal endpoint is an entry here — no
  * new adapter, route, or handler is required.
  *
- * `fal-flux-schnell` uses an id that deliberately does not collide with any
- * id in the visible model catalog, so no existing model card can be routed
- * to fal by accident.
+ * Every id below deliberately does not collide with any id in the visible
+ * model catalog (cinemaStudioData.ts), so no existing model card can be
+ * routed to fal by accident — the orchestrator only ever runs a model a
+ * developer explicitly selected via the `?model=` diagnostic override.
+ *
+ * Every endpoint id, input parameter, and output field below was verified
+ * against its individual fal.ai model documentation page (the catalog
+ * listing page was rate-limited during verification) — not invented and not
+ * copied from the visible-catalog display names. Where fal does not document
+ * a hard ceiling (e.g. num_images), maxOutputCount reuses the same
+ * conservative cap already established by fal-flux-schnell rather than
+ * inventing a new unverified number.
  */
+const FAL_IMAGE_SIZE_ASPECT_RATIOS = ["1:1", "4:3", "3:4", "16:9", "9:16"];
+
 const FAL_MODELS: ModelRegistryEntry[] = [
   {
     id: "fal-flux-schnell",
@@ -214,7 +236,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     maxInputs: 0,
     capabilities: {
       // Only ratios that map onto a documented fal image_size preset.
-      supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      supportedAspectRatios: FAL_IMAGE_SIZE_ASPECT_RATIOS,
       supportedResolutions: UI_RESOLUTIONS,
       supportedDurationsSeconds: [],
       minOutputCount: 1,
@@ -227,6 +249,140 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     defaults: { aspectRatio: "16:9", resolution: "1K", outputCount: 1 },
     enabled: true,
     isMock: false,
+  },
+  {
+    id: "fal-flux-dev",
+    label: "FLUX.1 [dev] (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/flux/dev",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      supportedAspectRatios: FAL_IMAGE_SIZE_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "16:9", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+  {
+    id: "fal-seedream-v4",
+    label: "Seedream 4.0 (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/bytedance/seedream/v4/text-to-image",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // fal also documents "auto"/"auto_2K"/"auto_4K" image_size values for
+      // this endpoint, but those are not aspect ratios Cinefield's UI emits
+      // — omitted rather than invented into the picker.
+      supportedAspectRatios: FAL_IMAGE_SIZE_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "16:9", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+  {
+    id: "fal-recraft-v3",
+    label: "Recraft V3 (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/recraft/v3/text-to-image",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      supportedAspectRatios: FAL_IMAGE_SIZE_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      // Recraft V3's documented schema has no num_images / batch parameter
+      // at all — capped at 1 rather than assuming an undocumented batch
+      // input would be accepted.
+      maxOutputCount: 1,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "1:1", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+  {
+    id: "fal-z-image-turbo",
+    label: "Z-Image Turbo (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/z-image/turbo",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      supportedAspectRatios: FAL_IMAGE_SIZE_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      // fal's own docs state a 1-4 batch size for this endpoint explicitly.
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "16:9", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+  },
+  {
+    id: "fal-nano-banana",
+    label: "Nano Banana (fal.ai)",
+    providerId: "fal",
+    providerModelId: "fal-ai/nano-banana",
+    generationType: "image",
+    supportedWorkflows: ["text-to-image"],
+    executionMode: "sync",
+    acceptedInputMimeTypes: [],
+    maxInputs: 0,
+    capabilities: {
+      // This endpoint's own aspect_ratio enum is exactly the UI's full set.
+      supportedAspectRatios: UI_ASPECT_RATIOS,
+      supportedResolutions: UI_RESOLUTIONS,
+      supportedDurationsSeconds: [],
+      minOutputCount: 1,
+      maxOutputCount: 4,
+      supportsThinking: false,
+      supportedThinkingValues: [],
+      requiresPrompt: true,
+      maxPromptLength: 10_000,
+    },
+    defaults: { aspectRatio: "1:1", resolution: "1K", outputCount: 1 },
+    enabled: true,
+    isMock: false,
+    falSizeParam: "aspect-ratio-string",
   },
 ];
 

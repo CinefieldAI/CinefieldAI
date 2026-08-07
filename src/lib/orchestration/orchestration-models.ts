@@ -30,6 +30,11 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "mock-video": { generationType: "video", provider: "mock", isMock: true },
   "mock-tts": { generationType: "audio", provider: "mock", isMock: true },
   "fal-flux-schnell": { generationType: "image", provider: "fal", isMock: false },
+  "fal-flux-dev": { generationType: "image", provider: "fal", isMock: false },
+  "fal-seedream-v4": { generationType: "image", provider: "fal", isMock: false },
+  "fal-recraft-v3": { generationType: "image", provider: "fal", isMock: false },
+  "fal-z-image-turbo": { generationType: "image", provider: "fal", isMock: false },
+  "fal-nano-banana": { generationType: "image", provider: "fal", isMock: false },
   // Registered here for id/type consistency with the server registry, but
   // disabled there (model-registry.ts: enabled: false) — Cloudflare stays
   // inactive until a later, separate phase.

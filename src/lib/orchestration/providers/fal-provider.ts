@@ -182,7 +182,6 @@ class FalProvider implements ProviderAdapter {
     const timeoutHandle = setTimeout(() => timeoutController.abort(), FAL_REQUEST_TIMEOUT_MS);
 
     try {
-      const imageSize = mapAspectRatioToFalImageSize(request.settings.aspectRatio);
       const requestedCount = request.settings.outputCount ?? model.defaults.outputCount;
       const numImages = Math.min(
         Math.max(requestedCount, model.capabilities.minOutputCount),
@@ -194,7 +193,17 @@ class FalProvider implements ProviderAdapter {
         num_images: numImages,
         output_format: "png",
       };
-      if (imageSize) input.image_size = imageSize;
+
+      // fal's image endpoints are not input-schema-uniform: most map onto a
+      // fixed `image_size` preset, but some (e.g. nano-banana) take the
+      // aspect ratio directly as `aspect_ratio`. Registry-driven, never a
+      // per-model-id branch — see ModelRegistryEntry.falSizeParam.
+      if (model.falSizeParam === "aspect-ratio-string") {
+        if (request.settings.aspectRatio) input.aspect_ratio = request.settings.aspectRatio;
+      } else {
+        const imageSize = mapAspectRatioToFalImageSize(request.settings.aspectRatio);
+        if (imageSize) input.image_size = imageSize;
+      }
       if (typeof request.settings.seed === "number") input.seed = request.settings.seed;
 
       // `subscribe` waits for the queued job to finish, which keeps this a
