@@ -47,6 +47,11 @@ export default function ResolutionPopover({
     count: options.length,
     selectedIndex: options.indexOf(value),
     open: controlledOpen,
+    onActivate: (index) => {
+      const opt = options[index];
+      if (opt === undefined) return;
+      onChange(opt);
+    },
     onSelect: (index) => {
       const opt = options[index];
       if (opt === undefined) return;
@@ -84,6 +89,7 @@ export default function ResolutionPopover({
           aria-label="Resolution"
           onKeyDown={nav.handleKeyDown}
           onOpenAutoFocus={nav.handleOpenAutoFocus}
+          onEscapeKeyDown={nav.handleEscapeKeyDown}
           className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >

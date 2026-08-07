@@ -20,19 +20,41 @@ export function useListboxNav({
   selectedIndex,
   open,
   onSelect,
+  onActivate,
 }: {
   count: number;
   selectedIndex: number;
   open: boolean;
   onSelect: (index: number) => void;
+  /**
+   * Opt in to "selection follows focus": every arrow/Home/End move commits the
+   * value straight away, so the fill and the checkmark travel together with the
+   * keyboard instead of the checkmark lagging on the old row. Escape puts back
+   * whatever was selected when the panel opened.
+   *
+   * Only for cheap, reversible values (ratio, resolution, quality). Model lists
+   * deliberately leave this off — swapping the model rebuilds the whole control
+   * row, so that stays an explicit Enter/click.
+   */
+  onActivate?: (index: number) => void;
 }) {
   const initialIndex = selectedIndex < 0 ? 0 : selectedIndex;
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const optionRefs = useRef<(HTMLElement | null)[]>([]);
 
+  // Latest selection, read when the panel opens without making the reset
+  // effect depend on it (with selection-follows-focus it changes constantly).
+  const selectedIndexRef = useRef(initialIndex);
+  selectedIndexRef.current = initialIndex;
+  /** What to restore if the user escapes out of the panel. */
+  const restoreIndexRef = useRef(initialIndex);
+
   useEffect(() => {
-    if (open) setActiveIndex(initialIndex);
-  }, [open, initialIndex]);
+    if (!open) return;
+    const start = selectedIndexRef.current;
+    restoreIndexRef.current = start;
+    setActiveIndex(start);
+  }, [open]);
 
   const focusOption = (index: number) => {
     const el = optionRefs.current[index];
@@ -46,6 +68,15 @@ export function useListboxNav({
   const moveTo = (index: number) => {
     setActiveIndex(index);
     focusOption(index);
+    onActivate?.(index);
+  };
+
+  /** Escape leaves the value the panel opened with, even after arrow keys
+   *  committed intermediate ones. Radix still does the closing. */
+  const handleEscapeKeyDown = () => {
+    if (onActivate && restoreIndexRef.current !== activeIndex) {
+      onActivate(restoreIndexRef.current);
+    }
   };
 
   /** Radix focuses the panel wrapper on open; take that over so the currently
@@ -92,5 +123,12 @@ export function useListboxNav({
     tabIndex: index === activeIndex ? 0 : -1,
   });
 
-  return { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps, moveTo };
+  return {
+    activeIndex,
+    handleKeyDown,
+    handleOpenAutoFocus,
+    handleEscapeKeyDown,
+    getOptionProps,
+    moveTo,
+  };
 }

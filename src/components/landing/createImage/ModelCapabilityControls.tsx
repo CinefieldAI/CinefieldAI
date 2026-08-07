@@ -37,7 +37,10 @@ const COMPACT_TRIGGER =
 
 /** Scrollable option list: the bar stays hidden (globals.css `.hide-scrollbar`)
  *  but wheel/trackpad/touch/keyboard scrolling all keep working. */
-const LISTBOX_SCROLL = "hide-scrollbar max-h-[264px] overflow-y-auto";
+/** Tall enough that even the longest ratio list (10 rows) fits without
+ *  scrolling, so arrowing through never jumps the list under the heading.
+ *  Scrolling stays available as a fallback on short viewports. */
+const LISTBOX_SCROLL = "hide-scrollbar max-h-[min(70vh,560px)] overflow-y-auto";
 
 /**
  * Background for one option row. Keyboard focus is shown with the same quiet
@@ -159,17 +162,20 @@ export function QualityPopover({
   label?: string;
 } & PopoverCoordination) {
   const open = openId === id;
-  const select = (index: number) => {
+  const commit = (index: number) => {
     const opt = options[index];
-    if (!opt) return;
-    onChange(opt.value);
+    if (opt) onChange(opt.value);
+  };
+  const select = (index: number) => {
+    commit(index);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((o) => o.value === value),
     open,
     onSelect: select,
+    onActivate: commit,
   });
 
   return (
@@ -186,6 +192,7 @@ export function QualityPopover({
         sideOffset={10}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`w-[300px] ${POPOVER_SURFACE}`}
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
@@ -247,17 +254,20 @@ export function ResolutionPopover({
   label?: string;
 } & PopoverCoordination) {
   const open = openId === id;
-  const select = (index: number) => {
+  const commit = (index: number) => {
     const opt = options[index];
-    if (!opt) return;
-    onChange(opt.value);
+    if (opt) onChange(opt.value);
+  };
+  const select = (index: number) => {
+    commit(index);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((o) => o.value === value),
     open,
     onSelect: select,
+    onActivate: commit,
   });
 
   return (
@@ -274,6 +284,7 @@ export function ResolutionPopover({
         sideOffset={10}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`${compactWidth ? "w-[160px]" : "w-[300px]"} ${POPOVER_SURFACE}`}
       >
         {detailed && (
@@ -342,17 +353,20 @@ export function AspectRatioPopover({
 } & PopoverCoordination) {
   const active = options.find((r) => r.value === value) ?? options[0];
   const open = openId === id;
-  const select = (index: number) => {
+  const commit = (index: number) => {
     const ratio = options[index];
-    if (!ratio) return;
-    onChange(ratio.value);
+    if (ratio) onChange(ratio.value);
+  };
+  const select = (index: number) => {
+    commit(index);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((r) => r.value === value),
     open,
     onSelect: select,
+    onActivate: commit,
   });
 
   return (
@@ -374,6 +388,7 @@ export function AspectRatioPopover({
         sideOffset={8}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
@@ -508,17 +523,20 @@ export function ThinkingPopover({
   options: string[];
 } & PopoverCoordination) {
   const open = openId === id;
-  const select = (index: number) => {
+  const commit = (index: number) => {
     const opt = options[index];
-    if (opt === undefined) return;
-    onChange(opt);
+    if (opt !== undefined) onChange(opt);
+  };
+  const select = (index: number) => {
+    commit(index);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.indexOf(value),
     open,
     onSelect: select,
+    onActivate: commit,
   });
 
   return (
@@ -535,6 +553,7 @@ export function ThinkingPopover({
         sideOffset={10}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`w-[200px] ${POPOVER_SURFACE}`}
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Thinking</p>
@@ -669,17 +688,20 @@ export function GridGenerationPopover({
   onChange: (v: string) => void;
 } & PopoverCoordination) {
   const open = openId === id;
-  const select = (index: number) => {
+  const commit = (index: number) => {
     const opt = GRID_GENERATION_OPTIONS[index];
-    if (opt === undefined) return;
-    onChange(opt);
+    if (opt !== undefined) onChange(opt);
+  };
+  const select = (index: number) => {
+    commit(index);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
     count: GRID_GENERATION_OPTIONS.length,
     selectedIndex: GRID_GENERATION_OPTIONS.indexOf(value as (typeof GRID_GENERATION_OPTIONS)[number]),
     open,
     onSelect: select,
+    onActivate: commit,
   });
 
   return (
@@ -697,6 +719,7 @@ export function GridGenerationPopover({
         sideOffset={10}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`w-[180px] ${POPOVER_SURFACE}`}
       >
         <div className="flex items-center gap-1.5 px-2 py-1.5">

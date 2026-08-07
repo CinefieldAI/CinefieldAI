@@ -36,10 +36,12 @@ export default function ModelItem({
       role="option"
       aria-selected={isSelected}
       onClick={() => onSelect(model.name)}
-      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
         isSelected
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
-          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
+          : // Keyboard focus gets the same grey card the mouse hover uses, so
+            // arrowing through the list visibly shows where you are.
+            "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
       {/* Selected indicator: flat 3px accent line, no glow. The white

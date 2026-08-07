@@ -96,6 +96,11 @@ export default function Kling3AspectRatioControl({
     count: KLING3_ASPECT_RATIOS.length,
     selectedIndex: KLING3_ASPECT_RATIOS.findIndex((opt) => opt.value === value),
     open: controlledOpen,
+    onActivate: (index) => {
+      const opt = KLING3_ASPECT_RATIOS[index];
+      if (!opt) return;
+      onChange(opt.value);
+    },
     onSelect: (index) => {
       const opt = KLING3_ASPECT_RATIOS[index];
       if (!opt) return;
@@ -129,10 +134,11 @@ export default function Kling3AspectRatioControl({
           sideOffset={8}
           onKeyDown={nav.handleKeyDown}
           onOpenAutoFocus={nav.handleOpenAutoFocus}
+          onEscapeKeyDown={nav.handleEscapeKeyDown}
           className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#18191c]/95 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.75)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[210px]"
         >
           <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
-          <div role="listbox" aria-label="Select ratio" className="hide-scrollbar max-h-[264px] overflow-y-auto">
+          <div role="listbox" aria-label="Select ratio" className="hide-scrollbar max-h-[min(70vh,560px)] overflow-y-auto">
           {KLING3_ASPECT_RATIOS.map((opt, index) => {
             const selected = opt.value === value;
             return (
@@ -148,7 +154,7 @@ export default function Kling3AspectRatioControl({
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-all duration-150 ${
                   selected
-                    ? "bg-[#24262b] text-white font-semibold border border-white/10"
+                    ? "bg-[#24262b] font-semibold text-white"
                     : nav.activeIndex === index
                       ? "bg-white/5 text-white"
                       : "text-white/80 hover:bg-white/5 hover:text-white"

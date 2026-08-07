@@ -118,26 +118,18 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
         active
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
-          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
+          : // Keyboard focus shows the same grey card as hover, so arrowing
+            // through the list makes the current row visible.
+            "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
       {active ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
-        />
-      ) : isContinuation ? (
-        <span
-          aria-hidden
-          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            boxShadow:
-              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-          }}
         />
       ) : null}
       <div
@@ -204,26 +196,18 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
         active
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
-          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
+          : // Keyboard focus shows the same grey card as hover, so arrowing
+            // through the list makes the current row visible.
+            "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
       {active ? (
         <span
           aria-hidden
           className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
-        />
-      ) : isContinuation ? (
-        <span
-          aria-hidden
-          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            boxShadow:
-              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-          }}
         />
       ) : null}
       <div
@@ -375,16 +359,6 @@ function VideoParentRow({
           <span
             aria-hidden
             className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
-          />
-        ) : isContinuation ? (
-          <span
-            aria-hidden
-            className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-            style={{
-              background: "rgba(255, 255, 255, 0.95)",
-              boxShadow:
-                "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-            }}
           />
         ) : null}
         <div
