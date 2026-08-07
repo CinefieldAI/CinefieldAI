@@ -2,6 +2,7 @@
 
 import {
   AtSign,
+  Blend,
   Check,
   ChevronDown,
   Grid2x2,
@@ -87,7 +88,7 @@ export function AssetsButtonGroup({
    *  Uploads. Falls back to `onOpenPicker` when omitted. */
   onOpenElementsPicker?: () => void;
   /** Set false for models that only expose the plus button, no @ element
-   *  reference (Seedream 4.0). */
+   *  reference (Seedream 4.0, GPT Image, Seedream 4.5, Nano Banana variants). */
   showElementButton?: boolean;
 }) {
   return (
@@ -379,6 +380,156 @@ export function BatchSizeCounter({
         <Plus className="h-3.5 w-3.5" />
       </button>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Unlimited switch (Seedream 5.0 Pro)                                  */
+/* ------------------------------------------------------------------ */
+
+export function UnlimitedToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+      Unlimited
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Unlimited"
+        onClick={onToggle}
+        className="relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+        style={{ background: enabled ? "#22c55e" : "rgba(255,255,255,0.18)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200"
+          style={{ transform: enabled ? "translateX(13px)" : "translateX(2px)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Thinking selector (Nano Banana 2 Lite)                               */
+/* ------------------------------------------------------------------ */
+
+export function ThinkingPopover({
+  value,
+  onChange,
+  options,
+  id,
+  openId,
+  onOpenIdChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+} & PopoverCoordination) {
+  return (
+    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+      <PopoverTrigger asChild>
+        <button type="button" className={COMPACT_TRIGGER}>
+          {value}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={10}
+        className={`w-[200px] ${POPOVER_SURFACE}`}
+      >
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Thinking</p>
+        <div role="listbox" className="flex flex-col gap-0.5">
+          {options.map((opt) => {
+            const selected = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(opt);
+                  onOpenIdChange(null);
+                }}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
+                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
+                }`}
+              >
+                {opt}
+                {selected && <Check className="h-4 w-4 shrink-0 text-[#D97757]" />}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Vector mode switch (Recraft V4.1)                                    */
+/* ------------------------------------------------------------------ */
+
+export function VectorModeToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+      <Info className="h-3.5 w-3.5 opacity-60" />
+      Vector mode
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Vector mode"
+        onClick={onToggle}
+        className="relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+        style={{ background: enabled ? "#22c55e" : "rgba(255,255,255,0.18)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200"
+          style={{ transform: enabled ? "translateX(13px)" : "translateX(2px)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Color transfer trigger (Recraft V4.1)                                */
+/* ------------------------------------------------------------------ */
+
+export function ColorTransferButton({
+  active,
+  onToggle,
+}: {
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      className={`${COMPACT_TRIGGER} ${active ? "border-[#D97757] bg-[#181a1d]" : ""}`}
+    >
+      <Blend className="h-4 w-4 opacity-75" />
+      Color transfer
+    </button>
   );
 }
 

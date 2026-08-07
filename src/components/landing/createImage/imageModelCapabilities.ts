@@ -72,11 +72,27 @@ export interface ImageModelCapabilities {
   /** Renders the 80px Character + General cards beside Generate instead of
    *  a compact-row pill (Higgsfield Soul 2.0 only). */
   characterCards?: boolean;
+  /** Nano Banana 2 Lite's Thinking (reasoning depth) selector. */
+  thinkingOptions?: string[];
+  defaultThinking?: string;
+  /** Seedream 5.0 Pro's Unlimited switch, rendered right of the batch counter. */
+  unlimited?: boolean;
+  defaultUnlimited?: boolean;
 }
 
 export const RECRAFT_QUALITY_OPTIONS: { value: string; description: string }[] = [
   { value: "Standard", description: "Balanced quality and speed" },
   { value: "Pro", description: "Higher fidelity, slower" },
+];
+
+/** Recraft V4.1 needs the 4:5 social ratio, which the shared standard set omits. */
+export const RECRAFT_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:5", width: 16, height: 20 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "16:9", width: 21, height: 12 },
 ];
 
 const CINEMATIC_RATIOS: AspectRatioChoice[] = [
@@ -203,6 +219,10 @@ const RECRAFT_CAPABILITIES: ImageModelCapabilities = {
  *  has no plus/@ reference buttons. */
 const RECRAFT_V4_1_CAPABILITIES: ImageModelCapabilities = {
   ...RECRAFT_CAPABILITIES,
+  defaultQuality: "Standard",
+  aspectRatioOptions: RECRAFT_ASPECT_RATIOS,
+  defaultAspectRatio: "4:5",
+  defaultVectorMode: false,
   assetUpload: false,
   referenceSelection: false,
 };
@@ -219,9 +239,9 @@ export const SEEDREAM_4_MODE_OPTIONS: { value: string; description: string }[] =
   { value: "Basic", description: "Default generation mode" },
 ];
 export const SEEDREAM_5_PRO_RESOLUTION_OPTIONS: ResolutionChoice[] = [
-  { value: "1K", description: "1024px" },
-  { value: "1.5K", description: "1536px" },
   { value: "2K", description: "2048px" },
+  { value: "3K", description: "3072px" },
+  { value: "4K", description: "4096px" },
 ];
 export const SEEDREAM_5_LITE_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "2K", description: "2048px" },
@@ -233,6 +253,9 @@ export const SEEDREAM_4_5_RESOLUTION_OPTIONS: ResolutionChoice[] = [
 export const NANO_BANANA_2_LITE_QUALITY_OPTIONS: { value: string; description: string }[] = [
   { value: "High", description: "Best visual fidelity" },
 ];
+
+/** Nano Banana 2 Lite's Thinking control — reasoning depth, not a quality tier. */
+export const NANO_BANANA_2_LITE_THINKING_OPTIONS = ["High", "Minimal"];
 
 export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   Auto: {
@@ -460,7 +483,9 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
-    elementReferences: true,
+    elementReferences: false,
+    unlimited: true,
+    defaultUnlimited: false,
   },
   // Seedream 5.0 Lite — plus + @, single 2K resolution option, no Unlimited
   // anywhere (this model never had one; nothing to remove).
@@ -695,9 +720,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   },
   "Nano Banana 2 Lite": {
     modelTriggerSize: "compact",
-    quality: true,
-    qualityOptions: NANO_BANANA_2_LITE_QUALITY_OPTIONS,
-    defaultQuality: "High",
+    quality: false,
     resolution: false,
     aspectRatio: "simple",
     aspectRatioOptions: STANDARD_ASPECT_RATIOS,
@@ -709,7 +732,9 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
-    elementReferences: true,
+    elementReferences: false,
+    thinkingOptions: NANO_BANANA_2_LITE_THINKING_OPTIONS,
+    defaultThinking: "High",
   },
 };
 

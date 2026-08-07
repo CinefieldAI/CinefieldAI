@@ -35,10 +35,14 @@ import {
   AspectRatioPopover,
   AssetsButtonGroup,
   BatchSizeCounter,
+  ColorTransferButton,
   EnhancementToggle,
   QualityPopover,
   ResolutionPopover,
   SettingsPopover,
+  ThinkingPopover,
+  UnlimitedToggle,
+  VectorModeToggle,
   type FluxFlexSettings,
 } from "./ModelCapabilityControls";
 
@@ -242,6 +246,10 @@ export default function PromptComposer({
   const [modelAspectRatio, setModelAspectRatio] = useState(capabilities?.defaultAspectRatio ?? "16:9");
   const [modelBatch, setModelBatch] = useState(capabilities?.defaultBatchSize ?? 1);
   const [enhancementEnabled, setEnhancementEnabled] = useState(capabilities?.defaultEnhancement ?? true);
+  const [modelThinking, setModelThinking] = useState(capabilities?.defaultThinking ?? "High");
+  const [unlimitedEnabled, setUnlimitedEnabled] = useState(capabilities?.defaultUnlimited ?? false);
+  const [vectorMode, setVectorMode] = useState(capabilities?.defaultVectorMode ?? false);
+  const [modelColorTransfer, setModelColorTransfer] = useState(capabilities?.defaultColorTransfer ?? false);
   const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexSettings>({
     strength: 50,
     guidance: 50,
@@ -281,6 +289,10 @@ export default function PromptComposer({
       setModelAspectRatio(capabilities.defaultAspectRatio ?? "16:9");
       setModelBatch(capabilities.defaultBatchSize ?? 1);
       setEnhancementEnabled(capabilities.defaultEnhancement ?? true);
+      setModelThinking(capabilities.defaultThinking ?? "High");
+      setUnlimitedEnabled(capabilities.defaultUnlimited ?? false);
+      setVectorMode(capabilities.defaultVectorMode ?? false);
+      setModelColorTransfer(capabilities.defaultColorTransfer ?? false);
     } else {
       // Legacy/generic-panel models (Higgsfield Soul, Nano Banana family,
       // Seedream family, Grok Imagine, Recraft V4.1, GPT Image / 1.5, Kling
@@ -621,10 +633,7 @@ export default function PromptComposer({
                   {selectedModel === "GPT Image 2" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -902,10 +911,7 @@ export default function PromptComposer({
                   {selectedModel === "Seedream 4.5" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -967,9 +973,18 @@ export default function PromptComposer({
                   {selectedModel === "Seedream 5.0 Pro" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          label="Select quality"
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
                         />
                       )}
                       {capabilities.aspectRatioOptions && (
@@ -982,30 +997,18 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
-                      {capabilities.resolutionOptions && (
-                        <ResolutionPopover
-                          value={modelResolution}
-                          onChange={setModelResolution}
-                          options={capabilities.resolutionOptions}
-                          detailed
-                          label="QUALITY"
-                          compactWidth
-                          id="resolution"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <UnlimitedToggle
+                        enabled={unlimitedEnabled}
+                        onToggle={() => setUnlimitedEnabled((v) => !v)}
+                      />
                     </>
                   )}
 
                   {(selectedModel === "Nano Banana Pro" || selectedModel === "Nano Banana 2") && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -1034,9 +1037,46 @@ export default function PromptComposer({
                   {selectedModel === "Nano Banana 2 Lite" && (
                     <>
                       {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.thinkingOptions && (
+                        <ThinkingPopover
+                          value={modelThinking}
+                          onChange={setModelThinking}
+                          options={capabilities.thinkingOptions}
+                          id="thinking"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {selectedModel === "Recraft V4.1" && (
+                    <>
+                      <VectorModeToggle
+                        enabled={vectorMode}
+                        onToggle={() => setVectorMode((v) => !v)}
+                      />
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
                         />
                       )}
                       {capabilities.aspectRatioOptions && (
@@ -1050,16 +1090,10 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      {capabilities.qualityOptions && (
-                        <QualityPopover
-                          value={modelQuality}
-                          onChange={setModelQuality}
-                          options={capabilities.qualityOptions}
-                          id="quality"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
+                      <ColorTransferButton
+                        active={modelColorTransfer}
+                        onToggle={() => setModelColorTransfer((v) => !v)}
+                      />
                     </>
                   )}
 
