@@ -272,17 +272,36 @@ export default function Navbar({
     "FLUX.2": "FLUX.2 Pro",
   };
 
+  /**
+   * Picking a model always lands on /image with that model selected,
+   * regardless of which page the navbar is currently rendered on.
+   *
+   * `onOpenImageModel` is supplied only by AppShell (so only on /, /image,
+   * /audio/create, /canvas). It used to gate the whole destination: without
+   * it the handler fell back to onOpenImagePanel(), which every other host
+   * page defines differently — /video/create sent it to /generate, and
+   * Cinema Studio, Marketing Studio, Shorts Studio and Explainer all pass a
+   * noop, so the click silently did nothing there. The callback is now only
+   * an in-place optimisation for when we are already on /image; the
+   * destination itself no longer depends on the host page.
+   */
   const handleModelSelect = (name: string) => {
-    if (!onOpenImageModel || IMAGE_MODELS_WITHOUT_WORKSPACE.has(name)) {
+    // Popcorn and Topaz have no Create Image workspace destination — they
+    // keep the generic side-panel fallback they always had.
+    if (IMAGE_MODELS_WITHOUT_WORKSPACE.has(name)) {
       onOpenImagePanel();
       return;
     }
+
     const workspaceModel = IMAGE_DROPDOWN_TO_WORKSPACE_MODEL[name] ?? name;
-    goToWorkspace({
-      path: "/image",
-      query: `model=${encodeURIComponent(workspaceModel)}`,
-      inPlace: () => onOpenImageModel(workspaceModel),
-    });
+    setOpenNavItem("");
+
+    if (pathname === "/image" && onOpenImageModel) {
+      onOpenImageModel(workspaceModel);
+      return;
+    }
+
+    router.push(`/image?model=${encodeURIComponent(workspaceModel)}`);
   };
 
   const handleVideoFeatureSelect = (title: string) => {
