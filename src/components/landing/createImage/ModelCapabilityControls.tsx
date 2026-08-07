@@ -44,10 +44,14 @@ const LISTBOX_SCROLL = "hide-scrollbar max-h-[264px] overflow-y-auto";
 const OPTION_ACTIVE_RING = "ring-1 ring-inset ring-[rgba(217,119,87,0.55)]";
 
 /**
- * Roving keyboard navigation for a popover's option list. Handlers are bound to
- * the popover content, so arrow keys are only ever intercepted while that panel
- * is open — nothing is registered at the document level. Escape/focus-return is
- * left to Radix, which already does both.
+ * Roving-tabindex keyboard navigation for a popover's option list.
+ *
+ * The active option holds real DOM focus (and is the only tabbable row), so the
+ * highlight, the focus ring and what a screen reader announces can never drift
+ * apart. Handlers are bound to the popover content, so arrow keys are only ever
+ * intercepted while that panel is open — nothing is registered at the document
+ * level. Escape-to-close and focus-return-to-trigger are left to Radix, which
+ * already does both.
  */
 function useListboxNav({
   count,
@@ -60,51 +64,73 @@ function useListboxNav({
   open: boolean;
   onSelect: (index: number) => void;
 }) {
-  const [activeIndex, setActiveIndex] = useState(selectedIndex < 0 ? 0 : selectedIndex);
+  const initialIndex = selectedIndex < 0 ? 0 : selectedIndex;
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  // Only auto-scroll after a real arrow-key move, so merely opening the panel
-  // never yanks the surrounding page.
-  const navigatedRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setActiveIndex(selectedIndex < 0 ? 0 : selectedIndex);
-      navigatedRef.current = false;
-    }
-  }, [open, selectedIndex]);
+    if (open) setActiveIndex(initialIndex);
+  }, [open, initialIndex]);
 
-  useEffect(() => {
-    if (navigatedRef.current) {
-      optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
-    }
-  }, [activeIndex]);
+  const focusOption = (index: number) => {
+    const el = optionRefs.current[index];
+    if (!el) return;
+    // preventScroll stops the browser nudging the whole page; the explicit
+    // scrollIntoView then moves only the list's own scroll container.
+    el.focus({ preventScroll: true });
+    el.scrollIntoView({ block: "nearest" });
+  };
+
+  const moveTo = (index: number) => {
+    setActiveIndex(index);
+    focusOption(index);
+  };
+
+  /** Radix focuses the panel wrapper on open; take that over so the currently
+   *  selected row is focused instead and ArrowDown works without a click. */
+  const handleOpenAutoFocus = (event: Event) => {
+    event.preventDefault();
+    setActiveIndex(initialIndex);
+    requestAnimationFrame(() => focusOption(initialIndex));
+  };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (count === 0) return;
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      navigatedRef.current = true;
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((index) => (index + delta + count) % count);
-      return;
-    }
-    if (event.key === "Home" || event.key === "End") {
-      event.preventDefault();
-      navigatedRef.current = true;
-      setActiveIndex(event.key === "Home" ? 0 : count - 1);
-      return;
-    }
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect(activeIndex);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        moveTo(Math.min(activeIndex + 1, count - 1));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        moveTo(Math.max(activeIndex - 1, 0));
+        break;
+      case "Home":
+        event.preventDefault();
+        moveTo(0);
+        break;
+      case "End":
+        event.preventDefault();
+        moveTo(count - 1);
+        break;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        onSelect(activeIndex);
+        break;
+      default:
+        break;
     }
   };
 
-  const setOptionRef = (index: number) => (el: HTMLButtonElement | null) => {
-    optionRefs.current[index] = el;
-  };
+  const getOptionProps = (index: number) => ({
+    ref: (el: HTMLButtonElement | null) => {
+      optionRefs.current[index] = el;
+    },
+    tabIndex: index === activeIndex ? 0 : -1,
+  });
 
-  return { activeIndex, handleKeyDown, setOptionRef };
+  return { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps };
 }
 
 /** Trigger a11y wiring shared by every option-list popover. */
@@ -222,7 +248,7 @@ export function QualityPopover({
     onChange(opt.value);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((o) => o.value === value),
     open,
@@ -242,6 +268,7 @@ export function QualityPopover({
         align="start"
         sideOffset={10}
         onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
         className={`w-[300px] ${POPOVER_SURFACE}`}
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
@@ -251,7 +278,7 @@ export function QualityPopover({
             return (
               <button
                 key={opt.value}
-                ref={setOptionRef(index)}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -308,7 +335,7 @@ export function ResolutionPopover({
     onChange(opt.value);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((o) => o.value === value),
     open,
@@ -328,6 +355,7 @@ export function ResolutionPopover({
         align="start"
         sideOffset={10}
         onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
         className={`${compactWidth ? "w-[160px]" : "w-[300px]"} ${POPOVER_SURFACE}`}
       >
         {detailed && (
@@ -339,7 +367,7 @@ export function ResolutionPopover({
             return (
               <button
                 key={opt.value}
-                ref={setOptionRef(index)}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -400,7 +428,7 @@ export function AspectRatioPopover({
     onChange(ratio.value);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.findIndex((r) => r.value === value),
     open,
@@ -425,16 +453,17 @@ export function AspectRatioPopover({
         align="start"
         sideOffset={8}
         onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
         className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
-        <div role="listbox" aria-label="Aspect ratio" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+        <div role="listbox" aria-label="Select ratio" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
           {options.map((ratio, index) => {
             const selected = ratio.value === value;
             return (
               <button
                 key={ratio.value}
-                ref={setOptionRef(index)}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -561,7 +590,7 @@ export function ThinkingPopover({
     onChange(opt);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
     count: options.length,
     selectedIndex: options.indexOf(value),
     open,
@@ -581,6 +610,7 @@ export function ThinkingPopover({
         align="start"
         sideOffset={10}
         onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
         className={`w-[200px] ${POPOVER_SURFACE}`}
       >
         <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Thinking</p>
@@ -590,7 +620,7 @@ export function ThinkingPopover({
             return (
               <button
                 key={opt}
-                ref={setOptionRef(index)}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -720,7 +750,7 @@ export function GridGenerationPopover({
     onChange(opt);
     onOpenIdChange(null);
   };
-  const { activeIndex, handleKeyDown, setOptionRef } = useListboxNav({
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, getOptionProps } = useListboxNav({
     count: GRID_GENERATION_OPTIONS.length,
     selectedIndex: GRID_GENERATION_OPTIONS.indexOf(value as (typeof GRID_GENERATION_OPTIONS)[number]),
     open,
@@ -741,6 +771,7 @@ export function GridGenerationPopover({
         align="start"
         sideOffset={10}
         onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
         className={`w-[180px] ${POPOVER_SURFACE}`}
       >
         <div className="flex items-center gap-1.5 px-2 py-1.5">
@@ -753,7 +784,7 @@ export function GridGenerationPopover({
             return (
               <button
                 key={opt}
-                ref={setOptionRef(index)}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}

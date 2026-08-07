@@ -860,16 +860,6 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                       {capabilities.resolutionOptions && (
                         <ResolutionPopover
                           value={modelResolution}
@@ -877,6 +867,16 @@ export default function PromptComposer({
                           options={capabilities.resolutionOptions}
                           compactWidth
                           id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
                           openId={openPopoverId}
                           onOpenIdChange={setOpenPopoverId}
                         />
