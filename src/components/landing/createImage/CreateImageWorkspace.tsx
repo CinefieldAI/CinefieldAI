@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Wand2 } from "lucide-react";
 import HeroSection from "@/components/image-tools/HeroSection";
-import ImageAtmosphereBackground from "./ImageAtmosphereBackground";
 import PromptComposer from "./PromptComposer";
 import { FEATURED_MODELS } from "./createImageData";
 import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
@@ -108,10 +107,12 @@ export default function CreateImageWorkspace({ onBack, initialModel }: CreateIma
     await new Promise((resolve) => setTimeout(resolve, 1600));
   };
 
+  // The page sits on AppShell's own black background. It used to carry an
+  // ImageAtmosphereBackground layer — three full-bleed photos cross-fading
+  // every 8s behind everything — which is gone; the hero collage is now the
+  // only imagery on this page.
   return (
     <section className="relative flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden pb-[190px]">
-      <ImageAtmosphereBackground />
-
       {/* Top bar */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-5">
         <button
