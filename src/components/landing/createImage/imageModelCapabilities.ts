@@ -204,6 +204,88 @@ export const GPT_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "4K", description: "4096px" },
 ];
 
+/* ------------------------------------------------------------------ */
+/* /image-only control definitions for the three OpenAI models          */
+/* ------------------------------------------------------------------ */
+
+/** GPT Image 2's own 9-ratio set, in the exact order its panel lists them.
+ *  Dedicated to GPT Image 2: do not share it with GPT Image / GPT Image 1.5
+ *  (their 3-ratio set is below) and do not trim it to match a shorter list. */
+export const GPT_IMAGE_2_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "21:9", width: 24, height: 10 },
+];
+
+/** Square / portrait / landscape only. Shared by exactly two models —
+ *  GPT Image and GPT Image 1.5 — whose ratio requirements are identical.
+ *  Never add "Auto" or a fourth ratio here: GPT Image 2's longer list is
+ *  deliberately separate, and NANO_BANANA_ASPECT_RATIOS happens to hold the
+ *  same three values but belongs to a different model. */
+export const GPT_COMPACT_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+];
+
+/** GPT Image's own quality copy. Deliberately NOT GPT_QUALITY_OPTIONS: the
+ *  three tier names match but every description is this model's own. */
+export const GPT_IMAGE_QUALITY_OPTIONS: { value: string; description: string }[] = [
+  { value: "Low", description: "Fastest, fewer credits" },
+  { value: "Medium", description: "Balanced speed & detail" },
+  { value: "High", description: "Maximum detail" },
+];
+
+export interface GptImagePageControls {
+  aspectRatioOptions: AspectRatioChoice[];
+  defaultAspectRatio: string;
+  qualityOptions: { value: string; description: string }[];
+  defaultQuality: string;
+}
+
+/**
+ * The ratio lists, quality copy and defaults /image's prompt bar uses for the
+ * three OpenAI models.
+ *
+ * These deliberately live OUTSIDE `MODEL_CAPABILITIES`. That map is not
+ * /image's alone — /generate's CinemaStudioImagePanel renders its own GPT
+ * Image 2 row from `capabilities.aspectRatioOptions` and gates its plus
+ * button on `capabilities.assetUpload`, and image-tools' ImageForm reads it
+ * too. /generate is locked, so editing those entries in place would have
+ * silently changed a locked page. Only PromptComposer imports this map, which
+ * leaves both other callers byte-identical in behaviour.
+ *
+ * Consequence worth knowing: /generate's GPT Image 2 panel still offers the
+ * older 6-ratio GPT_ASPECT_RATIOS set. Propagating these values there is a
+ * separate, explicitly-unlocked change.
+ */
+export const GPT_IMAGE_PAGE_CONTROLS: Record<string, GptImagePageControls> = {
+  "GPT Image": {
+    aspectRatioOptions: GPT_COMPACT_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    qualityOptions: GPT_IMAGE_QUALITY_OPTIONS,
+    defaultQuality: "Low",
+  },
+  "GPT Image 1.5": {
+    aspectRatioOptions: GPT_COMPACT_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    qualityOptions: GPT_QUALITY_OPTIONS,
+    defaultQuality: "Low",
+  },
+  "GPT Image 2": {
+    aspectRatioOptions: GPT_IMAGE_2_ASPECT_RATIOS,
+    defaultAspectRatio: "Auto",
+    qualityOptions: GPT_QUALITY_OPTIONS,
+    defaultQuality: "High",
+  },
+};
+
 export const SOUL_CINEMA_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "1.5k", description: "" },
   { value: "2K", description: "" },

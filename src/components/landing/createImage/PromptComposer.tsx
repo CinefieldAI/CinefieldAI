@@ -29,6 +29,7 @@ import { OUTPUT_COUNTS, type ReferenceAttachment } from "./createImageData";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import {
   getCapabilities,
+  GPT_IMAGE_PAGE_CONTROLS,
   KLING_O1_RESOLUTION_OPTIONS,
   STANDARD_ASPECT_RATIOS,
 } from "./imageModelCapabilities";
@@ -254,10 +255,17 @@ export default function PromptComposer({
   // Digital S35 / WAN 2.2). Kept separate from the legacy generic controls
   // above so every other model's behavior is untouched.
   const capabilities = getCapabilities(selectedModel);
-  const [gptQuality, setGptQuality] = useState("High");
-  const [modelQuality, setModelQuality] = useState(capabilities?.defaultQuality ?? "Standard");
+  // GPT Image / GPT Image 1.5 / GPT Image 2 take their ratio list, quality
+  // copy and defaults from this /image-only map rather than from
+  // MODEL_CAPABILITIES, which /generate's locked image panel also reads.
+  const gptControls = GPT_IMAGE_PAGE_CONTROLS[selectedModel];
+  const [modelQuality, setModelQuality] = useState(
+    gptControls?.defaultQuality ?? capabilities?.defaultQuality ?? "Standard",
+  );
   const [modelResolution, setModelResolution] = useState(capabilities?.defaultResolution ?? "2K");
-  const [modelAspectRatio, setModelAspectRatio] = useState(capabilities?.defaultAspectRatio ?? "16:9");
+  const [modelAspectRatio, setModelAspectRatio] = useState(
+    gptControls?.defaultAspectRatio ?? capabilities?.defaultAspectRatio ?? "16:9",
+  );
   const [modelBatch, setModelBatch] = useState(capabilities?.defaultBatchSize ?? 1);
   const [enhancementEnabled, setEnhancementEnabled] = useState(capabilities?.defaultEnhancement ?? true);
   const [modelThinking, setModelThinking] = useState(capabilities?.defaultThinking ?? "High");
@@ -304,9 +312,12 @@ export default function PromptComposer({
     // follows the user into the next model.
     setDrawMode(false);
     if (capabilities) {
-      setModelQuality(capabilities.defaultQuality ?? "Standard");
+      // gptControls is already recomputed for the model being switched TO, so
+      // the three OpenAI models land on their own defaults (1:1/Low, 1:1/Low,
+      // Auto/High) instead of the shared map's.
+      setModelQuality(gptControls?.defaultQuality ?? capabilities.defaultQuality ?? "Standard");
       setModelResolution(capabilities.defaultResolution ?? "2K");
-      setModelAspectRatio(capabilities.defaultAspectRatio ?? "16:9");
+      setModelAspectRatio(gptControls?.defaultAspectRatio ?? capabilities.defaultAspectRatio ?? "16:9");
       setModelBatch(capabilities.defaultBatchSize ?? 1);
       setEnhancementEnabled(capabilities.defaultEnhancement ?? true);
       setModelThinking(capabilities.defaultThinking ?? "High");
@@ -631,25 +642,22 @@ export default function PromptComposer({
 
               {capabilities ? (
                 <>
-                  {selectedModel === "GPT Image 2" && (
+                  {/* The three OpenAI models each render a different control
+                      order, and each reads its ratio list and quality copy
+                      from GPT_IMAGE_PAGE_CONTROLS rather than from
+                      `capabilities` — see that map for why. Resolution and
+                      batch still come from the shared entry, which already
+                      holds the right values for them (1K/2K/4K, 4K default,
+                      batch 4 on GPT Image 2). */}
+                  {selectedModel === "GPT Image 2" && gptControls && (
                     <>
                       {capabilities.assetUpload && (
                         <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
                       )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          large
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                       <QualityPopover
-                        value={gptQuality}
-                        onChange={setGptQuality}
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
                         id="quality"
                         openId={openPopoverId}
                         onOpenIdChange={setOpenPopoverId}
@@ -665,6 +673,63 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        large
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {/* GPT Image 1.5 and GPT Image had capability entries but no
+                      branch here, so selecting either rendered a control row
+                      with nothing in it but the model selector — the same gap
+                      Kling O1 had. Neither shows an upload or @ button. */}
+                  {selectedModel === "GPT Image 1.5" && gptControls && (
+                    <>
+                      <QualityPopover
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
+                        id="quality"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "GPT Image" && gptControls && (
+                    <>
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <QualityPopover
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
+                        id="quality"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
                     </>
                   )}
