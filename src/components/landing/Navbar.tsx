@@ -245,6 +245,32 @@ export default function Navbar({
     goToAudioWorkspace({ mode: "voiceover", modelIndex: index >= 0 ? index : 0 });
   };
 
+  /**
+   * Clicking a top-level Image/Video/Audio trigger now also jumps to that
+   * section's workspace, on top of the mega dropdown hovering already opens.
+   * Each one reuses the handler its own dropdown's primary row uses, so the
+   * trigger and that row can never drift to different destinations.
+   *
+   * Radix's trigger has its own click handler that toggles the menu, so the
+   * navigation must preventDefault or the two fight over `openNavItem`.
+   *
+   * Two kinds of click are deliberately left to Radix:
+   *  - keyboard Enter/Space (`detail === 0`), otherwise a keyboard user could
+   *    only ever leave the page and never open the panel;
+   *  - pointers with no hover, where the first tap is the only way to open the
+   *    panel at all. The mega dropdowns are md+ only (mobile has its own
+   *    drawer below), but touch laptops and tablets do reach this.
+   */
+  const handleNavTriggerClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    goToSection: () => void,
+  ) => {
+    if (event.detail === 0) return;
+    if (!window.matchMedia("(hover: hover)").matches) return;
+    event.preventDefault();
+    goToSection();
+  };
+
   return (
     <header
       className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 md:grid-cols-[auto_1fr_auto]"
@@ -283,6 +309,9 @@ export default function Navbar({
             {/* Image: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
+                onClick={(event) =>
+                  handleNavTriggerClick(event, () => handleFeatureSelect("create"))
+                }
                 className={`text-[14px] ${
                   activePanel === "image"
                     ? "bg-white/10 text-[#D97757]"
@@ -302,6 +331,11 @@ export default function Navbar({
             {/* Video: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
+                onClick={(event) =>
+                  handleNavTriggerClick(event, () =>
+                    handleVideoFeatureSelect("Create Video"),
+                  )
+                }
                 className={`text-[14px] ${
                   activePanel === "video" ||
                   pathname.startsWith("/video/")
@@ -322,6 +356,15 @@ export default function Navbar({
             {/* Audio: mega dropdown trigger */}
             <NavigationMenuItem>
               <NavigationMenuTrigger
+                onClick={(event) =>
+                  handleNavTriggerClick(event, () =>
+                    // Carries whatever Audio mode is already active instead of
+                    // snapping to Voiceover the way picking a Feature row does
+                    // — the trigger is a way into the workspace, not a mode
+                    // change.
+                    goToAudioWorkspace({ mode: audioMode ?? "voiceover" }),
+                  )
+                }
                 className={`text-[14px] ${
                   activePanel === "audio" ||
                   pathname.startsWith("/audio/")
