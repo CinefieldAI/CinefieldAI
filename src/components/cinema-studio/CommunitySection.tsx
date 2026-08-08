@@ -62,7 +62,7 @@ export default function CommunitySection({
           inset is pinned to the collapsed sidebar and only a transform follows
           the live width, so the grid keeps its columns as the sidebar opens. */}
       <div
-        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-transform duration-300 ease-out md:pl-[68px]"
+        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-transform duration-300 ease-out md:pl-[60px]"
         style={{ transform: `translateX(${Math.max(0, (sidebarWidth ?? 52) - 52)}px)` }}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

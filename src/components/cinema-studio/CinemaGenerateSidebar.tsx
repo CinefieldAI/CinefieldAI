@@ -177,7 +177,7 @@ interface CinemaGenerateSidebarProps {
   onViewChange?: (view: string) => void;
   /** Fires whenever the rendered width changes (collapse toggle or drag-resize)
    *  so the page can keep its main-content offset in sync. */
-  onWidthChange?: (width: number) => void;
+  onWidthChange?: (width: number, isDragging: boolean) => void;
 }
 
 export default function CinemaGenerateSidebar({
@@ -224,16 +224,15 @@ export default function CinemaGenerateSidebar({
 
   // The sidebar's own rendered width — follows the live drag in real time.
   const width = dragWidth ?? (isCollapsed ? COLLAPSED_WIDTH : expandedWidth);
-  // The "committed" width — only the collapsed/expanded resting state, never
-  // the in-between drag value. The main content panel is independent of the
-  // sidebar: it must not shift on every drag pixel, only once the drag ends
-  // and the sidebar settles into its new resting width.
-  const committedWidth = isCollapsed ? COLLAPSED_WIDTH : expandedWidth;
-
+  // Report the live width, drag included, so the content panel moves in the
+  // same frame as the sidebar. Reporting only the resting width used to leave
+  // the page background exposed between the two for the length of a drag.
+  // `isDragging` rides along so the consumer can drop its transition while the
+  // pointer is down and not lag a frame behind.
   useEffect(() => {
-    onWidthChange?.(committedWidth);
+    onWidthChange?.(width, isDragging);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committedWidth]);
+  }, [width, isDragging]);
 
   useEffect(() => {
     if (!isDragging) return;

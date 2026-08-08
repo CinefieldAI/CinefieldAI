@@ -59,6 +59,10 @@ export default function CinemaStudioWorkspace() {
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_COLLAPSED_WIDTH);
+  // True while the sidebar's resize handle is held. The content panel drops its
+  // transition then, so it tracks the pointer exactly instead of easing a frame
+  // behind and briefly exposing the page background between the two.
+  const [isSidebarDragging, setIsSidebarDragging] = useState(false);
 
   const toggleHeroVideoMute = () => {
     if (heroVideoRef.current) {
@@ -320,22 +324,24 @@ export default function CinemaStudioWorkspace() {
         onViewChange={(view) => setActiveSidebarView(view as any)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-        onWidthChange={setSidebarWidth}
+        onWidthChange={(width, dragging) => {
+          setSidebarWidth(width);
+          setIsSidebarDragging(dragging);
+        }}
       />
 
       {/* Hero — the Blueface promo fills this band, with the composer sitting
           over its lower edge (matches the reference: video on top, cards on
-          black underneath). This section is its own independent panel next
-          to the sidebar — it does not live-follow the sidebar while it's
-          being drag-resized, only once the drag settles (see
-          `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
+          black underneath). It tracks the sidebar frame for frame, drag
+          included, so the two edges stay together and the page background is
+          never exposed between them. */}
       <section
         /* The panel keeps the size it has while the sidebar is collapsed and
            slides sideways instead of being squeezed: the left offset and the
            width are both pinned to the collapsed sidebar, and only a transform
            follows the live width. Expanding the sidebar therefore pushes the
            card right without reflowing anything inside it. */
-        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-transform duration-300 ease-out md:ml-[68px] md:w-[calc(100vw-68px)]"
+        className={`relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black md:ml-[60px] md:w-[calc(100vw-60px)] ${isSidebarDragging ? "" : "transition-transform duration-300 ease-out"}`}
         style={{ transform: `translateX(${Math.max(0, sidebarWidth - SIDEBAR_COLLAPSED_WIDTH)}px)` }}
       >
         <video
@@ -353,7 +359,7 @@ export default function CinemaStudioWorkspace() {
               vid.play().catch(() => {});
             }
           }}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full rounded-[1rem] object-cover"
         >
           <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
         </video>
