@@ -1,13 +1,10 @@
 import React from "react";
 import { Wand2 } from "lucide-react";
 import {
-  CharacterSwapIcon,
-  FaceSwapIcon,
   FluxIcon,
   GoogleIcon,
   GrokIcon,
   HappyHorseIcon,
-  HiggsfieldIcon,
   KlingIcon,
   MinimaxIcon,
   MultiReferenceIcon,
@@ -24,6 +21,28 @@ import WanIcon from "@/components/cinema-studio/icons/WanIcon";
  * plain name, so the marker stays a pure presentation concern and every key
  * in the table below can remain marker-free.
  */
+/**
+ * The site's own mark for its own models — the white C on transparency
+ * (public/cinefield-icon-exact.png), so inside the existing dark icon tiles it
+ * reads as a white glyph on black, replacing the competitor squiggle the
+ * Cinefield-branded models used to carry. Same tile, same sizing contract as
+ * the SVG icons: the className passed in drives the dimensions.
+ */
+const CinefieldIcon: React.ComponentType<{
+  className?: string;
+  style?: React.CSSProperties;
+}> = ({ className, style }) =>
+  React.createElement("img", {
+    src: "/cinefield-icon-exact.png",
+    alt: "",
+    className,
+    // The C sits small inside the PNG's canvas, so at the size-4.5 the tiles
+    // pass in it reads smaller than the sibling SVG glyphs. Scaling the image
+    // up — rather than passing a bigger className — keeps every caller's
+    // layout box identical to the other icons'.
+    style: { ...style, objectFit: "contain", transform: "scale(1.4)" },
+  });
+
 export const normalizeModelName = (value: string): string =>
   value.replace(/^\s*🚫\s*/, "").trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -59,14 +78,14 @@ export const MODEL_ICON_BY_NORMALIZED_NAME: Record<
   "wan 2.5 fast": WanIcon,
   "wan 2.6": WanIcon,
   "wan 2.7": WanIcon,
-  "cinefield soul 2.0": HiggsfieldIcon,
-  "cinefield soul cinema": HiggsfieldIcon,
-  "cinefield soul": HiggsfieldIcon,
-  "cinefield face swap": FaceSwapIcon,
-  "cinefield character swap": CharacterSwapIcon,
-  "cinefield lite": HiggsfieldIcon,
-  "cinefield standard": HiggsfieldIcon,
-  "cinefield turbo": HiggsfieldIcon,
+  "cinefield soul 2.0": CinefieldIcon,
+  "cinefield soul cinema": CinefieldIcon,
+  "cinefield soul": CinefieldIcon,
+  "cinefield face swap": CinefieldIcon,
+  "cinefield character swap": CinefieldIcon,
+  "cinefield lite": CinefieldIcon,
+  "cinefield standard": CinefieldIcon,
+  "cinefield turbo": CinefieldIcon,
   "happyhorse": HappyHorseIcon,
   "multi reference": MultiReferenceIcon,
   "seedance 2.0": SeedanceIcon,
