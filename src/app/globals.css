@@ -168,6 +168,19 @@ body {
   height: 0;
 }
 
+/* Page-level variant — a route opts in by putting this on <html> while it is
+   mounted (see CinemaStudioWorkspace), hiding the document scrollbar without
+   disabling scrolling. Deliberately class-gated so no other route changes. */
+.hide-page-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-page-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Keyboard focus inside a prompt-bar control row.
    Deliberately identical to the mouse-hover look — the same thin orange edge,
    no extra outline — so arrowing across the row and hovering it read the same.

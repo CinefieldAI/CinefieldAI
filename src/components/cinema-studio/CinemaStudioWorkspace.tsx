@@ -78,6 +78,14 @@ export default function CinemaStudioWorkspace() {
     }
   }, []);
 
+  // Hide the document scrollbar while this page is mounted — scrolling itself
+  // keeps working; only the bar disappears. Removed on unmount so every other
+  // route keeps its normal scrollbar.
+  useEffect(() => {
+    document.documentElement.classList.add("hide-page-scrollbar");
+    return () => document.documentElement.classList.remove("hide-page-scrollbar");
+  }, []);
+
   // Core settings
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"image" | "video">("video");
@@ -370,10 +378,26 @@ export default function CinemaStudioWorkspace() {
 
         {/* Side feathers — the top and bottom already faded, but the left and
             right edges cut the footage off dead straight against the panel.
-            These carry the same fade sideways so the video dissolves into the
-            surface on all four sides instead of ending on a hard line. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-32 rounded-l-[15px] bg-gradient-to-r from-black via-black/55 to-transparent" />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-32 rounded-r-[15px] bg-gradient-to-l from-black via-black/55 to-transparent" />
+            The reference dissolves the footage over a wide band (roughly a
+            quarter of the hero), so these are 320px with an eased multi-stop
+            ramp rather than a narrow strip: solid black holds the first 60px,
+            then falls away gradually. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-80 rounded-l-[15px]"
+          style={{
+            background:
+              "linear-gradient(to right, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-80 rounded-r-[15px]"
+          style={{
+            background:
+              "linear-gradient(to left, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+          }}
+        />
 
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
