@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
-import CreateAudioWorkspace from "@/components/landing/createAudio/CreateAudioWorkspace";
+import AudioCreateShell from "@/components/landing/createAudio/AudioCreateShell";
 import CreateImageWorkspace from "@/components/landing/createImage/CreateImageWorkspace";
 import { MASTER_IMAGE_MODELS } from "@/components/landing/createImage/createImageData";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
@@ -123,8 +123,11 @@ export default function AppShell({ initialView = "default", initialPanel = null 
             initialModel={selectedImageModel}
           />
         )}
+        {/* Phase-1 shell of the rebuilt audio workspace. The old
+            CreateAudioWorkspace (rotary + composer) stays in the codebase as
+            the source of the behaviors the integration phase will wire in. */}
         {activeView === "createAudio" && (
-          <CreateAudioWorkspace
+          <AudioCreateShell
             onBack={() => setActiveView("default")}
             audioMode={audioMode}
             onAudioModeChange={setAudioMode}
