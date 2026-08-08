@@ -30,6 +30,11 @@ import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
+/** Mirrors COLLAPSED_WIDTH in CinemaGenerateSidebar — the width the content
+ *  panel is sized against, so expanding the sidebar slides it instead of
+ *  shrinking it. */
+const SIDEBAR_COLLAPSED_WIDTH = 52;
+
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
   const promptBarWrapperRef = useRef<HTMLDivElement>(null);
@@ -53,7 +58,7 @@ export default function CinemaStudioWorkspace() {
   // Sidebar state
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(52);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_COLLAPSED_WIDTH);
 
   const toggleHeroVideoMute = () => {
     if (heroVideoRef.current) {
@@ -296,8 +301,12 @@ export default function CinemaStudioWorkspace() {
     setAttachedFile(null);
   };
 
+  // overflow-x-hidden below: the content panel keeps its collapsed-state width
+  // and slides right when the sidebar opens, so its right edge runs past the
+  // viewport instead of the panel narrowing. Clip it here rather than letting
+  // the page gain a horizontal scrollbar.
   return (
-    <div className="min-h-screen w-full bg-black text-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-black text-white">
       <Navbar
         activePanel={null}
         onOpenImagePanel={noop}
@@ -314,22 +323,6 @@ export default function CinemaStudioWorkspace() {
         onWidthChange={setSidebarWidth}
       />
 
-      {/* Separator rail — the strip between the sidebar and the hero used to be
-          bare margin. It is now a real surface: darker than the sidebar
-          (#18191C) and lighter than the hero (black), so both panels read as
-          separate. It tracks the sidebar through the same committed
-          `sidebarWidth`, stays put when the sidebar collapses, and clicking it
-          runs the sidebar's existing collapse handler — no second button and no
-          second piece of state. Sits at z-30 so the sidebar's own drag handle
-          (z-50) keeps working across it, and is desktop-only like the sidebar. */}
-      <button
-        type="button"
-        aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-        className="fixed top-[72px] z-30 hidden h-[calc(100vh-88px)] w-8 rounded-t-[10px] border-x border-white/[0.04] bg-[#141517] transition-[left,background-color] duration-300 ease-out hover:bg-[#17181b] md:block"
-        style={{ left: `${sidebarWidth}px` }}
-      />
-
       {/* Hero — the Blueface promo fills this band, with the composer sitting
           over its lower edge (matches the reference: video on top, cards on
           black underneath). This section is its own independent panel next
@@ -337,8 +330,13 @@ export default function CinemaStudioWorkspace() {
           being drag-resized, only once the drag settles (see
           `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
       <section
-        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+32px)]"
-        style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
+        /* The panel keeps the size it has while the sidebar is collapsed and
+           slides sideways instead of being squeezed: the left offset and the
+           width are both pinned to the collapsed sidebar, and only a transform
+           follows the live width. Expanding the sidebar therefore pushes the
+           card right without reflowing anything inside it. */
+        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-transform duration-300 ease-out md:ml-[68px] md:w-[calc(100vw-68px)]"
+        style={{ transform: `translateX(${Math.max(0, sidebarWidth - SIDEBAR_COLLAPSED_WIDTH)}px)` }}
       >
         <video
           ref={heroVideoRef}

@@ -58,9 +58,12 @@ export default function CommunitySection({
 }) {
   return (
     <section className="w-full bg-black">
+      {/* Slides with the hero panel above rather than being squeezed: the left
+          inset is pinned to the collapsed sidebar and only a transform follows
+          the live width, so the grid keeps its columns as the sidebar opens. */}
       <div
-        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-[padding-left] duration-300 ease-out md:pl-[calc(var(--cinema-sidebar-w)+16px)]"
-        style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
+        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-transform duration-300 ease-out md:pl-[68px]"
+        style={{ transform: `translateX(${Math.max(0, (sidebarWidth ?? 52) - 52)}px)` }}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {COMMUNITY_ITEMS.map((item) => (
