@@ -862,6 +862,110 @@ export function SettingsPopover({
 }
 
 /* ------------------------------------------------------------------ */
+/* Flux.2 Flex advanced settings (/image only)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * /image's FLUX.2 Flex advanced panel: Prompt Strength (CFG) 1.5–10 and
+ * Quality Steps 1–50. Deliberately a separate component from the older
+ * SettingsPopover above — that one (0–100% Strength/Guidance) is still
+ * rendered by /generate's image panel (CinemaStudioImagePanel, ImageForm),
+ * which this task must not touch. Only PromptComposer uses this variant.
+ */
+export interface FluxFlexAdvancedSettings {
+  /** Prompt Strength (CFG): 1.5–10. */
+  cfg: number;
+  /** Quality Steps: 1–50. */
+  steps: number;
+}
+
+function AdvancedSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1 text-xs font-medium text-white/70">
+        {label}
+        <Info className="h-3.5 w-3.5 shrink-0 text-white/40" />
+        <span className="ml-auto text-white/45">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[#D97757]"
+      />
+    </div>
+  );
+}
+
+export function FluxFlexAdvancedPopover({
+  settings,
+  onChange,
+  id,
+  openId,
+  onOpenIdChange,
+}: {
+  settings: FluxFlexAdvancedSettings;
+  onChange: (settings: FluxFlexAdvancedSettings) => void;
+} & PopoverCoordination) {
+  return (
+    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Advanced settings"
+          className="gen-panel-settings-popup-trigger flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 px-1.5 text-white/85 transition-colors hover:bg-white/10 active:bg-white/20"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="center"
+        sideOffset={10}
+        className="z-[100000] w-60 rounded-xl border border-white/10 bg-[#141618]/95 px-4 py-3 text-white shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+      >
+        <div className="flex flex-col gap-4">
+          <AdvancedSlider
+            label="Prompt Strength (CFG)"
+            value={settings.cfg}
+            min={1.5}
+            max={10}
+            step={0.5}
+            onChange={(cfg) => onChange({ ...settings, cfg })}
+          />
+          <AdvancedSlider
+            label="Quality Steps"
+            value={settings.steps}
+            min={1}
+            max={50}
+            step={1}
+            onChange={(steps) => onChange({ ...settings, steps })}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Labeled toggle switch (Recraft V4.1 Utility's Vector mode / Color    */
 /* transfer) — icon + label + switch pill, distinct from the plain      */
 /* On/Off text button used by EnhancementToggle.                       */

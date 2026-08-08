@@ -155,6 +155,29 @@ const COMPACT_ASPECT_RATIOS: AspectRatioChoice[] = [
   { value: "16:9", width: 21, height: 12 },
 ];
 
+/** Kling O1's own 9-ratio set — the standard seven plus 3:2 and 2:3, in the
+ *  order its reference panel lists them. Dedicated to Kling O1: do not share
+ *  it with other models and do not trim it to match a shorter list. */
+export const KLING_O1_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "21:9", width: 24, height: 10 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "9:16", width: 12, height: 21 },
+];
+
+/** Kling O1's resolution tiers. The model stops at 2K — this list must never
+ *  gain the 4K row the GPT set has (see KLING_O1_RESOLUTION_OPTIONS below,
+ *  which encodes the same 1K/2K-only restriction for the legacy row). */
+export const KLING_O1_RESOLUTION_CHOICES: ResolutionChoice[] = [
+  { value: "1K", description: "Fast · Quick generation" },
+  { value: "2K", description: "High quality · Better resolution" },
+];
+
 /** The standard 7-option shared ratio list (Auto/1:1/3:4/9:16/4:3/16:9/21:9)
  *  used by every generic/legacy-tier model that doesn't have its own
  *  dedicated ratio set (Higgsfield Soul, Nano Banana family, Seedream
@@ -438,6 +461,11 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
+    // FLUX.2 Pro's Unlimited switch sits in the toolbar after the batch
+    // counter — same placement as Seedream 5.0 Pro's, never inside a
+    // dropdown.
+    unlimited: true,
+    defaultUnlimited: false,
   },
   "FLUX.2 Flex": {
     modelTriggerSize: "compact",
@@ -763,10 +791,10 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
-    resolutionOptions: GPT_RESOLUTION_OPTIONS,
+    resolutionOptions: KLING_O1_RESOLUTION_CHOICES,
     defaultResolution: "1K",
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    aspectRatioOptions: KLING_O1_ASPECT_RATIOS,
     defaultAspectRatio: "1:1",
     batchSize: true,
     defaultBatchSize: 1,

@@ -39,13 +39,13 @@ import {
   ColorTransferButton,
   DrawToggle,
   EnhancementToggle,
+  FluxFlexAdvancedPopover,
   QualityPopover,
   ResolutionPopover,
-  SettingsPopover,
   ThinkingPopover,
   UnlimitedToggle,
   VectorModeToggle,
-  type FluxFlexSettings,
+  type FluxFlexAdvancedSettings,
 } from "./ModelCapabilityControls";
 
 interface PromptComposerProps {
@@ -264,9 +264,11 @@ export default function PromptComposer({
   const [unlimitedEnabled, setUnlimitedEnabled] = useState(capabilities?.defaultUnlimited ?? false);
   const [vectorMode, setVectorMode] = useState(capabilities?.defaultVectorMode ?? false);
   const [modelColorTransfer, setModelColorTransfer] = useState(capabilities?.defaultColorTransfer ?? false);
-  const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexSettings>({
-    strength: 50,
-    guidance: 50,
+  // FLUX.2 Flex advanced sliders — Prompt Strength (CFG) 1.5–10 and Quality
+  // Steps 1–50, at their documented defaults.
+  const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexAdvancedSettings>({
+    cfg: 5,
+    steps: 30,
   });
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   // Which tab the shared Assets Picker opens on: the plus button always
@@ -791,6 +793,12 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.unlimited && (
+                        <UnlimitedToggle
+                          enabled={unlimitedEnabled}
+                          onToggle={() => setUnlimitedEnabled((v) => !v)}
+                        />
+                      )}
                     </>
                   )}
 
@@ -817,7 +825,7 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      <SettingsPopover
+                      <FluxFlexAdvancedPopover
                         settings={fluxFlexSettings}
                         onChange={setFluxFlexSettings}
                         id="settings"
@@ -1153,6 +1161,43 @@ export default function PromptComposer({
                           onChange={setModelAspectRatio}
                           options={capabilities.aspectRatioOptions}
                           id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {/* Kling O1 had a capability entry but no branch here, so
+                      selecting it rendered a toolbar with no controls at all
+                      (the legacy row's 1K/2K special case became unreachable
+                      the moment the capability entry existed). Its ratio and
+                      resolution lists are its own — KLING_O1_ASPECT_RATIOS
+                      (9 ratios) and KLING_O1_RESOLUTION_CHOICES (1K/2K, no
+                      4K) in imageModelCapabilities.ts. */}
+                  {selectedModel === "Kling O1" && (
+                    <>
+                      {capabilities.assetUpload && (
+                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          id="resolution"
                           openId={openPopoverId}
                           onOpenIdChange={setOpenPopoverId}
                         />
