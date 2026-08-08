@@ -186,7 +186,7 @@ export default function Hero() {
         />
 
         {/* Title */}
-        <h2 className="text-center font-bold text-white uppercase max-w-full" style={{
+        <h2 className="text-center font-bold text-yellow-400 uppercase max-w-full" style={{
           fontFamily: "'Space Grotesk', sans-serif",
           fontWeight: 700,
           fontSize: "1.75rem",
