@@ -52,3 +52,6 @@ next-env.d.ts
 # Cinefield handoff paketi (ChatGPT icin, repoya girmesin)
 cinefield-handoff/
 cinefield-handoff.zip
+
+# Local video compression output — compare before swapping in, never deployed
+video-compressed/
