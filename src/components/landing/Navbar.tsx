@@ -126,17 +126,12 @@ export default function Navbar({
     }
   };
 
-  // Two of the thirteen models in the dropdown aren't prompt-driven image
-  // generators — Popcorn is a storyboard tool, Topaz is an upscaler — so
-  // they don't have a Create Image workspace destination yet and keep
-  // falling back to the generic side panel.
-  const IMAGE_MODELS_WITHOUT_WORKSPACE = new Set(["🚫 Cinefield Popcorn", "Topaz"]);
-  // The dropdown's display names match the Create Image workspace's model
-  // list 1:1 except for these two casing/naming differences.
-  const IMAGE_DROPDOWN_TO_WORKSPACE_MODEL: Record<string, string> = {
-    "Seedream 5.0 lite": "Seedream 5.0 Lite",
-    "FLUX.2": "FLUX.2 Pro",
-  };
+  // Topaz is the one model left in the dropdown that isn't a prompt-driven
+  // image generator — it's an upscaler — so it has no Create Image workspace
+  // destination and keeps falling back to the generic side panel. Cinefield
+  // Popcorn used to sit here too; it left the dropdown entirely, so its entry
+  // was an unreachable lookup and has gone with it.
+  const IMAGE_MODELS_WITHOUT_WORKSPACE = new Set(["Topaz"]);
 
   /**
    * Picking a model always lands on /image with that model selected,
@@ -150,24 +145,28 @@ export default function Navbar({
    * noop, so the click silently did nothing there. The callback is now only
    * an in-place optimisation for when we are already on /image; the
    * destination itself no longer depends on the host page.
+   *
+   * The dropdown's display name is passed straight through: every routable
+   * model in IMAGE_DROPDOWN_MODELS now spells its name exactly as
+   * createImageData.ts does. A translation map used to sit here for
+   * "Seedream 5.0 lite" and "FLUX.2" — the first left the dropdown, the
+   * second was renamed to "FLUX.2 Pro", so neither key could match anything
+   * any more. Re-add one here if the two catalogs ever drift apart again.
    */
   const handleModelSelect = (name: string) => {
-    // Popcorn and Topaz have no Create Image workspace destination — they
-    // keep the generic side-panel fallback they always had.
     if (IMAGE_MODELS_WITHOUT_WORKSPACE.has(name)) {
       onOpenImagePanel();
       return;
     }
 
-    const workspaceModel = IMAGE_DROPDOWN_TO_WORKSPACE_MODEL[name] ?? name;
     setOpenNavItem("");
 
     if (pathname === "/image" && onOpenImageModel) {
-      onOpenImageModel(workspaceModel);
+      onOpenImageModel(name);
       return;
     }
 
-    router.push(`/image?model=${encodeURIComponent(workspaceModel)}`);
+    router.push(`/image?model=${encodeURIComponent(name)}`);
   };
 
   const handleVideoFeatureSelect = (title: string) => {
