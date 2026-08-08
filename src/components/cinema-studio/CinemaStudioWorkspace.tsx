@@ -321,11 +321,11 @@ export default function CinemaStudioWorkspace() {
     <div className="cinema-generate-workspace relative min-h-screen w-full overflow-x-hidden bg-[#090a0b] text-white">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[180px] h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(217,119,87,0.10),rgba(25,28,29,0.34)_34%,rgba(9,10,11,0.96)_68%,rgba(9,10,11,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 top-[160px] h-[680px] bg-[radial-gradient(ellipse_at_top,rgba(217,119,87,0.10)_0%,rgba(34,37,38,0.42)_36%,rgba(17,19,20,0.78)_66%,rgba(9,10,11,0)_100%)]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[300px] h-[420px] bg-[linear-gradient(180deg,rgba(9,10,11,0)_0%,rgba(9,10,11,0.72)_24%,rgba(9,10,11,0.96)_58%,rgba(9,10,11,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 top-[360px] h-[520px] bg-[linear-gradient(180deg,rgba(9,10,11,0)_0%,rgba(12,14,15,0.20)_24%,rgba(12,14,15,0.68)_58%,rgba(9,10,11,0)_100%)]"
       />
       <Navbar
         activePanel={null}
@@ -357,67 +357,58 @@ export default function CinemaStudioWorkspace() {
            width are both pinned to the collapsed sidebar, and only a transform
            follows the live width. Expanding the sidebar therefore pushes the
            card right without reflowing anything inside it. */
-        className={`relative z-10 overflow-visible rounded-[18px] border border-white/[0.04] bg-black md:ml-[60px] md:w-[calc(100vw-60px)] ${isSidebarDragging ? "" : "transition-transform duration-300 ease-out"}`}
+        className={`relative z-10 overflow-visible rounded-[18px] bg-transparent md:ml-[60px] md:w-[calc(100vw-60px)] ${isSidebarDragging ? "" : "transition-transform duration-300 ease-out"}`}
         style={{ transform: `translateX(${Math.max(0, sidebarWidth - SIDEBAR_COLLAPSED_WIDTH)}px)` }}
       >
-        <video
-          ref={heroVideoRef}
-          autoPlay
-          muted={isHeroVideoMuted}
-          loop
-          playsInline
-          preload="metadata"
+        {/* One masked visual surface contains the video and every darkening
+            layer. It extends behind the community lead-in so no unmasked
+            overlay or panel border can leave a horizontal edge. */}
+        <div
           aria-hidden="true"
-          onTimeUpdate={(e) => {
-            const vid = e.currentTarget;
-            if (vid.duration && vid.currentTime >= vid.duration - 0.2) {
-              vid.currentTime = 0;
-              vid.play().catch(() => {});
-            }
+          className="pointer-events-none absolute inset-x-0 top-0 -bottom-24 overflow-hidden rounded-[15px]"
+          style={{
+            WebkitMaskImage:
+              "linear-gradient(to bottom, #000 0%, #000 42%, rgba(0,0,0,0.92) 55%, rgba(0,0,0,0.68) 70%, rgba(0,0,0,0.32) 84%, rgba(0,0,0,0.08) 94%, transparent 100%)",
+            maskImage:
+              "linear-gradient(to bottom, #000 0%, #000 42%, rgba(0,0,0,0.92) 55%, rgba(0,0,0,0.68) 70%, rgba(0,0,0,0.32) 84%, rgba(0,0,0,0.08) 94%, transparent 100%)",
           }}
-          className="absolute inset-0 h-full w-full rounded-[15px] object-cover"
         >
-          <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
-        </video>
+          <video
+            ref={heroVideoRef}
+            autoPlay
+            muted={isHeroVideoMuted}
+            loop
+            playsInline
+            preload="metadata"
+            onTimeUpdate={(e) => {
+              const vid = e.currentTarget;
+              if (vid.duration && vid.currentTime >= vid.duration - 0.2) {
+                vid.currentTime = 0;
+                vid.play().catch(() => {});
+              }
+            }}
+            className="absolute inset-0 h-full w-full object-cover"
+          >
+            <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
+          </video>
 
-        {/* Soft gradient overlays blending video smoothly into black background — transition pulled lower down */}
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
-        {/* Bottom dissolve — same eased multi-stop treatment as the side
-            feathers. The old 112px via-black/90 ramp went dark almost at once
-            and its top edge read as a hard line across the footage; this one
-            is 288px and falls away gradually, so the video sinks into the
-            surface the way the reference's does. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-0 left-0 right-0 h-72 rounded-b-[15px]"
-          style={{
-            background:
-              "linear-gradient(to top, #000 0%, #000 18%, rgba(0,0,0,0.85) 38%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25) 80%, transparent 100%)",
-          }}
-        />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/15" />
 
-        {/* Side feathers — the top and bottom already faded, but the left and
-            right edges cut the footage off dead straight against the panel.
-            The reference dissolves the footage over a wide band (roughly a
-            quarter of the hero), so these are 320px with an eased multi-stop
-            ramp rather than a narrow strip: solid black holds the first 60px,
-            then falls away gradually. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 w-80 rounded-l-[15px]"
-          style={{
-            background:
-              "linear-gradient(to right, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 w-80 rounded-r-[15px]"
-          style={{
-            background:
-              "linear-gradient(to left, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
-          }}
-        />
+          <div
+            className="absolute inset-y-0 left-0 w-80 rounded-l-[15px]"
+            style={{
+              background:
+                "linear-gradient(to right, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+            }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 w-80 rounded-r-[15px]"
+            style={{
+              background:
+                "linear-gradient(to left, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+            }}
+          />
+        </div>
 
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
