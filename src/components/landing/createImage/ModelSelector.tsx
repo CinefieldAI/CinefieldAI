@@ -107,6 +107,18 @@ export default function ModelSelector({
         return;
       }
       if (event.key === " ") return; // typing a space must stay a space
+    } else {
+      // Typing while a list row holds focus hands the keystroke back to the
+      // search box, so arrowing down to peek at results never costs a click
+      // to resume the query. Space is typing here too — Enter still selects.
+      const printable =
+        event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+      if (printable || event.key === "Backspace") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        setQuery((q) => (printable ? q + event.key : q.slice(0, -1)));
+        return;
+      }
     }
     nav.handleKeyDown(event);
   };

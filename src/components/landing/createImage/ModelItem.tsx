@@ -105,6 +105,11 @@ export default function ModelItem({
           }`}
         >
           {model.name}
+          {model.comingSoon && (
+            <span className="ml-1.5 rounded px-1 py-px align-middle text-[9px] font-bold uppercase leading-none text-[#FACC15] ring-1 ring-inset ring-[#FACC15]/40">
+              Coming Soon
+            </span>
+          )}
         </span>
         <p className="text-[10px] text-white/45 group-hover/model-row:text-white/60 truncate font-normal">
           {model.description}

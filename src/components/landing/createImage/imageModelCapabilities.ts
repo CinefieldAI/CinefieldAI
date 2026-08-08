@@ -343,6 +343,10 @@ const RECRAFT_V4_1_UTILITY_CAPABILITIES: ImageModelCapabilities = {
   defaultQuality: "Standard",
   aspectRatioOptions: RECRAFT_ASPECT_RATIOS,
   defaultAspectRatio: "4:5",
+  // Reference has no upload on Utility at all, so the prompt-row attach
+  // button (driven by this flag) must not appear either.
+  assetUpload: false,
+  referenceSelection: false,
 };
 
 /** Recraft V4.1 (non-Utility) — identical to Recraft V4.1 Utility except it
@@ -913,7 +917,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     defaultResolution: "1K",
     aspectRatio: "simple",
     aspectRatioOptions: KLING_O1_ASPECT_RATIOS,
-    defaultAspectRatio: "1:1",
+    defaultAspectRatio: "3:4",
     batchSize: true,
     defaultBatchSize: 1,
     gridGeneration: false,

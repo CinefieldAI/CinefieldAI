@@ -6,6 +6,9 @@ export interface CreateImageModel {
   name: string;
   description: string;
   badge?: "TOP" | "NEW" | "PREMIUM";
+  /** Renders a yellow "Coming Soon" pill in the model list; the model stays
+   *  selectable but its workspace is not built yet. */
+  comingSoon?: boolean;
   /** Optional custom icon component or public image path. */
   icon?: React.ComponentType<{ className?: string }> | string;
   newlyAdded?: boolean;
@@ -113,12 +116,14 @@ export const MASTER_IMAGE_MODELS: Record<string, CreateImageModel> = {
     id: "higgsfield-face-swap",
     name: "🚫 Cinefield Face Swap",
     description: "Transfer a face across any image",
+    comingSoon: true,
     icon: getIcon("🚫 Cinefield Face Swap")!,
   },
   "higgsfield-character-swap": {
     id: "higgsfield-character-swap",
     name: "🚫 Cinefield Character Swap",
     description: "Replace a full subject seamlessly",
+    comingSoon: true,
     icon: getIcon("🚫 Cinefield Character Swap")!,
   },
   "seedream-4-0": {

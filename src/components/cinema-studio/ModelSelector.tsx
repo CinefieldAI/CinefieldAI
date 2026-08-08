@@ -635,6 +635,20 @@ export default function ModelSelector({
       return;
     }
 
+    // Typing while a row (or submenu row) holds focus hands the keystroke
+    // back to the search box, so arrowing into the list to peek at results
+    // never costs a click to resume the query.
+    if (!inSearchInput) {
+      const printable =
+        e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (printable || e.key === "Backspace") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setQuery((q) => (printable ? q + e.key : q.slice(0, -1)));
+        return;
+      }
+    }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (openParentIndex !== null) {

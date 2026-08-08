@@ -585,6 +585,38 @@ export function ThinkingPopover({
 }
 
 /* ------------------------------------------------------------------ */
+/* Dead placeholder controls                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Inert stand-in for a control the reference site has and this model does not
+ * implement yet. Same dark shell as the live controls but yellow text so the
+ * gap is visible at a glance; disabled, so it takes no clicks, no focus, and
+ * the toolbar arrow keys skip straight over it.
+ */
+export function DeadControl({ label, icon }: { label: string; icon?: React.ReactNode }) {
+  return (
+    <button type="button" disabled className={`${COMPACT_TRIGGER} cursor-default text-[#FACC15]`}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+/** Dead counterpart of BatchSizeCounter — same shape, yellow, inert. */
+export function DeadBatchCounter() {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 text-[#FACC15]">
+      <span className="flex h-6 w-6 items-center justify-center"><Minus className="h-3.5 w-3.5" /></span>
+      <span className="w-8 shrink-0 text-center text-xs font-bold">
+        1<span className="opacity-50">/4</span>
+      </span>
+      <span className="flex h-6 w-6 items-center justify-center"><Plus className="h-3.5 w-3.5" /></span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Draw trigger (Nano Banana)                                           */
 /* ------------------------------------------------------------------ */
 

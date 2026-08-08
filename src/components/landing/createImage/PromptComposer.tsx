@@ -39,6 +39,8 @@ import {
   AspectRatioPopover,
   BatchSizeCounter,
   ColorTransferButton,
+  DeadBatchCounter,
+  DeadControl,
   DrawToggle,
   EnhancementToggle,
   FluxFlexAdvancedPopover,
@@ -780,6 +782,10 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {/* Reference parity placeholders — inert on purpose. */}
+                      <DeadControl label="Color Transfer" icon={<Blend className="h-4 w-4" />} />
+                      <DeadControl label="On" />
+                      <DeadControl label="Character" />
                     </>
                   )}
 
@@ -808,6 +814,8 @@ export default function PromptComposer({
                         onToggle={() => setEnhancementEnabled((v) => !v)}
                         icon={<Wand2 className="h-4 w-4" />}
                       />
+                      {/* Reference parity placeholder — WAN 2.2 has a count there. */}
+                      <DeadBatchCounter />
                     </>
                   )}
 
@@ -854,6 +862,9 @@ export default function PromptComposer({
                         enabled={enhancementEnabled}
                         onToggle={() => setEnhancementEnabled((v) => !v)}
                       />
+                      {/* Reference parity placeholder — FLUX.2 Max alone; the
+                          shared Flux Kontext Max row matches already. */}
+                      {selectedModel === "FLUX.2 Max" && <DeadControl label="Quality" icon={<Gem className="h-4 w-4" />} />}
                     </>
                   )}
 
@@ -920,6 +931,8 @@ export default function PromptComposer({
                         openId={openPopoverId}
                         onOpenIdChange={setOpenPopoverId}
                       />
+                      {/* Reference parity placeholder — Flex has an upload there. */}
+                      <DeadControl label="" icon={<Plus className="h-4 w-4" />} />
                     </>
                   )}
 
@@ -946,6 +959,19 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {/* Reference parity placeholders — inert on purpose. The
+                          two Souls differ: 2.0 also shows Color Transfer and
+                          opens with the toggle Off; the original shows On. */}
+                      {selectedModel === "🚫 Cinefield Soul 2.0" ? (
+                        <>
+                          <DeadControl label="Color Transfer" icon={<Blend className="h-4 w-4" />} />
+                          <DeadControl label="Off" />
+                        </>
+                      ) : (
+                        <DeadControl label="On" />
+                      )}
+                      <DeadControl label="Character" />
+                      <DeadControl label="General" />
                     </>
                   )}
 
@@ -1096,10 +1122,6 @@ export default function PromptComposer({
                         onOpenIdChange={setOpenPopoverId}
                       />
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      <UnlimitedToggle
-                        enabled={unlimitedEnabled}
-                        onToggle={() => setUnlimitedEnabled((v) => !v)}
-                      />
                     </>
                   )}
 
