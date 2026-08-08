@@ -396,6 +396,41 @@ export const NANO_BANANA_ASPECT_RATIOS: AspectRatioChoice[] = [
 export const SEEDREAM_4_MODE_OPTIONS: { value: string; description: string }[] = [
   { value: "Basic", description: "Default generation mode" },
 ];
+/**
+ * Seedream 5.0 Pro's and 5.0 Lite's /image ratio panels.
+ *
+ * Same eight values, deliberately in two different orders — Pro lists 21:9
+ * fifth, Lite lists it last — so they get an array each. Neither may be
+ * pointed at the other, and neither is STANDARD_ASPECT_RATIOS (which opens
+ * with "Auto" and is shared by ~10 other models).
+ *
+ * Like GPT_IMAGE_PAGE_CONTROLS below, these live outside MODEL_CAPABILITIES
+ * on purpose: that map is also read by /generate's CinemaStudioImagePanel and
+ * image-tools' ImageForm (which CinemaStudioWorkspace renders), and /generate
+ * is locked. Only PromptComposer imports these.
+ */
+export const SEEDREAM_5_PRO_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "21:9", width: 24, height: 10 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+];
+
+export const SEEDREAM_5_LITE_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "21:9", width: 24, height: 10 },
+];
+
 export const SEEDREAM_5_PRO_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "2K", description: "2048px" },
   { value: "3K", description: "3072px" },
