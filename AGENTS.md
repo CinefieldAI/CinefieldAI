@@ -4,6 +4,20 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Locked routes — do not modify without an explicit user request
+
+**/generate is FULLY LOCKED as of commit `cd94e62` (2026-08-09).** The user
+finalized it (Claude session + Codex's "Soften generate page background" /
+"Smooth generate hero transition" work) and asked for it to be frozen. That
+covers `src/app/generate/page.tsx` and everything under
+`src/components/cinema-studio/` it renders, plus the `/generate`-scoped rules
+in globals.css (`.hide-page-scrollbar`, `body:has(.cinema-generate-workspace)`
+— both scrollbar mechanisms are intentional; do not deduplicate them).
+
+Only a user instruction that explicitly names /generate unlocks the specific
+change requested — everything else on the page stays as committed. Do not
+"improve", restyle, or clean it up in passing.
+
 # More than one agent works in this repo
 
 Sessions run in parallel here and have already collided twice: a commit picked
