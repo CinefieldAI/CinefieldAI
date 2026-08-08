@@ -365,6 +365,7 @@ export const GROK_MODE_OPTIONS: { value: string; description: string }[] = [
 ];
 export const GROK_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "1K", description: "1024px" },
+  { value: "2K", description: "2048px" },
 ];
 
 /** Grok Imagine's wide ratio list — order is part of the spec, don't sort it. */
@@ -530,8 +531,8 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     enhancementToggle: true,
     defaultEnhancement: false,
     settingsTrigger: false,
-    assetUpload: false,
-    referenceSelection: false,
+    assetUpload: true,
+    referenceSelection: true,
   },
   "Flux Kontext Max": {
     modelTriggerSize: "compact",

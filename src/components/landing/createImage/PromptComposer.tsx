@@ -355,8 +355,8 @@ export default function PromptComposer({
    * Which models offer it and what it opens are both unchanged — only the
    * position moved. Capability models still open the Assets Picker; legacy
    * models still open the native file input; Z-Image and the models with
-   * `assetUpload: false` (WAN 2.2, Multi Reference, FLUX.2 Flex, Recraft
-   * V4.1, Z-Image, Cinematic Locations) still show nothing.
+   * `assetUpload: false` (WAN 2.2, FLUX.2 Flex, Recraft V4.1, Z-Image,
+   * Cinematic Locations) still show nothing.
    */
   const showPromptAttachment = capabilities
     ? capabilities.assetUpload
