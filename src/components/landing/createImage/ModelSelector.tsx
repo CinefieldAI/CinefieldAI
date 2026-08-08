@@ -52,48 +52,19 @@ export default function ModelSelector({
     }
   }, [open]);
 
+  /**
+   * Category order is fixed and never depends on what is selected.
+   *
+   * This used to rotate the flattened list so the selected model became the
+   * first row, then regroup the categories around it — which meant picking a
+   * model from "All models" pushed that whole category above "Featured
+   * models" and the list read differently every time. Rows now always appear
+   * in their canonical createImageData.ts order; the selection is shown by
+   * the row's own accent (bar + checkmark), not by moving it.
+   */
   const categories = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) {
-      if (!selected) return CATEGORY_SOURCES;
-
-      // 1. Flatten all models with their category label in canonical original order
-      const allFlatModels: { model: CreateImageModel; categoryLabel: string }[] = [];
-      for (const cat of CATEGORY_SOURCES) {
-        for (const m of cat.models) {
-          allFlatModels.push({ model: m, categoryLabel: cat.label });
-        }
-      }
-
-      // 2. Find selected model index
-      const selectedIdx = allFlatModels.findIndex(
-        (item) => item.model.name === selected || item.model.id === selected
-      );
-
-      if (selectedIdx < 0) return CATEGORY_SOURCES;
-
-      // 3. Rotate model list so selected model is first, followed by original next items, then wrapped start items
-      const rotatedList = [
-        ...allFlatModels.slice(selectedIdx),
-        ...allFlatModels.slice(0, selectedIdx),
-      ];
-
-      // 4. Group consecutive models belonging to the same category
-      const rotatedCategories: { label: string; models: CreateImageModel[] }[] = [];
-      for (const item of rotatedList) {
-        const lastCat = rotatedCategories[rotatedCategories.length - 1];
-        if (lastCat && lastCat.label === item.categoryLabel) {
-          lastCat.models.push(item.model);
-        } else {
-          rotatedCategories.push({
-            label: item.categoryLabel,
-            models: [item.model],
-          });
-        }
-      }
-
-      return rotatedCategories;
-    }
+    if (!q) return CATEGORY_SOURCES;
 
     const match = (m: CreateImageModel) =>
       m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
@@ -102,21 +73,7 @@ export default function ModelSelector({
       ...c,
       models: c.models.filter(match),
     })).filter((c) => c.models.length > 0);
-  }, [query, selected]);
-
-  const flatIndexByName = useMemo(() => {
-    const map = new Map<string, number>();
-    let idx = 0;
-    categories.forEach((cat) => {
-      cat.models.forEach((m) => {
-        if (!map.has(m.name)) {
-          map.set(m.name, idx);
-          idx += 1;
-        }
-      });
-    });
-    return map;
-  }, [categories]);
+  }, [query]);
 
   const hasNoResults = categories.length === 0;
 
@@ -289,21 +246,21 @@ export default function ModelSelector({
                     </div>
                   <div className="space-y-1.5">
                     {cat.models.map((model) => {
-                      const entryIndex = flatIndexByName.get(model.name) ?? 0;
-                      const isContinuation = !query.trim() && entryIndex === 1;
                       rowIndex += 1;
                       const optionProps = nav.getOptionProps(rowIndex);
                       return (
+                        /* No onHover: pointing at a row shows only its grey
+                           hover card. The orange bar/checkmark stay pinned to
+                           the marked row (selection, moved by arrow keys) —
+                           the pointer never drags them around. */
                         <ModelItem
                           key={`${catIdx}-${model.id}`}
                           model={model}
                           isSelected={selected === model.name}
                           onSelect={handleSelect}
-                          isContinuation={isContinuation}
                           optionRef={optionProps.ref}
                           tabIndex={optionProps.tabIndex}
                           isMarked={nav.activeIndex === rowIndex}
-                          onHover={((index) => () => nav.setActiveIndex(index))(rowIndex)}
                         />
                       );
                     })}
