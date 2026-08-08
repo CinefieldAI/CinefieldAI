@@ -310,7 +310,7 @@ export default function CinemaStudioWorkspace() {
   // viewport instead of the panel narrowing. Clip it here rather than letting
   // the page gain a horizontal scrollbar.
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-black text-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#0B0C0E] text-white">
       <Navbar
         activePanel={null}
         onOpenImagePanel={noop}
@@ -359,7 +359,7 @@ export default function CinemaStudioWorkspace() {
               vid.play().catch(() => {});
             }
           }}
-          className="absolute inset-0 h-full w-full rounded-[1rem] object-cover"
+          className="absolute inset-0 h-full w-full rounded-[15px] object-cover"
         >
           <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
         </video>

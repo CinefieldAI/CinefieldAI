@@ -57,7 +57,7 @@ export default function CommunitySection({
   sidebarWidth?: number;
 }) {
   return (
-    <section className="w-full bg-black">
+    <section className="w-full bg-[#0B0C0E]">
       {/* Slides with the hero panel above rather than being squeezed: the left
           inset is pinned to the collapsed sidebar and only a transform follows
           the live width, so the grid keeps its columns as the sidebar opens. */}
