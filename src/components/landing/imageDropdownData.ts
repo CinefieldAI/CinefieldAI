@@ -153,12 +153,20 @@ export interface ImageModel {
 }
 
 // Single unified models list (matches the higgsfield.ai reference: one
-// "Models" column, no Featured/All split). Trimmed down from the earlier
-// expanded catalog to the reference's 15 models — see imageDropdownData
-// git history for the removed extras (Seedream 4.0/4.5, base Nano
-// Banana/Higgsfield Soul, Face/Character Swap, Recraft V4.1 Utility,
-// Kling O1, FLUX.2 Flex/Max, Flux Kontext Max, base GPT Image, Multi
-// Reference, WAN 2.2) if any of those need to come back.
+// "Models" column, no Featured/All split), trimmed to exactly the 11 models
+// that reference currently shows.
+//
+// This list is the navbar mega dropdown ONLY. The /image prompt bar has its
+// own, much longer catalog in createImage/createImageData.ts (FEATURED_MODELS
+// + ALL_MODELS, 27 models) which ModelSelector reads instead — removing a
+// model here never removes it from the composer, and 14 of those 27 have
+// deliberately never appeared in this dropdown.
+//
+// See git history for extras removed from here over time: Seedream 4.0/4.5
+// and 5.0 lite, base Nano Banana, Nano Banana 2, base Higgsfield Soul,
+// Face/Character Swap, Recraft V4.1 Utility, Kling O1, FLUX.2 Flex/Max,
+// Flux Kontext Max, base GPT Image, GPT Image 1.5, Multi Reference, WAN 2.2,
+// Cinefield Popcorn.
 export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
   {
     name: "🚫 Cinefield Soul 2.0",
@@ -171,18 +179,8 @@ export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
     icon: Sparkles,
   },
   {
-    name: "🚫 Cinefield Popcorn",
-    meta: "Fun, stylized quick-gen",
-    icon: Sparkles,
-  },
-  {
     name: "GPT Image 2",
     meta: "4K images with near-perfect text rendering",
-    icon: OpenAIIcon,
-  },
-  {
-    name: "GPT Image 1.5",
-    meta: "True-color precision rendering",
     icon: OpenAIIcon,
   },
   {
@@ -190,16 +188,6 @@ export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
     meta: "Logically consistent images with intelligent visual reasoning",
     icon: SeedreamIcon,
     isAdded: true,
-  },
-  {
-    name: "Seedream 5.0 lite",
-    meta: "Intelligent visual reasoning",
-    icon: SeedreamIcon,
-  },
-  {
-    name: "Nano Banana 2",
-    meta: "Pro quality at Flash speed",
-    icon: GoogleIcon,
   },
   {
     name: "Nano Banana 2 Lite",
