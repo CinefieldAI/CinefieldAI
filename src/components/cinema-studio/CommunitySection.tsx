@@ -57,7 +57,7 @@ export default function CommunitySection({
   sidebarWidth?: number;
 }) {
   return (
-    <section className="w-full bg-black">
+    <section className="relative z-10 w-full bg-transparent">
       <div
         className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-[padding-left] duration-300 ease-out md:pl-[calc(var(--cinema-sidebar-w)+16px)]"
         style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}

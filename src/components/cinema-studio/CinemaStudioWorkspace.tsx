@@ -218,7 +218,15 @@ export default function CinemaStudioWorkspace() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-black text-white">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#090a0b] text-white">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[180px] h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(217,119,87,0.10),rgba(25,28,29,0.34)_34%,rgba(9,10,11,0.96)_68%,rgba(9,10,11,0)_100%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[300px] h-[420px] bg-[linear-gradient(180deg,rgba(9,10,11,0)_0%,rgba(9,10,11,0.72)_24%,rgba(9,10,11,0.96)_58%,rgba(9,10,11,0)_100%)]"
+      />
       <Navbar
         activePanel={null}
         onOpenImagePanel={noop}
@@ -242,7 +250,7 @@ export default function CinemaStudioWorkspace() {
           being drag-resized, only once the drag settles (see
           `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
       <section
-        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
+        className="relative z-10 overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
         style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
       >
         <video
@@ -266,8 +274,8 @@ export default function CinemaStudioWorkspace() {
         </video>
 
         {/* Soft gradient overlays blending video smoothly into black background — transition pulled lower down */}
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
-        <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-[#090a0b]/80 pointer-events-none" />
+        <div aria-hidden="true" className="absolute -bottom-24 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-[#090a0b]/92 to-[#090a0b] pointer-events-none" />
 
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
