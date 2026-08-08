@@ -368,6 +368,13 @@ export default function CinemaStudioWorkspace() {
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
         <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
 
+        {/* Side feathers — the top and bottom already faded, but the left and
+            right edges cut the footage off dead straight against the panel.
+            These carry the same fade sideways so the video dissolves into the
+            surface on all four sides instead of ending on a hard line. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-32 rounded-l-[15px] bg-gradient-to-r from-black via-black/55 to-transparent" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-32 rounded-r-[15px] bg-gradient-to-l from-black via-black/55 to-transparent" />
+
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
           className="pointer-events-none absolute inset-x-0 top-32 md:top-36 z-5 flex justify-center px-4"
