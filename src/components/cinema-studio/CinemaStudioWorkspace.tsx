@@ -374,7 +374,19 @@ export default function CinemaStudioWorkspace() {
 
         {/* Soft gradient overlays blending video smoothly into black background — transition pulled lower down */}
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
-        <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
+        {/* Bottom dissolve — same eased multi-stop treatment as the side
+            feathers. The old 112px via-black/90 ramp went dark almost at once
+            and its top edge read as a hard line across the footage; this one
+            is 288px and falls away gradually, so the video sinks into the
+            surface the way the reference's does. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 right-0 h-72 rounded-b-[15px]"
+          style={{
+            background:
+              "linear-gradient(to top, #000 0%, #000 18%, rgba(0,0,0,0.85) 38%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25) 80%, transparent 100%)",
+          }}
+        />
 
         {/* Side feathers — the top and bottom already faded, but the left and
             right edges cut the footage off dead straight against the panel.
