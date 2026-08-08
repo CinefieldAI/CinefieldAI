@@ -5,7 +5,9 @@ import * as Popover from "@radix-ui/react-popover";
 import { ChevronDown, Search, Sparkles } from "lucide-react";
 import ModelItem from "./ModelItem";
 import { ALL_MODELS, FEATURED_MODELS, type CreateImageModel } from "./createImageData";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import { getSharedModelIcon } from "@/lib/modelIconRegistry";
+import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 
 interface ModelSelectorProps {
   selected: string;
@@ -50,48 +52,19 @@ export default function ModelSelector({
     }
   }, [open]);
 
+  /**
+   * Category order is fixed and never depends on what is selected.
+   *
+   * This used to rotate the flattened list so the selected model became the
+   * first row, then regroup the categories around it — which meant picking a
+   * model from "All models" pushed that whole category above "Featured
+   * models" and the list read differently every time. Rows now always appear
+   * in their canonical createImageData.ts order; the selection is shown by
+   * the row's own accent (bar + checkmark), not by moving it.
+   */
   const categories = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) {
-      if (!selected) return CATEGORY_SOURCES;
-
-      // 1. Flatten all models with their category label in canonical original order
-      const allFlatModels: { model: CreateImageModel; categoryLabel: string }[] = [];
-      for (const cat of CATEGORY_SOURCES) {
-        for (const m of cat.models) {
-          allFlatModels.push({ model: m, categoryLabel: cat.label });
-        }
-      }
-
-      // 2. Find selected model index
-      const selectedIdx = allFlatModels.findIndex(
-        (item) => item.model.name === selected || item.model.id === selected
-      );
-
-      if (selectedIdx < 0) return CATEGORY_SOURCES;
-
-      // 3. Rotate model list so selected model is first, followed by original next items, then wrapped start items
-      const rotatedList = [
-        ...allFlatModels.slice(selectedIdx),
-        ...allFlatModels.slice(0, selectedIdx),
-      ];
-
-      // 4. Group consecutive models belonging to the same category
-      const rotatedCategories: { label: string; models: CreateImageModel[] }[] = [];
-      for (const item of rotatedList) {
-        const lastCat = rotatedCategories[rotatedCategories.length - 1];
-        if (lastCat && lastCat.label === item.categoryLabel) {
-          lastCat.models.push(item.model);
-        } else {
-          rotatedCategories.push({
-            label: item.categoryLabel,
-            models: [item.model],
-          });
-        }
-      }
-
-      return rotatedCategories;
-    }
+    if (!q) return CATEGORY_SOURCES;
 
     const match = (m: CreateImageModel) =>
       m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
@@ -100,23 +73,58 @@ export default function ModelSelector({
       ...c,
       models: c.models.filter(match),
     })).filter((c) => c.models.length > 0);
-  }, [query, selected]);
-
-  const flatIndexByName = useMemo(() => {
-    const map = new Map<string, number>();
-    let idx = 0;
-    categories.forEach((cat) => {
-      cat.models.forEach((m) => {
-        if (!map.has(m.name)) {
-          map.set(m.name, idx);
-          idx += 1;
-        }
-      });
-    });
-    return map;
-  }, [categories]);
+  }, [query]);
 
   const hasNoResults = categories.length === 0;
+
+  /** Every row in render order, duplicates included, so each rendered option
+   *  gets its own index (a few models appear under more than one category). */
+  const flatRows = useMemo(
+    () => categories.flatMap((cat) => cat.models),
+    [categories],
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const nav = useListboxNav({
+    count: flatRows.length,
+    selectedIndex: flatRows.findIndex((m) => m.name === selected),
+    open,
+    onSelect: (index) => {
+      const model = flatRows[index];
+      if (model) handleSelect(model.name);
+    },
+  });
+
+  /** The search box keeps focus on open so the user can type straight away.
+   *  ArrowDown hands off to the list instead of stepping past the first row. */
+  const handlePanelKeyDown = (event: React.KeyboardEvent) => {
+    const inSearch = event.target === searchInputRef.current;
+    if (inSearch) {
+      if (event.key === "ArrowUp") return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nav.moveTo(nav.activeIndex);
+        return;
+      }
+      if (event.key === " ") return; // typing a space must stay a space
+    } else {
+      // Typing while a list row holds focus hands the keystroke back to the
+      // search box, so arrowing down to peek at results never costs a click
+      // to resume the query. Space is typing here too — Enter still selects.
+      const printable =
+        event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+      if (printable || event.key === "Backspace") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        setQuery((q) => (printable ? q + event.key : q.slice(0, -1)));
+        return;
+      }
+    }
+    nav.handleKeyDown(event);
+  };
+
+  // Running counter matching flatRows, incremented as rows render below.
+  let rowIndex = -1;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -128,7 +136,7 @@ export default function ModelSelector({
           aria-label={`Model: ${selected}`}
           className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
             open
-              ? "border-[#D97757] bg-[#181a1d] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              ? "border-[#D97757] bg-[#181a1d]"
               : "border-[rgba(217,119,87,0.45)] bg-[#101112] hover:border-[#D97757] hover:bg-[#181a1d]"
           }`}
         >
@@ -139,7 +147,13 @@ export default function ModelSelector({
           ) : (
             <Sparkles className="h-4 w-4 text-[#D97757]" />
           )}
-          <span className="max-w-[140px] truncate text-white">{selected}</span>
+          <span
+            className={`max-w-[140px] truncate ${
+              isBlockedModelLabel(selected) ? BLOCKED_MODEL_LABEL_CLASS : "text-white"
+            }`}
+          >
+            {selected}
+          </span>
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${
               open ? "rotate-180 text-[#D97757]" : "text-neutral-400"
@@ -156,6 +170,7 @@ export default function ModelSelector({
           collisionPadding={16}
           data-page="image"
           data-image-model-dropdown="true"
+          onKeyDown={handlePanelKeyDown}
           className="outline-none z-[100000] rounded-2xl border border-white/[0.08] bg-[rgba(25,27,30,0.76)] backdrop-blur-[28px] backdrop-saturate-[125%] shadow-[0_20px_60px_rgba(0,0,0,0.45)] flex flex-col pointer-events-auto transition-all duration-[170ms] ease-out origin-bottom animate-in fade-in-0 slide-in-from-bottom-2 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
         >
           <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
@@ -167,9 +182,10 @@ export default function ModelSelector({
 
             {/* Search Header Container (Glass Field) */}
             <div className="relative z-10 p-2.5 pb-1">
-              <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.25)]">
-                <Search className="size-4 shrink-0 text-white/40 group-focus-within/search:text-[#F19A72] group-focus-within/search:drop-shadow-[0_0_5px_rgba(217,119,87,0.5)] transition-colors duration-200" />
+              <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757]/60 focus-within:bg-white/[0.06]">
+                <Search className="size-4 shrink-0 text-white/40 transition-colors duration-200 group-focus-within/search:text-[#F19A72]" />
                 <input
+                  ref={searchInputRef}
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -180,10 +196,12 @@ export default function ModelSelector({
               </div>
             </div>
 
-            {/* Internal scroll area with professional thin scrollbar */}
+            {/* Internal scroll area — stays scrollable (wheel/trackpad/touch/
+                keyboard) with the scrollbar track and thumb hidden, matching
+                the rest of the app's panels via globals.css `.hide-scrollbar`. */}
             <div
               ref={scrollContainerRef}
-              className="relative z-10 flex-1 min-h-0 overflow-y-auto px-2.5 pb-2.5 space-y-1 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.18)_transparent] hover:[scrollbar-color:rgba(217,119,87,0.45)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#D97757]/50 transition-colors"
+              className="hide-scrollbar relative z-10 flex-1 min-h-0 overflow-y-auto px-2.5 pb-2.5 space-y-1 transition-colors"
               role="listbox"
               aria-label="AI models"
               onWheel={(e) => e.stopPropagation()}
@@ -240,15 +258,21 @@ export default function ModelSelector({
                     </div>
                   <div className="space-y-1.5">
                     {cat.models.map((model) => {
-                      const entryIndex = flatIndexByName.get(model.name) ?? 0;
-                      const isContinuation = !query.trim() && entryIndex === 1;
+                      rowIndex += 1;
+                      const optionProps = nav.getOptionProps(rowIndex);
                       return (
+                        /* No onHover: pointing at a row shows only its grey
+                           hover card. The orange bar/checkmark stay pinned to
+                           the marked row (selection, moved by arrow keys) —
+                           the pointer never drags them around. */
                         <ModelItem
                           key={`${catIdx}-${model.id}`}
                           model={model}
                           isSelected={selected === model.name}
                           onSelect={handleSelect}
-                          isContinuation={isContinuation}
+                          optionRef={optionProps.ref}
+                          tabIndex={optionProps.tabIndex}
+                          isMarked={nav.activeIndex === rowIndex}
                         />
                       );
                     })}

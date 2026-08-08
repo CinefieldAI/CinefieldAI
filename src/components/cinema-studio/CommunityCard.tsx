@@ -52,16 +52,8 @@ export default function CommunityCard({ item }: { item: CommunityItem }) {
       onMouseLeave={handleLeave}
       className="group flex flex-col gap-2 rounded-2xl bg-white/[0.04] p-2 transition-colors duration-200 hover:bg-white/[0.08]"
     >
-      {/* Media well */}
+      {/* Media well — video only, no static poster image */}
       <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
-        <Image
-          src={item.poster}
-          alt=""
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-          className="object-cover"
-        />
-
         {item.hoverVideo && (
           <>
             <video
@@ -69,11 +61,9 @@ export default function CommunityCard({ item }: { item: CommunityItem }) {
               muted={muted}
               loop
               playsInline
-              preload="none"
-              poster={item.poster}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 motion-reduce:transition-none ${
-                hovered ? "opacity-100" : "opacity-0"
-              }`}
+              autoPlay
+              preload="auto"
+              className="absolute inset-0 h-full w-full object-cover"
             >
               <source src={item.hoverVideo} type="video/mp4" />
             </video>

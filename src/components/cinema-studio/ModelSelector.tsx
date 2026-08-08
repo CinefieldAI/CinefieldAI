@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
+import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 import {
   Check,
   ChevronDown,
@@ -108,6 +109,9 @@ function ImageRow({
   const IconComponent = sharedIcon ?? (typeof model.icon === "function" ? model.icon : null);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+  // The orange bar, orange card and checkmark ride the keyboard focus; the
+  // model itself still only changes on Enter/click.
+  const marked = !!focused;
 
   return (
     <button
@@ -117,33 +121,25 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
-        active
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
+        marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
-          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
+          : // Keyboard focus shows the same grey card as hover, so arrowing
+            // through the list makes the current row visible.
+            "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
-      {active ? (
+      {marked ? (
         <span
           aria-hidden
-          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
-        />
-      ) : isContinuation ? (
-        <span
-          aria-hidden
-          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            boxShadow:
-              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-          }}
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
         />
       ) : null}
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active || isContinuation
-            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+            ? "mr-2.5"
+            : "group-hover/model-row:scale-[1.02] mr-3"
         }`}
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -160,7 +156,7 @@ function ImageRow({
         </div>
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-        <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+        <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
           {model.name}
         </span>
         <p className="truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
@@ -168,7 +164,7 @@ function ImageRow({
         </p>
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+        {marked && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -194,6 +190,9 @@ function VideoFlatRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value;
+  // The orange bar, orange card and checkmark ride the keyboard focus; the
+  // model itself still only changes on Enter/click.
+  const marked = !!focused;
 
   return (
     <button
@@ -203,33 +202,25 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-180 ease-out cursor-pointer hover:translate-x-[2px] focus-visible:outline-none ${
-        active
+      className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
+        marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
-          : "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08]"
+          : // Keyboard focus shows the same grey card as hover, so arrowing
+            // through the list makes the current row visible.
+            "bg-[rgba(255,255,255,0.025)] hover:bg-[rgba(255,255,255,0.055)] focus:bg-[rgba(255,255,255,0.055)] border border-white/[0.03] hover:border-white/[0.08] focus:border-white/[0.08]"
       }`}
     >
-      {active ? (
+      {marked ? (
         <span
           aria-hidden
-          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
-        />
-      ) : isContinuation ? (
-        <span
-          aria-hidden
-          className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            boxShadow:
-              "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-          }}
+          className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
         />
       ) : null}
       <div
         className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
           active || isContinuation
-            ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-            : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+            ? "mr-2.5"
+            : "group-hover/model-row:scale-[1.02] mr-3"
         }`}
         style={{
           background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -247,7 +238,7 @@ function VideoFlatRow({
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
         <div className="flex items-center gap-1.5">
-          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -271,7 +262,7 @@ function VideoFlatRow({
         ) : null}
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
-        {active && <Check className="size-4 text-[#D97757] drop-shadow-[0_0_6px_rgba(217,119,87,0.6)]" />}
+        {marked && <Check className="size-4 text-[#D97757]" />}
       </div>
     </button>
   );
@@ -305,6 +296,7 @@ function VideoParentRow({
   const Icon = typeof model.icon === "string" ? null : (model.icon ?? Clapperboard);
   const iconPath = typeof model.icon === "string" ? model.icon : null;
   const active = model.id === value || subs.some((s) => s.id === value);
+  const marked = !!focused;
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,24 +365,14 @@ function VideoParentRow({
         {active ? (
           <span
             aria-hidden
-            className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2 shadow-[0_0_8px_rgba(217,119,87,0.8)]"
-          />
-        ) : isContinuation ? (
-          <span
-            aria-hidden
-            className="w-[2px] h-7 rounded-full shrink-0 mr-2"
-            style={{
-              background: "rgba(255, 255, 255, 0.95)",
-              boxShadow:
-                "0 0 6px rgba(255, 255, 255, 0.85), 0 0 12px rgba(255, 255, 255, 0.42)",
-            }}
+            className="w-[3px] h-7 rounded-full bg-[#D97757] shrink-0 mr-2"
           />
         ) : null}
         <div
           className={`relative size-10 rounded-[12px] p-[1.5px] shrink-0 transition-all duration-180 ease-out ${
             active || isContinuation
-              ? "shadow-[0_-4px_14px_rgba(255,255,255,0.70),0_5px_18px_rgba(217,119,87,0.90)] mr-2.5"
-              : "shadow-[0_-2px_6px_rgba(255,255,255,0.30),0_3px_8px_rgba(217,119,87,0.40)] group-hover/model-row:shadow-[0_-3px_10px_rgba(255,255,255,0.50),0_4px_14px_rgba(217,119,87,0.65)] group-hover/model-row:scale-[1.02] mr-3"
+              ? "mr-2.5"
+              : "group-hover/model-row:scale-[1.02] mr-3"
           }`}
           style={{
             background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
@@ -407,7 +389,7 @@ function VideoParentRow({
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.description && (
@@ -454,7 +436,13 @@ function VideoParentRow({
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-medium text-white">
+                      <span
+                        className={`truncate text-xs font-medium ${
+                          isBlockedModelLabel(s.name)
+                            ? BLOCKED_MODEL_LABEL_CLASS
+                            : "text-white"
+                        }`}
+                      >
                         {s.name}
                       </span>
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -611,7 +599,9 @@ export default function ModelSelector({
   const [prevResetKey, setPrevResetKey] = useState({ query, open });
   if (prevResetKey.query !== query || prevResetKey.open !== open) {
     setPrevResetKey({ query, open });
-    setActiveIndex(0);
+    // Start the marker on the model that is actually selected, so opening the
+    // panel doesn't jump the orange bar to the first row.
+    setActiveIndex(open && !query ? (flatIndexById.get(value) ?? 0) : 0);
     setOpenParentIndex(null);
     setActiveSubIndex(0);
   }
@@ -645,13 +635,32 @@ export default function ModelSelector({
       return;
     }
 
+    // Typing while a row (or submenu row) holds focus hands the keystroke
+    // back to the search box, so arrowing into the list to peek at results
+    // never costs a click to resume the query.
+    if (!inSearchInput) {
+      const printable =
+        e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (printable || e.key === "Backspace") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setQuery((q) => (printable ? q + e.key : q.slice(0, -1)));
+        return;
+      }
+    }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (openParentIndex !== null) {
         const len = flatEntries[openParentIndex]?.model.submodels?.length ?? 0;
         setActiveSubIndex((i) => Math.min(len - 1, i + 1));
+      } else if (inSearchInput) {
+        // Handing off from the search box targets row 0, which is usually
+        // already activeIndex — setState would bail out and the focus effect
+        // would never re-run, so move focus directly instead.
+        rowRefs.current[activeIndex]?.focus();
       } else {
-        setActiveIndex((i) => Math.min(flatEntries.length - 1, (inSearchInput ? -1 : i) + 1));
+        setActiveIndex((i) => Math.min(flatEntries.length - 1, i + 1));
       }
       return;
     }
@@ -718,7 +727,7 @@ export default function ModelSelector({
               aria-haspopup="listbox"
               aria-expanded={open}
               aria-label={`Model: ${selected.name}`}
-              className="flex h-7 items-center gap-1.5 rounded-full bg-[rgba(4,4,5,0.98)] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+              className="flex h-7 items-center gap-1.5 rounded-full bg-[rgba(4,4,5,0.98)] px-2 py-1 transition-all duration-150 hover:brightness-150 focus:outline-none"
             >
               {triggerIconPath ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded bg-[rgba(4,4,5,0.98)]">
@@ -731,7 +740,13 @@ export default function ModelSelector({
               ) : (
                 <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span className="max-w-[140px] truncate text-xs font-semibold text-white">
+              <span
+                className={`max-w-[140px] truncate text-xs font-semibold ${
+                  isBlockedModelLabel(selected.name)
+                    ? BLOCKED_MODEL_LABEL_CLASS
+                    : "text-white"
+                }`}
+              >
                 {selected.name}
               </span>
             </button>
@@ -743,7 +758,7 @@ export default function ModelSelector({
               aria-label={`Model: ${selected.name}`}
               className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
                 open
-                  ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                  ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
                   : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
               }`}
             >
@@ -758,7 +773,13 @@ export default function ModelSelector({
               ) : (
                 <SelectedIcon className="h-5 w-5 shrink-0" style={{ color: "#D97757" }} aria-hidden="true" />
               )}
-              <span className="max-w-[140px] truncate text-white">
+              <span
+                className={`max-w-[140px] truncate ${
+                  isBlockedModelLabel(selected.name)
+                    ? BLOCKED_MODEL_LABEL_CLASS
+                    : "text-white"
+                }`}
+              >
                 {selected.name}
               </span>
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${open ? "rotate-180 text-[#D97757]" : "text-neutral-400"}`} />
@@ -777,8 +798,8 @@ export default function ModelSelector({
             <div className="relative rounded-2xl flex flex-col overflow-hidden w-96 max-w-[calc(100vw-32px)] h-[520px] max-h-[var(--radix-popover-content-available-height,520px)]">
               {/* Search Header Container (Glass Field matching screenshot) */}
               <div className="relative z-10 p-2.5 pb-1">
-                <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-[rgba(217,119,87,0.40)] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757] focus-within:bg-white/[0.06] focus-within:shadow-[0_0_12px_rgba(217,119,87,0.30)]">
-                  <Search className="size-4 shrink-0 text-[#D97757] drop-shadow-[0_0_5px_rgba(217,119,87,0.5)]" />
+                <div className="group/search flex h-[38px] items-center gap-2.5 rounded-xl border border-[rgba(217,119,87,0.40)] bg-white/[0.035] px-3 transition-all duration-200 focus-within:border-[#D97757] focus-within:bg-white/[0.06]">
+                  <Search className="size-4 shrink-0 text-[#D97757]" />
                   <input
                     ref={searchInputRef}
                     autoFocus

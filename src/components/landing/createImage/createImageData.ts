@@ -6,6 +6,9 @@ export interface CreateImageModel {
   name: string;
   description: string;
   badge?: "TOP" | "NEW" | "PREMIUM";
+  /** Renders a yellow "Coming Soon" pill in the model list; the model stays
+   *  selectable but its workspace is not built yet. */
+  comingSoon?: boolean;
   /** Optional custom icon component or public image path. */
   icon?: React.ComponentType<{ className?: string }> | string;
   newlyAdded?: boolean;
@@ -23,16 +26,16 @@ export const MASTER_IMAGE_MODELS: Record<string, CreateImageModel> = {
   },
   "higgsfield-soul-2": {
     id: "higgsfield-soul-2",
-    name: "Higgsfield Soul 2.0",
+    name: "🚫 Cinefield Soul 2.0",
     description: "Photoreal portrait engine",
     badge: "TOP",
-    icon: getIcon("Higgsfield Soul 2.0")!,
+    icon: getIcon("🚫 Cinefield Soul 2.0")!,
   },
   "higgsfield-soul-cinema": {
     id: "higgsfield-soul-cinema",
-    name: "Higgsfield Soul Cinema",
+    name: "🚫 Cinefield Soul Cinema",
     description: "Cinematic character stills",
-    icon: getIcon("Higgsfield Soul Cinema")!,
+    icon: getIcon("🚫 Cinefield Soul Cinema")!,
   },
   "gpt-image-2": {
     id: "gpt-image-2",
@@ -105,21 +108,23 @@ export const MASTER_IMAGE_MODELS: Record<string, CreateImageModel> = {
   },
   "higgsfield-soul": {
     id: "higgsfield-soul",
-    name: "Higgsfield Soul",
+    name: "🚫 Cinefield Soul",
     description: "Original portrait engine",
-    icon: getIcon("Higgsfield Soul")!,
+    icon: getIcon("🚫 Cinefield Soul")!,
   },
   "higgsfield-face-swap": {
     id: "higgsfield-face-swap",
-    name: "Higgsfield Face Swap",
+    name: "🚫 Cinefield Face Swap",
     description: "Transfer a face across any image",
-    icon: getIcon("Higgsfield Face Swap")!,
+    comingSoon: true,
+    icon: getIcon("🚫 Cinefield Face Swap")!,
   },
   "higgsfield-character-swap": {
     id: "higgsfield-character-swap",
-    name: "Higgsfield Character Swap",
+    name: "🚫 Cinefield Character Swap",
     description: "Replace a full subject seamlessly",
-    icon: getIcon("Higgsfield Character Swap")!,
+    comingSoon: true,
+    icon: getIcon("🚫 Cinefield Character Swap")!,
   },
   "seedream-4-0": {
     id: "seedream-4-0",

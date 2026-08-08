@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import { Check, ChevronDown, MonitorPlay } from "lucide-react";
 
 const DEFAULT_RESOLUTION_OPTIONS = ["480p", "720p", "1080p", "4K"];
@@ -42,6 +43,23 @@ export default function ResolutionPopover({
   const defaultRes = options[0] ?? "720p";
   const isModified = value !== defaultRes;
 
+  const nav = useListboxNav({
+    count: options.length,
+    selectedIndex: options.indexOf(value),
+    open: controlledOpen,
+    onActivate: (index) => {
+      const opt = options[index];
+      if (opt === undefined) return;
+      onChange(opt);
+    },
+    onSelect: (index) => {
+      const opt = options[index];
+      if (opt === undefined) return;
+      onChange(opt);
+      handleOpenChange(false);
+    },
+  });
+
   return (
     <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
@@ -52,7 +70,7 @@ export default function ResolutionPopover({
           aria-expanded={controlledOpen}
           className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
             controlledOpen
-              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
               : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
           }`}
         >
@@ -69,6 +87,9 @@ export default function ResolutionPopover({
           collisionPadding={collisionPadding}
           role="listbox"
           aria-label="Resolution"
+          onKeyDown={nav.handleKeyDown}
+          onOpenAutoFocus={nav.handleOpenAutoFocus}
+          onEscapeKeyDown={nav.handleEscapeKeyDown}
           className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
         >
@@ -77,11 +98,12 @@ export default function ResolutionPopover({
               Resolution
             </span>
           </div>
-          {options.map((opt) => {
+          {options.map((opt, index) => {
             const selected = opt === value;
             return (
               <button
                 key={opt}
+                {...nav.getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -89,10 +111,12 @@ export default function ResolutionPopover({
                   onChange(opt);
                   handleOpenChange(false);
                 }}
-                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left outline-none transition-all duration-150 ${
                   selected
                     ? "bg-white/10 text-white font-semibold"
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                    : nav.activeIndex === index
+                      ? "bg-white/5 text-white"
+                      : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <span className="text-sm font-medium text-white">

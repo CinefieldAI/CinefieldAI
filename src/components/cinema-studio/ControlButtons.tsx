@@ -33,7 +33,7 @@ function ControlButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-8 items-center gap-1.5 rounded-[18px] px-2 py-1 text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[#D97757] ${
+      className={`flex h-8 items-center gap-1.5 rounded-[18px] px-2 py-1 text-sm font-medium transition-all duration-200 ease-out focus:outline-none ${
         active
           ? "bg-[#D97757]/10 text-[#D97757]"
           : "bg-[rgba(255,255,255,0.05)] text-neutral-300 hover:bg-[rgba(255,255,255,0.08)]"

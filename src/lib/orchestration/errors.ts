@@ -1,0 +1,211 @@
+/**
+ * Cinefield orchestration — typed error system.
+ *
+ * Every failure path in the orchestration chain produces one of these
+ * codes. Each carries a safe user-facing message, an HTTP status, and a
+ * retryable flag. Internal context is kept separate from the user message
+ * and must never contain secrets, tokens, headers, signed URLs, or raw
+ * provider payloads.
+ */
+
+export type OrchestrationErrorCode =
+  | "AUTH_REQUIRED"
+  | "GENERATION_NOT_FOUND"
+  | "FORBIDDEN"
+  | "INVALID_INPUT"
+  | "UNKNOWN_MODEL"
+  | "MODEL_DISABLED"
+  | "UNSUPPORTED_WORKFLOW"
+  | "REQUIRED_INPUT_MISSING"
+  | "UNSUPPORTED_INPUT_TYPE"
+  | "CAPABILITY_NOT_SUPPORTED"
+  | "PROVIDER_NOT_CONFIGURED"
+  | "PROVIDER_AUTH_ERROR"
+  | "PROVIDER_RATE_LIMIT"
+  | "PROVIDER_QUOTA_EXCEEDED"
+  | "PROVIDER_TIMEOUT"
+  | "PROVIDER_FAILED"
+  | "OUTPUT_MISSING"
+  | "OUTPUT_DOWNLOAD_FAILED"
+  | "OUTPUT_VALIDATION_FAILED"
+  | "STORAGE_UPLOAD_FAILED"
+  | "DATABASE_UPDATE_FAILED"
+  | "DUPLICATE_EXECUTION"
+  | "MOCK_VIDEO_NOT_IMPLEMENTED"
+  | "TRIGGER_DISPATCH_FAILED"
+  | "INTERNAL_ERROR";
+
+interface ErrorDefinition {
+  message: string;
+  status: number;
+  retryable: boolean;
+}
+
+const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
+  AUTH_REQUIRED: { message: "Authentication required.", status: 401, retryable: false },
+  GENERATION_NOT_FOUND: { message: "Generation not found.", status: 404, retryable: false },
+  FORBIDDEN: { message: "Generation not found.", status: 404, retryable: false },
+  INVALID_INPUT: { message: "The request contains invalid input.", status: 400, retryable: false },
+  UNKNOWN_MODEL: { message: "This model is not available.", status: 400, retryable: false },
+  MODEL_DISABLED: { message: "This model is currently disabled.", status: 400, retryable: false },
+  UNSUPPORTED_WORKFLOW: {
+    message: "This combination of model and inputs is not supported.",
+    status: 400,
+    retryable: false,
+  },
+  REQUIRED_INPUT_MISSING: {
+    message: "A required input is missing for this workflow.",
+    status: 400,
+    retryable: false,
+  },
+  UNSUPPORTED_INPUT_TYPE: {
+    message: "One of the attached files is not supported by this model.",
+    status: 400,
+    retryable: false,
+  },
+  CAPABILITY_NOT_SUPPORTED: {
+    message: "A selected setting is not supported by this model.",
+    status: 400,
+    retryable: false,
+  },
+  PROVIDER_NOT_CONFIGURED: {
+    message: "This provider is not configured.",
+    status: 503,
+    retryable: false,
+  },
+  PROVIDER_AUTH_ERROR: {
+    message: "The provider rejected the request credentials.",
+    status: 502,
+    retryable: false,
+  },
+  PROVIDER_RATE_LIMIT: {
+    message: "The provider is rate limiting requests. Please try again shortly.",
+    status: 429,
+    retryable: true,
+  },
+  PROVIDER_QUOTA_EXCEEDED: {
+    message: "The provider quota has been exceeded.",
+    status: 402,
+    retryable: false,
+  },
+  PROVIDER_TIMEOUT: {
+    message: "The provider timed out. Please try again.",
+    status: 504,
+    retryable: true,
+  },
+  PROVIDER_FAILED: {
+    message: "Generation failed at the provider. Please try again.",
+    status: 502,
+    retryable: true,
+  },
+  OUTPUT_MISSING: { message: "The provider returned no output.", status: 502, retryable: true },
+  OUTPUT_DOWNLOAD_FAILED: {
+    message: "The generated output could not be retrieved.",
+    status: 502,
+    retryable: true,
+  },
+  OUTPUT_VALIDATION_FAILED: {
+    message: "The generated output was invalid.",
+    status: 502,
+    retryable: false,
+  },
+  STORAGE_UPLOAD_FAILED: {
+    message: "The generated output could not be stored.",
+    status: 500,
+    retryable: true,
+  },
+  DATABASE_UPDATE_FAILED: {
+    message: "The generation could not be updated.",
+    status: 500,
+    retryable: true,
+  },
+  DUPLICATE_EXECUTION: {
+    message: "This generation is already being processed or has finished.",
+    status: 409,
+    retryable: false,
+  },
+  MOCK_VIDEO_NOT_IMPLEMENTED: {
+    message: "Mock video generation is not implemented.",
+    status: 501,
+    retryable: false,
+  },
+  TRIGGER_DISPATCH_FAILED: {
+    message: "The background job could not be queued. Please try again.",
+    status: 503,
+    retryable: true,
+  },
+  INTERNAL_ERROR: { message: "Something went wrong. Please try again.", status: 500, retryable: false },
+};
+
+export class OrchestrationError extends Error {
+  readonly code: OrchestrationErrorCode;
+  readonly status: number;
+  readonly retryable: boolean;
+  readonly userMessage: string;
+  /** Sanitized, non-secret detail for server logs only. Never returned raw. */
+  readonly context?: Record<string, unknown>;
+
+  constructor(
+    code: OrchestrationErrorCode,
+    options?: { context?: Record<string, unknown>; userMessage?: string }
+  ) {
+    const definition = ERROR_DEFINITIONS[code];
+    super(`${code}: ${definition.message}`);
+    this.name = "OrchestrationError";
+    this.code = code;
+    this.status = definition.status;
+    this.retryable = definition.retryable;
+    this.userMessage = options?.userMessage ?? definition.message;
+    this.context = options?.context;
+  }
+
+  /** Shape returned to the browser. Contains no internals or stack traces. */
+  toResponseBody(): { error: string; code: OrchestrationErrorCode; retryable: boolean } {
+    return { error: this.userMessage, code: this.code, retryable: this.retryable };
+  }
+}
+
+export function isOrchestrationError(value: unknown): value is OrchestrationError {
+  return value instanceof OrchestrationError;
+}
+
+/**
+ * Converts any thrown value into an OrchestrationError. Unknown throwables
+ * collapse to INTERNAL_ERROR so raw messages never reach the browser.
+ */
+export function toOrchestrationError(value: unknown): OrchestrationError {
+  if (isOrchestrationError(value)) return value;
+  return new OrchestrationError("INTERNAL_ERROR");
+}
+
+// ---- Retry foundation ------------------------------------------------------
+// Classification only. No background worker and no in-request sleeping — a
+// future durable queue will consume this policy.
+
+export interface RetryPolicy {
+  maxAttempts: number;
+  /** Backoff delays in milliseconds, applied by a future queue worker. */
+  backoffMs: number[];
+  retryableCodes: OrchestrationErrorCode[];
+}
+
+export const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  maxAttempts: 3,
+  backoffMs: [5_000, 20_000, 60_000],
+  retryableCodes: [
+    "PROVIDER_RATE_LIMIT",
+    "PROVIDER_TIMEOUT",
+    "PROVIDER_FAILED",
+    "OUTPUT_MISSING",
+    "OUTPUT_DOWNLOAD_FAILED",
+    "STORAGE_UPLOAD_FAILED",
+    "DATABASE_UPDATE_FAILED",
+  ],
+};
+
+export function isRetryable(
+  error: OrchestrationError,
+  policy: RetryPolicy = DEFAULT_RETRY_POLICY
+): boolean {
+  return policy.retryableCodes.includes(error.code);
+}

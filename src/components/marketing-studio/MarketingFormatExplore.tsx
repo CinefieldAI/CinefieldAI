@@ -453,7 +453,7 @@ export default function MarketingFormatExplore({ onSelectPreset }: MarketingForm
                       fill="currentColor"
                     />
                   </svg>
-                  Higgsfield
+                  Cinefield
                 </span>
               </div>
             )}

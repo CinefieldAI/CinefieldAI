@@ -46,7 +46,7 @@ export default function Cinema25ReferencesPopover({
           aria-label="References"
           aria-haspopup="dialog"
           aria-expanded={isOpen}
-          className="flex h-8 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+          className="flex h-8 items-center justify-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none"
         >
           <Plus className="size-4" />
         </button>

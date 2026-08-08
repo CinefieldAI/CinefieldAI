@@ -6,14 +6,15 @@ import {
   Blend,
   Gauge,
   Gem,
-  ImagePlus,
   Loader2,
+  Plus,
   Pencil,
   Sparkles,
   Wand2,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import { useToolbarNav } from "@/hooks/useToolbarNav";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 
 const DEFAULT_IMAGE_PROMPT_WIDTH = 1060;
@@ -28,18 +29,27 @@ import { OUTPUT_COUNTS, type ReferenceAttachment } from "./createImageData";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import {
   getCapabilities,
+  GPT_IMAGE_PAGE_CONTROLS,
   KLING_O1_RESOLUTION_OPTIONS,
+  SEEDREAM_5_LITE_ASPECT_RATIOS,
+  SEEDREAM_5_PRO_ASPECT_RATIOS,
   STANDARD_ASPECT_RATIOS,
 } from "./imageModelCapabilities";
 import {
   AspectRatioPopover,
-  AssetsButtonGroup,
   BatchSizeCounter,
+  ColorTransferButton,
+  DeadBatchCounter,
+  DeadControl,
+  DrawToggle,
   EnhancementToggle,
+  FluxFlexAdvancedPopover,
   QualityPopover,
   ResolutionPopover,
-  SettingsPopover,
-  type FluxFlexSettings,
+  ThinkingPopover,
+  UnlimitedToggle,
+  VectorModeToggle,
+  type FluxFlexAdvancedSettings,
 } from "./ModelCapabilityControls";
 
 interface PromptComposerProps {
@@ -47,7 +57,19 @@ interface PromptComposerProps {
   onPromptChange: (value: string) => void;
   selectedModel: string;
   onSelectModel: (name: string) => void;
-  onGenerate: (payload: { prompt: string; model: string }) => Promise<void> | void;
+  /**
+   * The composer's own control values travel with the request. Which state
+   * they come from depends on whether the selected model is
+   * capability-driven (its own aspect/resolution/batch controls) or falls
+   * back to the shared legacy row — see handleGenerate below.
+   */
+  onGenerate: (payload: {
+    prompt: string;
+    model: string;
+    aspectRatio: string;
+    resolution: string;
+    outputCount: number;
+  }) => Promise<void> | void;
 }
 
 let attachmentCounter = 0;
@@ -236,15 +258,28 @@ export default function PromptComposer({
   // Digital S35 / WAN 2.2). Kept separate from the legacy generic controls
   // above so every other model's behavior is untouched.
   const capabilities = getCapabilities(selectedModel);
-  const [gptQuality, setGptQuality] = useState("High");
-  const [modelQuality, setModelQuality] = useState(capabilities?.defaultQuality ?? "Standard");
+  // GPT Image / GPT Image 1.5 / GPT Image 2 take their ratio list, quality
+  // copy and defaults from this /image-only map rather than from
+  // MODEL_CAPABILITIES, which /generate's locked image panel also reads.
+  const gptControls = GPT_IMAGE_PAGE_CONTROLS[selectedModel];
+  const [modelQuality, setModelQuality] = useState(
+    gptControls?.defaultQuality ?? capabilities?.defaultQuality ?? "Standard",
+  );
   const [modelResolution, setModelResolution] = useState(capabilities?.defaultResolution ?? "2K");
-  const [modelAspectRatio, setModelAspectRatio] = useState(capabilities?.defaultAspectRatio ?? "16:9");
+  const [modelAspectRatio, setModelAspectRatio] = useState(
+    gptControls?.defaultAspectRatio ?? capabilities?.defaultAspectRatio ?? "16:9",
+  );
   const [modelBatch, setModelBatch] = useState(capabilities?.defaultBatchSize ?? 1);
   const [enhancementEnabled, setEnhancementEnabled] = useState(capabilities?.defaultEnhancement ?? true);
-  const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexSettings>({
-    strength: 50,
-    guidance: 50,
+  const [modelThinking, setModelThinking] = useState(capabilities?.defaultThinking ?? "High");
+  const [unlimitedEnabled, setUnlimitedEnabled] = useState(capabilities?.defaultUnlimited ?? false);
+  const [vectorMode, setVectorMode] = useState(capabilities?.defaultVectorMode ?? false);
+  const [modelColorTransfer, setModelColorTransfer] = useState(capabilities?.defaultColorTransfer ?? false);
+  // FLUX.2 Flex advanced sliders — Prompt Strength (CFG) 1.5–10 and Quality
+  // Steps 1–50, at their documented defaults.
+  const [fluxFlexSettings, setFluxFlexSettings] = useState<FluxFlexAdvancedSettings>({
+    cfg: 5,
+    steps: 30,
   });
   const [assetsPickerOpen, setAssetsPickerOpen] = useState(false);
   // Which tab the shared Assets Picker opens on: the plus button always
@@ -275,12 +310,23 @@ export default function PromptComposer({
   const [prevModelForReset, setPrevModelForReset] = useState(selectedModel);
   if (selectedModel !== prevModelForReset) {
     setPrevModelForReset(selectedModel);
+    // Draw is shared between Nano Banana's capability control and the legacy
+    // row's chip, so it has to clear on every switch or an active draw state
+    // follows the user into the next model.
+    setDrawMode(false);
     if (capabilities) {
-      setModelQuality(capabilities.defaultQuality ?? "Standard");
+      // gptControls is already recomputed for the model being switched TO, so
+      // the three OpenAI models land on their own defaults (1:1/Low, 1:1/Low,
+      // Auto/High) instead of the shared map's.
+      setModelQuality(gptControls?.defaultQuality ?? capabilities.defaultQuality ?? "Standard");
       setModelResolution(capabilities.defaultResolution ?? "2K");
-      setModelAspectRatio(capabilities.defaultAspectRatio ?? "16:9");
+      setModelAspectRatio(gptControls?.defaultAspectRatio ?? capabilities.defaultAspectRatio ?? "16:9");
       setModelBatch(capabilities.defaultBatchSize ?? 1);
       setEnhancementEnabled(capabilities.defaultEnhancement ?? true);
+      setModelThinking(capabilities.defaultThinking ?? "High");
+      setUnlimitedEnabled(capabilities.defaultUnlimited ?? false);
+      setVectorMode(capabilities.defaultVectorMode ?? false);
+      setModelColorTransfer(capabilities.defaultColorTransfer ?? false);
     } else {
       // Legacy/generic-panel models (Higgsfield Soul, Nano Banana family,
       // Seedream family, Grok Imagine, Recraft V4.1, GPT Image / 1.5, Kling
@@ -298,6 +344,29 @@ export default function PromptComposer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The composer's one attachment/reference button, now on the prompt row.
+   *
+   * It used to be two separate buttons that could never appear together: this
+   * one for legacy models, and an AssetsButtonGroup inside each
+   * capability-driven model's control row. Both are gone, replaced by the
+   * single top-row button below, so the bottom row is controls only and the
+   * DOM never holds two of them.
+   *
+   * Which models offer it and what it opens are both unchanged — only the
+   * position moved. Capability models still open the Assets Picker; legacy
+   * models still open the native file input; Z-Image and the models with
+   * `assetUpload: false` (WAN 2.2, FLUX.2 Flex, Recraft V4.1, Z-Image,
+   * Cinematic Locations) still show nothing.
+   */
+  const showPromptAttachment = capabilities
+    ? capabilities.assetUpload
+    : selectedModel !== "Z-Image";
+  const openPromptAttachment = () => {
+    if (capabilities) openUploadsPicker();
+    else fileInputRef.current?.click();
+  };
 
   // Keep the contenteditable in sync when the prompt is set externally (e.g. "reuse")
   useEffect(() => {
@@ -390,7 +459,18 @@ export default function PromptComposer({
     if (!prompt.trim() && attachments.length === 0) return;
     setIsGenerating(true);
     try {
-      await onGenerate({ prompt, model: selectedModel });
+      // Capability-driven models render their own aspect/resolution/batch
+      // controls (modelAspectRatio / modelResolution / modelBatch); every
+      // other model shares the legacy row below them (aspectRatio / quality
+      // / outputCount). Read whichever set is actually on screen so the
+      // request carries what the user can see.
+      await onGenerate({
+        prompt,
+        model: selectedModel,
+        aspectRatio: capabilities ? modelAspectRatio : aspectRatio,
+        resolution: capabilities ? modelResolution : quality,
+        outputCount: capabilities ? modelBatch : outputCount,
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -443,6 +523,7 @@ export default function PromptComposer({
   });
 
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const toolbarNav = useToolbarNav();
 
   return (
     <>
@@ -504,40 +585,6 @@ export default function PromptComposer({
             }}
           />
 
-          {/* Recraft V4.1 Utility — single decorative centered utility shell */}
-          {selectedModel === "Recraft V4.1 Utility" && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-0.5 z-10 transition-opacity duration-200"
-              style={{
-                borderRadius: "20px",
-                left: "calc(50% + 38px)",
-                right: "auto",
-                transform: "translateX(-50%)",
-                width: "360px",
-                height: "56px",
-                top: "calc(100% - 58px)",
-                border: "1.5px solid rgba(209,254,23,0.9)",
-                boxShadow:
-                  "0 0 35px rgba(209,254,23,0.55), inset 0 0 20px rgba(209,254,23,0.35)",
-                background:
-                  "linear-gradient(180deg, rgba(209,254,23,0.12) 0%, rgba(209,254,23,0.03) 100%)",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-              }}
-            >
-              <div
-                className="absolute left-0 right-0 overflow-hidden"
-                style={{
-                  bottom: "calc(100% - 30px)",
-                  borderTopLeftRadius: "20px",
-                  borderTopRightRadius: "20px",
-                  background:
-                    "linear-gradient(180deg, rgba(209,254,23,0.08), rgba(209,254,23,0))",
-                }}
-              />
-            </div>
-          )}
 
           {/* Left Column: Text editor (top) + controls row (mt-auto bottom) */}
           <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -554,14 +601,14 @@ export default function PromptComposer({
               )}
 
               <div className="flex items-start gap-2.5 flex-1 min-h-[24px]">
-                {!capabilities && selectedModel !== "Z-Image" && (
+                {showPromptAttachment && (
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Add reference image"
-                    className="group flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_12px_rgba(0,229,255,0.25)] active:scale-95"
+                    onClick={openPromptAttachment}
+                    aria-label="Add media"
+                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 transition-all duration-200 ease-out hover:bg-white/[0.06] hover:text-white active:scale-95"
                   >
-                    <ImagePlus className="h-4 w-4 transition-transform duration-200 ease-out group-hover:rotate-[3deg]" />
+                    <Plus className="h-4 w-4" />
                   </button>
                 )}
 
@@ -613,33 +660,27 @@ export default function PromptComposer({
             </div>
 
             {/* Bottom control row: mt-auto */}
-            <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+            <div
+              {...toolbarNav.containerProps}
+              className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+            >
               <ModelSelector selected={selectedModel} onSelect={onSelectModel} portalContainer={portalRoot} />
 
               {capabilities ? (
                 <>
-                  {selectedModel === "GPT Image 2" && (
+                  {/* The three OpenAI models each render a different control
+                      order, and each reads its ratio list and quality copy
+                      from GPT_IMAGE_PAGE_CONTROLS rather than from
+                      `capabilities` — see that map for why. Resolution and
+                      batch still come from the shared entry, which already
+                      holds the right values for them (1K/2K/4K, 4K default,
+                      batch 4 on GPT Image 2). */}
+                  {selectedModel === "GPT Image 2" && gptControls && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          large
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                       <QualityPopover
-                        value={gptQuality}
-                        onChange={setGptQuality}
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
                         id="quality"
                         openId={openPopoverId}
                         onOpenIdChange={setOpenPopoverId}
@@ -655,11 +696,68 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        large
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
                     </>
                   )}
 
-                  {selectedModel === "Higgsfield Soul Cinema" && (
+                  {/* GPT Image 1.5 and GPT Image had capability entries but no
+                      branch here, so selecting either rendered a control row
+                      with nothing in it but the model selector — the same gap
+                      Kling O1 had. Neither shows an upload or @ button. */}
+                  {selectedModel === "GPT Image 1.5" && gptControls && (
+                    <>
+                      <QualityPopover
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
+                        id="quality"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "GPT Image" && gptControls && (
+                    <>
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={gptControls.aspectRatioOptions}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <QualityPopover
+                        value={modelQuality}
+                        onChange={setModelQuality}
+                        options={gptControls.qualityOptions}
+                        id="quality"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {selectedModel === "🚫 Cinefield Soul Cinema" && (
                     <>
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -684,6 +782,10 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {/* Reference parity placeholders — inert on purpose. */}
+                      <DeadControl label="Color Transfer" icon={<Blend className="h-4 w-4" />} />
+                      <DeadControl label="On" />
+                      <DeadControl label="Character" />
                     </>
                   )}
 
@@ -699,22 +801,52 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      {/* Only the Off/On label changes with state. The wand
+                          stays white in both, inheriting the trigger's own
+                          text colour — the lime tint it used to take when
+                          enabled is gone. This `icon` override is WAN 2.2's
+                          alone; EnhancementToggle's default lime Sparkles is
+                          untouched for Multi Reference, Flux Kontext Max,
+                          FLUX.2 Max and Soul 2.0, and for /generate's own WAN
+                          2.2 row, which uses that default. */}
                       <EnhancementToggle
                         enabled={enhancementEnabled}
                         onToggle={() => setEnhancementEnabled((v) => !v)}
-                        icon={<Wand2 className="h-4 w-4" style={{ color: enhancementEnabled ? "rgb(209,254,23)" : undefined }} />}
+                        icon={<Wand2 className="h-4 w-4" />}
+                      />
+                      {/* Reference parity placeholder — WAN 2.2 has a count there. */}
+                      <DeadBatchCounter />
+                    </>
+                  )}
+
+                  {/* Multi Reference renders its own row (model, ratio, count,
+                      enhancement) — no assets group and no second model
+                      selector. Flux Kontext Max / FLUX.2 Max keep the original
+                      shared row below, unchanged. */}
+                  {selectedModel === "Multi Reference" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          plainRows
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <EnhancementToggle
+                        enabled={enhancementEnabled}
+                        onToggle={() => setEnhancementEnabled((v) => !v)}
                       />
                     </>
                   )}
 
-                  {(selectedModel === "Multi Reference" ||
-                    selectedModel === "Flux Kontext Max" ||
+                  {(selectedModel === "Flux Kontext Max" ||
                     selectedModel === "FLUX.2 Max") && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                      )}
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -730,15 +862,14 @@ export default function PromptComposer({
                         enabled={enhancementEnabled}
                         onToggle={() => setEnhancementEnabled((v) => !v)}
                       />
+                      {/* Reference parity placeholder — FLUX.2 Max alone; the
+                          shared Flux Kontext Max row matches already. */}
+                      {selectedModel === "FLUX.2 Max" && <DeadControl label="Quality" icon={<Gem className="h-4 w-4" />} />}
                     </>
                   )}
 
                   {selectedModel === "FLUX.2 Pro" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                      )}
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -761,12 +892,17 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.unlimited && (
+                        <UnlimitedToggle
+                          enabled={unlimitedEnabled}
+                          onToggle={() => setUnlimitedEnabled((v) => !v)}
+                        />
+                      )}
                     </>
                   )}
 
                   {selectedModel === "FLUX.2 Flex" && (
                     <>
-                      <ModelSelector selected={selectedModel} onSelect={onSelectModel} size="mini" />
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -788,24 +924,20 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      <SettingsPopover
+                      <FluxFlexAdvancedPopover
                         settings={fluxFlexSettings}
                         onChange={setFluxFlexSettings}
                         id="settings"
                         openId={openPopoverId}
                         onOpenIdChange={setOpenPopoverId}
                       />
+                      {/* Reference parity placeholder — Flex has an upload there. */}
+                      <DeadControl label="" icon={<Plus className="h-4 w-4" />} />
                     </>
                   )}
 
-                  {(selectedModel === "Higgsfield Soul 2.0" || selectedModel === "Higgsfield Soul") && (
+                  {(selectedModel === "🚫 Cinefield Soul 2.0" || selectedModel === "🚫 Cinefield Soul") && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -827,20 +959,31 @@ export default function PromptComposer({
                         />
                       )}
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {/* Reference parity placeholders — inert on purpose. The
+                          two Souls differ: 2.0 also shows Color Transfer and
+                          opens with the toggle Off; the original shows On. */}
+                      {selectedModel === "🚫 Cinefield Soul 2.0" ? (
+                        <>
+                          <DeadControl label="Color Transfer" icon={<Blend className="h-4 w-4" />} />
+                          <DeadControl label="Off" />
+                        </>
+                      ) : (
+                        <DeadControl label="On" />
+                      )}
+                      <DeadControl label="Character" />
+                      <DeadControl label="General" />
                     </>
                   )}
 
                   {selectedModel === "Grok Imagine" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} />
-                      )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          label="Select mode"
+                          id="quality"
                           openId={openPopoverId}
                           onOpenIdChange={setOpenPopoverId}
                         />
@@ -856,25 +999,22 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
-                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      {capabilities.qualityOptions && (
-                        <QualityPopover
-                          value={modelQuality}
-                          onChange={setModelQuality}
-                          options={capabilities.qualityOptions}
-                          id="quality"
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
                           openId={openPopoverId}
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
                     </>
                   )}
 
                   {selectedModel === "Seedream 4.0" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />
-                      )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -901,12 +1041,6 @@ export default function PromptComposer({
 
                   {selectedModel === "Seedream 4.5" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -931,24 +1065,13 @@ export default function PromptComposer({
                     </>
                   )}
 
+                  {/* Seedream 5.0 Lite and 5.0 Pro below share the same eight
+                      ratios in two different orders, so each reads its own
+                      array rather than capabilities.aspectRatioOptions (which
+                      is STANDARD_ASPECT_RATIOS, Auto-first and shared with ten
+                      other models, and is what /generate still renders). */}
                   {selectedModel === "Seedream 5.0 Lite" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
                       {capabilities.resolutionOptions && (
                         <ResolutionPopover
                           value={modelResolution}
@@ -960,18 +1083,198 @@ export default function PromptComposer({
                           onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={SEEDREAM_5_LITE_ASPECT_RATIOS}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
                       <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <UnlimitedToggle
+                        enabled={unlimitedEnabled}
+                        onToggle={() => setUnlimitedEnabled((v) => !v)}
+                      />
                     </>
                   )}
 
                   {selectedModel === "Seedream 5.0 Pro" && (
                     <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          detailed
+                          label="Select quality"
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
                         />
                       )}
+                      <AspectRatioPopover
+                        value={modelAspectRatio}
+                        onChange={setModelAspectRatio}
+                        options={SEEDREAM_5_PRO_ASPECT_RATIOS}
+                        id="aspectRatio"
+                        openId={openPopoverId}
+                        onOpenIdChange={setOpenPopoverId}
+                      />
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {(selectedModel === "Nano Banana Pro" || selectedModel === "Nano Banana 2") && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.resolutionOptions && (
+                        <ResolutionPopover
+                          value={modelResolution}
+                          onChange={setModelResolution}
+                          options={capabilities.resolutionOptions}
+                          id="resolution"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {/* Draw belongs to Nano Banana Pro alone. Nano Banana 2
+                          shares this branch and must not inherit it, and the
+                          base Nano Banana keeps its own DrawToggle further
+                          down. `drawMode` is shared state, which is safe here:
+                          only one model's row is mounted at a time and the
+                          model-switch reset already clears it. */}
+                      {selectedModel === "Nano Banana Pro" && (
+                        <DrawToggle enabled={drawMode} onToggle={() => setDrawMode((v) => !v)} />
+                      )}
+                    </>
+                  )}
+
+                  {selectedModel === "Nano Banana 2 Lite" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.thinkingOptions && (
+                        <ThinkingPopover
+                          value={modelThinking}
+                          onChange={setModelThinking}
+                          options={capabilities.thinkingOptions}
+                          id="thinking"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                    </>
+                  )}
+
+                  {(selectedModel === "Recraft V4.1" ||
+                    selectedModel === "Recraft V4.1 Utility") && (
+                    <>
+                      <VectorModeToggle
+                        enabled={vectorMode}
+                        onToggle={() => setVectorMode((v) => !v)}
+                      />
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      <ColorTransferButton
+                        active={modelColorTransfer}
+                        onToggle={() => setModelColorTransfer((v) => !v)}
+                      />
+                    </>
+                  )}
+
+                  {selectedModel === "Nano Banana" && (
+                    <>
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.qualityOptions && (
+                        <QualityPopover
+                          value={modelQuality}
+                          onChange={setModelQuality}
+                          options={capabilities.qualityOptions}
+                          id="quality"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      {capabilities.drawTool && (
+                        <DrawToggle enabled={drawMode} onToggle={() => setDrawMode((v) => !v)} />
+                      )}
+                    </>
+                  )}
+
+                  {selectedModel === "Z-Image" && (
+                    <>
+                      {capabilities.aspectRatioOptions && (
+                        <AspectRatioPopover
+                          value={modelAspectRatio}
+                          onChange={setModelAspectRatio}
+                          options={capabilities.aspectRatioOptions}
+                          id="aspectRatio"
+                          openId={openPopoverId}
+                          onOpenIdChange={setOpenPopoverId}
+                        />
+                      )}
+                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
+                    </>
+                  )}
+
+                  {/* Kling O1 had a capability entry but no branch here, so
+                      selecting it rendered a toolbar with no controls at all
+                      (the legacy row's 1K/2K special case became unreachable
+                      the moment the capability entry existed). Its ratio and
+                      resolution lists are its own — KLING_O1_ASPECT_RATIOS
+                      (9 ratios) and KLING_O1_RESOLUTION_CHOICES (1K/2K, no
+                      4K) in imageModelCapabilities.ts. */}
+                  {selectedModel === "Kling O1" && (
+                    <>
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
                           value={modelAspectRatio}
@@ -988,89 +1291,7 @@ export default function PromptComposer({
                           onChange={setModelResolution}
                           options={capabilities.resolutionOptions}
                           detailed
-                          label="QUALITY"
-                          compactWidth
                           id="resolution"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
-                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                    </>
-                  )}
-
-                  {(selectedModel === "Nano Banana Pro" || selectedModel === "Nano Banana 2") && (
-                    <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
-                      {capabilities.resolutionOptions && (
-                        <ResolutionPopover
-                          value={modelResolution}
-                          onChange={setModelResolution}
-                          options={capabilities.resolutionOptions}
-                          id="resolution"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
-                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                    </>
-                  )}
-
-                  {selectedModel === "Nano Banana 2 Lite" && (
-                    <>
-                      {capabilities.assetUpload && (
-                        <AssetsButtonGroup
-                          onOpenPicker={openUploadsPicker}
-                          onOpenElementsPicker={openElementsPicker}
-                        />
-                      )}
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
-                      <BatchSizeCounter value={modelBatch} onChange={setModelBatch} />
-                      {capabilities.qualityOptions && (
-                        <QualityPopover
-                          value={modelQuality}
-                          onChange={setModelQuality}
-                          options={capabilities.qualityOptions}
-                          id="quality"
-                          openId={openPopoverId}
-                          onOpenIdChange={setOpenPopoverId}
-                        />
-                      )}
-                    </>
-                  )}
-
-                  {selectedModel === "Z-Image" && (
-                    <>
-                      {capabilities.aspectRatioOptions && (
-                        <AspectRatioPopover
-                          value={modelAspectRatio}
-                          onChange={setModelAspectRatio}
-                          options={capabilities.aspectRatioOptions}
-                          id="aspectRatio"
                           openId={openPopoverId}
                           onOpenIdChange={setOpenPopoverId}
                         />

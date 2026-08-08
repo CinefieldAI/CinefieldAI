@@ -180,6 +180,45 @@ body:has(.cinema-generate-workspace)::-webkit-scrollbar {
   height: 0;
 }
 
+/* Page-level variant — a route opts in by putting this on <html> while it is
+   mounted (see CinemaStudioWorkspace), hiding the document scrollbar without
+   disabling scrolling. Deliberately class-gated so no other route changes. */
+.hide-page-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-page-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Keyboard focus inside a prompt-bar control row.
+   Deliberately identical to the mouse-hover look — the same thin orange edge,
+   no extra outline — so arrowing across the row and hovering it read the same.
+   Keyed to :focus-visible so a mouse click never leaves a control lit.
+   !important is needed because the controls carry Tailwind's
+   `focus:outline-none`, a more specific selector than this one.
+   Any control added to the row later picks this up with no extra work. */
+.prompt-control-row :focus-visible {
+  outline: none !important;
+  border-color: #d97757 !important;
+}
+
+/* Hand cursor across the navbar's dropdown menus.
+   Tailwind v4's preflight gives every <button> `cursor: default`, so the
+   Image / Video / Audio / MCP & CLI triggers and every row inside their mega
+   panels read as inert next to the plain <a> links sitting right beside them
+   (Marketing Studio, Cinema Studio, ...), which browsers still give a pointer.
+   Scoped to the navigation menu's own data-slots so it reaches inside the
+   locked mega-dropdown components without editing them, and so no button
+   elsewhere in the app is affected. Disabled controls keep their own cursor. */
+[data-slot="navigation-menu-trigger"]:not(:disabled),
+[data-slot="navigation-menu-content"] button:not(:disabled),
+[data-slot="navigation-menu-content"] [role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 /* Higgsfield-exact model-title typography — applied alongside each model
    list item's existing layout classes (truncate, block, etc). Matches
    Shared model-list typography.
@@ -468,4 +507,70 @@ body:has(.cinema-generate-workspace)::-webkit-scrollbar {
 
 .animate-genre-jump {
   animation: genre-trigger-jump 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Modal animations */
+@keyframes modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-overlay-in {
+  animation: modal-overlay-in 220ms ease-out;
+}
+
+.animate-modal-card-in {
+  animation: modal-card-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-modal-overlay-in,
+  .animate-modal-card-in {
+    animation: none;
+  }
+}
+
+/* Clerk OTP input field - make visible and readable */
+[data-otp-input],
+.cl-formfield__otp,
+.cl-otp-input,
+input[autocomplete="one-time-code"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  min-height: 48px !important;
+  color: #FFFFFF !important;
+  caret-color: #FFFFFF !important;
+  background-color: #18181b !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 10px !important;
+  padding: 0 14px !important;
+  font-size: 20px !important;
+  letter-spacing: 0.35em !important;
+  text-align: center !important;
+}
+
+[data-otp-input]:focus,
+.cl-formfield__otp:focus,
+.cl-otp-input:focus,
+input[autocomplete="one-time-code"]:focus {
+  border-color: #D97757 !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.2), 0 0 0 4px #D97757 !important;
+  outline: none !important;
 }

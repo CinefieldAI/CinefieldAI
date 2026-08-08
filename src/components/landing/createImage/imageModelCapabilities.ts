@@ -72,11 +72,43 @@ export interface ImageModelCapabilities {
   /** Renders the 80px Character + General cards beside Generate instead of
    *  a compact-row pill (Higgsfield Soul 2.0 only). */
   characterCards?: boolean;
+  /** Nano Banana 2 Lite's Thinking (reasoning depth) selector. */
+  thinkingOptions?: string[];
+  defaultThinking?: string;
+  /** Seedream 5.0 Pro's Unlimited switch, rendered right of the batch counter. */
+  unlimited?: boolean;
+  defaultUnlimited?: boolean;
+  /** Nano Banana's Draw control — opens the existing draw mode. */
+  drawTool?: boolean;
 }
 
 export const RECRAFT_QUALITY_OPTIONS: { value: string; description: string }[] = [
   { value: "Standard", description: "Balanced quality and speed" },
   { value: "Pro", description: "Higher fidelity, slower" },
+];
+
+/** Multi Reference's own ratio set — order is part of the spec, don't sort it,
+ *  and don't share it with the Flux models that used to sit in the same row. */
+export const MULTI_REFERENCE_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "4:5", width: 16, height: 20 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "2:1", width: 22, height: 11 },
+  { value: "3:4", width: 15, height: 20 },
+];
+
+/** Recraft V4.1 needs the 4:5 social ratio, which the shared standard set omits. */
+export const RECRAFT_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:5", width: 16, height: 20 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "16:9", width: 21, height: 12 },
 ];
 
 const CINEMATIC_RATIOS: AspectRatioChoice[] = [
@@ -123,6 +155,29 @@ const COMPACT_ASPECT_RATIOS: AspectRatioChoice[] = [
   { value: "16:9", width: 21, height: 12 },
 ];
 
+/** Kling O1's own 9-ratio set — the standard seven plus 3:2 and 2:3, in the
+ *  order its reference panel lists them. Dedicated to Kling O1: do not share
+ *  it with other models and do not trim it to match a shorter list. */
+export const KLING_O1_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "21:9", width: 24, height: 10 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "9:16", width: 12, height: 21 },
+];
+
+/** Kling O1's resolution tiers. The model stops at 2K — this list must never
+ *  gain the 4K row the GPT set has (see KLING_O1_RESOLUTION_OPTIONS below,
+ *  which encodes the same 1K/2K-only restriction for the legacy row). */
+export const KLING_O1_RESOLUTION_CHOICES: ResolutionChoice[] = [
+  { value: "1K", description: "Fast · Quick generation" },
+  { value: "2K", description: "High quality · Better resolution" },
+];
+
 /** The standard 7-option shared ratio list (Auto/1:1/3:4/9:16/4:3/16:9/21:9)
  *  used by every generic/legacy-tier model that doesn't have its own
  *  dedicated ratio set (Higgsfield Soul, Nano Banana family, Seedream
@@ -148,6 +203,88 @@ export const GPT_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "2K", description: "2048px" },
   { value: "4K", description: "4096px" },
 ];
+
+/* ------------------------------------------------------------------ */
+/* /image-only control definitions for the three OpenAI models          */
+/* ------------------------------------------------------------------ */
+
+/** GPT Image 2's own 9-ratio set, in the exact order its panel lists them.
+ *  Dedicated to GPT Image 2: do not share it with GPT Image / GPT Image 1.5
+ *  (their 3-ratio set is below) and do not trim it to match a shorter list. */
+export const GPT_IMAGE_2_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "21:9", width: 24, height: 10 },
+];
+
+/** Square / portrait / landscape only. Shared by exactly two models —
+ *  GPT Image and GPT Image 1.5 — whose ratio requirements are identical.
+ *  Never add "Auto" or a fourth ratio here: GPT Image 2's longer list is
+ *  deliberately separate, and NANO_BANANA_ASPECT_RATIOS happens to hold the
+ *  same three values but belongs to a different model. */
+export const GPT_COMPACT_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+];
+
+/** GPT Image's own quality copy. Deliberately NOT GPT_QUALITY_OPTIONS: the
+ *  three tier names match but every description is this model's own. */
+export const GPT_IMAGE_QUALITY_OPTIONS: { value: string; description: string }[] = [
+  { value: "Low", description: "Fastest, fewer credits" },
+  { value: "Medium", description: "Balanced speed & detail" },
+  { value: "High", description: "Maximum detail" },
+];
+
+export interface GptImagePageControls {
+  aspectRatioOptions: AspectRatioChoice[];
+  defaultAspectRatio: string;
+  qualityOptions: { value: string; description: string }[];
+  defaultQuality: string;
+}
+
+/**
+ * The ratio lists, quality copy and defaults /image's prompt bar uses for the
+ * three OpenAI models.
+ *
+ * These deliberately live OUTSIDE `MODEL_CAPABILITIES`. That map is not
+ * /image's alone — /generate's CinemaStudioImagePanel renders its own GPT
+ * Image 2 row from `capabilities.aspectRatioOptions` and gates its plus
+ * button on `capabilities.assetUpload`, and image-tools' ImageForm reads it
+ * too. /generate is locked, so editing those entries in place would have
+ * silently changed a locked page. Only PromptComposer imports this map, which
+ * leaves both other callers byte-identical in behaviour.
+ *
+ * Consequence worth knowing: /generate's GPT Image 2 panel still offers the
+ * older 6-ratio GPT_ASPECT_RATIOS set. Propagating these values there is a
+ * separate, explicitly-unlocked change.
+ */
+export const GPT_IMAGE_PAGE_CONTROLS: Record<string, GptImagePageControls> = {
+  "GPT Image": {
+    aspectRatioOptions: GPT_COMPACT_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    qualityOptions: GPT_IMAGE_QUALITY_OPTIONS,
+    defaultQuality: "Low",
+  },
+  "GPT Image 1.5": {
+    aspectRatioOptions: GPT_COMPACT_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
+    qualityOptions: GPT_QUALITY_OPTIONS,
+    defaultQuality: "Low",
+  },
+  "GPT Image 2": {
+    aspectRatioOptions: GPT_IMAGE_2_ASPECT_RATIOS,
+    defaultAspectRatio: "Auto",
+    qualityOptions: GPT_QUALITY_OPTIONS,
+    defaultQuality: "High",
+  },
+};
 
 export const SOUL_CINEMA_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "1.5k", description: "" },
@@ -199,10 +336,27 @@ const RECRAFT_CAPABILITIES: ImageModelCapabilities = {
   referenceSelection: true,
 };
 
+/** Recraft V4.1 Utility — the shared Recraft base, but showing the Standard
+ *  quality tier and the 4:5 default its toolbar is specified with. */
+const RECRAFT_V4_1_UTILITY_CAPABILITIES: ImageModelCapabilities = {
+  ...RECRAFT_CAPABILITIES,
+  defaultQuality: "Standard",
+  aspectRatioOptions: RECRAFT_ASPECT_RATIOS,
+  defaultAspectRatio: "4:5",
+  // Reference has no upload on Utility at all, so the prompt-row attach
+  // button (driven by this flag) must not appear either.
+  assetUpload: false,
+  referenceSelection: false,
+};
+
 /** Recraft V4.1 (non-Utility) — identical to Recraft V4.1 Utility except it
  *  has no plus/@ reference buttons. */
 const RECRAFT_V4_1_CAPABILITIES: ImageModelCapabilities = {
   ...RECRAFT_CAPABILITIES,
+  defaultQuality: "Standard",
+  aspectRatioOptions: RECRAFT_ASPECT_RATIOS,
+  defaultAspectRatio: "4:5",
+  defaultVectorMode: false,
   assetUpload: false,
   referenceSelection: false,
 };
@@ -210,18 +364,82 @@ const RECRAFT_V4_1_CAPABILITIES: ImageModelCapabilities = {
 /** Single-option "mode" popovers — reuse the Quality/Resolution popover
  *  mechanism for a one-choice display+control (never a decorative badge). */
 export const GROK_MODE_OPTIONS: { value: string; description: string }[] = [
-  { value: "Standard", description: "Default generation mode" },
+  { value: "Standard", description: "Standard generation mode" },
+  { value: "Quality", description: "Quality generation mode" },
 ];
 export const GROK_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "1K", description: "1024px" },
+  { value: "2K", description: "2048px" },
+];
+
+/** Grok Imagine's wide ratio list — order is part of the spec, don't sort it. */
+export const GROK_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "Auto", width: 16, height: 16 },
+  { value: "1:1", width: 16, height: 16 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "2:1", width: 22, height: 11 },
+  { value: "1:2", width: 11, height: 22 },
+];
+
+/** Nano Banana's own quality tiers — deliberately NOT the Low/Medium/High set
+ *  that GPT Image 2 owns (GPT_QUALITY_OPTIONS). Do not merge the two. */
+export const NANO_BANANA_QUALITY_OPTIONS: { value: string; description: string }[] = [
+  { value: "Basic", description: "1k quality and fast generation speed" },
+  { value: "High", description: "2k quality and fidelity, balanced speed" },
+];
+
+export const NANO_BANANA_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
 ];
 export const SEEDREAM_4_MODE_OPTIONS: { value: string; description: string }[] = [
   { value: "Basic", description: "Default generation mode" },
 ];
+/**
+ * Seedream 5.0 Pro's and 5.0 Lite's /image ratio panels.
+ *
+ * Same eight values, deliberately in two different orders — Pro lists 21:9
+ * fifth, Lite lists it last — so they get an array each. Neither may be
+ * pointed at the other, and neither is STANDARD_ASPECT_RATIOS (which opens
+ * with "Auto" and is shared by ~10 other models).
+ *
+ * Like GPT_IMAGE_PAGE_CONTROLS below, these live outside MODEL_CAPABILITIES
+ * on purpose: that map is also read by /generate's CinemaStudioImagePanel and
+ * image-tools' ImageForm (which CinemaStudioWorkspace renders), and /generate
+ * is locked. Only PromptComposer imports these.
+ */
+export const SEEDREAM_5_PRO_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "21:9", width: 24, height: 10 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+];
+
+export const SEEDREAM_5_LITE_ASPECT_RATIOS: AspectRatioChoice[] = [
+  { value: "1:1", width: 16, height: 16 },
+  { value: "4:3", width: 20, height: 15 },
+  { value: "3:4", width: 15, height: 20 },
+  { value: "16:9", width: 21, height: 12 },
+  { value: "9:16", width: 12, height: 21 },
+  { value: "2:3", width: 14, height: 21 },
+  { value: "3:2", width: 21, height: 14 },
+  { value: "21:9", width: 24, height: 10 },
+];
+
 export const SEEDREAM_5_PRO_RESOLUTION_OPTIONS: ResolutionChoice[] = [
-  { value: "1K", description: "1024px" },
-  { value: "1.5K", description: "1536px" },
   { value: "2K", description: "2048px" },
+  { value: "3K", description: "3072px" },
+  { value: "4K", description: "4096px" },
 ];
 export const SEEDREAM_5_LITE_RESOLUTION_OPTIONS: ResolutionChoice[] = [
   { value: "2K", description: "2048px" },
@@ -233,6 +451,9 @@ export const SEEDREAM_4_5_RESOLUTION_OPTIONS: ResolutionChoice[] = [
 export const NANO_BANANA_2_LITE_QUALITY_OPTIONS: { value: string; description: string }[] = [
   { value: "High", description: "Best visual fidelity" },
 ];
+
+/** Nano Banana 2 Lite's Thinking control — reasoning depth, not a quality tier. */
+export const NANO_BANANA_2_LITE_THINKING_OPTIONS = ["High", "Minimal"];
 
 export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   Auto: {
@@ -268,7 +489,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     referenceSelection: true,
     elementReferences: true,
   },
-  "Higgsfield Soul Cinema": {
+  "🚫 Cinefield Soul Cinema": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
@@ -306,9 +527,10 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     quality: false,
     resolution: false,
     aspectRatio: "simple",
-    aspectRatioOptions: REFERENCE_MODEL_RATIOS,
-    defaultAspectRatio: "3:4",
+    aspectRatioOptions: MULTI_REFERENCE_ASPECT_RATIOS,
+    defaultAspectRatio: "9:16",
     batchSize: true,
+    defaultBatchSize: 4,
     gridGeneration: false,
     enhancementToggle: true,
     defaultEnhancement: false,
@@ -361,6 +583,11 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
+    // FLUX.2 Pro's Unlimited switch sits in the toolbar after the batch
+    // counter — same placement as Seedream 5.0 Pro's, never inside a
+    // dropdown.
+    unlimited: true,
+    defaultUnlimited: false,
   },
   "FLUX.2 Flex": {
     modelTriggerSize: "compact",
@@ -382,7 +609,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // Recraft V4.1 and Recraft V4.1 Utility share one identical capability
   // set — the only differences between the two models are the name/id and
   // their own generation config, never the controls or panels they expose.
-  "Recraft V4.1 Utility": RECRAFT_CAPABILITIES,
+  "Recraft V4.1 Utility": RECRAFT_V4_1_UTILITY_CAPABILITIES,
   "Recraft V4.1": RECRAFT_V4_1_CAPABILITIES,
   "Grok Imagine": {
     modelTriggerSize: "compact",
@@ -393,7 +620,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     resolutionOptions: GROK_RESOLUTION_OPTIONS,
     defaultResolution: "1K",
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
+    aspectRatioOptions: GROK_ASPECT_RATIOS,
     defaultAspectRatio: "Auto",
     batchSize: true,
     defaultBatchSize: 4,
@@ -460,7 +687,9 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
-    elementReferences: true,
+    elementReferences: false,
+    unlimited: true,
+    defaultUnlimited: false,
   },
   // Seedream 5.0 Lite — plus + @, single 2K resolution option, no Unlimited
   // anywhere (this model never had one; nothing to remove).
@@ -486,7 +715,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // (Character/General replace the element-reference concept for this
   // model). Character/General render as 80px cards beside Generate, never
   // inside the compact control row.
-  "Higgsfield Soul 2.0": {
+  "🚫 Cinefield Soul 2.0": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
@@ -588,11 +817,13 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   // resolution) and renders it after batch, matching the supplied reference.
   "Nano Banana": {
     modelTriggerSize: "compact",
-    quality: false,
+    quality: true,
+    qualityOptions: NANO_BANANA_QUALITY_OPTIONS,
+    defaultQuality: "Basic",
     resolution: false,
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
-    defaultAspectRatio: "3:4",
+    aspectRatioOptions: NANO_BANANA_ASPECT_RATIOS,
+    defaultAspectRatio: "1:1",
     batchSize: true,
     defaultBatchSize: 1,
     gridGeneration: false,
@@ -600,8 +831,10 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
+    elementReferences: false,
+    drawTool: true,
   },
-  "Higgsfield Soul": {
+  "🚫 Cinefield Soul": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,
@@ -616,7 +849,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     assetUpload: true,
     referenceSelection: true,
   },
-  "Higgsfield Face Swap": {
+  "🚫 Cinefield Face Swap": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,
@@ -631,7 +864,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     assetUpload: true,
     referenceSelection: true,
   },
-  "Higgsfield Character Swap": {
+  "🚫 Cinefield Character Swap": {
     modelTriggerSize: "compact",
     quality: false,
     resolution: false,
@@ -680,11 +913,11 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     modelTriggerSize: "compact",
     quality: false,
     resolution: "simple",
-    resolutionOptions: GPT_RESOLUTION_OPTIONS,
+    resolutionOptions: KLING_O1_RESOLUTION_CHOICES,
     defaultResolution: "1K",
     aspectRatio: "simple",
-    aspectRatioOptions: STANDARD_ASPECT_RATIOS,
-    defaultAspectRatio: "1:1",
+    aspectRatioOptions: KLING_O1_ASPECT_RATIOS,
+    defaultAspectRatio: "3:4",
     batchSize: true,
     defaultBatchSize: 1,
     gridGeneration: false,
@@ -695,9 +928,7 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
   },
   "Nano Banana 2 Lite": {
     modelTriggerSize: "compact",
-    quality: true,
-    qualityOptions: NANO_BANANA_2_LITE_QUALITY_OPTIONS,
-    defaultQuality: "High",
+    quality: false,
     resolution: false,
     aspectRatio: "simple",
     aspectRatioOptions: STANDARD_ASPECT_RATIOS,
@@ -709,7 +940,9 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
     settingsTrigger: false,
     assetUpload: true,
     referenceSelection: true,
-    elementReferences: true,
+    elementReferences: false,
+    thinkingOptions: NANO_BANANA_2_LITE_THINKING_OPTIONS,
+    defaultThinking: "High",
   },
 };
 

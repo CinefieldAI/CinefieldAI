@@ -138,7 +138,7 @@ export default function CameraModal({
             onChange({ ...value, focalLength: Number(e.target.value) })
           }
           aria-label="Focal length"
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[#D97757] focus:outline-none focus:ring-2 focus:ring-[#D97757]"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-[#D97757] focus:outline-none"
         />
       </div>
     </ModalShell>

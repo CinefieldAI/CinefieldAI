@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# trigger.dev
+.trigger/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -45,3 +48,10 @@ next-env.d.ts
 .claude/launch.json
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Cinefield handoff paketi (ChatGPT icin, repoya girmesin)
+cinefield-handoff/
+cinefield-handoff.zip
+
+# Local video compression output — compare before swapping in, never deployed
+video-compressed/

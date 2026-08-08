@@ -219,7 +219,7 @@ const FEATURED_CREATE_MODELS: WorkflowModel[] = [
   },
   {
     id: "higgsfield-dop",
-    name: "Higgsfield DOP",
+    name: "🚫 Cinefield DOP",
     description: "VFX and camera control",
     icon: Clapperboard,
     quality: "1080p",
@@ -237,7 +237,7 @@ const EDIT_MODELS: WorkflowModel[] = [
   },
   {
     id: "higgsfield-reframe",
-    name: "Higgsfield Reframe",
+    name: "🚫 Cinefield Reframe",
     description: "Reframe and resize videos to any aspect ratio",
     icon: WandSparkles,
   },
@@ -341,14 +341,14 @@ const CREATE_MODEL_GROUPS: WorkflowModelGroup[] = [
     modelNames: ["Gemini Omni Flash"],
   },
   {
-    name: "Higgsfield",
+    name: "🚫 Cinefield",
     description: "Advanced camera controls and effect presets",
     icon: Clapperboard,
     modelNames: [
       "Cinematic Studio Video 3.5",
-      "Higgsfield Lite",
-      "Higgsfield Standard",
-      "Higgsfield Turbo",
+      "🚫 Cinefield Lite",
+      "🚫 Cinefield Standard",
+      "🚫 Cinefield Turbo",
     ],
   },
   {
@@ -407,9 +407,9 @@ const ADDITIONAL_CREATE_MODELS: WorkflowModel[] = [
   { id: "google-veo-3.1-fast", name: "Google Veo 3.1 Fast", description: "Fast Veo 3.1 generation", icon: GoogleIcon, quality: "1080p", duration: "4s-8s", audio: true },
   { id: "google-veo-3-fast", name: "Google Veo 3 Fast", description: "Fast Veo 3 generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
   { id: "google-veo-3", name: "Google Veo 3", description: "Google video generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
-  { id: "higgsfield-lite", name: "Higgsfield Lite", description: "Lightweight cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
-  { id: "higgsfield-standard", name: "Higgsfield Standard", description: "Standard cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
-  { id: "higgsfield-turbo", name: "Higgsfield Turbo", description: "Fast cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-lite", name: "🚫 Cinefield Lite", description: "Lightweight cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-standard", name: "🚫 Cinefield Standard", description: "Standard cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-turbo", name: "🚫 Cinefield Turbo", description: "Fast cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
   { id: "wan-2.6", name: "Wan 2.6", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-15s" },
   { id: "wan-2.5", name: "Wan 2.5", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
   { id: "wan-2.5-fast", name: "Wan 2.5 Fast", description: "Fast Wan generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
@@ -733,9 +733,9 @@ const NAVBAR_MODEL_TARGETS: Record<
     workflow: "create-video",
     modelName: "Seedance 1.5 Pro",
   },
-  "Higgsfield DOP": {
+  "🚫 Cinefield DOP": {
     workflow: "create-video",
-    modelName: "Higgsfield DOP",
+    modelName: "🚫 Cinefield DOP",
   },
 };
 

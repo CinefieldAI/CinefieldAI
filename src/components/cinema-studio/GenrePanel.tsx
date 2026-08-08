@@ -351,7 +351,7 @@ export default function GenrePanel({
 
         {/* Large circular preview */}
         <div
-          className={`absolute rounded-full overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-transform duration-200 ${
+          className={`absolute rounded-full overflow-hidden transition-transform duration-200 ${
             isDragging ? "scale-105" : ""
           }`}
           style={{

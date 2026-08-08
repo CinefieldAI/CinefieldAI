@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import { Check } from "lucide-react";
 
 interface Kling3AspectRatioControlProps {
@@ -91,6 +92,23 @@ export default function Kling3AspectRatioControl({
     onOpenChange?.(newOpen);
   };
 
+  const nav = useListboxNav({
+    count: KLING3_ASPECT_RATIOS.length,
+    selectedIndex: KLING3_ASPECT_RATIOS.findIndex((opt) => opt.value === value),
+    open: controlledOpen,
+    onActivate: (index) => {
+      const opt = KLING3_ASPECT_RATIOS[index];
+      if (!opt) return;
+      onChange(opt.value);
+    },
+    onSelect: (index) => {
+      const opt = KLING3_ASPECT_RATIOS[index];
+      if (!opt) return;
+      onChange(opt.value);
+      handleOpenChange(false);
+    },
+  });
+
   return (
     <Popover.Root open={controlledOpen} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
@@ -101,7 +119,7 @@ export default function Kling3AspectRatioControl({
           aria-expanded={controlledOpen}
           className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
             controlledOpen
-              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+              ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
               : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
           }`}
         >
@@ -114,13 +132,19 @@ export default function Kling3AspectRatioControl({
           side="top"
           align="start"
           sideOffset={8}
+          onKeyDown={nav.handleKeyDown}
+          onOpenAutoFocus={nav.handleOpenAutoFocus}
+          onEscapeKeyDown={nav.handleEscapeKeyDown}
           className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#18191c]/95 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.75)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[210px]"
         >
-          {KLING3_ASPECT_RATIOS.map((opt) => {
+          <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
+          <div role="listbox" aria-label="Select ratio" className="hide-scrollbar max-h-[min(70vh,560px)] overflow-y-auto">
+          {KLING3_ASPECT_RATIOS.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                {...nav.getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -128,10 +152,12 @@ export default function Kling3AspectRatioControl({
                   onChange(opt.value);
                   handleOpenChange(false);
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-all duration-150 ${
                   selected
-                    ? "bg-[#24262b] text-white font-semibold border border-white/10"
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                    ? "bg-[#24262b] font-semibold text-white"
+                    : nav.activeIndex === index
+                      ? "bg-white/5 text-white"
+                      : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <ShapeIcon shape={opt.shape} active={selected} />
@@ -144,6 +170,7 @@ export default function Kling3AspectRatioControl({
               </button>
             );
           })}
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

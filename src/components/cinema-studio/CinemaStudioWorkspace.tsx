@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX, Paperclip, X } from "lucide-react";
+import {
+  ALLOWED_INPUT_MIME_TYPES,
+  MAX_INPUT_FILE_SIZE,
+} from "@/lib/storageUpload";
+import { isSupportedNanoBananaModel } from "@/lib/gemini/geminiModelMapping";
+import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
+import { useGeneration, type LegacyExecutionOutcome } from "@/hooks/useGeneration";
 import Navbar from "@/components/landing/Navbar";
 import CinemaGenerateSidebar from "./CinemaGenerateSidebar";
 import CinemaStudioHoverSidebar from "./CinemaStudioHoverSidebar";
@@ -20,20 +27,42 @@ import CinemaStudioImagePanel from "./CinemaStudioImagePanel";
 import ImageForm from "@/components/image-tools/ImageForm";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
-import type { GenerateVideoRequest } from "@/lib/jobs";
 
 type ModalKey = "genre" | "style" | "camera" | null;
+
+/** Mirrors COLLAPSED_WIDTH in CinemaGenerateSidebar — the width the content
+ *  panel is sized against, so expanding the sidebar slides it instead of
+ *  shrinking it. */
+const SIDEBAR_COLLAPSED_WIDTH = 52;
 
 export default function CinemaStudioWorkspace() {
   const searchParams = useSearchParams();
   const promptBarWrapperRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Shared generation workflow — project resolution, upload, row insert,
+  // orchestration dispatch, polling, signed URL, and flow state all live in
+  // the hook. Renamed locals keep the existing render JSX untouched.
+  const {
+    status: flowStatus,
+    message: flowMessage,
+    result: resultPreview,
+    isGenerating,
+    generate,
+    reset: resetFlow,
+    setError: setFlowError,
+  } = useGeneration({ sourcePage: "/generate" });
   const [isHeroVideoMuted, setIsHeroVideoMuted] = useState(true);
 
   // Sidebar state
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(52);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_COLLAPSED_WIDTH);
+  // True while the sidebar's resize handle is held. The content panel drops its
+  // transition then, so it tracks the pointer exactly instead of easing a frame
+  // behind and briefly exposing the page background between the two.
+  const [isSidebarDragging, setIsSidebarDragging] = useState(false);
 
   const toggleHeroVideoMute = () => {
     if (heroVideoRef.current) {
@@ -49,6 +78,14 @@ export default function CinemaStudioWorkspace() {
     }
   }, []);
 
+  // Hide the document scrollbar while this page is mounted — scrolling itself
+  // keeps working; only the bar disappears. Removed on unmount so every other
+  // route keeps its normal scrollbar.
+  useEffect(() => {
+    document.documentElement.classList.add("hide-page-scrollbar");
+    return () => document.documentElement.classList.remove("hide-page-scrollbar");
+  }, []);
+
   // Core settings
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"image" | "video">("video");
@@ -57,6 +94,24 @@ export default function CinemaStudioWorkspace() {
   });
   const [imageModel, setImageModel] = useState("nano-banana-pro");
   const [isDrawOpen, setIsDrawOpen] = useState(false);
+
+  /**
+   * Development-only orchestration model override.
+   *
+   * `?model=<orchestration-model-id>` (e.g. `mock-image`, `fal-flux-schnell`)
+   * forces the model used for the generation row and for orchestration,
+   * independent of the model picker. The picker keeps its own state and its
+   * existing fallback label — it is never modified — because orchestration
+   * ids are deliberately absent from the visible model catalog, and any
+   * picker interaction would otherwise overwrite a URL-seeded state value.
+   *
+   * Null unless the URL explicitly names a registered orchestration model,
+   * so no real catalog model is ever rerouted to an orchestration provider.
+   */
+  const orchestrationModelOverride = useMemo(() => {
+    const requested = searchParams.get("model");
+    return requested && isOrchestrationModel(requested) ? requested : null;
+  }, [searchParams]);
 
   const [genre, setGenre] = useState<string | undefined>();
   const [style, setStyle] = useState<NonNullable<CinemaStudioSettings["style"]>>({});
@@ -98,7 +153,42 @@ export default function CinemaStudioWorkspace() {
 
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Attachment — page-level UI state; validation happens at select time for
+  // instant feedback, before anything reaches the shared generation flow.
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+
+  // Nano Banana 2 Lite's "Thinking" control — lifted here (from PromptBar's
+  // former local state) so its current value can be captured into
+  // generation metadata when queuing a generation.
+  const [nanoBanana2LiteThinking, setNanoBanana2LiteThinking] = useState<
+    "High" | "Minimal"
+  >("High");
+
+  const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!ALLOWED_INPUT_MIME_TYPES.includes(file.type)) {
+      setFlowError(`File type not allowed: ${file.type || "unknown"}`);
+      return;
+    }
+    if (file.size > MAX_INPUT_FILE_SIZE) {
+      setFlowError("File exceeds the 50 MB limit");
+      return;
+    }
+
+    resetFlow();
+    setAttachedFile(file);
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachedFile(null);
+    if (flowStatus === "error") {
+      resetFlow();
+    }
+  };
 
   const selectedModel = getModel(model);
 
@@ -156,69 +246,79 @@ export default function CinemaStudioWorkspace() {
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
 
-  // Generate video handler
-  const handleGenerate = async () => {
-    try {
-      setIsGenerating(true);
-      const isKling3MotionControl = model === "kling-3.0-motion-control";
-      const isKling3Turbo = model === "kling-3.0-turbo";
-      const effectivePrompt = prompt || klingAdvancedPrompt;
+  /**
+   * Legacy Gemini execution for the three Nano Banana models in Image mode —
+   * page-specific behavior that predates the orchestration pipeline, passed
+   * into the shared hook so provider-specific routing never lives inside it.
+   */
+  const executeNanoBananaLegacy = async (
+    generationId: string,
+  ): Promise<LegacyExecutionOutcome> => {
+    const execResponse = await fetch(`/api/generations/${generationId}/execute`, {
+      method: "POST",
+    });
+    const execJson = await execResponse.json();
 
-      if (!effectivePrompt.trim()) {
-        console.warn("Prompt is empty");
-        return;
-      }
-
-      // Genre/Style/Camera are only surfaced in the UI for Cinema Studio 3.5
-      // (ControlButtons + docked panels). Omitting them for every other model
-      // — including other Cinema Studio versions — avoids sending stale
-      // values left over from a prior 3.5 session.
-      // Kling 3.0 Turbo uses its own isolated aspectRatio/resolution rather
-      // than the shared state (see kling3TurboSettings above).
-      const payload: GenerateVideoRequest = {
-        model,
-        prompt: isKling3MotionControl ? undefined : effectivePrompt,
-        advancedPrompt: isKling3MotionControl ? effectivePrompt : undefined,
-        resolution: isKling3Turbo ? kling3TurboSettings.resolution : resolution,
-        aspectRatio: isKling3Turbo ? kling3TurboSettings.aspectRatio : aspectRatio,
-        duration,
-        batchSize: batch ? parseInt(batch.split("/")[0]) : undefined,
-        sound,
-        quality,
-        genre: isCinema35 ? genre : undefined,
-        style: isCinema35 ? style : undefined,
-        camera: isCinema35 ? camera : undefined,
+    if (!execResponse.ok || execJson.status !== "completed") {
+      return {
+        ok: false,
+        error: typeof execJson.error === "string" ? execJson.error : "Generation failed.",
       };
-
-      const response = await fetch("/api/generate-video", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("Generation error:", error);
-        return;
-      }
-
-      const result = await response.json();
-      console.log("Video generation queued:", result);
-
-      // Optionally show toast notification
-      // toast.success(`Video queued: ${result.jobId}`);
-    } catch (error) {
-      console.error("Failed to generate video:", error);
-      // toast.error("Failed to queue video generation");
-    } finally {
-      setIsGenerating(false);
     }
+    return {
+      ok: true,
+      url: typeof execJson.signedUrl === "string" ? execJson.signedUrl : null,
+      type: "image",
+      message:
+        typeof execJson.warning === "string"
+          ? `Generation completed. ${execJson.warning}`
+          : "Generation completed.",
+    };
   };
 
+  // Queues one generation via the shared workflow (upload, row insert,
+  // orchestration dispatch, polling, signed URL). The page contributes only
+  // what it uniquely knows: the effective model, mode, prompt sources, and
+  // its own metadata extras.
+  const handleGenerate = async () => {
+    // The dev orchestration override wins over the picker so the inserted
+    // row and the orchestration run always agree. Without an override this
+    // is exactly the previous behavior for every real catalog model.
+    const effectiveModel =
+      orchestrationModelOverride ?? (mode === "image" ? imageModel : model);
+
+    const metadata: Record<string, unknown> = {
+      aspect_ratio: aspectRatio,
+      resolution,
+      image_count: batch,
+    };
+    if (effectiveModel === "nano-banana-2-lite") {
+      metadata.thinking = nanoBanana2LiteThinking;
+    }
+
+    const useNanoBananaLegacy =
+      mode === "image" &&
+      !isOrchestrationModel(effectiveModel) &&
+      isSupportedNanoBananaModel(effectiveModel);
+
+    await generate({
+      model: effectiveModel,
+      uiMode: mode,
+      prompt: prompt || klingAdvancedPrompt,
+      attachedFile,
+      metadata,
+      executeLegacy: useNanoBananaLegacy ? executeNanoBananaLegacy : undefined,
+    });
+
+    setAttachedFile(null);
+  };
+
+  // overflow-x-hidden below: the content panel keeps its collapsed-state width
+  // and slides right when the sidebar opens, so its right edge runs past the
+  // viewport instead of the panel narrowing. Clip it here rather than letting
+  // the page gain a horizontal scrollbar.
   return (
-    <div className="cinema-generate-workspace relative min-h-screen w-full overflow-hidden bg-[#090a0b] text-white">
+    <div className="cinema-generate-workspace relative min-h-screen w-full overflow-x-hidden bg-[#090a0b] text-white">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-[180px] h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(217,119,87,0.10),rgba(25,28,29,0.34)_34%,rgba(9,10,11,0.96)_68%,rgba(9,10,11,0)_100%)]"
@@ -240,18 +340,25 @@ export default function CinemaStudioWorkspace() {
         onViewChange={(view) => setActiveSidebarView(view as any)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-        onWidthChange={setSidebarWidth}
+        onWidthChange={(width, dragging) => {
+          setSidebarWidth(width);
+          setIsSidebarDragging(dragging);
+        }}
       />
 
       {/* Hero — the Blueface promo fills this band, with the composer sitting
           over its lower edge (matches the reference: video on top, cards on
-          black underneath). This section is its own independent panel next
-          to the sidebar — it does not live-follow the sidebar while it's
-          being drag-resized, only once the drag settles (see
-          `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
+          black underneath). It tracks the sidebar frame for frame, drag
+          included, so the two edges stay together and the page background is
+          never exposed between them. */}
       <section
-        className="relative z-10 overflow-visible rounded-[18px] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
-        style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
+        /* The panel keeps the size it has while the sidebar is collapsed and
+           slides sideways instead of being squeezed: the left offset and the
+           width are both pinned to the collapsed sidebar, and only a transform
+           follows the live width. Expanding the sidebar therefore pushes the
+           card right without reflowing anything inside it. */
+        className={`relative z-10 overflow-visible rounded-[18px] border border-white/[0.04] bg-black md:ml-[60px] md:w-[calc(100vw-60px)] ${isSidebarDragging ? "" : "transition-transform duration-300 ease-out"}`}
+        style={{ transform: `translateX(${Math.max(0, sidebarWidth - SIDEBAR_COLLAPSED_WIDTH)}px)` }}
       >
         <video
           ref={heroVideoRef}
@@ -268,14 +375,49 @@ export default function CinemaStudioWorkspace() {
               vid.play().catch(() => {});
             }
           }}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full rounded-[15px] object-cover"
         >
           <source src="/Blueface - Box Training - Promo - 4K.mp4" type="video/mp4" />
         </video>
 
         {/* Soft gradient overlays blending video smoothly into black background — transition pulled lower down */}
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-[#090a0b]/80 pointer-events-none" />
-        <div aria-hidden="true" className="absolute -bottom-24 left-0 right-0 h-56 bg-gradient-to-b from-transparent via-[#090a0b]/92 to-[#090a0b] pointer-events-none" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
+        {/* Bottom dissolve — same eased multi-stop treatment as the side
+            feathers. The old 112px via-black/90 ramp went dark almost at once
+            and its top edge read as a hard line across the footage; this one
+            is 288px and falls away gradually, so the video sinks into the
+            surface the way the reference's does. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 right-0 h-72 rounded-b-[15px]"
+          style={{
+            background:
+              "linear-gradient(to top, #000 0%, #000 18%, rgba(0,0,0,0.85) 38%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.25) 80%, transparent 100%)",
+          }}
+        />
+
+        {/* Side feathers — the top and bottom already faded, but the left and
+            right edges cut the footage off dead straight against the panel.
+            The reference dissolves the footage over a wide band (roughly a
+            quarter of the hero), so these are 320px with an eased multi-stop
+            ramp rather than a narrow strip: solid black holds the first 60px,
+            then falls away gradually. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-80 rounded-l-[15px]"
+          style={{
+            background:
+              "linear-gradient(to right, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-80 rounded-r-[15px]"
+          style={{
+            background:
+              "linear-gradient(to left, #000 0%, #000 12%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.55) 52%, rgba(0,0,0,0.25) 74%, transparent 100%)",
+          }}
+        />
 
         {/* Hero Headline Overlay matching reference screenshot exactly */}
         <div
@@ -325,6 +467,94 @@ export default function CinemaStudioWorkspace() {
         {/* Mode toggle (left sidebar) + prompt bar + Cinema 3.0 Panel */}
         <div className="relative w-full">
           {/*
+            Attachment control + generation flow feedback — additive only,
+            rendered as a new sibling above the existing composer row. Does
+            not modify PromptBar, ModeToggle, or any existing element below.
+          */}
+          <div className="relative z-50 mx-auto mb-2 flex w-full max-w-[962px] flex-wrap items-center gap-2">
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              accept={ALLOWED_INPUT_MIME_TYPES.join(",")}
+              className="hidden"
+              onChange={handleAttachmentSelect}
+            />
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-[rgba(4,4,5,0.98)] px-2.5 text-xs font-semibold text-neutral-300 transition-colors hover:border-[#D97757] hover:text-white"
+            >
+              <Paperclip className="size-3.5" />
+              {attachedFile ? "Replace attachment" : "Attach file"}
+            </button>
+
+            {attachedFile && (
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[rgba(4,4,5,0.98)] px-2.5 py-1.5 text-xs text-neutral-300">
+                <span className="max-w-[180px] truncate font-medium text-white">
+                  {attachedFile.name}
+                </span>
+                <span className="text-neutral-500">
+                  {attachedFile.type || "unknown"}
+                </span>
+                <span className="text-neutral-500">
+                  {(attachedFile.size / (1024 * 1024)).toFixed(2)} MB
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemoveAttachment}
+                  aria-label="Remove attachment"
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+
+            {flowStatus !== "idle" && (
+              <span
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                  flowStatus === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-300"
+                    : flowStatus === "success"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-white/10 bg-white/5 text-neutral-300"
+                }`}
+              >
+                {flowStatus === "uploading"
+                  ? "Uploading attachment..."
+                  : flowStatus === "queued" && !flowMessage
+                    ? "Queuing generation..."
+                    : flowStatus === "processing"
+                      ? "Processing..."
+                      : flowMessage}
+              </span>
+            )}
+
+            {/* Minimal result preview. Additive only; no existing result area
+                existed on this page before. Image rendering is unchanged;
+                audio results (e.g. mock-tts) render a native player instead
+                of a broken <img>, since the signed URL is never an image. */}
+            {resultPreview && (
+              <div className="w-full basis-full">
+                {resultPreview.type === "audio" ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption -- mock/dev result preview, not user-facing content
+                  <audio
+                    controls
+                    src={resultPreview.url}
+                    className="w-full max-w-md"
+                  />
+                ) : (
+                  <img
+                    src={resultPreview.url}
+                    alt="Generated result"
+                    className="max-h-64 rounded-lg border border-white/10 object-contain"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/*
             Composer row: ModeToggle is a fixed-width sibling, outside the
             width-shared column. For Cinema Studio 2.5, Director Panel and
             PromptBar live inside ONE flex-1 column (`generation-composer-stack`)
@@ -372,6 +602,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             ) : isCinema25 ? (
@@ -430,6 +662,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             ) : (
@@ -479,6 +713,8 @@ export default function CinemaStudioWorkspace() {
                   }
                   cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                 />
               </div>
             )}

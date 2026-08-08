@@ -24,6 +24,7 @@ import KlingModeControl from "./KlingModeControl";
 import Veo31AspectRatioControl from "./Veo31AspectRatioControl";
 import FrameCard from "./FrameCard";
 import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
+import { useToolbarNav } from "@/hooks/useToolbarNav";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import SoundOffConfirmDialog from "./SoundOffConfirmDialog";
 import ResolutionPopover from "./ResolutionPopover";
@@ -98,6 +99,11 @@ export interface PromptBarProps {
   onCinema25AssignReference: (slotIndex: number, url: string | null) => void;
   cinema25ReferencesPopoverOpen: boolean;
   onCinema25ReferencesPopoverOpenChange: (open: boolean) => void;
+
+  // Nano Banana 2 Lite — "Thinking" control value. Lifted to the workspace
+  // so its current selection can be captured into generation metadata.
+  nanoBanana2LiteThinking: "High" | "Minimal";
+  onNanoBanana2LiteThinkingChange: (value: "High" | "Minimal") => void;
 }
 
 /** Verbatim reference icon — three sparkle stars + a pencil stroke (Kling 2.6's Enhance chip). */
@@ -207,7 +213,7 @@ function AutoSettingsToggle({
           if (wholeRowClickable) e.stopPropagation();
           onToggle();
         }}
-        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-2 focus-visible:ring-[#D97757] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full outline-none ring-0 transition focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
           checked ? "bg-emerald-500" : "bg-white/20"
         }`}
       >
@@ -224,7 +230,7 @@ function AutoSettingsToggle({
 
 /** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
-  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none";
 
 /** Batch size stepper (n/4 with +/- controls). */
 function BatchStepper({
@@ -316,6 +322,7 @@ export default function PromptBar(props: PromptBarProps) {
     | "multiShot"
     | "mode"
     | "bitrate"
+    | "thinking"
     | null
   >(null);
 
@@ -563,6 +570,8 @@ export default function PromptBar(props: PromptBarProps) {
     onCinema25AssignReference,
     cinema25ReferencesPopoverOpen,
     onCinema25ReferencesPopoverOpenChange,
+    nanoBanana2LiteThinking,
+    onNanoBanana2LiteThinkingChange,
   } = props;
 
   const isVideo = mode === "video";
@@ -682,6 +691,13 @@ export default function PromptBar(props: PromptBarProps) {
     model === "wan-2.5-fast" ||
     model === "wan-2.2" ||
     model === "wan-2.2-fast";
+
+  // Nano Banana family (Image mode) — exact model-id gating only, applies
+  // to Nano Banana Pro, Nano Banana 2, and Nano Banana 2 Lite exclusively.
+  const isNanoBananaPro = model === "nano-banana-pro";
+  const isNanoBanana2 = model === "nano-banana-2";
+  const isNanoBanana2Lite = model === "nano-banana-2-lite";
+  const isNanoBananaGroup = isNanoBananaPro || isNanoBanana2 || isNanoBanana2Lite;
 
   // Minimax Hailuo family detection (2.3 Fast / 2.3 / 02 Fast / 02)
   const isMinimaxHailuo =
@@ -926,6 +942,8 @@ export default function PromptBar(props: PromptBarProps) {
     };
   }, []);
 
+  const toolbarNav = useToolbarNav();
+
   const promptResize = usePromptSurfaceResize({
     width: promptWidth,
     height: promptHeight,
@@ -1018,7 +1036,10 @@ export default function PromptBar(props: PromptBarProps) {
             />
           )}
 
-          <div className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+          <div
+            {...toolbarNav.containerProps}
+            className="prompt-control-row mt-auto flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+          >
             {/* Cinema Studio 2.5 References Button - exactly 3 options (As
                 Reference / As Start Frame / As End Frame). Each option opens
                 the one shared Cinema25AssetsPicker with the matching context;
@@ -1098,7 +1119,7 @@ export default function PromptBar(props: PromptBarProps) {
                     aria-label="Shot Control"
                     className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
                       activePromptPopover === "shotControl"
-                        ? "border-[#D97757] bg-[rgba(17,17,18,0.98)] shadow-[0_0_12px_rgba(217,119,87,0.40)]"
+                        ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
                         : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
                     }`}
                   >
@@ -1465,6 +1486,43 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* + / @ asset buttons — Nano Banana Pro, Nano Banana 2, and Nano
+                Banana 2 Lite only. Reuses the existing bordered +/@ pill
+                pattern (Cinema Studio 3.5/3.0's Assets Picker buttons above)
+                and opens the same shared AssetsPickerModal on its Uploads /
+                Elements tab. */}
+            {isNanoBananaGroup && (
+              <div className="flex h-8 items-center rounded-lg border border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  aria-label="Add assets"
+                  title="Add assets"
+                  className="flex h-8 w-8 items-center justify-center rounded-l-lg text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <Plus className="size-4 text-white/80" />
+                </button>
+
+                <div className="h-4 w-px bg-white/20" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetsPickerTab("elements");
+                    setAssetsPickerOpen(true);
+                  }}
+                  aria-label="Elements"
+                  title="Elements"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-r-lg bg-transparent p-0 text-white/80 transition-colors hover:bg-white/10"
+                >
+                  <AtSign className="size-4" />
+                </button>
+              </div>
+            )}
+
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
@@ -1558,8 +1616,15 @@ export default function PromptBar(props: PromptBarProps) {
               )
             )}
 
-            {/* Resolution - Hidden for Gemini, Kling 2.6, Kling 2.1 Master, OpenAI Sora 2, and Higgsfield (not in their chip row) */}
-            {!isGeminiOmniFlash && !isKling2_6 && !isKling21Master && !isOpenAISora && !isHiggsfield && (
+            {/* Resolution - Hidden for Gemini, Kling 2.6, Kling 2.1 Master, OpenAI Sora 2, Higgsfield,
+                Nano Banana Pro (fixed 2K control below), and Nano Banana 2 Lite (Thinking control below) */}
+            {!isGeminiOmniFlash &&
+              !isKling2_6 &&
+              !isKling21Master &&
+              !isOpenAISora &&
+              !isHiggsfield &&
+              !isNanoBananaPro &&
+              !isNanoBanana2Lite && (
               <ResolutionPopover
                 value={isKling3Turbo ? kling3TurboSettings.resolution : resolution}
                 onChange={
@@ -1599,6 +1664,98 @@ export default function PromptBar(props: PromptBarProps) {
                               : undefined
                 }
               />
+            )}
+
+            {/* Nano Banana Pro — single fixed 2K resolution control. Reuses the
+                existing ResolutionPopover dropdown architecture (locked to one
+                option) rather than introducing a second resolution component. */}
+            {isNanoBananaPro && (
+              <ResolutionPopover
+                value="2K"
+                onChange={onResolutionChange}
+                isOpen={activePromptPopover === "resolution"}
+                portalContainer={portalRoot}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("resolution");
+                  else if (activePromptPopover === "resolution") setActivePromptPopover(null);
+                }}
+                options={["2K"]}
+              />
+            )}
+
+            {/* Nano Banana Pro — image count stepper. Reuses the existing
+                BatchStepper component (already defined in this file, same
+                PILL styling as other prompt-bar controls). */}
+            {isNanoBananaPro && (
+              <BatchStepper value={batch} onChange={onBatchChange} />
+            )}
+
+            {/* Nano Banana 2 Lite — "Thinking" control, replaces resolution
+                for this model only. Follows the same Radix Popover pattern
+                already used by Shot Control above (single-open-at-a-time via
+                activePromptPopover, native click-outside/Escape handling). */}
+            {isNanoBanana2Lite && (
+              <Popover.Root
+                open={activePromptPopover === "thinking"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("thinking");
+                  else if (activePromptPopover === "thinking") setActivePromptPopover(null);
+                }}
+              >
+                <Popover.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Thinking"
+                    aria-haspopup="dialog"
+                    aria-expanded={activePromptPopover === "thinking"}
+                    className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+                      activePromptPopover === "thinking"
+                        ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
+                        : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
+                    }`}
+                  >
+                    {nanoBanana2LiteThinking}
+                    <ChevronDown className="size-3 text-neutral-500" />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal container={portalRoot}>
+                  <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="outline-none z-[100000] rounded-2xl shadow-[0_4px_4px_rgba(0,0,0,0.12)] border border-[rgba(217,217,217,0.04)] bg-[rgba(35,38,42,0.75)] backdrop-blur data-[state=closed]:animate-fade-out data-[side=bottom]:data-[state=open]:animate-popover-in-down data-[side=top]:data-[state=open]:animate-popover-in-up data-[side=right]:data-[state=open]:animate-popover-in-right data-[side=left]:data-[state=open]:animate-popover-in-left flex flex-col gap-1 p-2 w-[160px] pointer-events-auto"
+                  >
+                    <span className="px-3 pt-1 pb-0.5 text-xs font-medium text-font-secondary">
+                      THINKING
+                    </span>
+                    {(["High", "Minimal"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          onNanoBanana2LiteThinkingChange(option);
+                          setActivePromptPopover(null);
+                        }}
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl w-full cursor-pointer hover:bg-[#131517] transition-colors ${
+                          nanoBanana2LiteThinking === option ? "bg-[#131517]" : ""
+                        }`}
+                      >
+                        <span className="font-medium text-sm text-white">{option}</span>
+                        {nanoBanana2LiteThinking === option && (
+                          <svg width="20" height="20" viewBox="0 0 20 20" className="size-5 text-[#D97757]">
+                            <path
+                              fillRule="evenodd"
+                              clipRule="evenodd"
+                              d="M14.7838 5.98556C15.0449 6.21134 15.0735 6.60602 14.8477 6.86712L8.72275 13.9505C8.60875 14.0823 8.44491 14.1605 8.27078 14.1663C8.09661 14.1721 7.92794 14.1049 7.80545 13.981L5.18045 11.3247C4.93782 11.0792 4.94016 10.6835 5.18568 10.4409C5.4312 10.1982 5.82691 10.2006 6.06955 10.4461L8.21939 12.6215L13.9022 6.04952C14.128 5.78842 14.5227 5.75979 14.7838 5.98556Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
             )}
 
             {/* Kling 3.0 Motion Control Specific Controls */}

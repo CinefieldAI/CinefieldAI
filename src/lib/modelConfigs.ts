@@ -253,7 +253,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   "soul": {
     id: "soul",
-    label: "Higgsfield Soul",
+    label: "🚫 Cinefield Soul",
     dataModel: "soul",
     description: "Ultra-realistic fashion visuals",
     showUploadButton: true,

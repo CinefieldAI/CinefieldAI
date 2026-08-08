@@ -2,6 +2,7 @@
 
 import {
   AtSign,
+  Blend,
   Check,
   ChevronDown,
   Grid2x2,
@@ -12,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useListboxNav } from "@/hooks/useListboxNav";
 import type { AspectRatioChoice, ResolutionChoice } from "./imageModelCapabilities";
 import { getAspectRatioDescription, GPT_QUALITY_OPTIONS, GRID_GENERATION_OPTIONS } from "./imageModelCapabilities";
 
@@ -31,7 +33,30 @@ const POPOVER_SURFACE =
 
 /** 32px-tall h-8 trigger with crisp thin orange border ring shared by every image control. */
 const COMPACT_TRIGGER =
-  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)] focus:outline-none focus:ring-2 focus:ring-[#D97757]";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 py-1 text-xs font-bold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none";
+
+/** Scrollable option list: the bar stays hidden (globals.css `.hide-scrollbar`)
+ *  but wheel/trackpad/touch/keyboard scrolling all keep working. */
+/** Tall enough that even the longest ratio list (10 rows) fits without
+ *  scrolling, so arrowing through never jumps the list under the heading.
+ *  Scrolling stays available as a fallback on short viewports. */
+const LISTBOX_SCROLL = "hide-scrollbar max-h-[min(70vh,560px)] overflow-y-auto";
+
+/**
+ * Background for one option row. Keyboard focus is shown with the same quiet
+ * fill the mouse uses — no ring and no glow — so the panels read like the model
+ * list. Rows also carry `outline-none`, otherwise the browser paints its own
+ * white focus ring on top once an option takes real DOM focus.
+ */
+function optionSurface(selected: boolean, active: boolean, selectedClass = "bg-white/10") {
+  if (selected) return selectedClass;
+  return active ? "bg-white/[0.06]" : "hover:bg-white/[0.06]";
+}
+
+/** Trigger a11y wiring shared by every option-list popover. */
+function triggerA11y(open: boolean) {
+  return { "aria-haspopup": "listbox" as const, "aria-expanded": open };
+}
 
 function RatioIcon({ ratio, active }: { ratio: AspectRatioChoice; active?: boolean }) {
   if (ratio.value === "Auto") {
@@ -87,11 +112,11 @@ export function AssetsButtonGroup({
    *  Uploads. Falls back to `onOpenPicker` when omitted. */
   onOpenElementsPicker?: () => void;
   /** Set false for models that only expose the plus button, no @ element
-   *  reference (Seedream 4.0). */
+   *  reference (Seedream 4.0, GPT Image, Seedream 4.5, Nano Banana variants). */
   showElementButton?: boolean;
 }) {
   return (
-    <div className="group flex h-8 shrink-0 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="group flex h-8 shrink-0 items-center rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       <button
         type="button"
         onClick={onOpenPicker}
@@ -125,6 +150,7 @@ export function QualityPopover({
   value,
   onChange,
   options = GPT_QUALITY_OPTIONS,
+  label = "Select quality",
   id,
   openId,
   onOpenIdChange,
@@ -132,11 +158,30 @@ export function QualityPopover({
   value: string;
   onChange: (v: string) => void;
   options?: { value: string; description: string }[];
+  /** Panel heading — Grok Imagine's tiers are modes, not quality levels. */
+  label?: string;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const commit = (index: number) => {
+    const opt = options[index];
+    if (opt) onChange(opt.value);
+  };
+  const select = (index: number) => {
+    commit(index);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((o) => o.value === value),
+    open,
+    onSelect: select,
+    onActivate: commit,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </button>
@@ -145,25 +190,27 @@ export function QualityPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`w-[300px] ${POPOVER_SURFACE}`}
       >
-        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Select quality</p>
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((opt) => {
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
+        <div role="listbox" aria-label={label} className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt.value);
-                  onOpenIdChange(null);
-                }}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                }`}
+                onClick={() => select(index)}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -206,10 +253,27 @@ export function ResolutionPopover({
   /** Header caption shown when `detailed` — Seedream 5.0 Pro uses "QUALITY". */
   label?: string;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const commit = (index: number) => {
+    const opt = options[index];
+    if (opt) onChange(opt.value);
+  };
+  const select = (index: number) => {
+    commit(index);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((o) => o.value === value),
+    open,
+    onSelect: select,
+    onActivate: commit,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </button>
@@ -218,31 +282,30 @@ export function ResolutionPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`${compactWidth ? "w-[160px]" : "w-[300px]"} ${POPOVER_SURFACE}`}
       >
         {detailed && (
           <p className="px-2 py-1.5 text-xs font-semibold text-white/70">{label}</p>
         )}
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((opt) => {
+        <div role="listbox" aria-label={label} className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
                 key={opt.value}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt.value);
-                  onOpenIdChange(null);
-                }}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left transition-colors ${
-                  selected
-                    ? lime
-                      ? "bg-[rgba(255,255,255,0.08)]"
-                      : "bg-white/10"
-                    : "hover:bg-white/[0.06]"
-                }`}
+                onClick={() => select(index)}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                  lime ? "bg-[rgba(255,255,255,0.08)]" : "bg-white/10",
+                )}`}
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-white">{opt.value}</span>
@@ -274,6 +337,7 @@ export function AspectRatioPopover({
   onChange,
   options,
   large,
+  plainRows,
   id,
   openId,
   onOpenIdChange,
@@ -283,14 +347,35 @@ export function AspectRatioPopover({
   options: AspectRatioChoice[];
   /** GPT Image 2's large 40px trigger; otherwise the 28px compact trigger. */
   large?: boolean;
+  /** Multi Reference's panel: value-only rows (no Portrait/Landscape/Custom
+   *  subtitle) and a neutral keyboard ring instead of the orange one. */
+  plainRows?: boolean;
 } & PopoverCoordination) {
   const active = options.find((r) => r.value === value) ?? options[0];
+  const open = openId === id;
+  const commit = (index: number) => {
+    const ratio = options[index];
+    if (ratio) onChange(ratio.value);
+  };
+  const select = (index: number) => {
+    commit(index);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.findIndex((r) => r.value === value),
+    open,
+    onSelect: select,
+    onActivate: commit,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           className={COMPACT_TRIGGER}
+          {...triggerA11y(open)}
         >
           <RatioIcon ratio={active} />
           {active.value}
@@ -301,25 +386,29 @@ export function AspectRatioPopover({
         side="top"
         align="start"
         sideOffset={8}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className="z-[100000] overflow-hidden rounded-2xl border border-white/10 bg-[#141618]/95 p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl pointer-events-auto transition-all duration-200 ease-out origin-bottom animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 w-[220px]"
       >
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {options.map((ratio) => {
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
+        <div role="listbox" aria-label="Select ratio" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((ratio, index) => {
             const selected = ratio.value === value;
             return (
               <button
                 key={ratio.value}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(ratio.value);
-                  onOpenIdChange(null);
-                }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all duration-150 ${
+                onClick={() => select(index)}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-all duration-150 ${
                   selected
-                    ? "bg-white/10 text-white font-semibold"
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                    ? "bg-white/10 font-semibold text-white"
+                    : open && index === activeIndex
+                      ? "bg-white/5 text-white"
+                      : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 <RatioIcon ratio={ratio} active={selected} />
@@ -327,9 +416,11 @@ export function AspectRatioPopover({
                   <span className="block truncate text-sm font-medium text-white">
                     {ratio.value}
                   </span>
-                  <span className="block truncate text-xs text-white/50">
-                    {ratio.description ?? getAspectRatioDescription(ratio.value)}
-                  </span>
+                  {!plainRows && (
+                    <span className="block truncate text-xs text-white/50">
+                      {ratio.description ?? getAspectRatioDescription(ratio.value)}
+                    </span>
+                  )}
                 </span>
                 {selected && <Check className="size-4 shrink-0 text-[#D97757]" />}
               </button>
@@ -355,7 +446,7 @@ export function BatchSizeCounter({
   max?: number;
 }) {
   return (
-    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d] hover:shadow-[0_0_10px_rgba(217,119,87,0.20)]">
+    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
       <button
         type="button"
         disabled={value <= 1}
@@ -383,6 +474,238 @@ export function BatchSizeCounter({
 }
 
 /* ------------------------------------------------------------------ */
+/* Unlimited switch (Seedream 5.0 Pro)                                  */
+/* ------------------------------------------------------------------ */
+
+export function UnlimitedToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
+      Unlimited
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Unlimited"
+        onClick={onToggle}
+        className="relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+        style={{ background: enabled ? "#22c55e" : "rgba(255,255,255,0.18)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200"
+          style={{ transform: enabled ? "translateX(13px)" : "translateX(2px)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Thinking selector (Nano Banana 2 Lite)                               */
+/* ------------------------------------------------------------------ */
+
+export function ThinkingPopover({
+  value,
+  onChange,
+  options,
+  id,
+  openId,
+  onOpenIdChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+} & PopoverCoordination) {
+  const open = openId === id;
+  const commit = (index: number) => {
+    const opt = options[index];
+    if (opt !== undefined) onChange(opt);
+  };
+  const select = (index: number) => {
+    commit(index);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
+    count: options.length,
+    selectedIndex: options.indexOf(value),
+    open,
+    onSelect: select,
+    onActivate: commit,
+  });
+
+  return (
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+      <PopoverTrigger asChild>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
+          {value}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={10}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
+        className={`w-[200px] ${POPOVER_SURFACE}`}
+      >
+        <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Thinking</p>
+        <div role="listbox" aria-label="Thinking" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {options.map((opt, index) => {
+            const selected = opt === value;
+            return (
+              <button
+                key={opt}
+                {...getOptionProps(index)}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => select(index)}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
+              >
+                {opt}
+                {selected && <Check className="h-4 w-4 shrink-0 text-[#D97757]" />}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Dead placeholder controls                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Inert stand-in for a control the reference site has and this model does not
+ * implement yet. Same dark shell as the live controls but yellow text so the
+ * gap is visible at a glance; disabled, so it takes no clicks, no focus, and
+ * the toolbar arrow keys skip straight over it.
+ */
+export function DeadControl({ label, icon }: { label: string; icon?: React.ReactNode }) {
+  return (
+    <button type="button" disabled className={`${COMPACT_TRIGGER} cursor-default text-[#FACC15]`}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+/** Dead counterpart of BatchSizeCounter — same shape, yellow, inert. */
+export function DeadBatchCounter() {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-1.5 text-[#FACC15]">
+      <span className="flex h-6 w-6 items-center justify-center"><Minus className="h-3.5 w-3.5" /></span>
+      <span className="w-8 shrink-0 text-center text-xs font-bold">
+        1<span className="opacity-50">/4</span>
+      </span>
+      <span className="flex h-6 w-6 items-center justify-center"><Plus className="h-3.5 w-3.5" /></span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Draw trigger (Nano Banana)                                           */
+/* ------------------------------------------------------------------ */
+
+export function DrawToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={enabled}
+      className={`${COMPACT_TRIGGER} ${enabled ? "border-[#D97757] bg-[#181a1d]" : ""}`}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 opacity-75">
+        <path
+          d="M7.55929 15.125C6.80178 14.9323 5.23971 14.4539 3.55888 12.743C0.749296 9.88327 0.0300494 5.97875 1.95239 4.02207C3.53188 2.41436 6.59253 2.53853 9.125 4.25M11.75 6.875C13.9356 9.44282 14.5373 11.8324 12.8604 13.1979C11.6042 14.2208 10.0146 13.0379 9.08705 12.126M6.875 9.125H8.71079C8.976 9.125 9.23036 9.01964 9.41789 8.83211L14.4156 3.83439C14.807 3.44298 14.806 2.80805 14.4133 2.4179L13.5684 1.57841C13.1772 1.1897 12.5451 1.1911 12.1556 1.58154L7.16703 6.58225C6.98002 6.76972 6.875 7.02371 6.875 7.2885V9.125Z"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Draw
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Vector mode switch (Recraft V4.1)                                    */
+/* ------------------------------------------------------------------ */
+
+export function VectorModeToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[#101112] px-2.5 text-xs font-bold text-white transition-all duration-200 hover:border-[#D97757] hover:bg-[#181a1d]">
+      <Info className="h-3.5 w-3.5 opacity-60" />
+      Vector mode
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Vector mode"
+        onClick={onToggle}
+        className="relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+        style={{ background: enabled ? "#22c55e" : "rgba(255,255,255,0.18)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200"
+          style={{ transform: enabled ? "translateX(13px)" : "translateX(2px)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Color transfer trigger (Recraft V4.1)                                */
+/* ------------------------------------------------------------------ */
+
+export function ColorTransferButton({
+  active,
+  onToggle,
+}: {
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      className={`${COMPACT_TRIGGER} ${active ? "border-[#D97757] bg-[#181a1d]" : ""}`}
+    >
+      <Blend className="h-4 w-4 opacity-75" />
+      Color transfer
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Grid generation (Studio Digital S35)                                 */
 /* ------------------------------------------------------------------ */
 
@@ -396,10 +719,27 @@ export function GridGenerationPopover({
   value: string;
   onChange: (v: string) => void;
 } & PopoverCoordination) {
+  const open = openId === id;
+  const commit = (index: number) => {
+    const opt = GRID_GENERATION_OPTIONS[index];
+    if (opt !== undefined) onChange(opt);
+  };
+  const select = (index: number) => {
+    commit(index);
+    onOpenIdChange(null);
+  };
+  const { activeIndex, handleKeyDown, handleOpenAutoFocus, handleEscapeKeyDown, getOptionProps } = useListboxNav({
+    count: GRID_GENERATION_OPTIONS.length,
+    selectedIndex: GRID_GENERATION_OPTIONS.indexOf(value as (typeof GRID_GENERATION_OPTIONS)[number]),
+    open,
+    onSelect: select,
+    onActivate: commit,
+  });
+
   return (
-    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+    <Popover open={open} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
       <PopoverTrigger asChild>
-        <button type="button" className={COMPACT_TRIGGER}>
+        <button type="button" className={COMPACT_TRIGGER} {...triggerA11y(open)}>
           <Grid2x2 className="h-4 w-4" />
           {value}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -409,28 +749,30 @@ export function GridGenerationPopover({
         side="top"
         align="start"
         sideOffset={10}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onEscapeKeyDown={handleEscapeKeyDown}
         className={`w-[180px] ${POPOVER_SURFACE}`}
       >
         <div className="flex items-center gap-1.5 px-2 py-1.5">
           <p className="text-xs font-semibold text-white/70">Grid generation</p>
           <Info className="h-3.5 w-3.5 text-white/40" />
         </div>
-        <div role="listbox" className="flex flex-col gap-0.5">
-          {GRID_GENERATION_OPTIONS.map((opt) => {
+        <div role="listbox" aria-label="Grid generation" className={`flex flex-col gap-0.5 ${LISTBOX_SCROLL}`}>
+          {GRID_GENERATION_OPTIONS.map((opt, index) => {
             const selected = opt === value;
             return (
               <button
                 key={opt}
+                {...getOptionProps(index)}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onChange(opt);
-                  onOpenIdChange(null);
-                }}
-                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white transition-colors ${
-                  selected ? "bg-white/10" : "hover:bg-white/[0.06]"
-                }`}
+                onClick={() => select(index)}
+                className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm font-medium text-white outline-none transition-colors ${optionSurface(
+                  selected,
+                  open && index === activeIndex,
+                )}`}
               >
                 {opt}
                 {selected && <Check className="h-4 w-4 shrink-0" style={{ color: LIME }} />}
@@ -544,6 +886,110 @@ export function SettingsPopover({
             label="Guidance"
             value={settings.guidance}
             onChange={(guidance) => onChange({ ...settings, guidance })}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Flux.2 Flex advanced settings (/image only)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * /image's FLUX.2 Flex advanced panel: Prompt Strength (CFG) 1.5–10 and
+ * Quality Steps 1–50. Deliberately a separate component from the older
+ * SettingsPopover above — that one (0–100% Strength/Guidance) is still
+ * rendered by /generate's image panel (CinemaStudioImagePanel, ImageForm),
+ * which this task must not touch. Only PromptComposer uses this variant.
+ */
+export interface FluxFlexAdvancedSettings {
+  /** Prompt Strength (CFG): 1.5–10. */
+  cfg: number;
+  /** Quality Steps: 1–50. */
+  steps: number;
+}
+
+function AdvancedSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1 text-xs font-medium text-white/70">
+        {label}
+        <Info className="h-3.5 w-3.5 shrink-0 text-white/40" />
+        <span className="ml-auto text-white/45">{value}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[#D97757]"
+      />
+    </div>
+  );
+}
+
+export function FluxFlexAdvancedPopover({
+  settings,
+  onChange,
+  id,
+  openId,
+  onOpenIdChange,
+}: {
+  settings: FluxFlexAdvancedSettings;
+  onChange: (settings: FluxFlexAdvancedSettings) => void;
+} & PopoverCoordination) {
+  return (
+    <Popover open={openId === id} onOpenChange={(v) => onOpenIdChange(v ? id : null)}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Advanced settings"
+          className="gen-panel-settings-popup-trigger flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 px-1.5 text-white/85 transition-colors hover:bg-white/10 active:bg-white/20"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="center"
+        sideOffset={10}
+        className="z-[100000] w-60 rounded-xl border border-white/10 bg-[#141618]/95 px-4 py-3 text-white shadow-[0_12px_32px_rgba(0,0,0,0.65)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+      >
+        <div className="flex flex-col gap-4">
+          <AdvancedSlider
+            label="Prompt Strength (CFG)"
+            value={settings.cfg}
+            min={1.5}
+            max={10}
+            step={0.5}
+            onChange={(cfg) => onChange({ ...settings, cfg })}
+          />
+          <AdvancedSlider
+            label="Quality Steps"
+            value={settings.steps}
+            min={1}
+            max={50}
+            step={1}
+            onChange={(steps) => onChange({ ...settings, steps })}
           />
         </div>
       </PopoverContent>
