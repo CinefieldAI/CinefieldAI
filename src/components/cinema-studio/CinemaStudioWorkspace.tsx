@@ -314,6 +314,22 @@ export default function CinemaStudioWorkspace() {
         onWidthChange={setSidebarWidth}
       />
 
+      {/* Separator rail — the strip between the sidebar and the hero used to be
+          bare margin. It is now a real surface: darker than the sidebar
+          (#18191C) and lighter than the hero (black), so both panels read as
+          separate. It tracks the sidebar through the same committed
+          `sidebarWidth`, stays put when the sidebar collapses, and clicking it
+          runs the sidebar's existing collapse handler — no second button and no
+          second piece of state. Sits at z-30 so the sidebar's own drag handle
+          (z-50) keeps working across it, and is desktop-only like the sidebar. */}
+      <button
+        type="button"
+        aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+        className="fixed top-[72px] z-30 hidden h-[calc(100vh-88px)] w-8 rounded-t-[10px] border-x border-white/[0.04] bg-[#141517] transition-[left,background-color] duration-300 ease-out hover:bg-[#17181b] md:block"
+        style={{ left: `${sidebarWidth}px` }}
+      />
+
       {/* Hero — the Blueface promo fills this band, with the composer sitting
           over its lower edge (matches the reference: video on top, cards on
           black underneath). This section is its own independent panel next
@@ -321,7 +337,7 @@ export default function CinemaStudioWorkspace() {
           being drag-resized, only once the drag settles (see
           `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
       <section
-        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
+        className="relative overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+32px)]"
         style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
       >
         <video
