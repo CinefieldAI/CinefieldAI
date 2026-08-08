@@ -69,6 +69,18 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* /generate stays scrollable, but its document scrollbar remains hidden. */
+body:has(.cinema-generate-workspace) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body:has(.cinema-generate-workspace)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 * {
   scrollbar-color: #3f3f46 #000000;
 }

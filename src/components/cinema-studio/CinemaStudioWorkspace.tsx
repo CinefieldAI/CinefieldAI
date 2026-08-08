@@ -218,7 +218,7 @@ export default function CinemaStudioWorkspace() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#090a0b] text-white">
+    <div className="cinema-generate-workspace relative min-h-screen w-full overflow-hidden bg-[#090a0b] text-white">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-[180px] h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(217,119,87,0.10),rgba(25,28,29,0.34)_34%,rgba(9,10,11,0.96)_68%,rgba(9,10,11,0)_100%)]"
@@ -250,7 +250,7 @@ export default function CinemaStudioWorkspace() {
           being drag-resized, only once the drag settles (see
           `onWidthChange`/`sidebarWidth` in CinemaGenerateSidebar). */}
       <section
-        className="relative z-10 overflow-visible rounded-[1rem] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
+        className="relative z-10 overflow-visible rounded-[18px] border border-white/[0.04] bg-black transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)]"
         style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
       >
         <video

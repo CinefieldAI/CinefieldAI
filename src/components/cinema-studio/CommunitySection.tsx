@@ -47,7 +47,9 @@ const COMMUNITY_ITEMS: CommunityItem[] = [
 
 /**
  * Community grid sitting on solid black directly under the video hero —
- * exactly nine cards, 3/2/1 columns with a 16px gap.
+ * exactly nine cards, 3/2/1 columns with a 16px gap. Its width is based on
+ * the viewport rather than the current sidebar width, so resizing the sidebar
+ * repositions the grid without compressing its cards.
  */
 export default function CommunitySection({
   sidebarWidth = 52,
@@ -57,9 +59,9 @@ export default function CommunitySection({
   sidebarWidth?: number;
 }) {
   return (
-    <section className="relative z-10 w-full bg-transparent">
+    <section className="relative z-10 w-full overflow-x-clip bg-transparent">
       <div
-        className="mx-auto w-full max-w-[1320px] px-4 py-10 transition-[padding-left] duration-300 ease-out md:pl-[calc(var(--cinema-sidebar-w)+16px)]"
+        className="w-full px-4 py-10 transition-[margin-left] duration-300 ease-out md:ml-[calc(var(--cinema-sidebar-w)+16px)] md:w-[min(1320px,calc(100vw-84px))]"
         style={{ ["--cinema-sidebar-w" as string]: `${sidebarWidth}px` }}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

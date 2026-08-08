@@ -279,7 +279,7 @@ export default function CinemaGenerateSidebar({
       role="navigation"
       aria-label="Cinema Studio Sidebar"
       className={cn(
-        "fixed left-0 top-14 z-40 hidden h-[calc(100vh-72px)] flex-col overflow-hidden rounded-[1rem] border border-white/[0.04] bg-[#18191C] md:flex",
+        "fixed left-0 top-14 z-40 hidden h-[calc(100vh-72px)] flex-col overflow-hidden rounded-[18px] border border-white/[0.04] bg-[#18191C] md:flex",
         !isDragging && "transition-[width] duration-300 ease-out"
       )}
       style={{ width }}
