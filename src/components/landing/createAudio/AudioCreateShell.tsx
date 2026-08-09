@@ -21,7 +21,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { AUDIO_MODELS, AUDIO_MODE_ORDER, type AudioMode } from "../audioMenuData";
+import {
+  AUDIO_MODELS,
+  AUDIO_MODE_ORDER,
+  type AudioMode,
+} from "../audioMenuData";
 
 /**
  * Phase-1 shell for the rebuilt /audio/create workspace: left control panel +
@@ -104,6 +108,9 @@ type FloatingPanel =
   | "voice"
   | "model"
   | "stability"
+  | "seed-speed"
+  | "seed-pitch"
+  | "seed-volume"
   | "qwen-speed"
   | "qwen-pitch"
   | "qwen-volume"
@@ -151,6 +158,10 @@ export default function AudioCreateShell({
   const [qwenVoiceDetails, setQwenVoiceDetails] = useState("");
   const [expressionIntensity, setExpressionIntensity] = useState(5);
   const [mood, setMood] = useState(0);
+  const [seedSpeed, setSeedSpeed] = useState(1);
+  const [seedPitch, setSeedPitch] = useState(0);
+  const [seedVolume, setSeedVolume] = useState(100);
+  const [seedValue, setSeedValue] = useState(0);
   const [qwenSpeed, setQwenSpeed] = useState(1);
   const [qwenPitch, setQwenPitch] = useState(1);
   const [qwenVolume, setQwenVolume] = useState(50);
@@ -159,9 +170,8 @@ export default function AudioCreateShell({
   const [qwenLanguage, setQwenLanguage] = useState("Auto detect");
   const [qwenSeed, setQwenSeed] = useState(0);
   const [qwenSaveSettings, setQwenSaveSettings] = useState(false);
-  const [stability, setStability] = useState<
-    (typeof STABILITY_OPTIONS)[number]["value"]
-  >("Natural");
+  const [stability, setStability] =
+    useState<(typeof STABILITY_OPTIONS)[number]["value"]>("Natural");
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel>(null);
   const [floatingPosition, setFloatingPosition] = useState<FloatingPosition>({
     left: 0,
@@ -179,38 +189,68 @@ export default function AudioCreateShell({
   const isElevenV3 = audioModelIndex === 1;
   const isQwenAudio = audioModelIndex === 2;
 
-  const qwenSliderConfig =
-    floatingPanel === "qwen-speed"
+  const audioSliderConfig =
+    floatingPanel === "seed-speed"
       ? {
           label: "Speed",
-          value: qwenSpeed,
+          value: seedSpeed,
           min: 0.5,
           max: 2,
           step: 0.1,
-          display: `${qwenSpeed.toFixed(1)}x`,
-          setValue: setQwenSpeed,
+          display: `${seedSpeed.toFixed(1)}x`,
+          setValue: setSeedSpeed,
         }
-      : floatingPanel === "qwen-pitch"
+      : floatingPanel === "seed-pitch"
         ? {
             label: "Pitch",
-            value: qwenPitch,
-            min: 0.5,
-            max: 2,
-            step: 0.1,
-            display: `${qwenPitch.toFixed(1)}x`,
-            setValue: setQwenPitch,
+            value: seedPitch,
+            min: -12,
+            max: 12,
+            step: 1,
+            display: `${seedPitch}`,
+            setValue: setSeedPitch,
           }
-        : floatingPanel === "qwen-volume"
+        : floatingPanel === "seed-volume"
           ? {
               label: "Volume",
-              value: qwenVolume,
+              value: seedVolume,
               min: 0,
-              max: 100,
+              max: 200,
               step: 1,
-              display: `${qwenVolume}%`,
-              setValue: setQwenVolume,
+              display: `${seedVolume}%`,
+              setValue: setSeedVolume,
             }
-          : null;
+          : floatingPanel === "qwen-speed"
+            ? {
+                label: "Speed",
+                value: qwenSpeed,
+                min: 0.5,
+                max: 2,
+                step: 0.1,
+                display: `${qwenSpeed.toFixed(1)}x`,
+                setValue: setQwenSpeed,
+              }
+            : floatingPanel === "qwen-pitch"
+              ? {
+                  label: "Pitch",
+                  value: qwenPitch,
+                  min: 0.5,
+                  max: 2,
+                  step: 0.1,
+                  display: `${qwenPitch.toFixed(1)}x`,
+                  setValue: setQwenPitch,
+                }
+              : floatingPanel === "qwen-volume"
+                ? {
+                    label: "Volume",
+                    value: qwenVolume,
+                    min: 0,
+                    max: 100,
+                    step: 1,
+                    display: `${qwenVolume}%`,
+                    setValue: setQwenVolume,
+                  }
+                : null;
   const qwenOptionConfig =
     floatingPanel === "qwen-format"
       ? {
@@ -256,10 +296,12 @@ export default function AudioCreateShell({
 
     const rect = trigger.getBoundingClientRect();
     const sidebarRect = trigger.closest("aside")?.getBoundingClientRect();
-    const anchorRight = panel.startsWith("qwen-")
+    const isSidebarControl =
+      panel.startsWith("qwen-") || panel.startsWith("seed-");
+    const anchorRight = isSidebarControl
       ? (sidebarRect?.right ?? rect.right)
       : rect.right;
-    const anchorLeft = panel.startsWith("qwen-")
+    const anchorLeft = isSidebarControl
       ? (sidebarRect?.left ?? rect.left)
       : rect.left;
     const viewportPadding = 12;
@@ -277,7 +319,10 @@ export default function AudioCreateShell({
       left,
       top: Math.max(
         68,
-        Math.min(rect.top, window.innerHeight - preferredHeight - viewportPadding),
+        Math.min(
+          rect.top,
+          window.innerHeight - preferredHeight - viewportPadding,
+        ),
       ),
       width,
     });
@@ -322,7 +367,9 @@ export default function AudioCreateShell({
                   enabled ? "text-white" : "cursor-default text-zinc-400"
                 }`}
               >
-                <span className="block whitespace-nowrap">{TAB_LABELS[mode]}</span>
+                <span className="block whitespace-nowrap">
+                  {TAB_LABELS[mode]}
+                </span>
                 {enabled && (
                   <span className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-white" />
                 )}
@@ -371,7 +418,7 @@ export default function AudioCreateShell({
               <span className="block text-base font-semibold text-white">
                 {isSeedAudio
                   ? "Upload media"
-                  : selectedVoice ?? "Pick a voice"}
+                  : (selectedVoice ?? "Pick a voice")}
               </span>
               <span className="mt-1 block truncate text-sm font-medium text-zinc-400">
                 {isSeedAudio
@@ -428,7 +475,9 @@ export default function AudioCreateShell({
             className="flex h-14 shrink-0 items-center justify-between gap-2 rounded-xl border border-white/[0.07] bg-[#202224] px-3 text-left transition-colors hover:border-white/15"
           >
             <span className="min-w-0">
-              <span className="block text-xs font-medium text-zinc-400">Model</span>
+              <span className="block text-xs font-medium text-zinc-400">
+                Model
+              </span>
               <span className="mt-1 block truncate text-sm font-semibold text-white">
                 {isQwenAudio ? "Qwen Audio 3.0 TTS" : model.title}
               </span>
@@ -523,7 +572,12 @@ export default function AudioCreateShell({
                       onClick={() => {
                         setExpressionIntensity(5);
                         setMood(0);
+                        setSeedSpeed(1);
+                        setSeedPitch(0);
+                        setSeedVolume(100);
+                        setSeedValue(0);
                         setSaveSettings(false);
+                        setFloatingPanel(null);
                       }}
                       className="flex items-center gap-1 text-xs font-semibold text-white hover:text-[#df7b59]"
                     >
@@ -573,7 +627,9 @@ export default function AudioCreateShell({
 
                   <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#202224] p-3 hover:border-white/15">
                     <div className="flex items-center gap-1 px-0.5">
-                      <span className="text-xs font-medium text-zinc-400">Mood</span>
+                      <span className="text-xs font-medium text-zinc-400">
+                        Mood
+                      </span>
                       <span
                         title="Move toward Angry, Neutral, or Happy"
                         className="flex size-4 items-center justify-center text-zinc-400"
@@ -604,7 +660,9 @@ export default function AudioCreateShell({
                       <span
                         aria-hidden="true"
                         className="pointer-events-none absolute top-1/2 h-[30px] w-[21px] -translate-x-1/2 -translate-y-1/2 rounded border border-black/15 bg-white shadow"
-                        style={{ left: `calc(${(mood + 1) * 50}% - ${mood === 1 ? 10 : mood === -1 ? -10 : 0}px)` }}
+                        style={{
+                          left: `calc(${(mood + 1) * 50}% - ${mood === 1 ? 10 : mood === -1 ? -10 : 0}px)`,
+                        }}
                       />
                       <input
                         type="range"
@@ -612,7 +670,9 @@ export default function AudioCreateShell({
                         max={1}
                         step={0.01}
                         value={mood}
-                        onChange={(event) => setMood(Number(event.target.value))}
+                        onChange={(event) =>
+                          setMood(Number(event.target.value))
+                        }
                         aria-label="Mood"
                         className="absolute inset-0 z-20 size-full cursor-pointer opacity-0"
                       />
@@ -624,27 +684,51 @@ export default function AudioCreateShell({
                     </div>
                   </div>
 
-                  <span className="px-1 text-xs text-zinc-400">Audio settings</span>
+                  <span className="px-1 text-xs text-zinc-400">
+                    Audio settings
+                  </span>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      ["Speed", "1.0x"],
-                      ["Pitch", "0"],
-                      ["Volume", "100%"],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="flex min-w-0 items-center gap-1 rounded-xl border border-white/[0.07] bg-[#202224] px-3 py-2"
+                      {
+                        label: "Speed",
+                        value: `${seedSpeed.toFixed(1)}x`,
+                        panel: "seed-speed" as const,
+                      },
+                      {
+                        label: "Pitch",
+                        value: `${seedPitch}`,
+                        panel: "seed-pitch" as const,
+                      },
+                      {
+                        label: "Volume",
+                        value: `${seedVolume}%`,
+                        panel: "seed-volume" as const,
+                      },
+                    ].map((control) => (
+                      <button
+                        key={control.label}
+                        type="button"
+                        aria-expanded={floatingPanel === control.panel}
+                        onClick={(event) =>
+                          openFloatingPanel(
+                            control.panel,
+                            event.currentTarget,
+                            244,
+                            112,
+                          )
+                        }
+                        className="flex min-w-0 items-center gap-1 rounded-xl border border-white/[0.07] bg-[#202224] px-3 py-2 text-left transition-colors hover:border-white/15"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs text-zinc-400">
-                            {label}
+                            {control.label}
                           </span>
                           <span className="block truncate text-sm font-medium tabular-nums text-white">
-                            {value}
+                            {control.value}
                           </span>
                         </span>
                         <ChevronRight className="size-4 shrink-0 text-zinc-400" />
-                      </div>
+                      </button>
                     ))}
                   </div>
                   {[
@@ -665,6 +749,27 @@ export default function AudioCreateShell({
                       </span>
                     </div>
                   ))}
+                  <label className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="flex items-center gap-1 text-sm font-medium text-white">
+                      Seed
+                      <span
+                        title="Use the same seed to reproduce a result"
+                        className="flex size-4 items-center justify-center text-zinc-400"
+                      >
+                        <Info className="size-3.5" />
+                      </span>
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={seedValue}
+                      onChange={(event) =>
+                        setSeedValue(Number(event.target.value))
+                      }
+                      aria-label="Seed"
+                      className="w-20 bg-transparent text-right text-sm font-medium tabular-nums text-white outline-none"
+                    />
+                  </label>
                   <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
                     <span className="text-sm font-semibold text-white">
                       Save settings
@@ -714,7 +819,9 @@ export default function AudioCreateShell({
                       Reset
                     </button>
                   </div>
-                  <span className="px-1 text-xs text-zinc-400">Audio settings</span>
+                  <span className="px-1 text-xs text-zinc-400">
+                    Audio settings
+                  </span>
 
                   <div className="grid grid-cols-3 gap-2">
                     {[
@@ -818,7 +925,9 @@ export default function AudioCreateShell({
                       type="number"
                       inputMode="numeric"
                       value={qwenSeed}
-                      onChange={(event) => setQwenSeed(Number(event.target.value))}
+                      onChange={(event) =>
+                        setQwenSeed(Number(event.target.value))
+                      }
                       aria-label="Seed"
                       className="w-20 bg-transparent text-right text-sm font-medium tabular-nums text-white outline-none"
                     />
@@ -840,9 +949,7 @@ export default function AudioCreateShell({
                     >
                       <span
                         className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
-                          qwenSaveSettings
-                            ? "translate-x-5"
-                            : "translate-x-0.5"
+                          qwenSaveSettings ? "translate-x-5" : "translate-x-0.5"
                         }`}
                       />
                     </button>
@@ -853,7 +960,9 @@ export default function AudioCreateShell({
               {advancedOpen && isElevenV3 && (
                 <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
                   <div className="flex items-center justify-between px-1">
-                    <span className="text-xs text-zinc-400">Eleven v3 controls</span>
+                    <span className="text-xs text-zinc-400">
+                      Eleven v3 controls
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
@@ -866,7 +975,9 @@ export default function AudioCreateShell({
                       Reset
                     </button>
                   </div>
-                  <span className="px-1 text-xs text-zinc-400">Audio settings</span>
+                  <span className="px-1 text-xs text-zinc-400">
+                    Audio settings
+                  </span>
                   <button
                     ref={stabilityButtonRef}
                     type="button"
@@ -895,7 +1006,9 @@ export default function AudioCreateShell({
                     </span>
                   </div>
                   <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
-                    <span className="text-sm font-semibold text-white">Save settings</span>
+                    <span className="text-sm font-semibold text-white">
+                      Save settings
+                    </span>
                     <button
                       type="button"
                       role="switch"
@@ -986,7 +1099,9 @@ export default function AudioCreateShell({
 
           <div className="min-h-0 overflow-y-auto p-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-400">Voices</span>
+              <span className="text-sm font-semibold text-zinc-400">
+                Voices
+              </span>
               <button
                 type="button"
                 className="flex h-8 items-center gap-1.5 rounded-lg bg-white/5 px-3 text-xs font-semibold text-white"
@@ -1013,12 +1128,16 @@ export default function AudioCreateShell({
                     }`}
                   >
                     <span className="flex items-center gap-2">
-                      <span className={`size-10 shrink-0 rounded-full bg-gradient-to-br ${voice.color}`} />
+                      <span
+                        className={`size-10 shrink-0 rounded-full bg-gradient-to-br ${voice.color}`}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-white">
                           {voice.name}
                         </span>
-                        <span className="block text-xs text-zinc-400">{voice.gender}</span>
+                        <span className="block text-xs text-zinc-400">
+                          {voice.gender}
+                        </span>
                       </span>
                       {selected && <Check className="size-4 text-[#D97757]" />}
                     </span>
@@ -1029,7 +1148,9 @@ export default function AudioCreateShell({
                           <span
                             key={index}
                             className="w-px shrink-0 bg-white/20"
-                            style={{ height: `${22 + ((voiceIndex * 13 + index * 19) % 72)}%` }}
+                            style={{
+                              height: `${22 + ((voiceIndex * 13 + index * 19) % 72)}%`,
+                            }}
                           />
                         ))}
                       </span>
@@ -1084,7 +1205,9 @@ export default function AudioCreateShell({
                       {item.description}
                     </span>
                   </span>
-                  {active && <Check className="size-4 shrink-0 text-[#dfff00]" />}
+                  {active && (
+                    <Check className="size-4 shrink-0 text-[#dfff00]" />
+                  )}
                 </button>
               );
             })}
@@ -1092,26 +1215,29 @@ export default function AudioCreateShell({
         </div>
       )}
 
-      {qwenSliderConfig && (
+      {audioSliderConfig && (
         <div
           ref={floatingPanelRef}
           role="dialog"
-          aria-label={`${qwenSliderConfig.label} settings`}
+          aria-label={`${audioSliderConfig.label} settings`}
           className="fixed z-[90] w-[244px] animate-in rounded-xl border border-white/10 bg-[#1c1e20]/95 px-2 pb-2 pt-1 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
           style={floatingPosition}
         >
           <div className="flex items-center gap-2 px-1 py-1.5">
             <span className="min-w-0 flex-1 truncate text-xs text-zinc-400">
-              {qwenSliderConfig.label}
+              {audioSliderConfig.label}
             </span>
             <span className="shrink-0 text-xs font-medium tabular-nums text-white">
-              {qwenSliderConfig.display}
+              {audioSliderConfig.display}
             </span>
           </div>
           <label className="relative flex h-9 cursor-pointer items-center overflow-hidden rounded-lg bg-[#292e33]">
             <span className="pointer-events-none absolute inset-0 flex justify-around">
               {Array.from({ length: 3 }, (_, index) => (
-                <span key={index} className="flex flex-1 items-center justify-center">
+                <span
+                  key={index}
+                  className="flex flex-1 items-center justify-center"
+                >
                   <span className="h-2 w-px rounded bg-white/15" />
                 </span>
               ))}
@@ -1120,21 +1246,21 @@ export default function AudioCreateShell({
               className="pointer-events-none absolute inset-y-0 left-0 rounded-l-lg border-r border-white bg-white/[0.06] transition-[width] duration-150"
               style={{
                 width: `${
-                  ((qwenSliderConfig.value - qwenSliderConfig.min) /
-                    (qwenSliderConfig.max - qwenSliderConfig.min)) *
+                  ((audioSliderConfig.value - audioSliderConfig.min) /
+                    (audioSliderConfig.max - audioSliderConfig.min)) *
                   100
                 }%`,
               }}
             />
             <input
               type="range"
-              aria-label={qwenSliderConfig.label}
-              min={qwenSliderConfig.min}
-              max={qwenSliderConfig.max}
-              step={qwenSliderConfig.step}
-              value={qwenSliderConfig.value}
+              aria-label={audioSliderConfig.label}
+              min={audioSliderConfig.min}
+              max={audioSliderConfig.max}
+              step={audioSliderConfig.step}
+              value={audioSliderConfig.value}
               onChange={(event) =>
-                qwenSliderConfig.setValue(Number(event.target.value))
+                audioSliderConfig.setValue(Number(event.target.value))
               }
               className="absolute inset-0 size-full cursor-pointer opacity-0"
             />
