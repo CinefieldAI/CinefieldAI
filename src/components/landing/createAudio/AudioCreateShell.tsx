@@ -640,42 +640,76 @@ export default function AudioCreateShell({
         </div>
 
         <div className="hide-scrollbar min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 pt-10">
-            <header className="text-center">
-              <h1 className="text-3xl font-extrabold uppercase tracking-wide text-white md:text-4xl">
-                Turn text into speech
-              </h1>
-              <p className="mt-3 text-sm text-zinc-400 md:text-base">
-                Lifelike speech from any script — ready for your projects
-              </p>
-            </header>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <section className="rounded-2xl border border-white/[0.07] bg-[#17191b] p-5">
-                <h2 className="text-lg font-semibold text-white">
-                  Pick or clone a voice
-                </h2>
-                <p className="mt-1 whitespace-pre-line text-sm text-zinc-400">
-                  {"Choose a preset, clone your own,\nor pick a model"}
+          <div className="@container w-full overflow-hidden rounded-xl border border-white/5 bg-[#111214]">
+            <div className="flex min-h-[640px] flex-col px-8 pb-8 pt-[42px] @max-[640px]:px-4 @max-[640px]:pt-7">
+              <header className="flex flex-col items-center gap-2">
+                <h1 className="text-center font-grotesk text-[40px] font-bold uppercase leading-[48px] text-white [font-feature-settings:'ss04'] @max-[640px]:text-[28px] @max-[640px]:leading-9">
+                  Turn text into speech
+                </h1>
+                <p className="text-center text-[18px] font-medium leading-7 text-[#898A8B]">
+                  Lifelike speech from any script — ready for your projects
                 </p>
-                {/* Media placeholder — no matching internal promo asset exists
-                    yet, and external reference media must not be hotlinked. */}
-                <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-white/[0.05] bg-[#101113]">
-                  <AudioLines className="size-8 text-zinc-700" />
-                </div>
-              </section>
+              </header>
 
-              <section className="rounded-2xl border border-white/[0.07] bg-[#17191b] p-5">
-                <h2 className="text-lg font-semibold text-white">
-                  Write, describe and generate
-                </h2>
-                <p className="mt-1 whitespace-pre-line text-sm text-zinc-400">
-                  {"Type your script, describe how it sounds,\nand create"}
-                </p>
-                <div className="mt-4 flex aspect-video items-center justify-center rounded-xl border border-white/[0.05] bg-[#101113]">
-                  <AudioLines className="size-8 text-zinc-700" />
-                </div>
-              </section>
+              <div className="mt-[38px] flex w-full flex-col gap-5 @[640px]:flex-row">
+                <section className="flex min-w-0 flex-1 flex-col items-center justify-center gap-6 overflow-hidden rounded-[24px] border border-[rgba(217,217,217,0.04)] bg-[#18191C] px-4 pb-4 pt-5">
+                  <div className="flex w-full flex-col gap-2 px-2">
+                    <h2 className="text-[24px] font-medium leading-7 text-white">
+                      Pick or clone a voice
+                    </h2>
+                    <p className="max-w-[266px] text-[16px] font-medium leading-6 text-[#828282]">
+                      Choose a preset, clone your own, or pick a model
+                    </p>
+                  </div>
+                  <div className="relative h-[300px] w-full overflow-hidden rounded-xl">
+                    <video
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      disablePictureInPicture
+                      preload="metadata"
+                      aria-label="Voice presets carousel"
+                      className="size-full object-cover"
+                    >
+                      <source
+                        src="https://static.higgsfield.ai/voice/how-to-use/tts-left.mp4"
+                        type="video/mp4"
+                      />
+                      Your browser does not support the video.
+                    </video>
+                  </div>
+                </section>
+
+                <section className="flex min-w-0 flex-1 flex-col items-center justify-center gap-6 overflow-hidden rounded-[24px] border border-[rgba(217,217,217,0.04)] bg-[#18191C] px-4 pb-4 pt-5">
+                  <div className="flex w-full flex-col gap-2 px-2">
+                    <h2 className="text-[24px] font-medium leading-7 text-white">
+                      Write, describe and generate
+                    </h2>
+                    <p className="max-w-[328px] text-[16px] font-medium leading-6 text-[#828282]">
+                      Type your script, describe how it sounds, and create
+                    </p>
+                  </div>
+                  <div className="relative h-[300px] w-full overflow-hidden rounded-xl">
+                    <video
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      disablePictureInPicture
+                      preload="metadata"
+                      aria-label="Text to speech form with a script prompt"
+                      className="size-full object-cover"
+                    >
+                      <source
+                        src="https://static.higgsfield.ai/voice/how-to-use/tts-right.mp4"
+                        type="video/mp4"
+                      />
+                      Your browser does not support the video.
+                    </video>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
         </div>
