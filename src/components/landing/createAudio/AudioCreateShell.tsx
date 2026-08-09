@@ -68,7 +68,49 @@ const STABILITY_OPTIONS = [
   { value: "Robust", description: "most consistent, muted tags" },
 ] as const;
 
-type FloatingPanel = "voice" | "model" | "stability" | null;
+const QWEN_FORMATS = [
+  { value: "mp3", description: "small, default" },
+  { value: "wav", description: "lossless" },
+  { value: "opus", description: "web" },
+] as const;
+
+const QWEN_SAMPLE_RATES = [
+  { value: "8000 Hz", description: "low / phone quality" },
+  { value: "16000 Hz", description: "basic / voice calls" },
+  { value: "22050 Hz", description: "legacy audio" },
+  { value: "24000 Hz", description: "default — fine for voice" },
+  { value: "44100 Hz", description: "CD quality" },
+  { value: "48000 Hz", description: "video / studio" },
+] as const;
+
+const QWEN_LANGUAGES = [
+  "Auto detect",
+  "Chinese",
+  "English",
+  "French",
+  "German",
+  "Japanese",
+  "Korean",
+  "Russian",
+  "Portuguese",
+  "Thai",
+  "Indonesian",
+  "Vietnamese",
+  "Italian",
+  "Malay",
+] as const;
+
+type FloatingPanel =
+  | "voice"
+  | "model"
+  | "stability"
+  | "qwen-speed"
+  | "qwen-pitch"
+  | "qwen-volume"
+  | "qwen-format"
+  | "qwen-rate"
+  | "qwen-language"
+  | null;
 
 type FloatingPosition = CSSProperties;
 
@@ -96,7 +138,7 @@ export default function AudioCreateShell({
 }: AudioCreateShellProps) {
   const [script, setScript] = useState("");
   const [batchSize, setBatchSize] = useState(() =>
-    audioModelIndex === 0 ? 1 : 4,
+    audioModelIndex === 0 || audioModelIndex === 2 ? 1 : 4,
   );
   const [contentTab, setContentTab] = useState<"history" | "how-it-works">(
     "how-it-works",
@@ -106,8 +148,17 @@ export default function AudioCreateShell({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [saveSettings, setSaveSettings] = useState(false);
   const [voiceDetails, setVoiceDetails] = useState("");
+  const [qwenVoiceDetails, setQwenVoiceDetails] = useState("");
   const [expressionIntensity, setExpressionIntensity] = useState(5);
   const [mood, setMood] = useState(0);
+  const [qwenSpeed, setQwenSpeed] = useState(1);
+  const [qwenPitch, setQwenPitch] = useState(1);
+  const [qwenVolume, setQwenVolume] = useState(50);
+  const [qwenFormat, setQwenFormat] = useState("mp3");
+  const [qwenSampleRate, setQwenSampleRate] = useState("24000 Hz");
+  const [qwenLanguage, setQwenLanguage] = useState("Auto detect");
+  const [qwenSeed, setQwenSeed] = useState(0);
+  const [qwenSaveSettings, setQwenSaveSettings] = useState(false);
   const [stability, setStability] = useState<
     (typeof STABILITY_OPTIONS)[number]["value"]
   >("Natural");
@@ -126,6 +177,70 @@ export default function AudioCreateShell({
   const model = AUDIO_MODELS[audioModelIndex] ?? AUDIO_MODELS[0];
   const isSeedAudio = audioModelIndex === 0;
   const isElevenV3 = audioModelIndex === 1;
+  const isQwenAudio = audioModelIndex === 2;
+
+  const qwenSliderConfig =
+    floatingPanel === "qwen-speed"
+      ? {
+          label: "Speed",
+          value: qwenSpeed,
+          min: 0.5,
+          max: 2,
+          step: 0.1,
+          display: `${qwenSpeed.toFixed(1)}x`,
+          setValue: setQwenSpeed,
+        }
+      : floatingPanel === "qwen-pitch"
+        ? {
+            label: "Pitch",
+            value: qwenPitch,
+            min: 0.5,
+            max: 2,
+            step: 0.1,
+            display: `${qwenPitch.toFixed(1)}x`,
+            setValue: setQwenPitch,
+          }
+        : floatingPanel === "qwen-volume"
+          ? {
+              label: "Volume",
+              value: qwenVolume,
+              min: 0,
+              max: 100,
+              step: 1,
+              display: `${qwenVolume}%`,
+              setValue: setQwenVolume,
+            }
+          : null;
+  const qwenOptionConfig =
+    floatingPanel === "qwen-format"
+      ? {
+          label: "Output format",
+          selected: qwenFormat,
+          options: QWEN_FORMATS,
+        }
+      : floatingPanel === "qwen-rate"
+        ? {
+            label: "Sample Rate",
+            selected: qwenSampleRate,
+            options: QWEN_SAMPLE_RATES,
+          }
+        : floatingPanel === "qwen-language"
+          ? {
+              label: "Language",
+              selected: qwenLanguage,
+              options: QWEN_LANGUAGES.map((value) => ({
+                value,
+                description: "",
+              })),
+            }
+          : null;
+
+  const selectQwenOption = (value: string) => {
+    if (floatingPanel === "qwen-format") setQwenFormat(value);
+    if (floatingPanel === "qwen-rate") setQwenSampleRate(value);
+    if (floatingPanel === "qwen-language") setQwenLanguage(value);
+    setFloatingPanel(null);
+  };
 
   const openFloatingPanel = (
     panel: Exclude<FloatingPanel, null>,
@@ -140,16 +255,23 @@ export default function AudioCreateShell({
     }
 
     const rect = trigger.getBoundingClientRect();
+    const sidebarRect = trigger.closest("aside")?.getBoundingClientRect();
+    const anchorRight = panel.startsWith("qwen-")
+      ? (sidebarRect?.right ?? rect.right)
+      : rect.right;
+    const anchorLeft = panel.startsWith("qwen-")
+      ? (sidebarRect?.left ?? rect.left)
+      : rect.left;
     const viewportPadding = 12;
-    const availableRight = window.innerWidth - rect.right - viewportPadding;
+    const availableRight = window.innerWidth - anchorRight - viewportPadding;
     const width = Math.min(
       preferredWidth,
       Math.max(280, window.innerWidth - viewportPadding * 2),
     );
     const left =
       availableRight >= width + 12
-        ? rect.right + 12
-        : Math.max(viewportPadding, rect.left - width - 12);
+        ? anchorRight + 12
+        : Math.max(viewportPadding, anchorLeft - width - 12);
 
     setFloatingPosition({
       left,
@@ -308,7 +430,7 @@ export default function AudioCreateShell({
             <span className="min-w-0">
               <span className="block text-xs font-medium text-zinc-400">Model</span>
               <span className="mt-1 block truncate text-sm font-semibold text-white">
-                {model.title}
+                {isQwenAudio ? "Qwen Audio 3.0 TTS" : model.title}
               </span>
             </span>
             <ChevronRight className="size-4 shrink-0 text-zinc-400" />
@@ -341,7 +463,7 @@ export default function AudioCreateShell({
             </div>
           </div>
 
-          {isSeedAudio && (
+          {(isSeedAudio || isQwenAudio) && (
             <section className="relative flex shrink-0 flex-col gap-1 rounded-xl border border-white/[0.07] bg-[#202224] p-3 focus-within:border-white/15">
               <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-xl bg-white/[0.05] px-2 py-1 text-[10px] font-medium text-zinc-400">
                 Optional
@@ -354,19 +476,24 @@ export default function AudioCreateShell({
               </label>
               <textarea
                 id="audio-form-sidebar-voice-details"
-                value={voiceDetails}
-                onChange={(event) => setVoiceDetails(event.target.value)}
-                maxLength={500}
+                value={isQwenAudio ? qwenVoiceDetails : voiceDetails}
+                onChange={(event) =>
+                  isQwenAudio
+                    ? setQwenVoiceDetails(event.target.value)
+                    : setVoiceDetails(event.target.value)
+                }
+                maxLength={isQwenAudio ? 128 : 500}
                 placeholder="e.g. Young female voice with british accent, soft and loud. Excited, giggling"
                 className="h-[52px] resize-none overflow-y-auto bg-transparent pr-1 text-xs leading-[18px] text-white outline-none placeholder:text-zinc-400"
               />
               <span className="mt-0.5 self-end text-[10px] font-medium tabular-nums text-white/40">
-                {voiceDetails.length}/500
+                {isQwenAudio ? qwenVoiceDetails.length : voiceDetails.length}/
+                {isQwenAudio ? 128 : 500}
               </span>
             </section>
           )}
 
-          {(isSeedAudio || isElevenV3) && (
+          {(isSeedAudio || isElevenV3 || isQwenAudio) && (
             <div className="shrink-0">
               <button
                 type="button"
@@ -386,7 +513,7 @@ export default function AudioCreateShell({
               </button>
 
               {advancedOpen && isSeedAudio && (
-                <div className="flex flex-col gap-2 pb-1 pt-2">
+                <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs text-zinc-400">
                       Seed Audio 1.0 controls
@@ -562,8 +689,169 @@ export default function AudioCreateShell({
                 </div>
               )}
 
+              {advancedOpen && isQwenAudio && (
+                <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs text-zinc-400">
+                      Qwen Audio 3.0 TTS controls
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQwenSpeed(1);
+                        setQwenPitch(1);
+                        setQwenVolume(50);
+                        setQwenFormat("mp3");
+                        setQwenSampleRate("24000 Hz");
+                        setQwenLanguage("Auto detect");
+                        setQwenSeed(0);
+                        setQwenSaveSettings(false);
+                        setFloatingPanel(null);
+                      }}
+                      className="flex items-center gap-1 text-xs font-semibold text-white hover:text-[#df7b59]"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset
+                    </button>
+                  </div>
+                  <span className="px-1 text-xs text-zinc-400">Audio settings</span>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      {
+                        label: "Speed",
+                        value: `${qwenSpeed.toFixed(1)}x`,
+                        panel: "qwen-speed" as const,
+                      },
+                      {
+                        label: "Pitch",
+                        value: `${qwenPitch.toFixed(1)}x`,
+                        panel: "qwen-pitch" as const,
+                      },
+                      {
+                        label: "Volume",
+                        value: `${qwenVolume}%`,
+                        panel: "qwen-volume" as const,
+                      },
+                    ].map((control) => (
+                      <button
+                        key={control.label}
+                        type="button"
+                        aria-expanded={floatingPanel === control.panel}
+                        onClick={(event) =>
+                          openFloatingPanel(
+                            control.panel,
+                            event.currentTarget,
+                            244,
+                            112,
+                          )
+                        }
+                        className="flex min-w-0 items-center gap-1 rounded-xl border border-white/[0.07] bg-[#202224] px-3 py-2 text-left transition-colors hover:border-white/15"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs text-zinc-400">
+                            {control.label}
+                          </span>
+                          <span className="block truncate text-sm font-medium tabular-nums text-white">
+                            {control.value}
+                          </span>
+                        </span>
+                        <ChevronRight className="size-4 shrink-0 text-zinc-400" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {[
+                    {
+                      label: "Output format",
+                      value: qwenFormat.toUpperCase(),
+                      panel: "qwen-format" as const,
+                      icon: true,
+                    },
+                    {
+                      label: "Sample Rate",
+                      value: qwenSampleRate.replace("000 Hz", " kHz"),
+                      panel: "qwen-rate" as const,
+                      icon: false,
+                    },
+                    {
+                      label: "Language",
+                      value: qwenLanguage,
+                      panel: "qwen-language" as const,
+                      icon: false,
+                    },
+                  ].map((control) => (
+                    <button
+                      key={control.label}
+                      type="button"
+                      aria-expanded={floatingPanel === control.panel}
+                      onClick={(event) =>
+                        openFloatingPanel(
+                          control.panel,
+                          event.currentTarget,
+                          224,
+                          control.panel === "qwen-language" ? 340 : 250,
+                        )
+                      }
+                      className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3 text-sm font-medium text-white transition-colors hover:border-white/15"
+                    >
+                      <span>{control.label}</span>
+                      <span className="flex items-center gap-2">
+                        {control.icon && <FileAudio className="size-4" />}
+                        {control.value}
+                        <ChevronRight className="size-4 text-zinc-400" />
+                      </span>
+                    </button>
+                  ))}
+
+                  <label className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="flex items-center gap-1 text-sm font-medium text-white">
+                      Seed
+                      <span
+                        title="Use the same seed to reproduce a result"
+                        className="flex size-4 items-center justify-center text-zinc-400"
+                      >
+                        <Info className="size-3.5" />
+                      </span>
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={qwenSeed}
+                      onChange={(event) => setQwenSeed(Number(event.target.value))}
+                      aria-label="Seed"
+                      className="w-20 bg-transparent text-right text-sm font-medium tabular-nums text-white outline-none"
+                    />
+                  </label>
+
+                  <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="text-sm font-semibold text-white">
+                      Save settings
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={qwenSaveSettings}
+                      aria-label="Save settings"
+                      onClick={() => setQwenSaveSettings((value) => !value)}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        qwenSaveSettings ? "bg-[#df7b59]" : "bg-zinc-600"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
+                          qwenSaveSettings
+                            ? "translate-x-5"
+                            : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {advancedOpen && isElevenV3 && (
-                <div className="flex flex-col gap-2 pb-1 pt-2">
+                <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs text-zinc-400">Eleven v3 controls</span>
                     <button
@@ -759,7 +1047,7 @@ export default function AudioCreateShell({
           ref={floatingPanelRef}
           role="dialog"
           aria-label="Select audio model"
-          className="fixed z-[80] max-h-[520px] overflow-y-auto rounded-2xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+          className="fixed z-[80] max-h-[520px] animate-in overflow-y-auto rounded-2xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
           style={floatingPosition}
         >
           <div className="flex h-9 items-center gap-2 px-2 text-xs text-zinc-400">
@@ -780,7 +1068,7 @@ export default function AudioCreateShell({
                   onClick={() => {
                     onAudioModelIndexChange(index);
                     setAdvancedOpen(false);
-                    if (index === 0) setBatchSize(1);
+                    if (index === 0 || index === 2) setBatchSize(1);
                     setFloatingPanel(null);
                   }}
                   className={`flex min-h-[62px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors ${
@@ -804,12 +1092,101 @@ export default function AudioCreateShell({
         </div>
       )}
 
+      {qwenSliderConfig && (
+        <div
+          ref={floatingPanelRef}
+          role="dialog"
+          aria-label={`${qwenSliderConfig.label} settings`}
+          className="fixed z-[90] w-[244px] animate-in rounded-xl border border-white/10 bg-[#1c1e20]/95 px-2 pb-2 pt-1 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
+          style={floatingPosition}
+        >
+          <div className="flex items-center gap-2 px-1 py-1.5">
+            <span className="min-w-0 flex-1 truncate text-xs text-zinc-400">
+              {qwenSliderConfig.label}
+            </span>
+            <span className="shrink-0 text-xs font-medium tabular-nums text-white">
+              {qwenSliderConfig.display}
+            </span>
+          </div>
+          <label className="relative flex h-9 cursor-pointer items-center overflow-hidden rounded-lg bg-[#292e33]">
+            <span className="pointer-events-none absolute inset-0 flex justify-around">
+              {Array.from({ length: 3 }, (_, index) => (
+                <span key={index} className="flex flex-1 items-center justify-center">
+                  <span className="h-2 w-px rounded bg-white/15" />
+                </span>
+              ))}
+            </span>
+            <span
+              className="pointer-events-none absolute inset-y-0 left-0 rounded-l-lg border-r border-white bg-white/[0.06] transition-[width] duration-150"
+              style={{
+                width: `${
+                  ((qwenSliderConfig.value - qwenSliderConfig.min) /
+                    (qwenSliderConfig.max - qwenSliderConfig.min)) *
+                  100
+                }%`,
+              }}
+            />
+            <input
+              type="range"
+              aria-label={qwenSliderConfig.label}
+              min={qwenSliderConfig.min}
+              max={qwenSliderConfig.max}
+              step={qwenSliderConfig.step}
+              value={qwenSliderConfig.value}
+              onChange={(event) =>
+                qwenSliderConfig.setValue(Number(event.target.value))
+              }
+              className="absolute inset-0 size-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      )}
+
+      {qwenOptionConfig && (
+        <div
+          ref={floatingPanelRef}
+          role="dialog"
+          aria-label={qwenOptionConfig.label}
+          className="fixed z-[90] max-h-80 animate-in overflow-y-auto rounded-xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
+          style={floatingPosition}
+        >
+          <div className="flex h-8 items-center px-2 text-xs font-semibold text-zinc-500">
+            {qwenOptionConfig.label}
+          </div>
+          {qwenOptionConfig.options.map((option) => {
+            const active = option.value === qwenOptionConfig.selected;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => selectQwenOption(option.value)}
+                className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg p-2 text-left transition-colors ${
+                  active ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-white">
+                    {option.value}
+                  </span>
+                  {option.description && (
+                    <span className="block truncate text-xs text-zinc-400">
+                      {option.description}
+                    </span>
+                  )}
+                </span>
+                {active && <Check className="size-4 shrink-0 text-white" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {floatingPanel === "stability" && (
         <div
           ref={floatingPanelRef}
           role="dialog"
           aria-label="Stability"
-          className="fixed z-[90] rounded-xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+          className="fixed z-[90] animate-in rounded-xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
           style={floatingPosition}
         >
           <div className="flex h-8 items-center px-2 text-xs font-semibold text-zinc-500">
