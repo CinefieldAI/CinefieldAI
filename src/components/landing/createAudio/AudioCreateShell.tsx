@@ -104,6 +104,61 @@ const QWEN_LANGUAGES = [
   "Malay",
 ] as const;
 
+const MINIMAX_EMOTIONS = [
+  "Neutral",
+  "Happy",
+  "Sad",
+  "Angry",
+  "Fearful",
+  "Surprised",
+  "Disgusted",
+] as const;
+
+const MINIMAX_SAMPLE_RATES = [
+  { value: "16000 Hz", description: "basic voice" },
+  { value: "24000 Hz", description: "standard quality" },
+  { value: "32000 Hz", description: "default" },
+  { value: "44100 Hz", description: "CD quality" },
+  { value: "48000 Hz", description: "video / studio" },
+] as const;
+
+const MINIMAX_LANGUAGES = [
+  "Auto detect",
+  "Afrikaans",
+  "Arabic",
+  "Bulgarian",
+  "Catalan",
+  "Chinese",
+  "Czech",
+  "Danish",
+  "Dutch",
+  "English",
+  "Filipino",
+  "Finnish",
+  "French",
+  "German",
+  "Greek",
+  "Hebrew",
+  "Hindi",
+  "Hungarian",
+  "Indonesian",
+  "Italian",
+  "Japanese",
+  "Korean",
+  "Malay",
+  "Polish",
+  "Portuguese",
+  "Romanian",
+  "Russian",
+  "Spanish",
+  "Swedish",
+  "Tamil",
+  "Thai",
+  "Turkish",
+  "Ukrainian",
+  "Vietnamese",
+] as const;
+
 type FloatingPanel =
   | "voice"
   | "model"
@@ -117,6 +172,11 @@ type FloatingPanel =
   | "qwen-format"
   | "qwen-rate"
   | "qwen-language"
+  | "minimax-speed"
+  | "minimax-pitch"
+  | "minimax-volume"
+  | "minimax-rate"
+  | "minimax-language"
   | null;
 
 type FloatingPosition = CSSProperties;
@@ -144,9 +204,11 @@ export default function AudioCreateShell({
   onAudioModelIndexChange,
 }: AudioCreateShellProps) {
   const [script, setScript] = useState("");
-  const [batchSize, setBatchSize] = useState(() =>
-    audioModelIndex === 0 || audioModelIndex === 2 ? 1 : 4,
-  );
+  const [batchSize, setBatchSize] = useState(() => {
+    if (audioModelIndex === 0 || audioModelIndex === 2) return 1;
+    if (audioModelIndex === 3) return 3;
+    return 4;
+  });
   const [contentTab, setContentTab] = useState<"history" | "how-it-works">(
     "how-it-works",
   );
@@ -170,6 +232,16 @@ export default function AudioCreateShell({
   const [qwenLanguage, setQwenLanguage] = useState("Auto detect");
   const [qwenSeed, setQwenSeed] = useState(0);
   const [qwenSaveSettings, setQwenSaveSettings] = useState(false);
+  const [minimaxEmotion, setMinimaxEmotion] =
+    useState<(typeof MINIMAX_EMOTIONS)[number]>("Neutral");
+  const [minimaxSpeed, setMinimaxSpeed] = useState(1);
+  const [minimaxPitch, setMinimaxPitch] = useState(0);
+  const [minimaxVolume, setMinimaxVolume] = useState(100);
+  const [minimaxSampleRate, setMinimaxSampleRate] = useState("32000 Hz");
+  const [minimaxLanguage, setMinimaxLanguage] = useState("Auto detect");
+  const [minimaxTextNormalization, setMinimaxTextNormalization] =
+    useState(false);
+  const [minimaxSaveSettings, setMinimaxSaveSettings] = useState(false);
   const [stability, setStability] =
     useState<(typeof STABILITY_OPTIONS)[number]["value"]>("Natural");
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel>(null);
@@ -188,6 +260,7 @@ export default function AudioCreateShell({
   const isSeedAudio = audioModelIndex === 0;
   const isElevenV3 = audioModelIndex === 1;
   const isQwenAudio = audioModelIndex === 2;
+  const isMiniMax = audioModelIndex === 3;
 
   const audioSliderConfig =
     floatingPanel === "seed-speed"
@@ -250,8 +323,38 @@ export default function AudioCreateShell({
                     display: `${qwenVolume}%`,
                     setValue: setQwenVolume,
                   }
-                : null;
-  const qwenOptionConfig =
+                : floatingPanel === "minimax-speed"
+                  ? {
+                      label: "Speed",
+                      value: minimaxSpeed,
+                      min: 0.5,
+                      max: 2,
+                      step: 0.1,
+                      display: `${minimaxSpeed.toFixed(1)}x`,
+                      setValue: setMinimaxSpeed,
+                    }
+                  : floatingPanel === "minimax-pitch"
+                    ? {
+                        label: "Pitch",
+                        value: minimaxPitch,
+                        min: -12,
+                        max: 12,
+                        step: 1,
+                        display: `${minimaxPitch}`,
+                        setValue: setMinimaxPitch,
+                      }
+                    : floatingPanel === "minimax-volume"
+                      ? {
+                          label: "Volume",
+                          value: minimaxVolume,
+                          min: 0,
+                          max: 200,
+                          step: 1,
+                          display: `${minimaxVolume}%`,
+                          setValue: setMinimaxVolume,
+                        }
+                      : null;
+  const audioOptionConfig =
     floatingPanel === "qwen-format"
       ? {
           label: "Output format",
@@ -273,12 +376,29 @@ export default function AudioCreateShell({
                 description: "",
               })),
             }
-          : null;
+          : floatingPanel === "minimax-rate"
+            ? {
+                label: "Sample Rate",
+                selected: minimaxSampleRate,
+                options: MINIMAX_SAMPLE_RATES,
+              }
+            : floatingPanel === "minimax-language"
+              ? {
+                  label: "Language boost",
+                  selected: minimaxLanguage,
+                  options: MINIMAX_LANGUAGES.map((value) => ({
+                    value,
+                    description: "",
+                  })),
+                }
+              : null;
 
-  const selectQwenOption = (value: string) => {
+  const selectAudioOption = (value: string) => {
     if (floatingPanel === "qwen-format") setQwenFormat(value);
     if (floatingPanel === "qwen-rate") setQwenSampleRate(value);
     if (floatingPanel === "qwen-language") setQwenLanguage(value);
+    if (floatingPanel === "minimax-rate") setMinimaxSampleRate(value);
+    if (floatingPanel === "minimax-language") setMinimaxLanguage(value);
     setFloatingPanel(null);
   };
 
@@ -297,7 +417,9 @@ export default function AudioCreateShell({
     const rect = trigger.getBoundingClientRect();
     const sidebarRect = trigger.closest("aside")?.getBoundingClientRect();
     const isSidebarControl =
-      panel.startsWith("qwen-") || panel.startsWith("seed-");
+      panel.startsWith("qwen-") ||
+      panel.startsWith("seed-") ||
+      panel.startsWith("minimax-");
     const anchorRight = isSidebarControl
       ? (sidebarRect?.right ?? rect.right)
       : rect.right;
@@ -542,7 +664,7 @@ export default function AudioCreateShell({
             </section>
           )}
 
-          {(isSeedAudio || isElevenV3 || isQwenAudio) && (
+          {(isSeedAudio || isElevenV3 || isQwenAudio || isMiniMax) && (
             <div className="shrink-0">
               <button
                 type="button"
@@ -957,6 +1079,196 @@ export default function AudioCreateShell({
                 </div>
               )}
 
+              {advancedOpen && isMiniMax && (
+                <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs text-zinc-400">
+                      MiniMax Speech 2.8 HD controls
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMinimaxEmotion("Neutral");
+                        setMinimaxSpeed(1);
+                        setMinimaxPitch(0);
+                        setMinimaxVolume(100);
+                        setMinimaxSampleRate("32000 Hz");
+                        setMinimaxLanguage("Auto detect");
+                        setMinimaxTextNormalization(false);
+                        setMinimaxSaveSettings(false);
+                        setFloatingPanel(null);
+                      }}
+                      className="flex items-center gap-1 text-xs font-semibold text-white hover:text-[#df7b59]"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset
+                    </button>
+                  </div>
+
+                  <span className="px-1 text-xs text-zinc-400">Emotion</span>
+                  <div className="flex flex-wrap gap-1">
+                    {MINIMAX_EMOTIONS.map((emotion) => {
+                      const selected = minimaxEmotion === emotion;
+                      return (
+                        <button
+                          key={emotion}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setMinimaxEmotion(emotion)}
+                          className={`flex h-8 items-center justify-center rounded-lg px-3 text-xs font-medium transition-colors ${
+                            selected
+                              ? "bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]"
+                              : "bg-white/[0.05] text-zinc-400 hover:text-white"
+                          }`}
+                        >
+                          {emotion}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <span className="px-1 text-xs text-zinc-400">
+                    Audio settings
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      {
+                        label: "Speed",
+                        value: `${minimaxSpeed.toFixed(1)}x`,
+                        panel: "minimax-speed" as const,
+                      },
+                      {
+                        label: "Pitch",
+                        value: `${minimaxPitch}`,
+                        panel: "minimax-pitch" as const,
+                      },
+                      {
+                        label: "Volume",
+                        value: `${minimaxVolume}%`,
+                        panel: "minimax-volume" as const,
+                      },
+                    ].map((control) => (
+                      <button
+                        key={control.label}
+                        type="button"
+                        aria-expanded={floatingPanel === control.panel}
+                        onClick={(event) =>
+                          openFloatingPanel(
+                            control.panel,
+                            event.currentTarget,
+                            244,
+                            112,
+                          )
+                        }
+                        className="flex min-w-0 items-center gap-1 rounded-xl border border-white/[0.07] bg-[#202224] px-3 py-2 text-left transition-colors hover:border-white/15"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs text-zinc-400">
+                            {control.label}
+                          </span>
+                          <span className="block truncate text-sm font-medium tabular-nums text-white">
+                            {control.value}
+                          </span>
+                        </span>
+                        <ChevronRight className="size-4 shrink-0 text-zinc-400" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {[
+                    {
+                      label: "Sample Rate",
+                      value: minimaxSampleRate.replace("000 Hz", " kHz"),
+                      panel: "minimax-rate" as const,
+                    },
+                    {
+                      label: "Language boost",
+                      value: minimaxLanguage,
+                      panel: "minimax-language" as const,
+                    },
+                  ].map((control) => (
+                    <button
+                      key={control.label}
+                      type="button"
+                      aria-expanded={floatingPanel === control.panel}
+                      onClick={(event) =>
+                        openFloatingPanel(
+                          control.panel,
+                          event.currentTarget,
+                          224,
+                          control.panel === "minimax-language" ? 340 : 250,
+                        )
+                      }
+                      className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3 text-sm font-medium text-white transition-colors hover:border-white/15"
+                    >
+                      <span>{control.label}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{control.value}</span>
+                        <ChevronRight className="size-4 shrink-0 text-zinc-400" />
+                      </span>
+                    </button>
+                  ))}
+
+                  <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-white">
+                      Text normalization
+                      <span
+                        title="Normalize written text before speech generation"
+                        className="flex size-[18px] items-center justify-center text-zinc-400"
+                      >
+                        <Info className="size-3.5" />
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={minimaxTextNormalization}
+                      aria-label="Text normalization"
+                      onClick={() =>
+                        setMinimaxTextNormalization((value) => !value)
+                      }
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        minimaxTextNormalization
+                          ? "bg-[#df7b59]"
+                          : "bg-zinc-600"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform duration-300 ${
+                          minimaxTextNormalization
+                            ? "translate-x-5"
+                            : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="text-sm font-semibold text-white">
+                      Save settings
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={minimaxSaveSettings}
+                      aria-label="Save settings"
+                      onClick={() => setMinimaxSaveSettings((value) => !value)}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        minimaxSaveSettings ? "bg-[#df7b59]" : "bg-zinc-600"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform duration-300 ${
+                          minimaxSaveSettings
+                            ? "translate-x-5"
+                            : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {advancedOpen && isElevenV3 && (
                 <div className="flex animate-in flex-col gap-2 pb-1 pt-2 duration-200 fade-in-0 slide-in-from-top-2">
                   <div className="flex items-center justify-between px-1">
@@ -1181,6 +1493,8 @@ export default function AudioCreateShell({
           </div>
           <div className="flex flex-col gap-1">
             {AUDIO_MODELS.map((item, index) => {
+              if (item.title === "VibeVoice") return null;
+
               const active = index === audioModelIndex;
               return (
                 <button
@@ -1190,6 +1504,7 @@ export default function AudioCreateShell({
                     onAudioModelIndexChange(index);
                     setAdvancedOpen(false);
                     if (index === 0 || index === 2) setBatchSize(1);
+                    if (index === 3) setBatchSize(3);
                     setFloatingPanel(null);
                   }}
                   className={`flex min-h-[62px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors ${
@@ -1268,24 +1583,24 @@ export default function AudioCreateShell({
         </div>
       )}
 
-      {qwenOptionConfig && (
+      {audioOptionConfig && (
         <div
           ref={floatingPanelRef}
           role="dialog"
-          aria-label={qwenOptionConfig.label}
+          aria-label={audioOptionConfig.label}
           className="fixed z-[90] max-h-80 animate-in overflow-y-auto rounded-xl border border-white/10 bg-[#1c1e20]/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-2xl duration-200 fade-in-0 slide-in-from-left-2 zoom-in-95"
           style={floatingPosition}
         >
           <div className="flex h-8 items-center px-2 text-xs font-semibold text-zinc-500">
-            {qwenOptionConfig.label}
+            {audioOptionConfig.label}
           </div>
-          {qwenOptionConfig.options.map((option) => {
-            const active = option.value === qwenOptionConfig.selected;
+          {audioOptionConfig.options.map((option) => {
+            const active = option.value === audioOptionConfig.selected;
             return (
               <button
                 key={option.value}
                 type="button"
-                onClick={() => selectQwenOption(option.value)}
+                onClick={() => selectAudioOption(option.value)}
                 className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg p-2 text-left transition-colors ${
                   active ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
                 }`}
