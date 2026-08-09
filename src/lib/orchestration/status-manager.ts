@@ -1,7 +1,13 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OrchestrationError } from "./errors";
-import type { OrchestrationStage } from "./types";
+import type {
+  OrchestrationStage,
+  PersistedAmbiguousSubmission,
+  PersistedContinuationHalt,
+  PersistedProviderJob,
+  SubmissionEvidence,
+} from "./types";
 
 /**
  * Cinefield status manager — the single place protected generation fields
@@ -25,6 +31,26 @@ interface OrchestrationMetadata {
   isMock?: boolean;
   errorCode?: string;
   retryable?: boolean;
+  /** Async provider job state — present only while/after a provider ran async. */
+  providerJob?: PersistedProviderJob;
+  /**
+   * Present only while a submit attempt's outcome is unknown (Phase 6E).
+   * Blocks resetForRetry until Phase 7 reconciliation clears it.
+   */
+  ambiguousSubmission?: PersistedAmbiguousSubmission | null;
+  /**
+   * Single-flight lease on the finalization tail (download → upload →
+   * complete). Holds an ISO timestamp while one checker finalizes; null or
+   * absent when free. Prevents two concurrent "provider says completed"
+   * observations from uploading the same outputs twice (Phase 6F).
+   */
+  finalizeClaimedAt?: string | null;
+  /**
+   * Present only when automatic continuation stopped polling a job that had
+   * not reached a terminal state (Phase 6G). Purely informational: it never
+   * changes `status` and never clears providerJob.
+   */
+  continuation?: PersistedContinuationHalt | null;
   updatedAt: string;
 }
 
@@ -113,7 +139,11 @@ export async function markCompleted(
   existingMetadata: Record<string, unknown> | null,
   result: { outputUrl: string; thumbnailUrl?: string | null; provider: string; workflow: string; isMock: boolean }
 ): Promise<void> {
-  const { error } = await admin
+  // Compare-and-set from "processing" only. The sync path always arrives here
+  // in "processing" (claimGeneration put it there), so this changes nothing
+  // for it — but an async continuation may race a cancellation or a second
+  // checker, and cancelled → completed / completed → completed must lose.
+  const { data, error } = await admin
     .from("generations")
     .update({
       status: "completed",
@@ -128,13 +158,475 @@ export async function markCompleted(
         isMock: result.isMock,
       }),
     })
-    .eq("id", generationId);
+    .eq("id", generationId)
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
       context: { generationId, operation: "markCompleted" },
     });
   }
+
+  if (!data) {
+    // The row left "processing" under us (completed elsewhere, cancelled, or
+    // requeued). Completing it now would be an invalid transition.
+    throw new OrchestrationError("DUPLICATE_EXECUTION", {
+      context: { generationId, operation: "markCompleted" },
+    });
+  }
+}
+
+/**
+ * Records that a provider accepted the job and is working on it
+ * asynchronously. `status` stays "processing" (already set by
+ * claimGeneration); what changes is the persisted orchestration metadata:
+ * stage becomes "waiting-provider" and the provider-neutral job state
+ * (external job id, last observed provider state) is stored so a later
+ * status check can find and continue this exact job.
+ *
+ * Guarded on status = "processing" so a cancelled or finished row can never
+ * be pulled back into a waiting state.
+ */
+export async function markProcessingAsync(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null,
+  job: { providerJob: PersistedProviderJob; provider: string; workflow: string; isMock: boolean }
+): Promise<Record<string, unknown>> {
+  const merged = mergeOrchestrationMetadata(existingMetadata, {
+    stage: "waiting-provider",
+    provider: job.provider,
+    workflow: job.workflow,
+    isMock: job.isMock,
+    providerJob: job.providerJob,
+  });
+
+  const { data, error } = await admin
+    .from("generations")
+    .update({ metadata: merged })
+    .eq("id", generationId)
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "markProcessingAsync" },
+    });
+  }
+
+  if (!data) {
+    throw new OrchestrationError("DUPLICATE_EXECUTION", {
+      context: { generationId, operation: "markProcessingAsync" },
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * Persists the ambiguous-submission marker: a submit attempt ran but no
+ * reliable answer arrived, so an external provider job may or may not exist
+ * (Phase 6E.2 case C). Guarded on status = "processing" — the executor still
+ * holds the claim when this is written. While the marker is present,
+ * resetForRetry refuses to requeue the row, so no automatic path can submit
+ * a possible duplicate; Phase 7 reconciliation is the only thing allowed to
+ * clear it after proving with the provider that no job was created.
+ */
+export async function recordAmbiguousSubmission(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null,
+  attempt: PersistedAmbiguousSubmission
+): Promise<Record<string, unknown>> {
+  const merged = mergeOrchestrationMetadata(existingMetadata, {
+    ambiguousSubmission: attempt,
+  });
+
+  const { data, error } = await admin
+    .from("generations")
+    .update({ metadata: merged })
+    .eq("id", generationId)
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "recordAmbiguousSubmission" },
+    });
+  }
+
+  if (!data) {
+    throw new OrchestrationError("DUPLICATE_EXECUTION", {
+      context: { generationId, operation: "recordAmbiguousSubmission" },
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * How long one finalization attempt may hold the single-flight lease before
+ * a later checker may assume it crashed and take over. Deliberately longer
+ * than any legitimate download+upload (the Trigger.dev task itself is capped
+ * at 300s), so a live finalizer is never preempted — while a hard-crashed
+ * one cannot deadlock the job forever.
+ */
+const FINALIZATION_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Reads the finalization lease out of a metadata snapshot. Returns null for
+ * an absent, null, or non-string value — the same three cases the `->>`
+ * SQL extraction maps to NULL, so the read and the predicate agree.
+ */
+function readFinalizeClaimedAt(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const orchestration = (metadata as Record<string, unknown>).orchestration;
+  if (!orchestration || typeof orchestration !== "object") return null;
+  const value = (orchestration as Record<string, unknown>).finalizeClaimedAt;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Single-flight claim on the finalization tail (Phase 6F.4). Exactly one of
+ * several concurrent "provider says completed" observations may run
+ * download → upload → complete; the others fail this compare-and-set and
+ * must report the row as still processing instead of uploading a second
+ * copy of the same outputs.
+ *
+ * The predicate admits a claim only when the row is still "processing" AND
+ * no live lease exists: finalizeClaimedAt absent, null, or older than the
+ * lease window. `->>` extraction maps both a missing key and a JSON null to
+ * SQL NULL, and ISO-8601 UTC timestamps compare correctly as strings.
+ */
+export async function claimFinalization(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null
+): Promise<Record<string, unknown>> {
+  const cutoff = new Date(Date.now() - FINALIZATION_LEASE_MS).toISOString();
+  const merged = mergeOrchestrationMetadata(existingMetadata, {
+    finalizeClaimedAt: new Date().toISOString(),
+  });
+
+  const { data, error } = await admin
+    .from("generations")
+    .update({ metadata: merged })
+    .eq("id", generationId)
+    .eq("status", "processing")
+    .or(
+      `metadata->orchestration->>finalizeClaimedAt.is.null,metadata->orchestration->>finalizeClaimedAt.lt.${cutoff}`
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "claimFinalization" },
+    });
+  }
+
+  if (!data) {
+    // Another checker holds a live lease, or the row left "processing".
+    throw new OrchestrationError("DUPLICATE_EXECUTION", {
+      context: { generationId, operation: "claimFinalization" },
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * Updates the persisted provider-job state after one status check —
+ * observed provider state, check timestamp, check count. Status and stage
+ * are untouched; the row must still be "processing".
+ *
+ * `releaseFinalizeClaim` additionally clears the finalization lease in the
+ * same write — used when a finalization attempt failed and the next checker
+ * must be allowed to claim the tail again. Callers may pass it ONLY when
+ * they themselves hold the lease; releasing another finalizer's live lease
+ * would reopen the duplicate-upload window.
+ */
+export async function recordAsyncStatusCheck(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null,
+  providerJob: PersistedProviderJob,
+  options?: { releaseFinalizeClaim?: boolean }
+): Promise<Record<string, unknown>> {
+  const merged = mergeOrchestrationMetadata(
+    existingMetadata,
+    options?.releaseFinalizeClaim
+      ? { providerJob, finalizeClaimedAt: null }
+      : { providerJob }
+  );
+
+  // Lease compare-and-set. PostgREST replaces the whole metadata JSON with
+  // the value built above, and that value comes from the CALLER'S snapshot —
+  // so without this predicate a checker whose snapshot predates a
+  // concurrent finalizer's claim would silently erase that live lease, let a
+  // third checker claim the tail, and produce exactly the duplicate
+  // download/upload the lease exists to prevent. Requiring the stored lease
+  // to still match what the caller saw makes a stale write lose instead of
+  // clobber; the caller reports the row as still processing and checks again.
+  const seenLease = readFinalizeClaimedAt(existingMetadata);
+
+  let query = admin
+    .from("generations")
+    .update({ metadata: merged })
+    .eq("id", generationId)
+    .eq("status", "processing");
+
+  query =
+    seenLease === null
+      ? query.is("metadata->orchestration->>finalizeClaimedAt", null)
+      : query.eq("metadata->orchestration->>finalizeClaimedAt", seenLease);
+
+  const { data, error } = await query.select("id").maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "recordAsyncStatusCheck" },
+    });
+  }
+
+  if (!data) {
+    throw new OrchestrationError("DUPLICATE_EXECUTION", {
+      context: { generationId, operation: "recordAsyncStatusCheck" },
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * Records that automatic continuation stopped polling an async job that had
+ * not reached a terminal state (Phase 6G.5).
+ *
+ * Deliberately conservative about what it does NOT do: it does not change
+ * `status`, does not touch providerJob or ambiguousSubmission, and does not
+ * mark the generation failed. Cinefield giving up on polling says nothing
+ * about the external job, which may still be running and may already have
+ * been billed — declaring it failed would be a lie about the provider and
+ * would destroy the very evidence Phase 7 reconciliation needs. The row
+ * therefore stays in the safest existing state ("processing") and gains only
+ * a safe marker; no new DB status is introduced for this.
+ *
+ * Guarded on status = "processing" plus the finalization-lease compare-and-
+ * set, for the same reason as recordAsyncStatusCheck: the metadata column is
+ * replaced wholesale, so a stale write must lose rather than erase another
+ * worker's live lease. Returns false instead of throwing when the write does
+ * not apply — the caller is already stopping and has nothing to recover.
+ */
+export async function recordContinuationHalt(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null,
+  halt: PersistedContinuationHalt
+): Promise<boolean> {
+  const merged = mergeOrchestrationMetadata(existingMetadata, { continuation: halt });
+  const seenLease = readFinalizeClaimedAt(existingMetadata);
+
+  let query = admin
+    .from("generations")
+    .update({ metadata: merged })
+    .eq("id", generationId)
+    .eq("status", "processing");
+
+  query =
+    seenLease === null
+      ? query.is("metadata->orchestration->>finalizeClaimedAt", null)
+      : query.eq("metadata->orchestration->>finalizeClaimedAt", seenLease);
+
+  try {
+    const { data } = await query.select("id").maybeSingle();
+    return data !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cancels a generation that has not finished. Atomic compare-and-set from
+ * the only two states cancellation is legal from — queued (never submitted)
+ * and processing (possibly waiting on a provider job). Terminal rows are
+ * untouchable: completed/failed/cancelled all fail the predicate, and the
+ * matching guards on markCompleted/markFailed mean a stale provider
+ * completion arriving AFTER a cancellation can never overwrite it.
+ *
+ * No UI calls this yet; it exists so the future cancel flow (user cancels →
+ * row cancelled → transport may call provider.cancel()) has a safe writer.
+ * Returns true when this call performed the cancellation.
+ */
+export async function markCancelled(
+  admin: SupabaseClient,
+  generationId: string,
+  existingMetadata: Record<string, unknown> | null
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("generations")
+    .update({
+      status: "cancelled",
+      completed_at: new Date().toISOString(),
+      metadata: mergeOrchestrationMetadata(existingMetadata, { stage: "cancelled" }),
+    })
+    .eq("id", generationId)
+    .in("status", ["queued", "processing"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { generationId, operation: "markCancelled" },
+    });
+  }
+
+  return data !== null;
+}
+
+/**
+ * Typed read of the persisted provider-job state out of a generations
+ * metadata JSON. Returns null when the row never ran an async provider (or
+ * the state is malformed) — callers must treat that as "nothing to continue".
+ */
+export function readPersistedProviderJob(
+  metadata: Record<string, unknown> | null | undefined
+): PersistedProviderJob | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const orchestration = (metadata as Record<string, unknown>).orchestration;
+  if (!orchestration || typeof orchestration !== "object") return null;
+  const job = (orchestration as Record<string, unknown>).providerJob;
+  if (!job || typeof job !== "object") return null;
+
+  const candidate = job as Record<string, unknown>;
+  const id = candidate.id;
+  const provider = candidate.provider;
+  const state = candidate.state;
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (typeof provider !== "string" || provider.length === 0) return null;
+  if (
+    state !== "queued" &&
+    state !== "processing" &&
+    state !== "completed" &&
+    state !== "failed"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    provider,
+    state,
+    lastCheckedAt:
+      typeof candidate.lastCheckedAt === "string"
+        ? candidate.lastCheckedAt
+        : new Date(0).toISOString(),
+    checkCount:
+      typeof candidate.checkCount === "number" && Number.isFinite(candidate.checkCount)
+        ? candidate.checkCount
+        : 0,
+    lastCheckSource:
+      candidate.lastCheckSource === "poll" ||
+      candidate.lastCheckSource === "webhook" ||
+      candidate.lastCheckSource === "websocket"
+        ? candidate.lastCheckSource
+        : undefined,
+    lastCheckError:
+      typeof candidate.lastCheckError === "string" && candidate.lastCheckError.length > 0
+        ? candidate.lastCheckError
+        : undefined,
+    resume:
+      candidate.resume && typeof candidate.resume === "object"
+        ? (candidate.resume as Record<string, unknown>)
+        : undefined,
+  };
+}
+
+/**
+ * Finds the generation that owns an external provider job, by matching the
+ * PERSISTED (provider, providerJobId) pair on the row itself.
+ *
+ * This is the correlation step a webhook or WebSocket event needs: an
+ * inbound event names an external job, and only Cinefield's own persisted
+ * evidence can say which generation — and therefore which user — that job
+ * belongs to. The owner is returned FROM THE ROW and must never be taken
+ * from the event, so an event can never nominate a user or reach a
+ * generation whose stored job id does not match.
+ *
+ * Returns null when nothing matches: the event is then for a job Cinefield
+ * does not know about and must be rejected, not acted upon.
+ */
+export async function findGenerationByProviderJob(
+  admin: SupabaseClient,
+  provider: string,
+  providerJobId: string
+): Promise<{ generationId: string; clerkUserId: string; status: string } | null> {
+  const { data, error } = await admin
+    .from("generations")
+    .select("id, clerk_user_id, status")
+    .eq("metadata->orchestration->providerJob->>provider", provider)
+    .eq("metadata->orchestration->providerJob->>id", providerJobId)
+    .limit(2);
+
+  if (error || !data || data.length !== 1) {
+    // Zero matches (unknown job) and — defensively — more than one match
+    // (ambiguous correlation) are both refusals rather than guesses.
+    return null;
+  }
+
+  const row = data[0] as { id: string; clerk_user_id: string; status: string };
+  return { generationId: row.id, clerkUserId: row.clerk_user_id, status: row.status };
+}
+
+/**
+ * Answers the one question duplicate/double-billing protection needs: what
+ * does Cinefield already know about an external provider job for this
+ * generation (Phase 6E.1)?
+ *
+ * A persisted provider job is the strongest evidence and always wins; an
+ * ambiguous-submission marker means an attempt's outcome is unknown; only
+ * when neither exists is there provably nothing. Phase 7 failover reads
+ * this same evidence to ask "did provider A already start this job?" before
+ * it may ever try provider B.
+ */
+export function readSubmissionEvidence(
+  metadata: Record<string, unknown> | null | undefined
+): SubmissionEvidence {
+  const job = readPersistedProviderJob(metadata);
+  if (job) return { kind: "job", job };
+
+  if (metadata && typeof metadata === "object") {
+    const orchestration = (metadata as Record<string, unknown>).orchestration;
+    if (orchestration && typeof orchestration === "object") {
+      const attempt = (orchestration as Record<string, unknown>).ambiguousSubmission;
+      if (attempt && typeof attempt === "object") {
+        const candidate = attempt as Record<string, unknown>;
+        if (typeof candidate.provider === "string" && candidate.provider.length > 0) {
+          return {
+            kind: "ambiguous",
+            attempt: {
+              provider: candidate.provider,
+              attemptedAt:
+                typeof candidate.attemptedAt === "string"
+                  ? candidate.attemptedAt
+                  : new Date(0).toISOString(),
+              errorCode:
+                typeof candidate.errorCode === "string" && candidate.errorCode.length > 0
+                  ? candidate.errorCode
+                  : "PROVIDER_SUBMISSION_UNKNOWN",
+            },
+          };
+        }
+      }
+    }
+  }
+
+  return { kind: "none" };
 }
 
 /**
@@ -163,6 +655,16 @@ export async function markCompleted(
  * nothing matches, so without the `.select()` round-trip below this would
  * silently no-op and the next attempt would fail with DUPLICATE_EXECUTION —
  * which is precisely the defect this contract exists to prevent.
+ *
+ * Phase 6E.3 adds the safe-resubmission proof directly to the predicate: a
+ * requeue leads to a NEW provider submit, so it is allowed only when the
+ * row's own persisted evidence proves no external job can exist — no
+ * providerJob (a persisted job id is strong evidence the job is real) and
+ * no ambiguousSubmission marker (an unanswered attempt may have created
+ * one). The retryable flag alone is no longer sufficient: even if some
+ * future writer set it incorrectly, the evidence predicates keep a
+ * double-billed resubmission impossible. `->>` maps a missing key to SQL
+ * NULL, which is what `.is(..., null)` matches.
  */
 export async function resetForRetry(
   admin: SupabaseClient,
@@ -183,6 +685,8 @@ export async function resetForRetry(
     .eq("id", generationId)
     .eq("status", "failed")
     .eq("metadata->orchestration->>retryable", "true")
+    .is("metadata->orchestration->>providerJob", null)
+    .is("metadata->orchestration->>ambiguousSubmission", null)
     .select("id")
     .maybeSingle();
 
@@ -198,12 +702,33 @@ export async function resetForRetry(
 /**
  * Best-effort failure recording. Never throws — it runs inside a catch block
  * and must not mask the original error.
+ *
+ * Guarded on status = "processing": every legitimate failure happens while an
+ * execution holds the claim. Without the guard, a failure raised BECAUSE the
+ * row already reached a terminal state (e.g. claimGeneration's
+ * DUPLICATE_EXECUTION on an already-completed generation, or an async checker
+ * losing a race to a concurrent completion) would drag completed/cancelled
+ * back to failed — exactly the invalid transitions this module must prevent.
+ * A zero-row match is silent success by design.
  */
 export async function markFailed(
   admin: SupabaseClient,
   generationId: string,
   existingMetadata: Record<string, unknown> | null,
-  failure: { userMessage: string; errorCode: string; retryable: boolean }
+  failure: {
+    userMessage: string;
+    errorCode: string;
+    retryable: boolean;
+    /**
+     * Provider-job evidence to persist alongside the failure when the caller
+     * learned of an external job that is NOT yet in the metadata — e.g. a
+     * sync submission whose later download/upload failed. Callers pass this
+     * only when nothing richer is persisted, so it never overwrites the
+     * continuation's own job state. This is what lets Phase 7 see "a job
+     * already exists" on a failed row before considering another provider.
+     */
+    providerJob?: PersistedProviderJob;
+  }
 ): Promise<void> {
   try {
     await admin
@@ -216,9 +741,11 @@ export async function markFailed(
           stage: "failed",
           errorCode: failure.errorCode,
           retryable: failure.retryable,
+          ...(failure.providerJob ? { providerJob: failure.providerJob } : {}),
         }),
       })
-      .eq("id", generationId);
+      .eq("id", generationId)
+      .eq("status", "processing");
   } catch {
     // Swallow: the caller is already reporting the original failure.
   }

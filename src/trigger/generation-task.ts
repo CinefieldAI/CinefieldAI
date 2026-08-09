@@ -3,6 +3,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { isRetryable, toOrchestrationError } from "@/lib/orchestration/errors";
 import { executeGeneration } from "@/lib/orchestration/orchestrator";
 import { resetForRetry } from "@/lib/orchestration/status-manager";
+import { asyncContinuationTask } from "./async-continuation-task";
 
 /**
  * Cinefield's one generic background generation task.
@@ -33,6 +34,50 @@ export const generationTask = task({
         generationId: payload.generationId,
         clerkUserId: payload.clerkUserId,
       });
+      // status "completed": the sync path finished, outputs are in Storage.
+      //
+      // status "processing": an ASYNC provider accepted the job — its external
+      // job id and state are persisted on the row (metadata.orchestration
+      // .providerJob) and this run ends SUCCESSFULLY on purpose. Returning
+      // success (instead of waiting or throwing) is what keeps Trigger.dev's
+      // retry machinery from re-running executeGeneration and submitting the
+      // same job to the provider a second time.
+      //
+      // The waiting is handed to a SEPARATE controller run rather than done
+      // here, so this run's success (and therefore its "do not retry the
+      // submission" meaning) is recorded the moment the provider accepts.
+      // The controller can only check, never submit.
+      if (result.status === "processing") {
+        // idempotencyKey scopes the chain to this generation: a duplicate
+        // dispatch (this task retried, a webhook also nudging, a manual
+        // re-run) attaches to the existing controller instead of starting a
+        // second polling chain against the same provider job.
+        //
+        // Dispatch failure is swallowed on purpose. The provider job is
+        // already running and fully described on the row; throwing here
+        // would mark a healthy async generation failed, and — worse — a
+        // retry of THIS task would re-enter executeGeneration. The row
+        // simply stays "processing" until another transport (a later
+        // dispatch, or the Phase 6F webhook route) continues it.
+        try {
+          await asyncContinuationTask.trigger(
+            { generationId: payload.generationId, clerkUserId: payload.clerkUserId },
+            {
+              idempotencyKey: `continuation-${payload.generationId}`,
+              idempotencyKeyTTL: "24h",
+            }
+          );
+        } catch {
+          console.warn(
+            "[cinefield:orchestration]",
+            JSON.stringify({
+              generationId: payload.generationId,
+              result: "continuation_dispatch_failed",
+            })
+          );
+        }
+      }
+
       return { generationId: result.generationId, status: result.status };
     } catch (caught) {
       const error = toOrchestrationError(caught);
@@ -77,8 +122,13 @@ export const generationTask = task({
 
       if (!didReset) {
         // No eligible row was reset: the generation completed, was
-        // cancelled, is owned by another execution, or its failure was not
-        // marked retryable. Any of those make a retry incorrect.
+        // cancelled, is owned by another execution, its failure was not
+        // marked retryable, or its persisted evidence says an external
+        // provider job may already exist (a providerJob record or an
+        // ambiguous-submission marker — Phase 6E). Any of those make a
+        // retry incorrect: a requeue would run submit() again, and with job
+        // evidence present that could start a second, double-billed
+        // provider job. Aborting here IS the duplicate protection working.
         throw new AbortTaskRunError(`${error.code}: generation is not eligible for retry`);
       }
 

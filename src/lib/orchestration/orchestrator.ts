@@ -6,20 +6,43 @@ import {
 } from "@/lib/supabase/supabaseAdmin";
 import type { Generation, Project } from "@/types/database";
 import { validateCapabilities } from "./capability-validator";
-import { OrchestrationError, isRetryable, toOrchestrationError } from "./errors";
+import {
+  OrchestrationError,
+  isRetryable,
+  provesNoProviderJob,
+  toOrchestrationError,
+} from "./errors";
 import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
 import { getProviderAdapter } from "./provider-registry";
+import type { ProviderAdapter } from "./providers/provider-adapter";
 import { releaseFalResult } from "./providers/fal-provider";
 import { registerMockRequest, releaseMockRequest } from "./providers/mock-provider";
-import { claimGeneration, markCompleted, markFailed, setStage } from "./status-manager";
+import {
+  claimFinalization,
+  claimGeneration,
+  markCompleted,
+  markFailed,
+  markProcessingAsync,
+  readPersistedProviderJob,
+  readSubmissionEvidence,
+  recordAmbiguousSubmission,
+  recordAsyncStatusCheck,
+  setStage,
+} from "./status-manager";
 import { resolveWorkflow } from "./workflow-router";
 import type {
   GenerationSettings,
   NormalizedGenerationInput,
   NormalizedGenerationRequest,
   OrchestrationResult,
+  PersistedProviderJob,
+  ProviderExecutionContext,
+  ProviderStatusResult,
+  ProviderSubmission,
+  TransportSource,
+  WorkflowType,
 } from "./types";
 
 /**
@@ -210,8 +233,94 @@ export async function executeGeneration(params: {
 
   let metadata = existingMetadata;
   let workflowForLog: string | undefined;
+  // What this execution knows about an external provider job (Phase 6E):
+  //   "none"    → provably no job; a failure may be requeued per the normal
+  //               retry classification.
+  //   "unknown" → a submit attempt got no reliable answer; the job may
+  //               already exist, so every failure is recorded non-retryable
+  //               and the persisted marker blocks resetForRetry until
+  //               Phase 7 reconciles with the provider.
+  //   "job"     → the provider returned a job id (sync or async alike);
+  //               submitting again would start a second, double-billed job,
+  //               so failures are non-retryable from that moment on.
+  let submissionEvidence: "none" | "unknown" | "job" = "none";
+  // The submission the adapter returned, kept for the failure path so sync
+  // job evidence can be persisted for Phase 7 (id/provider/state only —
+  // never resume data, which is not vetted for the sync case).
+  let acceptedSubmission: ProviderSubmission | null = null;
 
   try {
+    // ---- Duplicate-job / double-billing guard (Phase 6E) -------------------
+    // claimGeneration only proves the row WAS "queued"; it does not prove no
+    // external provider job exists — a requeued row keeps its orchestration
+    // metadata. A persisted provider job is strong evidence the job is real,
+    // so this generation must never reach submit() again.
+    const priorEvidence = readSubmissionEvidence(existingMetadata);
+
+    if (priorEvidence.kind === "job") {
+      // Continue the existing job instead of submitting a duplicate: re-arm
+      // the waiting state and hand it back to the continuation, which
+      // reconciles by status check (free) rather than by resubmission
+      // (billed). This also covers a persisted state of "completed" (the
+      // next check finalizes) and "failed" (the next check confirms with the
+      // provider and terminally fails the row).
+      submissionEvidence = "job";
+
+      const orchestrationMeta =
+        typeof existingMetadata.orchestration === "object" &&
+        existingMetadata.orchestration !== null
+          ? (existingMetadata.orchestration as Record<string, unknown>)
+          : {};
+      const persistedWorkflow =
+        typeof orchestrationMeta.workflow === "string"
+          ? (orchestrationMeta.workflow as WorkflowType)
+          : resolveWorkflow(model, []);
+      workflowForLog = persistedWorkflow;
+
+      metadata = await markProcessingAsync(admin, generationId, metadata, {
+        provider: priorEvidence.job.provider,
+        workflow: persistedWorkflow,
+        isMock: model.isMock,
+        providerJob: priorEvidence.job,
+      });
+
+      log({
+        generationId,
+        provider: priorEvidence.job.provider,
+        modelId: model.id,
+        workflow: persistedWorkflow,
+        stage: "waiting-provider",
+        durationMs: Date.now() - startedAt,
+        result: "resumed_existing_job",
+      });
+
+      return {
+        generationId,
+        status: "processing",
+        workflow: persistedWorkflow,
+        provider: priorEvidence.job.provider,
+        modelId: model.id,
+        outputs: [],
+        isMock: model.isMock,
+      };
+    }
+
+    if (priorEvidence.kind === "ambiguous") {
+      // A previous submit attempt got no reliable answer — an external job
+      // may already exist, but with no job id there is nothing to continue
+      // and submitting again risks a duplicate charge. Fail closed; Phase 7
+      // reconciliation must prove no job exists (and clear the marker)
+      // before this generation may submit again.
+      submissionEvidence = "unknown";
+      throw new OrchestrationError("PROVIDER_SUBMISSION_UNKNOWN", {
+        context: {
+          generationId,
+          provider: priorEvidence.attempt.provider,
+          reason: "prior_submission_outcome_unknown",
+        },
+      });
+    }
+
     // ---- Normalize + route ------------------------------------------------
     const { request: partialRequest, inputs } = normalizeRequest({
       generation,
@@ -250,7 +359,46 @@ export async function executeGeneration(params: {
       registerMockRequest(request);
     }
 
-    const submission = await adapter.submit(request, context);
+    let submission: ProviderSubmission;
+    try {
+      submission = await adapter.submit(request, context);
+    } catch (caught) {
+      const error = toOrchestrationError(caught);
+
+      // Fail closed: the submit window is ambiguous unless the error code
+      // proves no job was created. A mock provider is exempt — it makes no
+      // external calls, so no external job (and no charge) can exist no
+      // matter which error its test modes raise. Without that exemption the
+      // zero-cost "retryable-failure" mock mode would permanently brick the
+      // row with a marker only Phase 7 could clear.
+      if (!model.isMock && !provesNoProviderJob(error)) {
+        // The submit window closed without a reliable answer: the provider
+        // may or may not have created (and started billing) a job — Phase
+        // 6E.2 case C. Record that uncertainty; even if the marker write
+        // itself fails, the in-memory evidence below keeps this failure
+        // non-retryable either way.
+        submissionEvidence = "unknown";
+        try {
+          metadata = await recordAmbiguousSubmission(admin, generationId, metadata, {
+            provider: model.providerId,
+            attemptedAt: new Date().toISOString(),
+            errorCode: error.code,
+          });
+        } catch {
+          // Best effort — the outer catch still records retryable:false.
+        }
+      }
+
+      throw error;
+    }
+
+    // The adapter answered. A returned job id means an external job now
+    // exists in SOME state — from here on, no failure may requeue this row
+    // into a second submit(), sync and async alike (Phase 6E).
+    if (submission.providerJobId) {
+      submissionEvidence = "job";
+      acceptedSubmission = submission;
+    }
 
     if (submission.status === "failed") {
       throw new OrchestrationError("PROVIDER_FAILED", {
@@ -258,49 +406,86 @@ export async function executeGeneration(params: {
       });
     }
 
-    // This phase supports synchronous providers only. An async provider would
-    // return queued/processing here and be picked up by a future queue worker.
+    // ---- Async branch ------------------------------------------------------
+    // The provider accepted the job and will finish it later. Persist the
+    // provider-neutral job state (external job id + last observed state) into
+    // the row's metadata and return control immediately: no browser request
+    // stays open and no API loop polls here. A background continuation
+    // (checkAsyncGeneration) picks the job up from the persisted state.
     if (submission.status !== "completed") {
-      throw new OrchestrationError("INTERNAL_ERROR", {
-        context: { generationId, reason: "async_provider_not_supported_yet" },
-        userMessage: "Asynchronous providers are not supported yet.",
+      if (!submission.providerJobId) {
+        // The provider ACCEPTED the job asynchronously but the adapter
+        // returned no job id — the job may exist, yet it can never be
+        // checked. That is an ambiguous submission, not a definitive
+        // failure: record it and fail closed (Phase 6E.2).
+        submissionEvidence = "unknown";
+        try {
+          metadata = await recordAmbiguousSubmission(admin, generationId, metadata, {
+            provider: model.providerId,
+            attemptedAt: new Date().toISOString(),
+            errorCode: "PROVIDER_SUBMISSION_UNKNOWN",
+          });
+        } catch {
+          // Best effort — the outer catch still records retryable:false.
+        }
+        throw new OrchestrationError("PROVIDER_SUBMISSION_UNKNOWN", {
+          context: {
+            generationId,
+            provider: model.providerId,
+            reason: "async_submission_missing_job_id",
+          },
+          userMessage: "The provider did not return a job identifier.",
+        });
+      }
+
+      metadata = await markProcessingAsync(admin, generationId, metadata, {
+        provider: model.providerId,
+        workflow,
+        isMock: model.isMock,
+        providerJob: {
+          id: submission.providerJobId,
+          provider: submission.provider,
+          state: submission.status,
+          lastCheckedAt: new Date().toISOString(),
+          checkCount: 0,
+          resume: submission.metadata,
+        },
       });
+
+      log({
+        generationId,
+        provider: model.providerId,
+        modelId: model.id,
+        workflow,
+        stage: "waiting-provider",
+        durationMs: Date.now() - startedAt,
+        result: "async_started",
+      });
+
+      return {
+        generationId,
+        status: "processing",
+        workflow,
+        provider: model.providerId,
+        modelId: model.id,
+        outputs: [],
+        isMock: model.isMock,
+      };
     }
 
-    if (!adapter.getResult) {
-      throw new OrchestrationError("INTERNAL_ERROR", {
-        context: { providerId: model.providerId, reason: "adapter_missing_getResult" },
-      });
-    }
-
-    // ---- Collect + normalize output ---------------------------------------
-    metadata = await setStage(admin, generationId, metadata, { stage: "downloading" });
-
-    const rawOutputs = await adapter.getResult(submission, context);
-    const resolvedOutputs = await normalizeOutputs(rawOutputs);
-
-    // ---- Upload -----------------------------------------------------------
-    metadata = await setStage(admin, generationId, metadata, { stage: "uploading" });
-
-    const uploaded = await uploadOutputs(admin, resolvedOutputs, {
+    // ---- Sync branch: collect, upload, finalize ----------------------------
+    const result = await collectAndFinalize({
+      admin,
+      adapter,
+      submission,
+      context,
+      generationId,
       clerkUserId,
       projectId: project.id,
-      generationId,
-    });
-
-    // ---- Finalize ---------------------------------------------------------
-    metadata = await setStage(admin, generationId, metadata, { stage: "finalizing" });
-
-    const primary = uploaded[0];
-    await markCompleted(admin, generationId, metadata, {
-      outputUrl: primary.storagePath,
-      thumbnailUrl: primary.type === "image" ? primary.storagePath : null,
-      provider: model.providerId,
+      model,
       workflow,
-      isMock: model.isMock,
+      metadata,
     });
-
-    const withSignedUrls = await attachSignedUrls(admin, uploaded);
 
     log({
       generationId,
@@ -312,22 +497,41 @@ export async function executeGeneration(params: {
       result: "success",
     });
 
-    return {
-      generationId,
-      status: "completed",
-      workflow,
-      provider: model.providerId,
-      modelId: model.id,
-      outputs: withSignedUrls,
-      isMock: model.isMock,
-    };
+    return result;
   } catch (caught) {
     const error = toOrchestrationError(caught);
+
+    // Submission retryability, not status-check retryability: this flag is
+    // what resetForRetry() reads to decide whether the row may be requeued
+    // for a NEW submit(). Once there is ANY evidence an external job may
+    // exist — a returned job id ("job") or an unanswered submit attempt
+    // ("unknown") — that answer is no, even for otherwise-transient error
+    // codes. resetForRetry independently re-proves this from the persisted
+    // evidence itself.
+    //
+    // For a SYNC submission that failed later in the chain (download,
+    // normalize, upload), the job evidence exists only in memory — persist
+    // its id/provider/state with the failure so Phase 7 can see the job
+    // before ever considering another provider. Async paths already have
+    // richer persisted job state, which must not be overwritten.
+    const syncEvidenceJob =
+      submissionEvidence === "job" &&
+      acceptedSubmission !== null &&
+      readPersistedProviderJob(metadata) === null
+        ? {
+            id: acceptedSubmission.providerJobId,
+            provider: acceptedSubmission.provider,
+            state: acceptedSubmission.status,
+            lastCheckedAt: new Date().toISOString(),
+            checkCount: 0,
+          }
+        : undefined;
 
     await markFailed(admin, generationId, metadata, {
       userMessage: error.userMessage,
       errorCode: error.code,
-      retryable: isRetryable(error),
+      retryable: submissionEvidence === "none" ? isRetryable(error) : false,
+      providerJob: syncEvidenceJob,
     });
 
     log({
@@ -352,4 +556,514 @@ export async function executeGeneration(params: {
       releaseFalResult(generationId);
     }
   }
+}
+
+/**
+ * The shared tail of every successful generation, sync or async:
+ * getResult → normalize → private Storage upload → completed row → signed
+ * URLs in memory. Sync submissions arrive here directly from
+ * executeGeneration; async ones arrive via checkAsyncGeneration once their
+ * provider reports completed. Identical storage/output semantics either way.
+ */
+async function collectAndFinalize(params: {
+  admin: SupabaseClient;
+  adapter: ProviderAdapter;
+  submission: ProviderSubmission;
+  context: ProviderExecutionContext;
+  generationId: string;
+  clerkUserId: string;
+  projectId: string;
+  model: ModelRegistryEntry;
+  workflow: WorkflowType;
+  metadata: Record<string, unknown>;
+}): Promise<OrchestrationResult> {
+  const {
+    admin,
+    adapter,
+    submission,
+    context,
+    generationId,
+    clerkUserId,
+    projectId,
+    model,
+    workflow,
+  } = params;
+  let metadata = params.metadata;
+
+  if (!adapter.getResult) {
+    throw new OrchestrationError("INTERNAL_ERROR", {
+      context: { providerId: model.providerId, reason: "adapter_missing_getResult" },
+    });
+  }
+
+  // ---- Collect + normalize output -----------------------------------------
+  metadata = await setStage(admin, generationId, metadata, { stage: "downloading" });
+
+  const rawOutputs = await adapter.getResult(submission, context);
+  const resolvedOutputs = await normalizeOutputs(rawOutputs);
+
+  // ---- Upload ---------------------------------------------------------------
+  metadata = await setStage(admin, generationId, metadata, { stage: "uploading" });
+
+  const uploaded = await uploadOutputs(admin, resolvedOutputs, {
+    clerkUserId,
+    projectId,
+    generationId,
+  });
+
+  // ---- Finalize -------------------------------------------------------------
+  metadata = await setStage(admin, generationId, metadata, { stage: "finalizing" });
+
+  const primary = uploaded[0];
+  await markCompleted(admin, generationId, metadata, {
+    outputUrl: primary.storagePath,
+    thumbnailUrl: primary.type === "image" ? primary.storagePath : null,
+    provider: model.providerId,
+    workflow,
+    isMock: model.isMock,
+  });
+
+  const withSignedUrls = await attachSignedUrls(admin, uploaded);
+
+  return {
+    generationId,
+    status: "completed",
+    workflow,
+    provider: model.providerId,
+    modelId: model.id,
+    outputs: withSignedUrls,
+    isMock: model.isMock,
+  };
+}
+
+/**
+ * One status check of an async generation — THE transport-neutral
+ * continuation entry point. A polling scheduler (Phase 6G) calls it between
+ * controlled waits; a future webhook route or WebSocket listener calls the
+ * same function when its provider signals. Nothing here knows or cares which
+ * transport triggered the check, and nothing here loops or resubmits.
+ *
+ * Contract:
+ *   RETURNS an OrchestrationResult only when the job's state is definitively
+ *   known — completed (finalized through the shared tail), still
+ *   processing/queued (observation recorded), or terminally failed (only
+ *   when the PROVIDER ITSELF reported the job failed, or the row already
+ *   reached a terminal state).
+ *
+ *   THROWS when the check could not be completed — transport errors,
+ *   provider 429/5xx/timeouts, auth/config problems, or a finalization step
+ *   that failed after the provider said completed. The row then deliberately
+ *   REMAINS "processing": the provider job is (as far as anyone knows) still
+ *   valid, so the correct reaction to a thrown error is to check again
+ *   later, never to fail the generation and never, ever to submit() again.
+ *   Because finalization failures also follow this rule, a crashed
+ *   download/upload simply re-runs on the next check.
+ *
+ * `expected` lets a transport assert what it believes it is delivering —
+ * e.g. a webhook carrying a provider name and job id — and is verified
+ * against the persisted state BEFORE any provider call. `source` is recorded
+ * with the observation for audit; the behavior is identical for all three.
+ */
+export async function checkAsyncGeneration(params: {
+  generationId: string;
+  clerkUserId: string;
+  source?: TransportSource;
+  expected?: { provider?: string; providerJobId?: string };
+}): Promise<OrchestrationResult> {
+  const { generationId, clerkUserId, expected } = params;
+  const source: TransportSource = params.source ?? "poll";
+  const startedAt = Date.now();
+
+  if (!isSupabaseAdminConfigured()) {
+    throw new OrchestrationError("PROVIDER_NOT_CONFIGURED", {
+      context: { reason: "supabase_admin_not_configured" },
+      userMessage: "The server is not fully configured.",
+    });
+  }
+
+  const admin: SupabaseClient = getSupabaseAdminClient();
+
+  // ---- Load + ownership (same contract as executeGeneration) ---------------
+  const { data: generationRow, error: generationError } = await admin
+    .from("generations")
+    .select("*")
+    .eq("id", generationId)
+    .maybeSingle();
+
+  if (generationError || !generationRow) {
+    throw new OrchestrationError("GENERATION_NOT_FOUND", { context: { generationId } });
+  }
+
+  const generation = generationRow as Generation;
+  if (generation.clerk_user_id !== clerkUserId) {
+    throw new OrchestrationError("FORBIDDEN", { context: { generationId } });
+  }
+
+  const model = findModel(generation.model);
+  if (!model) {
+    throw new OrchestrationError("UNKNOWN_MODEL", {
+      context: { generationId, modelId: generation.model },
+    });
+  }
+
+  const metadataRecord = (generation.metadata ?? {}) as Record<string, unknown>;
+  const orchestrationMeta =
+    typeof metadataRecord.orchestration === "object" && metadataRecord.orchestration !== null
+      ? (metadataRecord.orchestration as Record<string, unknown>)
+      : {};
+  const persistedWorkflow =
+    typeof orchestrationMeta.workflow === "string"
+      ? (orchestrationMeta.workflow as WorkflowType)
+      : resolveWorkflow(model, []);
+
+  const baseResult = {
+    generationId,
+    workflow: persistedWorkflow,
+    provider: model.providerId,
+    modelId: model.id,
+    outputs: [] as OrchestrationResult["outputs"],
+    isMock: model.isMock,
+  };
+
+  // Terminal rows are reported idempotently — a late webhook or a second
+  // checker after completion/cancellation/failure is a no-op, never a write.
+  if (generation.status === "completed") {
+    return { ...baseResult, status: "completed" };
+  }
+  if (generation.status === "failed" || generation.status === "cancelled") {
+    return { ...baseResult, status: "failed" };
+  }
+
+  if (generation.status !== "processing") {
+    // "queued": nothing has been submitted to a provider yet.
+    throw new OrchestrationError("INVALID_INPUT", {
+      context: { generationId, reason: "generation_not_waiting_on_provider" },
+      userMessage: "This generation is not waiting on a provider job.",
+    });
+  }
+
+  const job = readPersistedProviderJob(metadataRecord);
+  if (!job) {
+    throw new OrchestrationError("INVALID_INPUT", {
+      context: { generationId, reason: "no_persisted_provider_job" },
+      userMessage: "This generation has no provider job to check.",
+    });
+  }
+
+  // Transport assertion: a webhook/WS event names the job it is reporting;
+  // if that does not match the persisted job, the event belongs to something
+  // else and touching provider or row state on its behalf would be wrong.
+  if (
+    (expected?.provider !== undefined && expected.provider !== job.provider) ||
+    (expected?.providerJobId !== undefined && expected.providerJobId !== job.id)
+  ) {
+    throw new OrchestrationError("INVALID_INPUT", {
+      context: { generationId, reason: "provider_job_mismatch" },
+      userMessage: "The reported provider job does not match this generation.",
+    });
+  }
+
+  // The provider that actually started the job — not necessarily the one the
+  // registry would pick today — answers for it. This is the same correlation
+  // (generation + provider + external job id) Phase 7 will use to ask "did
+  // this provider already start work?" before attempting another provider.
+  const adapter = getProviderAdapter(job.provider);
+  if (!adapter.getStatus) {
+    throw new OrchestrationError("INTERNAL_ERROR", {
+      context: { providerId: job.provider, reason: "adapter_missing_getStatus" },
+    });
+  }
+
+  const submission: ProviderSubmission = {
+    providerJobId: job.id,
+    provider: job.provider,
+    status: job.state,
+    metadata: job.resume,
+  };
+  const context: ProviderExecutionContext = {
+    generationId,
+    clerkUserId,
+    projectId: generation.project_id,
+  };
+
+  let metadata = metadataRecord;
+
+  // ---- Ask the provider ----------------------------------------------------
+  // A failure HERE is a status-check failure, not a job failure: the provider
+  // job is still presumed live. Record the failed attempt (best effort, error
+  // code only) and rethrow; the row stays "processing" and the transport
+  // checks again later. markFailed is deliberately absent from this path.
+  let statusResult: ProviderStatusResult;
+  try {
+    statusResult = await adapter.getStatus(submission, context);
+  } catch (caught) {
+    const error = toOrchestrationError(caught);
+    await recordCheckFailure(admin, generationId, metadata, job, source, error.code);
+
+    log({
+      generationId,
+      provider: job.provider,
+      modelId: model.id,
+      workflow: persistedWorkflow,
+      stage: "waiting-provider",
+      durationMs: Date.now() - startedAt,
+      result: "check_failed",
+      errorCode: error.code,
+    });
+
+    throw error;
+  }
+
+  const observedJob: PersistedProviderJob = {
+    ...job,
+    state: statusResult.status,
+    lastCheckedAt: new Date().toISOString(),
+    checkCount: job.checkCount + 1,
+    lastCheckSource: source,
+    // A successful observation clears any earlier check-failure code.
+    lastCheckError: undefined,
+  };
+
+  // ---- Still running -------------------------------------------------------
+  if (statusResult.status === "queued" || statusResult.status === "processing") {
+    try {
+      metadata = await recordAsyncStatusCheck(admin, generationId, metadata, observedJob);
+    } catch (caught) {
+      return await resolveTerminalRace(admin, generationId, baseResult, caught);
+    }
+
+    log({
+      generationId,
+      provider: job.provider,
+      modelId: model.id,
+      workflow: persistedWorkflow,
+      stage: "waiting-provider",
+      durationMs: Date.now() - startedAt,
+      result: "async_pending",
+    });
+
+    return { ...baseResult, status: "processing" };
+  }
+
+  // ---- Provider reported the job failed ------------------------------------
+  // The single case in which a status check terminally fails the row. It is
+  // recorded with retryable:false — that flag means SUBMISSION retryability,
+  // and resetForRetry() reading false is exactly what guarantees no second
+  // submit() ever starts a duplicate provider job. Phase 7's failover will
+  // make its own decision from the persisted generation+provider+job id.
+  if (statusResult.status === "failed") {
+    const failure = new OrchestrationError("PROVIDER_FAILED", {
+      context: { generationId, provider: job.provider, reason: "provider_reported_failed" },
+    });
+
+    try {
+      metadata = await recordAsyncStatusCheck(admin, generationId, metadata, observedJob);
+    } catch (caught) {
+      return await resolveTerminalRace(admin, generationId, baseResult, caught);
+    }
+
+    await markFailed(admin, generationId, metadata, {
+      userMessage: failure.userMessage,
+      errorCode: failure.code,
+      retryable: false,
+    });
+
+    log({
+      generationId,
+      provider: job.provider,
+      modelId: model.id,
+      workflow: persistedWorkflow,
+      stage: "failed",
+      durationMs: Date.now() - startedAt,
+      result: "failure",
+      errorCode: failure.code,
+    });
+
+    return { ...baseResult, status: "failed" };
+  }
+
+  // ---- Provider says completed: same tail as the sync path -----------------
+  // Tracks whether THIS check holds the single-flight finalization lease, so
+  // the failure path below releases only a lease it actually owns — never a
+  // concurrent finalizer's.
+  let holdsFinalizeLease = false;
+
+  try {
+    metadata = await recordAsyncStatusCheck(admin, generationId, metadata, observedJob);
+
+    // Single-flight (Phase 6F.4): exactly one completion observation may run
+    // the download → upload → complete tail. Losing this claim is not an
+    // error — either another checker is finalizing right now (report the row
+    // as still processing; a later check will see the terminal state) or the
+    // row already went terminal (report that state idempotently).
+    try {
+      metadata = await claimFinalization(admin, generationId, metadata);
+      holdsFinalizeLease = true;
+    } catch (claimCaught) {
+      const claimError = toOrchestrationError(claimCaught);
+      if (claimError.code !== "DUPLICATE_EXECUTION") throw claimError;
+
+      const { data } = await admin
+        .from("generations")
+        .select("status")
+        .eq("id", generationId)
+        .maybeSingle();
+      const rowStatus = (data as { status?: string } | null)?.status;
+      if (rowStatus === "completed") {
+        return { ...baseResult, status: "completed" };
+      }
+      if (rowStatus === "failed" || rowStatus === "cancelled") {
+        return { ...baseResult, status: "failed" };
+      }
+
+      log({
+        generationId,
+        provider: job.provider,
+        modelId: model.id,
+        workflow: persistedWorkflow,
+        stage: "waiting-provider",
+        durationMs: Date.now() - startedAt,
+        result: "finalize_in_progress",
+      });
+
+      return { ...baseResult, status: "processing" };
+    }
+
+    const result = await collectAndFinalize({
+      admin,
+      adapter,
+      submission,
+      context,
+      generationId,
+      clerkUserId,
+      projectId: generation.project_id,
+      model,
+      workflow: persistedWorkflow,
+      metadata,
+    });
+
+    log({
+      generationId,
+      provider: job.provider,
+      modelId: model.id,
+      workflow: persistedWorkflow,
+      stage: "completed",
+      durationMs: Date.now() - startedAt,
+      result: "success",
+    });
+
+    return result;
+  } catch (caught) {
+    const error = toOrchestrationError(caught);
+
+    if (error.code === "DUPLICATE_EXECUTION") {
+      // Lost a race to a concurrent completion/cancellation — report the
+      // row's terminal state instead of failing the transport.
+      return await resolveTerminalRace(admin, generationId, baseResult, caught);
+    }
+
+    // Finalization failed AFTER the provider completed the job — a
+    // Cinefield-side problem (download, normalize, upload, DB). The provider
+    // result still exists under the same job id, so the row stays
+    // "processing" and the next check simply re-runs this idempotent tail.
+    // Failing the row here would discard a finished, possibly-paid job. The
+    // finalization lease this check took is released in the same write so
+    // the next checker may claim the tail again (Phase 6F.5) — retrying
+    // finalization only, never resubmitting.
+    await recordCheckFailure(admin, generationId, metadata, observedJob, source, error.code, {
+      releaseFinalizeClaim: holdsFinalizeLease,
+    });
+
+    log({
+      generationId,
+      provider: job.provider,
+      modelId: model.id,
+      workflow: persistedWorkflow,
+      stage: "waiting-provider",
+      durationMs: Date.now() - startedAt,
+      result: "finalize_failed",
+      errorCode: error.code,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Best-effort record of a failed status check: bumps checkCount, stamps the
+ * transport source and the orchestration error CODE (never a message or
+ * payload). Swallows its own failures — the original error is what matters.
+ *
+ * `releaseFinalizeClaim` is passed only by a caller that HOLDS the
+ * finalization lease and is abandoning the attempt, so the next checker can
+ * claim the tail again without waiting out the lease window.
+ */
+async function recordCheckFailure(
+  admin: SupabaseClient,
+  generationId: string,
+  metadata: Record<string, unknown>,
+  job: PersistedProviderJob,
+  source: TransportSource,
+  errorCode: string,
+  options?: { releaseFinalizeClaim?: boolean }
+): Promise<void> {
+  try {
+    await recordAsyncStatusCheck(
+      admin,
+      generationId,
+      metadata,
+      {
+        ...job,
+        lastCheckedAt: new Date().toISOString(),
+        checkCount: job.checkCount + 1,
+        lastCheckSource: source,
+        lastCheckError: errorCode,
+      },
+      options?.releaseFinalizeClaim ? { releaseFinalizeClaim: true } : undefined
+    );
+  } catch {
+    // Best effort only.
+  }
+}
+
+/**
+ * Resolves a DUPLICATE_EXECUTION raised because this check lost a race: the
+ * row left "processing", or a concurrent worker's finalization lease made
+ * this check's metadata write lose its compare-and-set. Re-reads the row and
+ * reports its state idempotently. Anything else is rethrown untouched.
+ */
+async function resolveTerminalRace(
+  admin: SupabaseClient,
+  generationId: string,
+  baseResult: Omit<OrchestrationResult, "status">,
+  caught: unknown
+): Promise<OrchestrationResult> {
+  const error = toOrchestrationError(caught);
+  if (error.code !== "DUPLICATE_EXECUTION") {
+    throw error;
+  }
+
+  const { data } = await admin
+    .from("generations")
+    .select("status")
+    .eq("id", generationId)
+    .maybeSingle();
+
+  const status = (data as { status?: string } | null)?.status;
+  if (status === "completed") {
+    return { ...baseResult, status: "completed" };
+  }
+  if (status === "failed" || status === "cancelled") {
+    return { ...baseResult, status: "failed" };
+  }
+  if (status === "processing") {
+    // Still processing and our write lost: another worker owns this job
+    // right now (it holds the finalization lease). That is not an error —
+    // the job is progressing under someone else, so report it as such and
+    // let the next check observe the outcome. Deliberately no write here:
+    // the whole point is not to touch state another worker owns.
+    return { ...baseResult, status: "processing" };
+  }
+
+  throw error;
 }

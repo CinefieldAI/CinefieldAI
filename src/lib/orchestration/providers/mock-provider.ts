@@ -1,5 +1,8 @@
 import "server-only";
+import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { OrchestrationError } from "../errors";
+import { findModel } from "../model-registry";
+import { readPersistedProviderJob } from "../status-manager";
 import { encodePng, paintMockCard } from "./png-encoder";
 import { encodeWav, synthesizeMockTone, wavDurationSeconds } from "./wav-encoder";
 import type { ProviderAdapter } from "./provider-adapter";
@@ -26,14 +29,50 @@ import type {
  * unrecognized values fall back to "success".
  */
 
-export type MockMode = "success" | "provider-failure" | "retryable-failure" | "missing-output";
+export type MockMode =
+  | "success"
+  | "provider-failure"
+  | "retryable-failure"
+  | "missing-output"
+  /**
+   * Async lifecycle test modes. submit() returns "processing" with a stable
+   * job id instead of finishing inline, so the generic async core
+   * (persist job → continuation → status checks → shared finalization) can be
+   * exercised end-to-end offline and at zero cost.
+   *
+   * Progression is driven by the PERSISTED providerJob.checkCount on the
+   * generation row — never by wall-clock time, randomness, or in-memory
+   * state — so it is deterministic and survives process and retry
+   * boundaries (the continuation runs in a different process than submit).
+   *
+   *   async-success: check 1 → processing, 2 → processing, 3 → completed
+   *   async-flaky:   check 1 → transient error, 2 → processing,
+   *                  3 → processing, 4 → completed
+   *   async-pending: never completes (exercises the polling ceiling)
+   */
+  | "async-success"
+  | "async-flaky"
+  | "async-pending";
 
 const VALID_MODES: ReadonlySet<string> = new Set<MockMode>([
   "success",
   "provider-failure",
   "retryable-failure",
   "missing-output",
+  "async-success",
+  "async-flaky",
+  "async-pending",
 ]);
+
+const ASYNC_MODES: ReadonlySet<string> = new Set<MockMode>([
+  "async-success",
+  "async-flaky",
+  "async-pending",
+]);
+
+export function isAsyncMockMode(mode: MockMode): boolean {
+  return ASYNC_MODES.has(mode);
+}
 
 export function resolveMockMode(metadata: Record<string, unknown> | null | undefined): MockMode {
   const raw = metadata?.mock_mode;
@@ -161,6 +200,18 @@ class MockProvider implements ProviderAdapter {
       });
     }
 
+    // Async test modes: accept the job and finish it later, exactly as a
+    // real long-running provider does. `metadata` becomes the persisted
+    // `resume` blob, so the mode travels with the job — no in-memory state.
+    if (isAsyncMockMode(mode)) {
+      return {
+        providerJobId: `mock-${request.generationId}`,
+        provider: this.providerId,
+        status: "processing",
+        metadata: { mock: true, mode },
+      };
+    }
+
     // Synchronous provider: the work is complete by the time submit resolves.
     return {
       providerJobId: `mock-${request.generationId}`,
@@ -172,17 +223,49 @@ class MockProvider implements ProviderAdapter {
 
   async getStatus(
     submission: ProviderSubmission,
-    _context: ProviderExecutionContext
+    context: ProviderExecutionContext
   ): Promise<ProviderStatusResult> {
-    void _context;
-    return { status: submission.status, progress: submission.status === "completed" ? 100 : 0 };
+    const mode = readResumeMode(submission.metadata);
+
+    if (!mode || !isAsyncMockMode(mode)) {
+      // Sync submissions carry their final state already.
+      return { status: submission.status, progress: submission.status === "completed" ? 100 : 0 };
+    }
+
+    // Deterministic progression from the PERSISTED check count — the value
+    // recorded by the core before this check, so it is identical no matter
+    // which process or transport asks.
+    const checksSoFar = await readPersistedCheckCount(context.generationId);
+
+    if (mode === "async-pending") {
+      return { status: "processing", progress: 10 };
+    }
+
+    if (mode === "async-flaky" && checksSoFar === 0) {
+      // A TRANSIENT status-check failure, not a job failure: the job is still
+      // live and the core must keep the row "processing" and check again.
+      throw new OrchestrationError("PROVIDER_TIMEOUT", {
+        context: { provider: "mock", mode, reason: "mock_transient_status_check" },
+      });
+    }
+
+    const completeAt = mode === "async-flaky" ? 3 : 2;
+    return checksSoFar >= completeAt
+      ? { status: "completed", progress: 100 }
+      : { status: "processing", progress: 50 };
   }
 
   async getResult(
     submission: ProviderSubmission,
     context: ProviderExecutionContext
   ): Promise<NormalizedOutput[]> {
-    const request = PENDING_REQUESTS.get(submission.providerJobId);
+    // The in-memory handoff only exists within a single sync execution. An
+    // async job is finalized by a later, separate process, so the request is
+    // rebuilt from the generation row itself when the map is empty.
+    const request =
+      PENDING_REQUESTS.get(submission.providerJobId) ??
+      (await rebuildRequestFromRow(context.generationId));
+
     if (!request) {
       throw new OrchestrationError("OUTPUT_MISSING", {
         context: { provider: "mock", generationId: context.generationId },
@@ -222,6 +305,93 @@ class MockProvider implements ProviderAdapter {
  * via releaseMockRequest() once the run finishes.
  */
 const PENDING_REQUESTS = new Map<string, NormalizedGenerationRequest>();
+
+/** Reads the async mode out of the persisted `resume` blob. */
+function readResumeMode(resume: Record<string, unknown> | undefined): MockMode | null {
+  const raw = resume?.mode;
+  return typeof raw === "string" && VALID_MODES.has(raw) ? (raw as MockMode) : null;
+}
+
+/**
+ * Number of status checks the core has already recorded for this job. Read
+ * straight from the persisted providerJob so mock progression is stable
+ * across processes, retries and transports. Mock-only: no production
+ * provider adapter reads Cinefield's own rows.
+ */
+async function readPersistedCheckCount(generationId: string): Promise<number> {
+  const admin = getSupabaseAdminClient();
+  const { data } = await admin
+    .from("generations")
+    .select("metadata")
+    .eq("id", generationId)
+    .maybeSingle();
+
+  const job = readPersistedProviderJob((data?.metadata ?? null) as Record<string, unknown> | null);
+  return job?.checkCount ?? 0;
+}
+
+/**
+ * Rebuilds the minimum request the mock renderers need, from the generation
+ * row plus the registry. Used only when an async job is finalized by a
+ * process that never ran submit(). Mock-only.
+ */
+async function rebuildRequestFromRow(
+  generationId: string
+): Promise<NormalizedGenerationRequest | null> {
+  const admin = getSupabaseAdminClient();
+  const { data } = await admin
+    .from("generations")
+    .select("*")
+    .eq("id", generationId)
+    .maybeSingle();
+
+  if (!data) return null;
+  const row = data as {
+    id: string;
+    clerk_user_id: string;
+    project_id: string;
+    model: string;
+    prompt: string;
+    metadata: Record<string, unknown> | null;
+  };
+
+  const model = findModel(row.model);
+  if (!model) return null;
+
+  const metadata = row.metadata ?? {};
+  const orchestration =
+    typeof metadata.orchestration === "object" && metadata.orchestration !== null
+      ? (metadata.orchestration as Record<string, unknown>)
+      : {};
+  const imageCount = typeof metadata.image_count === "string" ? metadata.image_count : undefined;
+  const parsedCount = imageCount
+    ? Number.parseInt(imageCount.split("/")[0] ?? "", 10)
+    : Number.NaN;
+
+  return {
+    generationId: row.id,
+    clerkUserId: row.clerk_user_id,
+    projectId: row.project_id,
+    modelId: row.model,
+    provider: model.providerId,
+    providerModelId: model.providerModelId,
+    generationType: model.generationType,
+    workflow:
+      typeof orchestration.workflow === "string"
+        ? (orchestration.workflow as NormalizedGenerationRequest["workflow"])
+        : "text-to-image",
+    prompt: row.prompt,
+    inputs: [],
+    settings: {
+      aspectRatio: typeof metadata.aspect_ratio === "string" ? metadata.aspect_ratio : undefined,
+      resolution: typeof metadata.resolution === "string" ? metadata.resolution : undefined,
+      outputCount: Number.isInteger(parsedCount) && parsedCount > 0 ? parsedCount : undefined,
+      voice: typeof metadata.voice === "string" ? metadata.voice : undefined,
+      language: typeof metadata.language === "string" ? metadata.language : undefined,
+      extra: metadata,
+    },
+  };
+}
 
 export function registerMockRequest(request: NormalizedGenerationRequest): void {
   PENDING_REQUESTS.set(`mock-${request.generationId}`, request);

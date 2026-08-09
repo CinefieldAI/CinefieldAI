@@ -25,6 +25,7 @@ export type OrchestrationErrorCode =
   | "PROVIDER_QUOTA_EXCEEDED"
   | "PROVIDER_TIMEOUT"
   | "PROVIDER_FAILED"
+  | "PROVIDER_SUBMISSION_UNKNOWN"
   | "OUTPUT_MISSING"
   | "OUTPUT_DOWNLOAD_FAILED"
   | "OUTPUT_VALIDATION_FAILED"
@@ -97,6 +98,15 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "Generation failed at the provider. Please try again.",
     status: 502,
     retryable: true,
+  },
+  // Deliberately NOT retryable: an unconfirmed submit may already have
+  // created a billable provider job, so an automatic resubmission could
+  // double-charge. Reconciliation (Phase 7) is the only safe way forward.
+  PROVIDER_SUBMISSION_UNKNOWN: {
+    message:
+      "The provider did not confirm whether this job started, so it will not be retried automatically.",
+    status: 502,
+    retryable: false,
   },
   OUTPUT_MISSING: { message: "The provider returned no output.", status: 502, retryable: true },
   OUTPUT_DOWNLOAD_FAILED: {
@@ -208,4 +218,56 @@ export function isRetryable(
   policy: RetryPolicy = DEFAULT_RETRY_POLICY
 ): boolean {
   return policy.retryableCodes.includes(error.code);
+}
+
+// ---- Ambiguous submission classification -----------------------------------
+// Applies to errors raised during the submit() window ONLY, and is
+// deliberately FAIL-CLOSED: an error is ambiguous unless its code positively
+// proves no external provider job was created.
+//
+// The inverse (an allowlist of "ambiguous" codes) is unsafe, because an
+// adapter's submit() window is not limited to the create-job request. A real
+// adapter may enqueue a job and then keep waiting on status/result inside the
+// same call — the fal adapter's client.subscribe() does exactly that — so a
+// generic-looking failure (a dropped socket, a 429 on a status poll, an
+// unparseable result payload) can be raised long AFTER a billable job exists.
+// Those all collapse into PROVIDER_FAILED / PROVIDER_RATE_LIMIT /
+// OUTPUT_MISSING, which say nothing about whether a job was created. Treating
+// them as "definitely not submitted" is precisely how a duplicate, double-
+// billed job gets started on retry.
+//
+// Only codes raised strictly BEFORE the provider could accept work — local
+// validation, missing configuration, and gate rejections that mean the
+// provider refused the request outright rather than starting it — prove
+// there is nothing to reconcile.
+const PROVES_NO_PROVIDER_JOB: OrchestrationErrorCode[] = [
+  // Never left Cinefield.
+  "PROVIDER_NOT_CONFIGURED",
+  "INVALID_INPUT",
+  "UNKNOWN_MODEL",
+  "MODEL_DISABLED",
+  "UNSUPPORTED_WORKFLOW",
+  "REQUIRED_INPUT_MISSING",
+  "UNSUPPORTED_INPUT_TYPE",
+  "CAPABILITY_NOT_SUPPORTED",
+  // The provider refused the request instead of starting work: no job, no
+  // charge. (A credentials rejection or an exhausted quota is a gate answer,
+  // not a partially-executed job.)
+  "PROVIDER_AUTH_ERROR",
+  "PROVIDER_QUOTA_EXCEEDED",
+  // Cinefield's own persistence/bookkeeping, raised around the provider call.
+  "DATABASE_UPDATE_FAILED",
+  "DUPLICATE_EXECUTION",
+];
+
+/**
+ * True when this submit-window error proves no external provider job can
+ * exist. Everything else must be treated as an ambiguous submission.
+ *
+ * NOTE for callers: a provider that cannot create external jobs at all (the
+ * mock provider) is exempt from ambiguity regardless of error code — that
+ * check belongs to the caller, which knows whether the model is a mock.
+ */
+export function provesNoProviderJob(error: OrchestrationError): boolean {
+  return PROVES_NO_PROVIDER_JOB.includes(error.code);
 }
