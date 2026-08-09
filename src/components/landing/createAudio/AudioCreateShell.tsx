@@ -8,9 +8,11 @@ import {
   ChevronRight,
   FileAudio,
   Filter,
+  ImageIcon,
   Info,
   Minus,
   Mic,
+  Music2,
   Play,
   Plus,
   RotateCcw,
@@ -93,7 +95,9 @@ export default function AudioCreateShell({
   onAudioModelIndexChange,
 }: AudioCreateShellProps) {
   const [script, setScript] = useState("");
-  const [batchSize, setBatchSize] = useState(4);
+  const [batchSize, setBatchSize] = useState(() =>
+    audioModelIndex === 0 ? 1 : 4,
+  );
   const [contentTab, setContentTab] = useState<"history" | "how-it-works">(
     "how-it-works",
   );
@@ -101,6 +105,9 @@ export default function AudioCreateShell({
   const [infoOpen, setInfoOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [saveSettings, setSaveSettings] = useState(false);
+  const [voiceDetails, setVoiceDetails] = useState("");
+  const [expressionIntensity, setExpressionIntensity] = useState(5);
+  const [mood, setMood] = useState(0);
   const [stability, setStability] = useState<
     (typeof STABILITY_OPTIONS)[number]["value"]
   >("Natural");
@@ -117,6 +124,7 @@ export default function AudioCreateShell({
   const floatingPanelRef = useRef<HTMLDivElement>(null);
 
   const model = AUDIO_MODELS[audioModelIndex] ?? AUDIO_MODELS[0];
+  const isSeedAudio = audioModelIndex === 0;
   const isElevenV3 = audioModelIndex === 1;
 
   const openFloatingPanel = (
@@ -212,19 +220,43 @@ export default function AudioCreateShell({
             className="relative flex h-40 shrink-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-[#202224] px-4 text-center transition-colors hover:border-white/20"
           >
             <span className="absolute right-1.5 top-1.5 rounded-xl bg-white/[0.05] px-2 py-1 text-[10px] font-medium text-zinc-400">
-              Required
+              {isSeedAudio ? "Optional" : "Required"}
             </span>
-            <span className="flex size-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)]">
-              <AudioLines className="size-4 text-zinc-300" />
-            </span>
+            {isSeedAudio ? (
+              <span className="flex items-center justify-center">
+                {[
+                  { label: "Voice", Icon: AudioLines },
+                  { label: "Audio", Icon: Music2 },
+                  { label: "Image", Icon: ImageIcon },
+                ].map(({ label, Icon }, index) => (
+                  <span
+                    key={label}
+                    aria-label={label}
+                    className={`flex size-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)] ${
+                      index < 2 ? "-mr-2" : ""
+                    }`}
+                  >
+                    <Icon className="size-4 text-zinc-300" />
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="flex size-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)]">
+                <AudioLines className="size-4 text-zinc-300" />
+              </span>
+            )}
             <span>
               <span className="block text-base font-semibold text-white">
-                {selectedVoice ?? "Pick a voice"}
+                {isSeedAudio
+                  ? "Upload media"
+                  : selectedVoice ?? "Pick a voice"}
               </span>
               <span className="mt-1 block truncate text-sm font-medium text-zinc-400">
-                {selectedVoice
-                  ? "Voice selected"
-                  : "Choose a preset or an uploaded voice"}
+                {isSeedAudio
+                  ? "Up to 3 Voices/Audios or Image"
+                  : selectedVoice
+                    ? "Voice selected"
+                    : "Choose a preset or an uploaded voice"}
               </span>
             </span>
           </button>
@@ -236,7 +268,10 @@ export default function AudioCreateShell({
                 type="button"
                 aria-label="Script information"
                 aria-expanded={infoOpen}
-                onClick={() => setInfoOpen((value) => !value)}
+                onMouseEnter={() => setInfoOpen(true)}
+                onMouseLeave={() => setInfoOpen(false)}
+                onFocus={() => setInfoOpen(true)}
+                onBlur={() => setInfoOpen(false)}
                 className="flex size-[18px] items-center justify-center rounded-full text-zinc-400 hover:text-white"
               >
                 <Info className="size-4" />
@@ -306,7 +341,32 @@ export default function AudioCreateShell({
             </div>
           </div>
 
-          {isElevenV3 && (
+          {isSeedAudio && (
+            <section className="relative flex shrink-0 flex-col gap-1 rounded-xl border border-white/[0.07] bg-[#202224] p-3 focus-within:border-white/15">
+              <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-xl bg-white/[0.05] px-2 py-1 text-[10px] font-medium text-zinc-400">
+                Optional
+              </span>
+              <label
+                htmlFor="audio-form-sidebar-voice-details"
+                className="text-sm font-medium text-zinc-400"
+              >
+                Voice details
+              </label>
+              <textarea
+                id="audio-form-sidebar-voice-details"
+                value={voiceDetails}
+                onChange={(event) => setVoiceDetails(event.target.value)}
+                maxLength={500}
+                placeholder="e.g. Young female voice with british accent, soft and loud. Excited, giggling"
+                className="h-[52px] resize-none overflow-y-auto bg-transparent pr-1 text-xs leading-[18px] text-white outline-none placeholder:text-zinc-400"
+              />
+              <span className="mt-0.5 self-end text-[10px] font-medium tabular-nums text-white/40">
+                {voiceDetails.length}/500
+              </span>
+            </section>
+          )}
+
+          {(isSeedAudio || isElevenV3) && (
             <div className="shrink-0">
               <button
                 type="button"
@@ -325,7 +385,184 @@ export default function AudioCreateShell({
                 />
               </button>
 
-              {advancedOpen && (
+              {advancedOpen && isSeedAudio && (
+                <div className="flex flex-col gap-2 pb-1 pt-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs text-zinc-400">
+                      Seed Audio 1.0 controls
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpressionIntensity(5);
+                        setMood(0);
+                        setSaveSettings(false);
+                      }}
+                      className="flex items-center gap-1 text-xs font-semibold text-white hover:text-[#df7b59]"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset
+                    </button>
+                  </div>
+
+                  <label className="relative flex h-12 cursor-pointer items-center justify-between overflow-hidden rounded-xl border border-white/[0.07] bg-[#202224] px-3 hover:border-white/15">
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 left-0 bg-white/[0.05]"
+                      style={{ width: `${expressionIntensity * 10}%` }}
+                    />
+                    {Array.from({ length: 9 }, (_, index) => (
+                      <span
+                        key={index}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-white/15"
+                        style={{ left: `${(index + 1) * 10}%` }}
+                      />
+                    ))}
+                    <span className="relative z-10 text-sm font-semibold text-white">
+                      Expression intensity
+                    </span>
+                    <span className="relative z-10 text-sm font-semibold tabular-nums text-white">
+                      {expressionIntensity}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-1/2 z-10 h-6 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-white/80"
+                      style={{ left: `${expressionIntensity * 10}%` }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={10}
+                      step={1}
+                      value={expressionIntensity}
+                      onChange={(event) =>
+                        setExpressionIntensity(Number(event.target.value))
+                      }
+                      aria-label="Expression intensity"
+                      className="absolute inset-0 z-20 size-full cursor-pointer opacity-0"
+                    />
+                  </label>
+
+                  <div className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-[#202224] p-3 hover:border-white/15">
+                    <div className="flex items-center gap-1 px-0.5">
+                      <span className="text-xs font-medium text-zinc-400">Mood</span>
+                      <span
+                        title="Move toward Angry, Neutral, or Happy"
+                        className="flex size-4 items-center justify-center text-zinc-400"
+                      >
+                        <Info className="size-3.5" />
+                      </span>
+                    </div>
+                    <label className="relative block h-7 cursor-pointer rounded-lg bg-[#191b1d] p-0.5">
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden rounded-lg"
+                        style={{
+                          width: `${(mood + 1) * 50}%`,
+                          background:
+                            mood > 0
+                              ? "linear-gradient(90deg, #ff2d00 0%, #ff9800 50%, #d1fe17 100%)"
+                              : "linear-gradient(90deg, #ff0000 0%, #ff5500 45%, #ff9800 100%)",
+                        }}
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center justify-between px-[7px]">
+                        {Array.from({ length: 4 }, (_, index) => (
+                          <span
+                            key={index}
+                            className="size-[3px] rounded-[1px] bg-white/15"
+                          />
+                        ))}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute top-1/2 h-[30px] w-[21px] -translate-x-1/2 -translate-y-1/2 rounded border border-black/15 bg-white shadow"
+                        style={{ left: `calc(${(mood + 1) * 50}% - ${mood === 1 ? 10 : mood === -1 ? -10 : 0}px)` }}
+                      />
+                      <input
+                        type="range"
+                        min={-1}
+                        max={1}
+                        step={0.01}
+                        value={mood}
+                        onChange={(event) => setMood(Number(event.target.value))}
+                        aria-label="Mood"
+                        className="absolute inset-0 z-20 size-full cursor-pointer opacity-0"
+                      />
+                    </label>
+                    <div className="flex items-center justify-between px-1 text-[10px] font-medium text-zinc-400">
+                      <span>Angry</span>
+                      <span>Neutral</span>
+                      <span>Happy</span>
+                    </div>
+                  </div>
+
+                  <span className="px-1 text-xs text-zinc-400">Audio settings</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ["Speed", "1.0x"],
+                      ["Pitch", "0"],
+                      ["Volume", "100%"],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        className="flex min-w-0 items-center gap-1 rounded-xl border border-white/[0.07] bg-[#202224] px-3 py-2"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs text-zinc-400">
+                            {label}
+                          </span>
+                          <span className="block truncate text-sm font-medium tabular-nums text-white">
+                            {value}
+                          </span>
+                        </span>
+                        <ChevronRight className="size-4 shrink-0 text-zinc-400" />
+                      </div>
+                    ))}
+                  </div>
+                  {[
+                    ["Output format", "MP3"],
+                    ["Sample Rate", "24 kHz"],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3 text-sm font-medium text-white"
+                    >
+                      <span>{label}</span>
+                      <span className="flex items-center gap-2">
+                        {label === "Output format" && (
+                          <FileAudio className="size-4" />
+                        )}
+                        {value}
+                        <ChevronRight className="size-4 text-zinc-400" />
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex h-12 items-center justify-between rounded-xl border border-white/[0.07] bg-[#202224] px-3">
+                    <span className="text-sm font-semibold text-white">
+                      Save settings
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={saveSettings}
+                      aria-label="Save settings"
+                      onClick={() => setSaveSettings((value) => !value)}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        saveSettings ? "bg-[#df7b59]" : "bg-zinc-600"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
+                          saveSettings ? "translate-x-5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {advancedOpen && isElevenV3 && (
                 <div className="flex flex-col gap-2 pb-1 pt-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs text-zinc-400">Eleven v3 controls</span>
@@ -395,7 +632,7 @@ export default function AudioCreateShell({
 
           <button
             type="button"
-            className="mt-auto h-14 w-full shrink-0 rounded-xl bg-[#96aa00] text-base font-bold text-black shadow-[inset_0_-4px_rgba(0,0,0,0.22)] transition hover:brightness-110 active:translate-y-px"
+            className="mt-auto h-14 w-full shrink-0 rounded-xl bg-[#df7b59] text-base font-bold text-black shadow-[inset_0_-4px_rgba(111,49,32,0.55)] transition hover:brightness-110 active:translate-y-px"
           >
             Generate
           </button>
@@ -542,7 +779,8 @@ export default function AudioCreateShell({
                   type="button"
                   onClick={() => {
                     onAudioModelIndexChange(index);
-                    if (index !== 1) setAdvancedOpen(false);
+                    setAdvancedOpen(false);
+                    if (index === 0) setBatchSize(1);
                     setFloatingPanel(null);
                   }}
                   className={`flex min-h-[62px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors ${
