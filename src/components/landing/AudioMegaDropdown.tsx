@@ -8,6 +8,7 @@ import {
   type AudioFeature,
   type AudioModel,
 } from "./audioMenuData";
+import AudioModelCardVisual from "./AudioModelCardVisual";
 
 interface AudioMegaDropdownProps {
   onFeatureSelect?: (title: string) => void;
@@ -29,7 +30,9 @@ function AudioColumn({
   activeTitle?: string;
   onSelect?: (title: string) => void;
 }) {
-  const [selectedTitle, setSelectedTitle] = useState<string | undefined>(activeTitle);
+  const [selectedTitle, setSelectedTitle] = useState<string | undefined>(
+    activeTitle,
+  );
 
   const handleSelect = (t: string) => {
     setSelectedTitle(t);
@@ -46,7 +49,7 @@ function AudioColumn({
       <div className="flex flex-col gap-1.5">
         {items.map((item) => {
           const Icon = item.icon;
-          const iconSrc = "iconSrc" in item ? item.iconSrc : undefined;
+          const isModel = "iconSrc" in item;
           const active = item.title === currentActive;
           return (
             <button
@@ -60,47 +63,49 @@ function AudioColumn({
                   "linear-gradient(160deg, rgba(46,48,51,0.95) 0%, rgba(38,40,43,0.95) 50%, rgba(30,32,35,0.95) 100%)",
               }}
             >
-              <div
-                className={`relative size-12 min-w-[48px] min-h-[48px] rounded-[13px] p-[1.5px] shrink-0 origin-center transition-all duration-300 ease-out group-hover:scale-[1.1] ${
-                  active
-                    ? "shadow-[0_-4px_16px_rgba(255,255,255,0.75),0_6px_24px_rgba(217,119,87,0.95)]"
-                    : "shadow-[0_-2px_8px_rgba(255,255,255,0.40),0_4px_14px_rgba(217,119,87,0.60)] group-hover:shadow-[0_-4px_18px_rgba(255,255,255,0.75),0_6px_24px_rgba(217,119,87,0.90)]"
-                }`}
-                style={{
-                  background:
-                    "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
-                }}
-              >
-                {/* 3D Metallic Glossy Glass Inner Badge */}
-                <div
-                  className="w-full h-full rounded-[11px] flex items-center justify-center overflow-hidden relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-2px_4px_rgba(0,0,0,0.45)]"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, #E6E6E6 0%, #A0A0A0 42%, #D97757 72%, #A8482A 100%)",
-                  }}
-                >
-                  <div className="absolute top-0 inset-x-0 h-[48%] bg-gradient-to-b from-white/70 to-transparent pointer-events-none rounded-t-[11px]" />
-                  {iconSrc ? (
-                    <img
-                      src={iconSrc}
-                      alt=""
-                      className="size-6 object-contain relative z-10 brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <Icon className="size-6 text-white relative z-10 drop-shadow-[0_1px_2px_rgba(255,255,255,0.28)]" />
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col min-w-0 justify-center gap-0.5">
-                <span className="truncate text-[16px] font-semibold leading-5 text-white">
-                  {item.title}
-                </span>
-                <span className="truncate text-[13px] font-normal leading-[18px] text-white/65">
-                  {item.description}
-                </span>
-              </div>
-              {active && <Check className="size-4 shrink-0 text-[#D97757] ml-auto" />}
+              {isModel ? (
+                <AudioModelCardVisual
+                  item={item as AudioModel}
+                  variant="navbar"
+                  active={active}
+                />
+              ) : (
+                <>
+                  <div
+                    className={`relative size-12 min-h-[48px] min-w-[48px] shrink-0 origin-center rounded-[13px] p-[1.5px] transition-all duration-300 ease-out group-hover:scale-[1.1] ${
+                      active
+                        ? "shadow-[0_-4px_16px_rgba(255,255,255,0.75),0_6px_24px_rgba(217,119,87,0.95)]"
+                        : "shadow-[0_-2px_8px_rgba(255,255,255,0.40),0_4px_14px_rgba(217,119,87,0.60)] group-hover:shadow-[0_-4px_18px_rgba(255,255,255,0.75),0_6px_24px_rgba(217,119,87,0.90)]"
+                    }`}
+                    style={{
+                      background:
+                        "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+                    }}
+                  >
+                    <div
+                      className="relative flex size-full items-center justify-center overflow-hidden rounded-[11px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-2px_4px_rgba(0,0,0,0.45)]"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, #E6E6E6 0%, #A0A0A0 42%, #D97757 72%, #A8482A 100%)",
+                      }}
+                    >
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-[48%] rounded-t-[11px] bg-gradient-to-b from-white/70 to-transparent" />
+                      <Icon className="relative z-10 size-6 text-white drop-shadow-[0_1px_2px_rgba(255,255,255,0.28)]" />
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                    <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                      {item.title}
+                    </span>
+                    <span className="truncate text-[13px] font-normal leading-[18px] text-white/65">
+                      {item.description}
+                    </span>
+                  </div>
+                </>
+              )}
+              {active && (
+                <Check className="size-4 shrink-0 text-[#D97757] ml-auto" />
+              )}
             </button>
           );
         })}
@@ -131,7 +136,7 @@ export default function AudioMegaDropdown({
         />
         <AudioColumn
           title="Models"
-          items={AUDIO_MODELS}
+          items={AUDIO_MODELS.filter((item) => item.title !== "VibeVoice")}
           activeTitle={activeModelTitle}
           onSelect={onModelSelect}
         />

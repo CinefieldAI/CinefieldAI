@@ -26,6 +26,7 @@ import {
   AUDIO_MODE_ORDER,
   type AudioMode,
 } from "../audioMenuData";
+import AudioModelCardVisual from "../AudioModelCardVisual";
 
 /**
  * Phase-1 shell for the rebuilt /audio/create workspace: left control panel +
@@ -180,24 +181,6 @@ type FloatingPanel =
   | null;
 
 type FloatingPosition = CSSProperties;
-
-function ModelBadge({ index }: { index: number }) {
-  const item = AUDIO_MODELS[index];
-  const Icon = item.icon;
-
-  return (
-    <span
-      className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-[11px] border border-white/30 shadow-[0_-2px_8px_rgba(255,255,255,0.34),0_4px_14px_rgba(217,119,87,0.5)]"
-      style={{
-        background:
-          "linear-gradient(180deg, #e8e8e8 0%, #9b9b9b 42%, #d97757 72%, #a8482a 100%)",
-      }}
-    >
-      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/70 to-transparent" />
-      <Icon className="relative z-10 size-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]" />
-    </span>
-  );
-}
 
 export default function AudioCreateShell({
   audioModelIndex,
@@ -594,16 +577,9 @@ export default function AudioCreateShell({
             onClick={() =>
               openFloatingPanel("model", modelButtonRef.current, 320, 500)
             }
-            className="flex h-14 shrink-0 items-center justify-between gap-2 rounded-xl border border-white/[0.07] bg-[#202224] px-3 text-left transition-colors hover:border-white/15"
+            className="group flex h-14 shrink-0 items-center justify-between gap-2 rounded-xl border border-white/[0.07] bg-[linear-gradient(160deg,rgba(46,48,51,0.95),rgba(30,32,35,0.95))] px-2.5 text-left transition-colors hover:border-white/15"
           >
-            <span className="min-w-0">
-              <span className="block text-xs font-medium text-zinc-400">
-                Model
-              </span>
-              <span className="mt-1 block truncate text-sm font-semibold text-white">
-                {isQwenAudio ? "Qwen Audio 3.0 TTS" : model.title}
-              </span>
-            </span>
+            <AudioModelCardVisual item={model} variant="trigger" active />
             <ChevronRight className="size-4 shrink-0 text-zinc-400" />
           </button>
 
@@ -1507,21 +1483,19 @@ export default function AudioCreateShell({
                     if (index === 3) setBatchSize(3);
                     setFloatingPanel(null);
                   }}
-                  className={`flex min-h-[62px] items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors ${
-                    active ? "bg-white/10" : "hover:bg-white/5"
+                  className={`group flex min-h-[64px] items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition-all duration-200 ${
+                    active
+                      ? "border-[#D97757]/35 bg-[linear-gradient(160deg,rgba(54,50,49,0.98),rgba(34,35,38,0.98))]"
+                      : "border-white/[0.04] bg-[linear-gradient(160deg,rgba(46,48,51,0.95),rgba(30,32,35,0.95))] hover:border-white/10 hover:-translate-y-px"
                   }`}
                 >
-                  <ModelBadge index={index} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-white">
-                      {item.title}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-zinc-400">
-                      {item.description}
-                    </span>
-                  </span>
+                  <AudioModelCardVisual
+                    item={item}
+                    variant="selector"
+                    active={active}
+                  />
                   {active && (
-                    <Check className="size-4 shrink-0 text-[#dfff00]" />
+                    <Check className="size-4 shrink-0 text-[#D97757]" />
                   )}
                 </button>
               );
