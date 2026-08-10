@@ -79,6 +79,54 @@ export interface Generation {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  /**
+   * Deterministic Temporal workflow id (`gen:<generationId>`) when this
+   * generation is owned by a Temporal workflow. NULL for rows created before
+   * Phase 6R.3 and for rows still running the direct/trigger paths.
+   */
+  temporal_workflow_id: string | null;
+}
+
+/**
+ * One provider submission for a generation (Phase 6R.6).
+ *
+ * Server-only: RLS is enabled with no `authenticated` policy, so only the
+ * service-role client can read or write this table.
+ */
+export type GenerationAttemptStatus =
+  | "pending"
+  | "claimed"
+  | "submitting"
+  | "submitted"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+/** What Cinefield can prove about whether an external provider job exists. */
+export type GenerationAttemptEvidence = "none" | "ambiguous" | "job";
+
+export interface GenerationAttempt {
+  id: string;
+  generation_id: string;
+  attempt_no: number;
+  provider: string;
+  provider_model: string;
+  provider_job_id: string | null;
+  status: GenerationAttemptStatus;
+  submission_evidence: GenerationAttemptEvidence;
+  submission_error_code: string | null;
+  workflow_id: string | null;
+  workflow_run_id: string | null;
+  cost_amount: number | null;
+  cost_currency: string | null;
+  latency_ms: number | null;
+  error_code: string | null;
+  started_at: string | null;
+  submitted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
