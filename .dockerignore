@@ -1,0 +1,57 @@
+# Cinefield Docker build context exclusions.
+#
+# Defense in depth: the provider-worker Dockerfile only COPYs the specific
+# directories it needs, but this file keeps secrets and unrelated bulk out of
+# the build context sent to the daemon in the first place — so a future
+# broader COPY (or a different Dockerfile) can't accidentally bake one in.
+
+# Secrets — never send an env file to the Docker daemon. .env.example is
+# safe (placeholders only) and explicitly re-included.
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+
+# Local Supabase CLI state (.temp holds a linked project ref/session, not
+# meant for an image).
+supabase/.branches
+supabase/.temp
+
+# Next.js web app — the provider worker never starts it.
+.next
+out
+public
+src/app
+src/components
+src/hooks
+src/context
+
+# Node / build artifacts
+node_modules
+npm-debug.log*
+coverage
+*.tsbuildinfo
+
+# Editor/OS noise
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docs and non-runtime project files
+docs
+*.md
+LOCKED_FEATURES.md
+CINEFIELD_ARCHITECTURE_CONTRACT_SOURCE.txt
+
+# Test/dev tooling not needed at runtime
+playwright-report
+test-results
+e2e
+
+# Docker meta files themselves
+Dockerfile*
+.dockerignore
