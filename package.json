@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "temporal:worker": "tsx --env-file-if-exists=.env.local worker/temporal-worker.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.4",
@@ -50,6 +51,7 @@
     "supabase": "^2.111.0",
     "tailwindcss": "^4",
     "trigger.dev": "^4.5.9",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

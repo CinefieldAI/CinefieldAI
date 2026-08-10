@@ -13,13 +13,13 @@
  * dependency-free modules safe on both sides.
  *
  * WHAT IS DELIBERATELY MISSING
- * No workflows and no activities are registered yet. GenerationWorkflow and
- * its activities arrive in Phase 6R.3, when `executeGeneration` is split into
- * a deterministic workflow plus activities. Registering an empty worker now
- * proves the connection, the auth boundary and the task queue wiring without
- * pretending the generation lifecycle has moved.
+ * No workflows are registered yet. GenerationWorkflow and its activities
+ * arrive in Phase 6R.3, when `executeGeneration` is split into a
+ * deterministic workflow plus activities. Until then this worker only proves
+ * the connection, the auth boundary and the task queue wiring — it does not
+ * pretend the generation lifecycle has moved.
  *
- * Run:  npx tsx worker/temporal-worker.ts     (once a namespace exists)
+ * Run:  npm run temporal:worker
  */
 
 import { NativeConnection, Worker } from "@temporalio/worker";
@@ -89,8 +89,19 @@ async function main(): Promise<void> {
     connection,
     namespace: config.namespace,
     taskQueue: TASK_QUEUES.generation,
-    // Phase 6R.3 registers workflowsPath and activities here.
-    activities: {},
+    // Temporal refuses to create a worker with nothing registered ("At least
+    // one task type must be enabled in `task_types`"), so a truly empty
+    // worker is not possible. `ping` is the smallest legal registration: it
+    // takes no input, touches no database, calls no provider, and — because
+    // no workflow schedules it — is never actually executed. It exists only
+    // so the worker can poll, which is what proves the task queue wiring.
+    // Phase 6R.3 replaces it with workflowsPath + the real generation
+    // activities.
+    activities: {
+      async ping(): Promise<"pong"> {
+        return "pong";
+      },
+    },
   });
 
   console.info(
