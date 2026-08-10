@@ -365,6 +365,29 @@ export async function executeGeneration(params: {
     } catch (caught) {
       const error = toOrchestrationError(caught);
 
+      // An adapter that captured the provider's own job id before failing
+      // (fal's onEnqueue hook, Phase 6R.5) attaches it to the typed error's
+      // safe context. That upgrades the outcome from "ambiguous" to precise
+      // JOB evidence: the external job verifiably exists under this id, so
+      // resubmission stays blocked AND reconciliation can query the provider
+      // directly instead of guessing. Identifier only — never a payload.
+      const capturedJobId =
+        typeof error.context?.providerJobId === "string" && error.context.providerJobId.length > 0
+          ? error.context.providerJobId
+          : null;
+
+      if (capturedJobId && !model.isMock) {
+        submissionEvidence = "job";
+        acceptedSubmission = {
+          providerJobId: capturedJobId,
+          provider: model.providerId,
+          status: "processing",
+        };
+        // The outer catch persists this evidence via markFailed's
+        // providerJob parameter (the same path sync-tail failures use).
+        throw error;
+      }
+
       // Fail closed: the submit window is ambiguous unless the error code
       // proves no job was created. A mock provider is exempt — it makes no
       // external calls, so no external job (and no charge) can exist no

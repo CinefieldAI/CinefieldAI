@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "temporal:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/temporal-worker.ts"
+    "temporal:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/temporal-worker.ts",
+    "provider:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/provider-worker.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1106.0",
     "@clerk/nextjs": "^7.6.4",
     "@fal-ai/client": "^1.10.1",
     "@google/genai": "^2.15.0",

@@ -181,6 +181,9 @@ class FalProvider implements ProviderAdapter {
     const timeoutController = new AbortController();
     const timeoutHandle = setTimeout(() => timeoutController.abort(), FAL_REQUEST_TIMEOUT_MS);
 
+    // Captured by onEnqueue below; read by the catch, so declared outside it.
+    let enqueuedRequestId: string | null = null;
+
     try {
       const requestedCount = request.settings.outputCount ?? model.defaults.outputCount;
       const numImages = Math.min(
@@ -219,29 +222,71 @@ class FalProvider implements ProviderAdapter {
 
       // `subscribe` waits for the queued job to finish, which keeps this a
       // synchronous adapter from the orchestrator's point of view.
+      //
+      // `onEnqueue` is the officially documented client hook that fires the
+      // moment fal accepts the job, BEFORE the wait for completion. Capturing
+      // the request id here closes the Phase 6R.1 audit window: any failure
+      // after this point (network drop mid-poll, timeout, unparseable
+      // result) previously lost the id and forced fail-closed ambiguity —
+      // now the error carries it, so the orchestrator records precise JOB
+      // evidence that reconciliation can query fal about directly.
       const result = await client.subscribe(model.providerModelId as never, {
         input: input as never,
         abortSignal: timeoutController.signal,
-      });
+        onEnqueue: (requestId: string) => {
+          enqueuedRequestId = requestId;
+        },
+      } as never);
 
       const images = extractImages((result as { data?: unknown }).data);
       if (images.length === 0) {
         throw new OrchestrationError("OUTPUT_MISSING", {
-          context: { provider: "fal", generationId: context.generationId },
+          context: {
+            provider: "fal",
+            generationId: context.generationId,
+            // The job COMPLETED at fal (and was billed) — only its payload
+            // was unusable. The id makes that provable later.
+            ...(enqueuedRequestId ? { providerJobId: enqueuedRequestId } : {}),
+          },
         });
       }
 
+      // Keyed by generationId — an internal handoff key for the in-memory
+      // submit()→getResult() round trip within one process, independent of
+      // whatever this adapter reports as providerJobId (see getResult below,
+      // which looks the images up the same way).
       PENDING_RESULTS.set(`fal-${request.generationId}`, images);
 
       return {
-        providerJobId: `fal-${request.generationId}`,
+        // The real fal request id, not a Cinefield-internal key. This is
+        // what gets persisted as "job" evidence if a later step in the sync
+        // tail (upload, normalization) fails — reconciliation must be able
+        // to query fal by this id directly; a synthetic `fal-<generationId>`
+        // string means nothing to fal's own status endpoint and would let a
+        // reconciler that treats "provider doesn't recognize this id" as
+        // proof-of-no-job clear the block and resubmit a job that already
+        // exists (Phase 6R Package B review). Falls back to the synthetic
+        // key only in the defensive case onEnqueue never fired.
+        providerJobId: enqueuedRequestId ?? `fal-${request.generationId}`,
         provider: this.providerId,
         status: "completed",
         // Deliberately free of provider URLs and raw payloads.
         metadata: { imageCount: images.length },
       };
     } catch (error) {
-      throw mapFalError(error);
+      const mapped = mapFalError(error);
+      // Attach the enqueued request id (an identifier, never a payload or a
+      // URL) to the typed error's safe context. The orchestrator reads it to
+      // record job evidence instead of ambiguity. mapFalError may have
+      // already carried context from an inner OrchestrationError — preserved,
+      // never overwritten.
+      if (enqueuedRequestId && mapped.context?.providerJobId === undefined) {
+        throw new OrchestrationError(mapped.code, {
+          userMessage: mapped.userMessage,
+          context: { ...mapped.context, provider: "fal", providerJobId: enqueuedRequestId },
+        });
+      }
+      throw mapped;
     } finally {
       clearTimeout(timeoutHandle);
     }
@@ -259,7 +304,11 @@ class FalProvider implements ProviderAdapter {
     submission: ProviderSubmission,
     context: ProviderExecutionContext
   ): Promise<NormalizedOutput[]> {
-    const images = PENDING_RESULTS.get(submission.providerJobId);
+    // Looked up by generationId, NOT submission.providerJobId: that field is
+    // now the real fal request id (see submit() above), which no longer
+    // matches PENDING_RESULTS' internal `fal-<generationId>` key.
+    void submission;
+    const images = PENDING_RESULTS.get(`fal-${context.generationId}`);
     if (!images || images.length === 0) {
       throw new OrchestrationError("OUTPUT_MISSING", {
         context: { provider: "fal", generationId: context.generationId },

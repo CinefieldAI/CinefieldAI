@@ -25,21 +25,19 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { toOrchestrationError } from "@/lib/orchestration/errors";
 import { findModel } from "@/lib/orchestration/model-registry";
-import { checkAsyncGeneration, executeGeneration } from "@/lib/orchestration/orchestrator";
+import { checkAsyncGeneration } from "@/lib/orchestration/orchestrator";
+import { markCancelled } from "@/lib/orchestration/status-manager";
+import { submitAttempt } from "@/lib/orchestration/attempt-submission-service";
 import {
-  markCancelled,
-  readPersistedProviderJob,
-} from "@/lib/orchestration/status-manager";
-import {
-  claimAttemptForSubmission,
+  cancelPendingAttempt,
   createAttempt,
-  markAttemptSubmitting,
   markAttemptTerminal,
   readActiveAttempt,
   readAttempt,
-  recordAmbiguousSubmission,
-  recordProviderJob,
 } from "@/lib/orchestration/attempt-repository";
+import { getCommandBus } from "@/lib/contracts/command-bus";
+import { commandIdFor } from "@/lib/contracts/command-wire";
+import { isSqsCommandBusEnabled } from "@/lib/aws/sqs-config";
 import type { Generation } from "@/types/database";
 
 /** What the workflow learns about a generation before doing anything. */
@@ -53,8 +51,13 @@ export interface GenerationDescriptor {
 }
 
 export interface SubmitOutcome {
-  /** "completed" only for synchronous providers that finish inside submit(). */
-  result: "completed" | "processing" | "failed" | "ambiguous" | "skipped";
+  /**
+   * "completed" only for synchronous providers that finish inside submit().
+   * "dispatched" means the command went to the SQS provider queue and the
+   * provider worker owns the actual submission — the workflow then observes
+   * the attempt row until it moves.
+   */
+  result: "completed" | "processing" | "failed" | "ambiguous" | "skipped" | "dispatched";
   attemptId: string;
   errorCode?: string;
 }
@@ -155,116 +158,47 @@ export async function ensureAttempt(params: {
 }
 
 /**
- * Submits the generation to its provider — the only activity that can cost
- * money, and therefore the one with the strictest guard.
+ * Submits the generation to its provider — or, in SQS dispatch mode, hands
+ * the command to the queue and lets the provider worker own the submission.
  *
- * Order of operations, and why:
- *   1. claimAttemptForSubmission — a conditional UPDATE requiring
- *      pending + evidence 'none' + no job id. A retry of this activity fails
- *      it and returns "skipped" WITHOUT calling the provider. This is the
- *      locked B3 rule.
- *   2. markAttemptSubmitting — written BEFORE the provider call, so a crash
- *      during the call leaves durable proof that a request may be in flight.
- *   3. executeGeneration — the unchanged Phase 6 chain.
- *   4. Record the outcome against the attempt.
+ * The submission logic itself lives in ONE place either way:
+ * `submitAttempt` in attempt-submission-service.ts, whose atomic claim is
+ * the B3 gate. This activity is a transport decision, nothing more:
  *
- * On failure the Phase 6 orchestrator has already classified the error
- * fail-closed (Phase 6E: ambiguous unless the code proves no job was
- * created). That classification is mirrored onto the attempt here, so the
- * relational evidence and the metadata evidence agree.
+ *   SQS disabled (default)  → call submitAttempt directly (in-process)
+ *   SQS enabled             → enqueue provider.submit; the worker calls the
+ *                             SAME submitAttempt on receive
+ *
+ * Enqueueing is safe to retry: the command id is deterministic
+ * (`provider.submit:<attemptId>`), so a redispatch deduplicates inside the
+ * FIFO queue, and even a delivered duplicate dies on the attempt claim.
+ * Temporal workflow code never talks to SQS — this activity is exactly the
+ * "Temporal → activity → CommandBus → SQS" boundary the architecture locks.
  */
 export async function submitGeneration(params: {
   generationId: string;
   clerkUserId: string;
   attemptId: string;
 }): Promise<SubmitOutcome> {
-  const admin = getSupabaseAdminClient();
-
-  const claimed = await claimAttemptForSubmission(admin, params.attemptId);
-  if (!claimed) {
-    // Already claimed, already submitted, or already carries evidence. A
-    // second provider call here is exactly the duplicate charge this whole
-    // package exists to prevent.
-    log({ generationId: params.generationId, attemptId: params.attemptId, result: "submit_skipped" });
-    return { result: "skipped", attemptId: params.attemptId };
-  }
-
-  await markAttemptSubmitting(admin, params.attemptId);
-
-  const startedAt = Date.now();
-  try {
-    const outcome = await executeGeneration({
-      generationId: params.generationId,
-      clerkUserId: params.clerkUserId,
-    });
-
-    // The orchestrator persists the provider job into generations.metadata
-    // for async providers. Mirror it onto the attempt so the relational row
-    // becomes the correlation source for webhooks and reconciliation.
-    const { data } = await admin
-      .from("generations")
-      .select("metadata")
-      .eq("id", params.generationId)
-      .maybeSingle();
-    const job = readPersistedProviderJob(
-      (data?.metadata ?? null) as Record<string, unknown> | null
-    );
-
-    if (job) {
-      await recordProviderJob(
-        admin,
-        params.attemptId,
-        job.id,
-        outcome.status === "processing" ? "processing" : "submitted"
-      );
-    }
-
-    if (outcome.status === "completed") {
-      await markAttemptTerminal(admin, params.attemptId, {
-        status: "succeeded",
-        latencyMs: Date.now() - startedAt,
-      });
-      return { result: "completed", attemptId: params.attemptId };
-    }
-
-    return { result: "processing", attemptId: params.attemptId };
-  } catch (caught) {
-    const error = toOrchestrationError(caught);
-
-    // Phase 6E already decided, fail-closed, whether this failure could have
-    // left a billable job behind, and wrote an ambiguousSubmission marker if
-    // so. Read that decision rather than re-deriving it, so the two records
-    // can never disagree.
-    const { data } = await admin
-      .from("generations")
-      .select("metadata")
-      .eq("id", params.generationId)
-      .maybeSingle();
-    const orchestration = ((data?.metadata ?? {}) as Record<string, unknown>).orchestration;
-    const ambiguous =
-      typeof orchestration === "object" &&
-      orchestration !== null &&
-      (orchestration as Record<string, unknown>).ambiguousSubmission !== undefined &&
-      (orchestration as Record<string, unknown>).ambiguousSubmission !== null;
-
-    if (ambiguous) {
-      await recordAmbiguousSubmission(admin, params.attemptId, error.code);
-      log({
+  if (isSqsCommandBusEnabled()) {
+    await getCommandBus().enqueue({
+      queue: "provider",
+      command: {
+        type: "provider.submit",
         generationId: params.generationId,
         attemptId: params.attemptId,
-        result: "submit_ambiguous",
-        errorCode: error.code,
-      });
-      return { result: "ambiguous", attemptId: params.attemptId, errorCode: error.code };
-    }
-
-    await markAttemptTerminal(admin, params.attemptId, {
-      status: "failed",
-      errorCode: error.code,
-      latencyMs: Date.now() - startedAt,
+      },
+      idempotencyKey: commandIdFor("provider.submit", params.attemptId),
     });
-    return { result: "failed", attemptId: params.attemptId, errorCode: error.code };
+    log({
+      generationId: params.generationId,
+      attemptId: params.attemptId,
+      result: "dispatched",
+    });
+    return { result: "dispatched", attemptId: params.attemptId };
   }
+
+  return await submitAttempt(params);
 }
 
 /**
@@ -301,18 +235,57 @@ export async function checkGenerationStatus(params: {
   return { result: "processing" };
 }
 
+export interface CancelOutcome {
+  /**
+   * false means an attempt is currently claimed/submitting — a handler (this
+   * same generation's in-process submit, or the SQS provider worker) may be
+   * talking to the provider RIGHT NOW. Nothing was written; the caller must
+   * wait and retry rather than force it. true means the race is resolved:
+   * the caller should re-read the attempt to learn what actually happened
+   * (it may have completed, failed, or genuinely have nothing left to send).
+   */
+  settled: boolean;
+}
+
 /**
- * Cancels a generation and closes its attempt.
+ * Cancels a generation, but ONLY once it is safe to do so.
+ *
+ * THE FIX for a Phase 6R Package B review finding: the previous version
+ * unconditionally force-closed the attempt via markAttemptTerminal, whose
+ * predicate matches claimed/submitting — exactly the window in which a
+ * handler may be mid-flight with a provider. Doing that let the handler's
+ * own terminal write (recordProviderJob / recordFailedWithJobEvidence /
+ * recordAmbiguousSubmission, all guarded on claimed/submitting) silently
+ * no-op once the row left that set, erasing every trace of a job that may
+ * already be billed — the exact failure this whole architecture exists to
+ * prevent, and reachable in the mainline cancel path for both in-process and
+ * SQS-dispatched submissions.
  *
  * `markCancelled` is the unchanged Phase 6 compare-and-set: it only applies
  * from queued/processing, so a completion that already won cannot be undone.
- * The attempt is closed regardless, since no workflow will drive it further.
+ * Below that, only a 'pending' attempt (nothing ever sent) is force-closed —
+ * any other resolved state is left exactly as the submission machinery
+ * wrote it, since that row is the truthful record of what happened at the
+ * provider.
  */
 export async function cancelGeneration(params: {
   generationId: string;
   attemptId: string | null;
-}): Promise<{ cancelled: boolean }> {
+}): Promise<CancelOutcome> {
   const admin = getSupabaseAdminClient();
+
+  if (params.attemptId) {
+    const attempt = await readAttempt(admin, params.attemptId);
+    if (attempt && (attempt.status === "claimed" || attempt.status === "submitting")) {
+      log({
+        generationId: params.generationId,
+        attemptId: params.attemptId,
+        result: "cancel_deferred",
+        attemptStatus: attempt.status,
+      });
+      return { settled: false };
+    }
+  }
 
   const { data } = await admin
     .from("generations")
@@ -327,11 +300,11 @@ export async function cancelGeneration(params: {
   );
 
   if (params.attemptId) {
-    await markAttemptTerminal(admin, params.attemptId, { status: "cancelled" });
+    await cancelPendingAttempt(admin, params.attemptId);
   }
 
-  log({ generationId: params.generationId, result: "cancelled", applied: cancelled });
-  return { cancelled };
+  log({ generationId: params.generationId, result: "cancel_settled", applied: cancelled });
+  return { settled: true };
 }
 
 /** Records the workflow's deterministic id on the generation row. */

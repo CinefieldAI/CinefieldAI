@@ -31,6 +31,9 @@ import { fileURLToPath } from "node:url";
 import { NativeConnection, Worker } from "@temporalio/worker";
 import * as activities from "./activities/generation-activities";
 import { TASK_QUEUES } from "../src/lib/temporal/task-queues";
+import { setCommandBus } from "../src/lib/contracts/command-bus";
+import { createSqsCommandBus } from "../src/lib/aws/sqs-command-bus";
+import { describeSqsConfig, isSqsCommandBusEnabled } from "../src/lib/aws/sqs-config";
 
 /**
  * Read directly from the process environment. On ECS these values are
@@ -77,6 +80,22 @@ async function main(): Promise<void> {
       })
     );
     process.exit(1);
+  }
+
+  // ---- CommandBus composition (Phase 6R.4) --------------------------------
+  // The ONLY place the SQS transport is wired in. When the explicit gate is
+  // off, the default NoopCommandBus stays in place and the submit activity
+  // performs direct in-process submission — configuration alone never
+  // switches the transport.
+  if (isSqsCommandBusEnabled()) {
+    const bus = createSqsCommandBus();
+    if (bus) {
+      setCommandBus(bus);
+      console.info(
+        "[cinefield:worker]",
+        JSON.stringify({ result: "command_bus", transport: "sqs", ...describeSqsConfig() })
+      );
+    }
   }
 
   const connection = await NativeConnection.connect({

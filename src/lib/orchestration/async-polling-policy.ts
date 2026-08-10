@@ -52,6 +52,29 @@ export const MAX_STATUS_CHECKS = 90;
 export const MAX_POLLING_WALL_CLOCK_SECONDS = 60 * 60;
 
 /**
+ * Checks a workflow spends watching a DISPATCHED command's attempt row —
+ * waiting for a provider worker to pick the command off the queue and finish
+ * the submission — before treating the dispatch as abandoned (worker down,
+ * queue stalled, message parked in the DLQ). Same staged delays as status
+ * checks. Cinefield operational policy, not a provider figure.
+ */
+export const MAX_DISPATCH_PICKUP_CHECKS = 30;
+
+/**
+ * Grace loop for finalizing cancellation while an attempt may still be
+ * claimed/submitting — a handler could be mid-flight with a provider right
+ * now, and forcing cancellation into that window risks erasing evidence of
+ * a job that may already be billed (see cancelGeneration in
+ * worker/activities/generation-activities.ts). Used both by the checkpoint
+ * that runs before the workflow's first submission and by a hard Temporal
+ * cancellation's cleanup; the poll/dispatch-observe loops elsewhere reuse
+ * their own existing cadence instead of this one. Cinefield operational
+ * policy, not a provider figure.
+ */
+export const CANCEL_SETTLE_MAX_ATTEMPTS = 6;
+export const CANCEL_SETTLE_INTERVAL_SECONDS = 5;
+
+/**
  * Consecutive failed status checks tolerated before the controller stops.
  * Transient failures (network, 429, 5xx) are expected and retried within this
  * budget; a sustained failure run means checking is not working right now and

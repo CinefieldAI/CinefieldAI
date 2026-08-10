@@ -11,8 +11,11 @@ import {
 // deterministic webpack sandbox, which does not read the Next.js tsconfig
 // path mapping. A relative path resolves identically in both.
 import {
+  CANCEL_SETTLE_MAX_ATTEMPTS,
+  CANCEL_SETTLE_INTERVAL_SECONDS,
   FIRST_CHECK_DELAY_SECONDS,
   MAX_CONSECUTIVE_CHECK_FAILURES,
+  MAX_DISPATCH_PICKUP_CHECKS,
   MAX_STATUS_CHECKS,
   nextCheckDelaySeconds,
 } from "../../src/lib/orchestration/async-polling-policy";
@@ -64,23 +67,42 @@ export type GenerationWorkflowResult = {
 /**
  * Activity timeouts and retries.
  *
- * `submitGeneration` is deliberately given maximumAttempts: 1. Temporal's own
- * retry must never be what re-enters a provider submission — the attempt
- * claim in the activity already refuses a second submit, and letting Temporal
- * retry on top of that would only produce repeated "skipped" round-trips
- * while obscuring the real failure. Everything else is safely retryable
- * because it only reads or performs compare-and-set writes.
+ * `submitGeneration` IS safe to retry, at every one of its two transport
+ * shapes:
+ *   - in-process: the activity's own atomic claim (claimAttemptForSubmission,
+ *     the B3 gate) refuses a second submit outright, AND executeGeneration's
+ *     own claimGeneration on the generations row provides a second,
+ *     independent guard — a retry that races ahead of a still-running first
+ *     attempt fails at one of those two claims before ever reaching
+ *     adapter.submit(). It never reaches the provider twice.
+ *   - SQS dispatch: the command id is deterministic
+ *     (`provider.submit:<attemptId>`), so a redispatch collapses inside the
+ *     FIFO queue's own deduplication, and even a delivered duplicate still
+ *     dies on the same attempt claim once the worker calls submitAttempt.
+ *
+ * A previous version pinned this to maximumAttempts: 1 specifically to keep
+ * Temporal's retry from re-entering a submission — but that protection was
+ * already provided by the claims above, and the side effect was that a
+ * single transient SQS SendMessage failure (throttling, a brief network
+ * blip) permanently stranded the generation in "queued" with no code path
+ * that ever marked it failed (Phase 6R Package B review). A small retryable
+ * policy fixes that stranding without reopening any double-submit risk.
  */
 const { submitGeneration } = proxyActivities<typeof activities>({
   startToCloseTimeout: "5 minutes",
-  retry: { maximumAttempts: 1 },
+  retry: { maximumAttempts: 3, initialInterval: "2 seconds", backoffCoefficient: 2 },
 });
 
-const { describeGeneration, ensureAttempt, checkGenerationStatus, recordWorkflowCorrelation } =
-  proxyActivities<typeof activities>({
-    startToCloseTimeout: "2 minutes",
-    retry: { maximumAttempts: 5, initialInterval: "2 seconds", backoffCoefficient: 2 },
-  });
+const {
+  describeGeneration,
+  ensureAttempt,
+  checkGenerationStatus,
+  recordWorkflowCorrelation,
+  getAttempt,
+} = proxyActivities<typeof activities>({
+  startToCloseTimeout: "2 minutes",
+  retry: { maximumAttempts: 5, initialInterval: "2 seconds", backoffCoefficient: 2 },
+});
 
 /**
  * Cancellation cleanup must still run once the workflow is being cancelled,
@@ -90,6 +112,87 @@ const { cancelGeneration } = proxyActivities<typeof activities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 3 },
 });
+
+/**
+ * Attempts to finalize cancellation right now. Returns the workflow's final
+ * result once the race is resolved, or null when an attempt is currently
+ * claimed/submitting — a handler may be talking to a provider RIGHT NOW, and
+ * forcing cancellation into that window would let its own evidence-
+ * persisting write silently no-op, erasing proof of a job that may already
+ * be billed (Phase 6R Package B review). Callers must not force it: the two
+ * poll/dispatch-observe loops just fall through and retry on their own
+ * existing cadence; the two checkpoints that lack a natural loop of their
+ * own use waitForCancellationToSettle below instead.
+ */
+async function settleCancellation(
+  generationId: string,
+  attemptId: string | null,
+  attempts: number
+): Promise<GenerationWorkflowResult | null> {
+  const outcome = await cancelGeneration({ generationId, attemptId });
+  if (!outcome.settled) return null;
+
+  if (!attemptId) {
+    return { generationId, outcome: "cancelled", attempts };
+  }
+
+  // cancelGeneration only settles once the attempt is no longer
+  // claimed/submitting, so it is now safe to read its true resting state —
+  // never assume "cancelled": a cancel request can lose to a generation
+  // that already finished, and the attempt itself is the truthful record.
+  const attempt = await getAttempt({ attemptId });
+  if (!attempt || attempt.status === "cancelled" || attempt.status === "pending") {
+    return { generationId, outcome: "cancelled", attempts };
+  }
+  if (attempt.status === "succeeded") {
+    return { generationId, outcome: "completed", attempts };
+  }
+  if (attempt.status === "failed") {
+    return {
+      generationId,
+      outcome: attempt.submission_evidence === "ambiguous" ? "ambiguous" : "failed",
+      attempts,
+      errorCode: attempt.error_code ?? undefined,
+    };
+  }
+  if (attempt.status === "claimed" || attempt.status === "submitting") {
+    // Should be unreachable: cancelGeneration only reports settled=true once
+    // the attempt has left this window. If a fresh claim raced in during the
+    // narrow gap between that check and this read, do not falsely report
+    // "cancelled" while a submission may be starting — report "abandoned" so
+    // nothing downstream treats this generation as safely done.
+    return { generationId, outcome: "abandoned", attempts };
+  }
+  // submitted/processing: a real job exists and generations.status was
+  // cancelled (or was already terminal) above — the attempt keeps its true
+  // evidence rather than being overwritten to hide that a job may exist.
+  return { generationId, outcome: "cancelled", attempts };
+}
+
+/**
+ * Loops settleCancellation with a short backoff until it resolves or the
+ * grace window elapses. Used at the two checkpoints that have no loop of
+ * their own to retry on (before the first submission, and a hard Temporal
+ * cancellation's cleanup) — the dispatch/poll loops elsewhere just retry on
+ * their own existing cadence instead of calling this.
+ */
+async function waitForCancellationToSettle(
+  generationId: string,
+  attemptId: string | null,
+  attempts: number
+): Promise<GenerationWorkflowResult> {
+  for (let i = 0; i < CANCEL_SETTLE_MAX_ATTEMPTS; i += 1) {
+    const settled = await settleCancellation(generationId, attemptId, attempts);
+    if (settled) return settled;
+    await sleep(CANCEL_SETTLE_INTERVAL_SECONDS * 1000);
+  }
+  // Exhausted the grace window: the attempt is still claimed/submitting
+  // somewhere. Do not force a "cancelled" outcome and do not force the
+  // attempt terminal — leave both exactly as the live handler will
+  // eventually write them, for generation-reconcile (Phase 6R.11) to
+  // resolve. The row stays "processing", never falsely "cancelled".
+  return { generationId, outcome: "abandoned", attempts };
+}
 
 export async function generationWorkflow(
   input: GenerationWorkflowInput
@@ -133,7 +236,7 @@ export async function generationWorkflow(
     attempts = attempt.attemptNo;
 
     if (cancelRequested) {
-      return await finishCancelled(input.generationId, attemptId, attempts);
+      return await waitForCancellationToSettle(input.generationId, attemptId, attempts);
     }
 
     const submission = await submitGeneration({
@@ -167,6 +270,57 @@ export async function generationWorkflow(
       };
     }
 
+    // ---- SQS dispatch mode: observe the attempt row, never the queue --------
+    // The provider worker owns the submission now. The workflow watches the
+    // attempt row — the durable truth the worker writes — and reacts to
+    // whatever it becomes. It never reads SQS and never resubmits.
+    if (submission.result === "dispatched") {
+      let providerJobLive = false;
+
+      for (let waitIndex = 0; waitIndex < MAX_DISPATCH_PICKUP_CHECKS; waitIndex += 1) {
+        await sleep(
+          (waitIndex === 0 ? FIRST_CHECK_DELAY_SECONDS : nextCheckDelaySeconds(waitIndex)) * 1000
+        );
+
+        if (cancelRequested) {
+          const settled = await settleCancellation(input.generationId, attemptId, attempts);
+          if (settled) return settled;
+          // Not yet safe (attempt claimed/submitting) — fall through and let
+          // this loop's own sleep above be the backoff before retrying.
+        }
+
+        const attempt = await getAttempt({ attemptId });
+        if (!attempt) break;
+
+        if (attempt.status === "succeeded") {
+          return { generationId: input.generationId, outcome: "completed", attempts };
+        }
+        if (attempt.status === "cancelled") {
+          return await finishCancelled(input.generationId, attemptId, attempts);
+        }
+        if (attempt.status === "failed") {
+          return {
+            generationId: input.generationId,
+            outcome: attempt.submission_evidence === "ambiguous" ? "ambiguous" : "failed",
+            attempts,
+            errorCode: attempt.error_code ?? undefined,
+          };
+        }
+        if (attempt.status === "submitted" || attempt.status === "processing") {
+          providerJobLive = true;
+          break;
+        }
+        // pending/claimed: the worker has not finished the submission yet.
+      }
+
+      if (!providerJobLive) {
+        // Worker down, queue stalled, or the command parked in the DLQ. The
+        // attempt row still holds whatever evidence exists — abandoning the
+        // wait never destroys it and never resubmits.
+        return { generationId: input.generationId, outcome: "abandoned", attempts };
+      }
+    }
+
     // "skipped" means this activity re-ran after a claim already existed. The
     // provider job is (or may be) live, so fall through to polling rather
     // than submitting again.
@@ -181,7 +335,10 @@ export async function generationWorkflow(
       );
 
       if (cancelRequested) {
-        return await finishCancelled(input.generationId, attemptId, attempts);
+        const settled = await settleCancellation(input.generationId, attemptId, attempts);
+        if (settled) return settled;
+        // Not yet safe — fall through and let this loop's own sleep above
+        // be the backoff before retrying.
       }
 
       try {
@@ -239,18 +396,22 @@ export async function generationWorkflow(
 }
 
 /**
- * Runs the cancellation activity in a non-cancellable scope so it completes
- * even though the workflow itself is being cancelled — otherwise the cleanup
- * would be cancelled along with everything else and the row would be stranded
- * in "processing".
+ * Runs cancellation settlement in a non-cancellable scope so it completes
+ * even though the workflow itself is being torn down by a HARD Temporal
+ * cancellation (workflow.cancel(), as opposed to the cancelGeneration
+ * signal) — otherwise the cleanup would be cancelled along with everything
+ * else and the row would be stranded in "processing". Still waits out the
+ * claimed/submitting window via waitForCancellationToSettle rather than
+ * forcing it, for the same reason every other cancellation path does: Wall-
+ * clock inside nonCancellable is not itself cancellable, so `sleep` here is
+ * safe and still bounded by CANCEL_SETTLE_MAX_ATTEMPTS.
  */
 async function finishCancelled(
   generationId: string,
   attemptId: string | null,
   attempts: number
 ): Promise<GenerationWorkflowResult> {
-  await CancellationScope.nonCancellable(async () => {
-    await cancelGeneration({ generationId, attemptId });
-  });
-  return { generationId, outcome: "cancelled", attempts };
+  return await CancellationScope.nonCancellable(() =>
+    waitForCancellationToSettle(generationId, attemptId, attempts)
+  );
 }

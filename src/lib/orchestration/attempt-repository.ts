@@ -327,6 +327,50 @@ export async function recordAmbiguousSubmission(
   return data !== null;
 }
 
+/**
+ * Records a submission that FAILED after the provider verifiably accepted
+ * the job — the external job exists (id in hand, captured at enqueue) but the
+ * call did not complete. Evidence 'job' + the id are written together, so:
+ *   - resubmission stays impossible (evidence exists),
+ *   - reconciliation can query the provider PRECISELY by id instead of
+ *     guessing, which is strictly stronger than 'ambiguous'.
+ * The (provider, provider_job_id) uniqueness still applies; losing it means
+ * another attempt already owns that external job — DUPLICATE_EXECUTION.
+ */
+export async function recordFailedWithJobEvidence(
+  admin: SupabaseClient,
+  attemptId: string,
+  providerJobId: string,
+  errorCode: string
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from(TABLE)
+    .update({
+      status: "failed",
+      provider_job_id: providerJobId,
+      submission_evidence: "job",
+      submission_error_code: errorCode,
+      error_code: errorCode,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", attemptId)
+    .in("status", ["claimed", "submitting"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    if (isUniqueViolation(error)) {
+      throw new OrchestrationError("DUPLICATE_EXECUTION", {
+        context: { attemptId, operation: "recordFailedWithJobEvidence" },
+      });
+    }
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { attemptId, operation: "recordFailedWithJobEvidence" },
+    });
+  }
+  return data !== null;
+}
+
 export interface AttemptTerminalInput {
   status: Extract<GenerationAttemptStatus, "succeeded" | "failed" | "cancelled">;
   errorCode?: string;
@@ -365,6 +409,77 @@ export async function markAttemptTerminal(
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
       context: { attemptId, operation: "markAttemptTerminal" },
+    });
+  }
+  return data !== null;
+}
+
+/**
+ * Cancels an attempt ONLY from 'pending' — the one state in which nothing
+ * has ever been sent to a provider.
+ *
+ * An attempt in 'claimed'/'submitting' may be mid-flight talking to a
+ * provider RIGHT NOW (in-process, or via the SQS provider worker). Forcing
+ * it to 'cancelled' there would let the submission handler's own terminal
+ * write (recordProviderJob / recordFailedWithJobEvidence /
+ * recordAmbiguousSubmission / markAttemptTerminal, all guarded on
+ * claimed/submitting) silently no-op once the row is no longer in that set —
+ * erasing every trace of a job that may already be billed. Callers must
+ * check for that window themselves (see cancelGeneration in
+ * worker/activities/generation-activities.ts) and wait it out; this function
+ * only ever touches a row that never left 'pending'.
+ */
+export async function cancelPendingAttempt(
+  admin: SupabaseClient,
+  attemptId: string
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from(TABLE)
+    .update({ status: "cancelled", completed_at: new Date().toISOString() })
+    .eq("id", attemptId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { attemptId, operation: "cancelPendingAttempt" },
+    });
+  }
+  return data !== null;
+}
+
+/**
+ * Refreshes `updated_at` on an attempt still actively held by its handler.
+ *
+ * `isAttemptClaimStale` (worker/provider-command-handler.ts) treats a
+ * claimed/submitting attempt whose `updated_at` has not moved in
+ * ATTEMPT_STALE_AFTER_MS as evidence its handler died. Without a heartbeat,
+ * that clock only ever gets one write (markAttemptSubmitting) and never
+ * moves again — so ANY submission whose end-to-end handling (including
+ * Phase 6F finalization, which is not bounded by the adapter's own request
+ * timeout) runs longer than the staleness window looks identically dead to
+ * one that actually crashed, and a second worker can preempt a perfectly
+ * live handler. Calling this periodically while a handler is alive keeps the
+ * clock moving so staleness only ever reflects a true crash. Guarded on
+ * claimed/submitting so a heartbeat racing a real terminal write can never
+ * resurrect or touch a row that has already resolved.
+ */
+export async function touchAttemptHeartbeat(
+  admin: SupabaseClient,
+  attemptId: string
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from(TABLE)
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", attemptId)
+    .in("status", ["claimed", "submitting"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { attemptId, operation: "touchAttemptHeartbeat" },
     });
   }
   return data !== null;
