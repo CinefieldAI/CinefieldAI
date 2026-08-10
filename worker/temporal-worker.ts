@@ -12,17 +12,24 @@
  * still shares `src/lib/temporal/{task-queues,workflow-ids}` — pure,
  * dependency-free modules safe on both sides.
  *
- * WHAT IS DELIBERATELY MISSING
- * No workflows are registered yet. GenerationWorkflow and its activities
- * arrive in Phase 6R.3, when `executeGeneration` is split into a
- * deterministic workflow plus activities. Until then this worker only proves
- * the connection, the auth boundary and the task queue wiring — it does not
- * pretend the generation lifecycle has moved.
+ * WHAT IS REGISTERED
+ * GenerationWorkflow (workflows/generation-workflow.ts) and its activities
+ * (activities/generation-activities.ts). The workflow module is registered by
+ * PATH, not by import: Temporal bundles it into an isolated, deterministic
+ * sandbox, and importing it here would pull non-deterministic module state
+ * into that bundle.
+ *
+ * Registering the workflow does NOT move production traffic. Nothing starts a
+ * GenerationWorkflow unless TEMPORAL_GENERATION_ENABLED is explicitly true —
+ * the direct/trigger paths remain the default.
  *
  * Run:  npm run temporal:worker
  */
 
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { NativeConnection, Worker } from "@temporalio/worker";
+import * as activities from "./activities/generation-activities";
 import { TASK_QUEUES } from "../src/lib/temporal/task-queues";
 
 /**
@@ -89,19 +96,11 @@ async function main(): Promise<void> {
     connection,
     namespace: config.namespace,
     taskQueue: TASK_QUEUES.generation,
-    // Temporal refuses to create a worker with nothing registered ("At least
-    // one task type must be enabled in `task_types`"), so a truly empty
-    // worker is not possible. `ping` is the smallest legal registration: it
-    // takes no input, touches no database, calls no provider, and — because
-    // no workflow schedules it — is never actually executed. It exists only
-    // so the worker can poll, which is what proves the task queue wiring.
-    // Phase 6R.3 replaces it with workflowsPath + the real generation
-    // activities.
-    activities: {
-      async ping(): Promise<"pong"> {
-        return "pong";
-      },
-    },
+    workflowsPath: path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "workflows/generation-workflow.ts"
+    ),
+    activities,
   });
 
   console.info(

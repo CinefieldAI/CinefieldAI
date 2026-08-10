@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "temporal:worker": "tsx --env-file-if-exists=.env.local worker/temporal-worker.ts"
+    "temporal:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/temporal-worker.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.4",
