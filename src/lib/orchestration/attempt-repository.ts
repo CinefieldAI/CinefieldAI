@@ -415,6 +415,57 @@ export async function markAttemptTerminal(
 }
 
 /**
+ * Records what a VERIFIED inbound provider event (webhook/WebSocket)
+ * observed about an already-submitted job (Phase 6R.10).
+ *
+ * DELIBERATELY NARROW — WHY THIS IS NOT markAttemptTerminal
+ * A webhook saying "completed" means the PROVIDER finished, not that
+ * Cinefield did. The generation is only complete after the finalization
+ * tail (download → normalize → upload → markCompleted) runs, and that tail
+ * belongs to the workflow, not to an inbound HTTP request. Writing
+ * 'succeeded' here would both lie about Cinefield's state and create a
+ * second finalization path racing the first. So this function only ever
+ * moves an attempt along the NON-terminal observation axis
+ * (submitted → processing) and records the observation timestamp; a
+ * provider-reported completion is signalled to Temporal and finalized
+ * there, exactly as a poll-observed completion already is.
+ *
+ * MONOTONIC BY PREDICATE
+ * The `.in("status", ...)` clause is the regression guard: only an attempt
+ * still in 'submitted' or 'processing' can be touched. A duplicate or
+ * out-of-order webhook arriving after the attempt reached
+ * succeeded/failed/cancelled matches no row and returns false — a
+ * completed attempt can never be dragged back to processing, and a
+ * terminal attempt is never reopened. Returning false is a normal,
+ * expected outcome for a replayed event, not an error.
+ *
+ * Provider failure is likewise NOT written terminal here: an inbound
+ * "failed" is signalled to the workflow, which owns deciding the
+ * attempt's terminal outcome through its existing guarded writers, so
+ * ambiguous-submission and evidence rules stay in one place.
+ */
+export async function recordProviderObservation(
+  admin: SupabaseClient,
+  attemptId: string,
+  observedStatus: "processing"
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from(TABLE)
+    .update({ status: observedStatus })
+    .eq("id", attemptId)
+    .in("status", ["submitted", "processing"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { attemptId, operation: "recordProviderObservation" },
+    });
+  }
+  return data !== null;
+}
+
+/**
  * Cancels an attempt ONLY from 'pending' — the one state in which nothing
  * has ever been sent to a provider.
  *

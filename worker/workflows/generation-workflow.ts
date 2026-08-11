@@ -1,5 +1,6 @@
 import {
   CancellationScope,
+  condition,
   defineSignal,
   isCancellation,
   proxyActivities,
@@ -50,6 +51,36 @@ import type * as activities from "../activities/generation-activities";
  */
 
 export const cancelGenerationSignal = defineSignal("cancelGeneration");
+
+/**
+ * Sent by the VERIFIED provider webhook boundary (Phase 6R.10) after it has
+ * durably recorded what an authenticated provider callback observed.
+ *
+ * WHY THE PAYLOAD IS ONLY A HINT
+ * The workflow does NOT act on `status` as authority. A signal payload is
+ * whatever the sender put in it; treating it as truth would let a
+ * mis-normalized (or, if verification ever regressed, forged) callback
+ * drive finalization. Instead the signal only WAKES the existing polling
+ * loop early, and that loop still calls checkGenerationStatus, which
+ * re-reads the provider through the normal adapter path and runs the
+ * shared, lease-guarded finalization tail. So a webhook makes the workflow
+ * react in seconds instead of at the next poll, without becoming a second
+ * source of truth or a second finalization path.
+ *
+ * That design is also what makes duplicate and out-of-order signals free:
+ * waking an already-awake loop is a no-op, and a signal arriving after the
+ * workflow finished is delivered to nobody. `providerJobId`/`attemptId` are
+ * carried for correlation logging only — never to select a different
+ * attempt than the one this workflow already owns.
+ */
+export interface ProviderEventSignalInput {
+  attemptId: string;
+  providerJobId: string;
+  /** Normalized observation, used as a wake hint only — never as authority. */
+  status: "processing" | "completed" | "failed";
+}
+
+export const providerEventSignal = defineSignal<[ProviderEventSignalInput]>("providerEvent");
 
 export interface GenerationWorkflowInput {
   generationId: string;
@@ -204,6 +235,28 @@ export async function generationWorkflow(
     cancelRequested = true;
   });
 
+  // Bumped by every provider webhook signal. The wait loops below watch it
+  // and cut their sleep short when it changes, so a webhook shortens the
+  // time to the next status check rather than performing any work itself.
+  // A monotonic counter (not a boolean) means two signals arriving during
+  // one sleep cannot lose the second one.
+  let providerEventCount = 0;
+  setHandler(providerEventSignal, () => {
+    providerEventCount += 1;
+  });
+
+  /**
+   * Sleeps up to `seconds`, returning early if a provider webhook signal
+   * arrives. Idempotent by construction: an extra signal only ends a sleep
+   * sooner, and the loop that follows re-checks authoritative state through
+   * checkGenerationStatus either way, so no duplicate or reordered signal
+   * can produce a different outcome than the poll alone would have.
+   */
+  async function sleepOrProviderEvent(seconds: number): Promise<void> {
+    const seen = providerEventCount;
+    await condition(() => providerEventCount !== seen, seconds * 1000);
+  }
+
   let attemptId: string | null = null;
   let attempts = 0;
 
@@ -278,8 +331,8 @@ export async function generationWorkflow(
       let providerJobLive = false;
 
       for (let waitIndex = 0; waitIndex < MAX_DISPATCH_PICKUP_CHECKS; waitIndex += 1) {
-        await sleep(
-          (waitIndex === 0 ? FIRST_CHECK_DELAY_SECONDS : nextCheckDelaySeconds(waitIndex)) * 1000
+        await sleepOrProviderEvent(
+          waitIndex === 0 ? FIRST_CHECK_DELAY_SECONDS : nextCheckDelaySeconds(waitIndex)
         );
 
         if (cancelRequested) {
@@ -330,8 +383,8 @@ export async function generationWorkflow(
     let lastErrorCode: string | undefined;
 
     for (let checkIndex = 0; checkIndex < MAX_STATUS_CHECKS; checkIndex += 1) {
-      await sleep(
-        (checkIndex === 0 ? FIRST_CHECK_DELAY_SECONDS : nextCheckDelaySeconds(checkIndex)) * 1000
+      await sleepOrProviderEvent(
+        checkIndex === 0 ? FIRST_CHECK_DELAY_SECONDS : nextCheckDelaySeconds(checkIndex)
       );
 
       if (cancelRequested) {
