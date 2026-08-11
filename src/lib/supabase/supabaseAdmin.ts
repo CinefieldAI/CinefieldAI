@@ -19,6 +19,22 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let cachedAdminClient: SupabaseClient | null = null;
 
+/**
+ * TEST-ONLY seam (Phase 6R.12). Replaces the cached admin client with an
+ * in-memory double so the zero-cost E2E harness can drive the REAL
+ * orchestration code without a network Supabase.
+ *
+ * Mirrors the existing `setCommandBus`/`setEventPublisher` seams in
+ * src/lib/contracts/ — a single, explicit, reviewable injection point
+ * rather than module patching (impossible under ESM) or a parallel fake
+ * implementation of the orchestration logic.
+ *
+ * Production never calls this. Passing null restores normal resolution.
+ */
+export function __setSupabaseAdminClientForTesting(client: SupabaseClient | null): void {
+  cachedAdminClient = client;
+}
+
 export function isSupabaseAdminConfigured(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
