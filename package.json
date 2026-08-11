@@ -30,6 +30,7 @@
     "@temporalio/workflow": "^1.22.0",
     "@trigger.dev/sdk": "4.5.9",
     "ai": "^6.0.209",
+    "bullmq": "^6.0.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
