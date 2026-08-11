@@ -6,6 +6,37 @@ import { resetForRetry } from "@/lib/orchestration/status-manager";
 import { asyncContinuationTask } from "./async-continuation-task";
 
 /**
+ * ===========================================================================
+ * LEGACY GENERATION OWNER — SCHEDULED FOR REMOVAL (Phase 6R.11)
+ * ===========================================================================
+ * Per the locked Phase 6R architecture, Trigger.dev is an OPERATIONAL
+ * platform (reconciliation, audit, health, cleanup — see
+ * src/trigger/operational/), NOT the owner of a generation's lifecycle.
+ * Temporal's GenerationWorkflow is the intended owner.
+ *
+ * THIS FILE IS STILL LIVE AND MUST NOT BE DELETED YET. It is currently the
+ * only working production generation path: `/api/orchestration/execute`
+ * dispatches here whenever `resolveExecutionMode()` returns "trigger",
+ * which is the case in the current environment. Meanwhile Temporal
+ * generation ownership is not enabled (TEMPORAL_GENERATION_ENABLED is
+ * unset) and `startGenerationWorkflow()` has no production caller — so
+ * removing this task today would break generation outright with nothing to
+ * take over.
+ *
+ * REMOVAL DEPENDENCIES, in order:
+ *   1. A server-side generation entry point that starts the Temporal
+ *      workflow (the /api/generate migration — explicitly out of scope for
+ *      6R.11, and itself blocked on real per-model pricing; see the Phase
+ *      E3/E3B reports).
+ *   2. TEMPORAL_GENERATION_ENABLED switched on with a running Temporal
+ *      worker, so the workflow actually owns generations.
+ *   3. Only then: retire this task and asyncContinuationTask, and drop the
+ *      "trigger" branch from resolveExecutionMode().
+ *
+ * DO NOT add new callers of this task, and do not extend it. New generation
+ * work belongs to the Temporal path.
+ * ===========================================================================
+ *
  * Cinefield's one generic background generation task.
  *
  * There is deliberately no per-provider or per-model task — every provider

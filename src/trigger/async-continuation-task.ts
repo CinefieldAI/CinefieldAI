@@ -16,6 +16,24 @@ import { recordContinuationHalt } from "@/lib/orchestration/status-manager";
 import type { ContinuationHaltReason } from "@/lib/orchestration/types";
 
 /**
+ * ===========================================================================
+ * LEGACY GENERATION CONTINUATION — SCHEDULED FOR REMOVAL (Phase 6R.11)
+ * ===========================================================================
+ * Provider polling/continuation belongs to Temporal's GenerationWorkflow,
+ * not to Trigger.dev, whose post-6R.11 role is operational only (see
+ * src/trigger/operational/).
+ *
+ * STILL LIVE: this task is dispatched by generation-task.ts, which is
+ * itself the current production generation owner. It shares that file's
+ * removal dependencies exactly — see the LEGACY header there. Do not
+ * delete it independently, and do not add new callers.
+ *
+ * Note this task already cannot own a submission: it imports only
+ * checkAsyncGeneration, never executeGeneration, so no continuation retry
+ * can produce a second billable provider job. That property must be
+ * preserved for as long as the file exists.
+ * ===========================================================================
+ *
  * Cinefield's generic async continuation controller.
  *
  * One long-running provider job, checked repeatedly until it finishes. This
