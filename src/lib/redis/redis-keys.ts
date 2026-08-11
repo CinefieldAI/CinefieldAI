@@ -126,18 +126,32 @@ export function providerErrorRateKey(providerId: string): string {
 export type RateLimitSubject = "user" | "ip";
 
 /**
- * `cinefield:v1:rate-limit:<subject>:<subjectId>:<windowId>`
+ * `cinefield:v1:rate-limit:<subject>:<subjectId>:<action>:<windowId>`
+ *
+ * `action` distinguishes independently-limited operations for the SAME
+ * subject (e.g. "generate" vs "login-attempt") — added in Phase 6R.7's
+ * rate-limit foundation after an audit found the original 3-segment shape
+ * (subject/subjectId/windowId only) had no way to represent this: two
+ * unrelated limiters for the same user would collide on the exact same
+ * key within the same window. No production caller existed yet, so this
+ * was a safe, additive contract fix rather than a breaking migration.
  *
  * `windowId` is the caller's own encoding of the current window (e.g. a
  * floored-minute timestamp already turned into a string) — this module
  * does not compute time, matching the "no Date.now() at import time" rule
  * observability code elsewhere in Cinefield already follows.
  */
-export function rateLimitKey(subject: RateLimitSubject, subjectId: string, windowId: string): string {
+export function rateLimitKey(
+  subject: RateLimitSubject,
+  subjectId: string,
+  action: string,
+  windowId: string
+): string {
   return buildKey(
     "rate-limit",
     subject,
     identifier("subjectId", subjectId),
+    identifier("action", action),
     identifier("windowId", windowId)
   );
 }

@@ -30,14 +30,21 @@ test("provider observability keys are versioned and namespaced", () => {
   );
 });
 
-test("rate-limit keys scope by subject type, subject id, and window", () => {
+test("rate-limit keys scope by subject type, subject id, action, and window", () => {
   assert.equal(
-    rateLimitKey("user", "user_abc123", "20260811T1200"),
-    `cinefield:v${REDIS_KEY_VERSION}:rate-limit:user:user_abc123:20260811T1200`
+    rateLimitKey("user", "user_abc123", "generate", "20260811T1200"),
+    `cinefield:v${REDIS_KEY_VERSION}:rate-limit:user:user_abc123:generate:20260811T1200`
   );
   assert.equal(
-    rateLimitKey("ip", "203-0-113-1", "20260811T1200"),
-    `cinefield:v${REDIS_KEY_VERSION}:rate-limit:ip:203-0-113-1:20260811T1200`
+    rateLimitKey("ip", "203-0-113-1", "generate", "20260811T1200"),
+    `cinefield:v${REDIS_KEY_VERSION}:rate-limit:ip:203-0-113-1:generate:20260811T1200`
+  );
+});
+
+test("rate-limit keys: different actions for the same subject never collide", () => {
+  assert.notEqual(
+    rateLimitKey("user", "user_abc123", "generate", "20260811T1200"),
+    rateLimitKey("user", "user_abc123", "login-attempt", "20260811T1200")
   );
 });
 
@@ -72,7 +79,7 @@ test("lock keys scope by resource type and resource id", () => {
 test("identifiers reject characters that could inject a key segment", () => {
   assert.throws(() => providerHealthKey("fal:evil"), /invalid providerId identifier/);
   assert.throws(() => providerHealthKey(""), /invalid providerId identifier/);
-  assert.throws(() => rateLimitKey("user", "has space", "w1"), /invalid subjectId identifier/);
+  assert.throws(() => rateLimitKey("user", "has space", "generate", "w1"), /invalid subjectId identifier/);
   assert.throws(() => lockKey("type", "id with colon:here"), /invalid resourceId identifier/);
 });
 
