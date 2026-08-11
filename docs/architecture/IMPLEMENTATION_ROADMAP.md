@@ -21,6 +21,16 @@ Verified against `git log` on branch `main` as of this phase (HEAD `2c4e3db`):
 
 ---
 
+## Operational Infrastructure Status (Phase 6R)
+
+The AWS SQS + ECS provider runtime, its dead-letter queue, CloudWatch
+alarms, an IAM least-privilege review, and production mock-provider
+validation are complete and verified. See
+[`../operations/AWS_PROVIDER_RUNTIME.md`](../operations/AWS_PROVIDER_RUNTIME.md)
+for the full resource inventory and test record.
+
+---
+
 ## Future Phase Order (Updated)
 
 This order **supersedes** the source contract's original "Faz 1–10" sequence (contract section 45) for everything after what's already built. Faz 1–3 of the source are effectively complete, in the shape described by the Completed Checkpoints above (not identical file-for-file to the source's illustrative structure, but satisfying the same principles — see the override section of the contract). Faz 4 (Runway, the source's "second independent provider") has been deliberately **reordered later** (now Phase 8) in favor of building out the Cloudflare AI layer and audio/multilingual capability first. Audio/TTS, which the source contract did not assign an explicit phase number to, has already been completed ahead of Cloudflare (checkpoint `2c4e3db`) and continues to expand within Phase 6.
