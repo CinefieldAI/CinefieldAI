@@ -1,4 +1,4 @@
-# Model Routing and Capabilities — Phase 7 Foundation (7-A / 7-F / 7-B)
+# Model Routing and Capabilities — Phase 7 (7-A / 7-F / 7-B / 7-C)
 
 Status: implemented. Scope is deliberately narrow — read "What this is NOT"
 before extending anything here.
@@ -235,15 +235,182 @@ Center, an audit trail — belongs to the later Admin/Security phase (Phase 16)
 and is deliberately not started here. The allowlist exists so route mutations
 are not shipped with no boundary at all while that decision is unmade.
 
+## 7-C — health-aware routing, circuit breaker, safe failover
+
+### The pipeline
+
+```
+Hard Eligibility  (7-B, unchanged)   route/model/version/provider enabled,
+        |                            adapter registered — a conjunction
+        v
+Health Evaluation (Redis A)          breaker state, rolling error rate,
+        |                            rolling latency, freshness
+        v
+Circuit Breaker                      OPEN excludes; HALF_OPEN admits a
+        |                            bounded number of REAL requests
+        v
+Health Score                         priority 1.0, error 0.35, latency 0.15,
+        |                            × confidence factor
+        v
+Deterministic Selection              highest score, ties -> the 7-B comparator
+```
+
+**Health can only subtract.** It reorders and it excludes. It can never admit
+a route hard eligibility rejected — `rejectionFor()` from the static router is
+called first, unchanged, and a disabled provider stays disabled no matter how
+good its telemetry looks.
+
+**With no health data, 7-C IS 7-B.** Proven by a test that runs both routers
+over the same candidates and asserts the same winner. This is what makes a
+Redis outage a degradation rather than an incident.
+
+### Active factors, and what is absent
+
+Active: static priority, rolling error rate, rolling latency, breaker state.
+
+**Cost and quality are absent, not zero-weighted.** There is no cost term and
+no quality term in `scoreRoute()` — asserted by a test that reads the function
+body. Adding them is Phase 7-D, and the per-axis breakdown is what makes that
+a widening rather than a rewrite.
+
+**Deterministic.** Same candidates + same health + same exclusions = same
+route. No randomness, no round-robin, no weighted sampling. Ties fall through
+to the Phase 7-B comparator, which is a total order.
+
+### Redis A health state
+
+| Key | TTL | Holds |
+| --- | --- | --- |
+| `cinefield:v1:circuit-breaker:<provider>:<encodedProviderModel>` | 1800s | breaker record |
+| `cinefield:v1:provider-error-rate:<provider>` | 300s | rolling success/failure counts |
+| `cinefield:v1:provider-latency:<provider>` | 120s | rolling latency aggregate |
+
+Breakers are scoped to the provider **model**, not the provider: one endpoint
+failing is the common case, and tripping every route through that provider
+would turn a narrow outage into a total one. `providerModelId` is hex-encoded
+into the key alphabet, so `a/b` and `a.b` cannot collide.
+
+The breaker TTL is deliberately longer than the signals it derives from: an
+expired breaker key reads as CLOSED, so a TTL shorter than the cooldown would
+silently reopen a provider Cinefield had just decided to stop using.
+
+**Nothing durable, nothing sensitive.** No generation, no attempt, no billing
+fact, no credential, no prompt, no media, no provider payload. Losing the
+whole keyspace costs a fresh start at CLOSED. A test asserts the serialized
+breaker record contains only its eight declared fields.
+
+### When telemetry is unavailable or stale
+
+- Missing data becomes **UNKNOWN** — never a fabricated healthy or unhealthy
+  state, and never a fabricated breaker.
+- UNKNOWN scores **neutral** on each axis (an unmeasured route has not been
+  slow; it has been unmeasured) and takes a small confidence penalty, so
+  known-good beats unmeasured and unmeasured beats known-bad.
+- An unmeasured route stays **selectable**. A cold Redis must not take the
+  platform offline.
+- A breaker record older than 900s stops being authoritative — a stale OPEN
+  from an incident that ended must not become a permanent capacity loss.
+- Corrupted breaker JSON is read as **absent**, never as OPEN: one bad write
+  must not take a provider out of rotation with no failure behind it.
+
+### Circuit breaker
+
+| State | Behaviour |
+| --- | --- |
+| `CLOSED` | routing allowed; 3 consecutive qualifying failures open it |
+| `OPEN` | excluded from selection for a 60s cooldown |
+| `HALF_OPEN` | 1 trial execution at a time; 2 successes close it, 1 failure reopens it and restarts the cooldown |
+
+OPEN becomes HALF_OPEN by the passage of time, computed on read — so a breaker
+recovers even if nothing ever writes to it again, instead of staying open
+forever because the thing that would have reset it was the traffic it blocked.
+
+**No synthetic probes.** Recovery evidence is ordinary user traffic that was
+going to be sent anyway. A probe would be a billable request Cinefield
+invented, which is a way to spend real money on an outage. Asserted by a test
+that the breaker modules never resolve an adapter, submit, or fetch.
+
+### Failure classification
+
+Only these count against a provider: `provider_rate_limit`,
+`provider_server_error`, `provider_unavailable`, `transport_timeout`,
+`provider_execution_failure`.
+
+These never do:
+
+- **local validation** — an unsupported ratio is not the provider's fault
+- **user cancellation** — a person pressing cancel must not take a provider down
+- **internal failure** — Cinefield's storage or database breaking
+- **provider rejection** (auth, quota) — real problems, but they do not heal
+  after a cooldown, so a breaker would flap forever while the fix is an
+  operator updating a credential
+- **unknown** — an unclassified failure is far more often a Cinefield bug than
+  a provider outage; letting unknowns open breakers means the first unhandled
+  error type takes routing down with it
+
+### Safe failover
+
+A failover is a **second provider execution**. It is permitted only when
+Cinefield can prove the first one never started. `decideFailover()` evaluates,
+strictly in this order:
+
+1. `provider_job_id` present → **reconciliation_required**
+2. `submission_evidence = "job"` → **reconciliation_required**
+3. `submission_evidence = "ambiguous"` → **reconciliation_required**
+4. error code does not prove no job was created → **reconciliation_required**
+5. local failure → **no_failover_local_failure** (another provider fixes nothing)
+6. attempt or route bounds reached → **failover_exhausted**
+7. otherwise → **safe_to_failover**
+
+The order is itself the safety property. Evidence is examined before attempt
+counts and route availability, so a system with retries to spare can never
+reach a retry decision for an ambiguous submission.
+
+When failover proceeds: **the `generation_id` never changes**. A new attempt
+row is created under the existing 6R rules, the failed attempt keeps its own
+row, evidence and error code, the new route is written to
+`generations.metadata.routing` (so execution actually goes elsewhere), and the
+already-tried route is excluded — read from attempt history, not tracked in
+the workflow, so a replay cannot re-select a burned route.
+
+Bounded at **one** failover per generation (`MAX_FAILOVER_ATTEMPTS = 1`).
+
+### AMBIGUOUS != SAFE TO RETRY
+
+This is the rule the phase exists to enforce. If a submission may have reached
+a provider but the acknowledgement is uncertain, Cinefield does **not** fail
+over, does **not** create a second logical generation, and does **not** start a
+second provider execution. The generation keeps its id and its attempt
+correlation and enters reconciliation instead. Ambiguity is also not breaker
+evidence — the work may have succeeded and only the acknowledgement was lost.
+
+Global invariant, preserved and re-proven against real PostgreSQL:
+
+```
+1 logical request = 1 generation_id = max 1 billable settlement
+1 generation_id  -> N provider attempts   (allowed)
+1 logical request -> N generations         (never)
+```
+
+### Ownership, unchanged
+
+| Concern | Owner |
+| --- | --- |
+| generation lifecycle, retry, cancellation, finalization | **Temporal** |
+| critical command transport | **AWS SQS + DLQ** |
+| provider execution | **Provider Worker** |
+| durable truth (generations, attempts, routes, audit) | **PostgreSQL** |
+| ephemeral health state | **Redis A** |
+| BullMQ | **Redis B** — untouched by 7-C |
+
+The router decides **where**. It is not a workflow engine: a test asserts the
+routing modules import no Temporal, no SQS, and no provider adapter.
+
 ## What this is NOT
 
 Explicitly out of scope, and absent rather than stubbed:
 
-- **7-C**: dynamic scoring, health/latency/cost input, circuit breakers,
-  automatic failover, load balancing. The router is deterministic on purpose —
-  a router that picks differently on two identical requests makes every
-  downstream bug irreproducible.
-- **7-D / Phase 22**: quality scoring, Braintrust, evals.
+- **7-D / Phase 22**: quality scoring, Braintrust, evals, cost-aware routing.
 - **7-E / Phase 21**: LaunchDarkly, OpenFeature, canary rollout.
 - **Phase 8**: real provider API calls, credentials, paid smoke tests.
 - **Phase 10**: Stripe, credit wallet, ledger, pricing engine.
@@ -280,6 +447,12 @@ Explicitly out of scope, and absent rather than stubbed:
   provider, every option a bound card offers is accepted by the real
   validator, a manipulated request is still refused, unbound cards are
   returned untouched.
+- `src/test/e2e/phase-7c-health-routing.e2e.test.ts` — 49 tests: static
+  compatibility, determinism over 100 runs and 4 shuffles, health/latency/error
+  influence, eligibility supremacy, every breaker transition, freshness,
+  failure classification, the full failover decision table including the
+  ordering property, Redis A round-trip and corruption handling, and the
+  security boundary.
 - `supabase/tests/test_model_routing.sql` — 8 proofs against a throwaway
   PostgreSQL: one-active-version, unique version numbers, unique provider
   endpoints, unique routes, bounded priority/status, additive attempt

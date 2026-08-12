@@ -122,6 +122,14 @@ export interface GenerationAttempt {
   cost_currency: string | null;
   latency_ms: number | null;
   error_code: string | null;
+  /**
+   * Phase 7-A/7-C routing correlation. Nullable and additive: an attempt for
+   * a generation created before routing existed carries null, and nothing
+   * reads these to decide behaviour — they answer "which route ran this?"
+   * after the fact, and let a failover avoid a route it already burned.
+   */
+  model_version_id: string | null;
+  model_route_id: string | null;
   started_at: string | null;
   submitted_at: string | null;
   completed_at: string | null;

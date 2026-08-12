@@ -41,7 +41,12 @@ import type {
  * error than refusing it here.
  */
 
-function rejectionFor(candidate: RouteCandidate): RouteRejectionReason | null {
+/**
+ * Hard eligibility. Exported so the Phase 7-C health-aware router applies the
+ * IDENTICAL rule rather than a second copy of it — a health router with its
+ * own notion of eligibility is how a disabled provider eventually gets traffic.
+ */
+export function rejectionFor(candidate: RouteCandidate): RouteRejectionReason | null {
   if (!candidate.enabled) return "route_disabled";
   if (candidate.routeStatus !== "active") return "route_not_active";
   if (candidate.modelLifecycle === "disabled") return "model_lifecycle_disabled";

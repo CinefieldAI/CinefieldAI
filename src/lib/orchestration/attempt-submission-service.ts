@@ -3,6 +3,11 @@ import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { toOrchestrationError } from "./errors";
 import { executeGeneration } from "./orchestrator";
 import { readPersistedProviderJob } from "./status-manager";
+import { readAttempt } from "./attempt-repository";
+import {
+  recordExecutionFailure,
+  recordExecutionSuccess,
+} from "@/lib/routing/health-recorder";
 import {
   claimAttemptForSubmission,
   markAttemptSubmitting,
@@ -73,6 +78,15 @@ export async function submitAttempt(params: {
   // predicate keeps every later invocation out until reconciliation.
   await markAttemptSubmitting(admin, params.attemptId);
 
+  // PHASE 7-C: who is being asked to do the work. Read from the attempt row
+  // rather than passed in, so the health signal is attributed to the provider
+  // the attempt actually records — the same row reconciliation reads.
+  const attemptRow = await readAttempt(admin, params.attemptId);
+  const observed = {
+    providerId: attemptRow?.provider ?? "unknown",
+    providerModelId: attemptRow?.provider_model ?? "unknown",
+  };
+
   const startedAt = Date.now();
   try {
     const outcome = await executeGeneration({
@@ -94,13 +108,21 @@ export async function submitAttempt(params: {
     }
 
     if (outcome.status === "completed") {
+      const latencyMs = Date.now() - startedAt;
       await markAttemptTerminal(admin, params.attemptId, {
         status: "succeeded",
-        latencyMs: Date.now() - startedAt,
+        latencyMs,
       });
+      // Phase 7-C. Best-effort, after the durable write: health telemetry
+      // must never come between a finished generation and its record.
+      await recordExecutionSuccess({ ...observed, latencyMs });
       return { result: "completed", attemptId: params.attemptId };
     }
 
+    // Accepted by an async provider. That acceptance IS a success signal for
+    // routing — it proves the provider is reachable and taking work — even
+    // though the generation itself is not finished.
+    await recordExecutionSuccess({ ...observed, latencyMs: Date.now() - startedAt });
     return { result: "processing", attemptId: params.attemptId };
   } catch (caught) {
     const error = toOrchestrationError(caught);
@@ -116,6 +138,14 @@ export async function submitAttempt(params: {
         result: "failed_with_job_evidence",
         errorCode: error.code,
       });
+      // A job exists, so the provider accepted the work and then something
+      // went wrong with it — that IS provider evidence, and the classifier
+      // decides whether this particular code counts.
+      await recordExecutionFailure({
+        ...observed,
+        latencyMs: Date.now() - startedAt,
+        errorCode: error.code,
+      });
       return { result: "failed", attemptId: params.attemptId, errorCode: error.code };
     }
 
@@ -127,14 +157,25 @@ export async function submitAttempt(params: {
         result: "ambiguous",
         errorCode: error.code,
       });
+      // Ambiguity says nothing about the provider — the work may have
+      // succeeded and only the acknowledgement was lost. Recorded with the
+      // ambiguous flag so the recorder refuses to move the breaker.
+      await recordExecutionFailure({
+        ...observed,
+        latencyMs: Date.now() - startedAt,
+        errorCode: error.code,
+        ambiguous: true,
+      });
       return { result: "ambiguous", attemptId: params.attemptId, errorCode: error.code };
     }
 
+    const latencyMs = Date.now() - startedAt;
     await markAttemptTerminal(admin, params.attemptId, {
       status: "failed",
       errorCode: error.code,
-      latencyMs: Date.now() - startedAt,
+      latencyMs,
     });
+    await recordExecutionFailure({ ...observed, latencyMs, errorCode: error.code });
     return { result: "failed", attemptId: params.attemptId, errorCode: error.code };
   }
 }

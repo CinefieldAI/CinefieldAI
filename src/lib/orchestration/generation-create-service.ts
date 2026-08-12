@@ -6,7 +6,7 @@ import { canonicalRequestHash, deriveIdempotencyIdentity } from "@/lib/redis/ide
 import { validateCapabilities } from "./capability-validator";
 import { mapMetadataToInputs, mapMetadataToSettings } from "./generation-settings-mapper";
 import { resolveWorkflow } from "./workflow-router";
-import { resolveRoute } from "@/lib/routing/model-router";
+import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
 
 function log(fields: Record<string, unknown>): void {
   // Identifiers and codes only — never a prompt, a credential or a payload.
@@ -185,17 +185,24 @@ export async function createGeneration(
   // A model with no eligible route is refused BEFORE the row is created. The
   // alternative — a durable generation nothing can ever run — is a queue of
   // work that silently never completes.
-  const routing = await resolveRoute(admin, { cinefieldModelId: model.id });
-  if (routing.outcome === "no_eligible_route") {
+  // PHASE 7-C: hard eligibility first, then health. A model with no route at
+  // all and a model whose every route is behind an open breaker are different
+  // failures and get different typed errors — one is a misconfiguration, the
+  // other is an outage that heals itself.
+  const routing = await resolveHealthyRoute(admin, { cinefieldModelId: model.id });
+  if (routing.outcome !== "selected") {
     log({
       modelId: model.id,
-      result: "no_eligible_route",
+      result: routing.outcome,
       // Codes only, so an operator can see which switch is off.
-      rejected: routing.rejected.map((r) => r.reason),
+      rejected: routing.decision.evaluations
+        .filter((evaluation) => evaluation.rejection)
+        .map((evaluation) => evaluation.rejection),
     });
-    throw new OrchestrationError("NO_ELIGIBLE_ROUTE", {
-      context: { modelId: model.id },
-    });
+    throw new OrchestrationError(
+      routing.outcome === "no_healthy_route" ? "NO_HEALTHY_ROUTE" : "NO_ELIGIBLE_ROUTE",
+      { context: { modelId: model.id } }
+    );
   }
 
   const requestHash = canonicalRequestHash(canonicalForm(request));

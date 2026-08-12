@@ -40,7 +40,9 @@ import type { ProviderCancelOutcome } from "@/lib/orchestration/cancellation";
 import { getCommandBus } from "@/lib/contracts/command-bus";
 import { commandIdFor } from "@/lib/contracts/command-wire";
 import { isSqsCommandBusEnabled } from "@/lib/aws/sqs-config";
-import type { Generation } from "@/types/database";
+import type { Generation, GenerationAttempt } from "@/types/database";
+import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
+import { decideFailover, DEFAULT_MAX_ATTEMPTS } from "@/lib/routing/failover-policy";
 
 /**
  * Reads the route the Phase 7-B router chose when the generation was created.
@@ -495,4 +497,136 @@ async function readGenerationOwner(
     .eq("id", generationId)
     .maybeSingle();
   return (data as { clerk_user_id?: string } | null)?.clerk_user_id ?? "";
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* PHASE 7-C — safe failover                                                 */
+/* ------------------------------------------------------------------------ */
+
+export interface FailoverPlan {
+  decision:
+    | "safe_to_failover"
+    | "reconciliation_required"
+    | "no_failover_local_failure"
+    | "failover_exhausted";
+  reason: string;
+  /** Present only for safe_to_failover: where the next attempt should go. */
+  nextRoute?: { routeId: string; providerId: string; providerModelId: string };
+}
+
+/**
+ * Decides whether this generation may be tried on a different route, and
+ * where.
+ *
+ * AN ACTIVITY, NOT WORKFLOW CODE, because it reads the database and Redis —
+ * both non-deterministic. The workflow asks and obeys; it does not compute
+ * the answer, and it does not own the policy.
+ *
+ * THE ORDER MATTERS. Evidence is evaluated before any route is looked at, so
+ * an ambiguous submission can never reach a "which route next" question. See
+ * failover-policy.ts.
+ */
+export async function planFailover(params: {
+  generationId: string;
+  attemptId: string;
+  errorCode?: string;
+}): Promise<FailoverPlan> {
+  const admin = getSupabaseAdminClient();
+
+  const attempt = await readAttempt(admin, params.attemptId);
+  if (!attempt) {
+    return { decision: "failover_exhausted", reason: "attempt_not_found" };
+  }
+
+  const { data: generationRow } = await admin
+    .from("generations")
+    .select("*")
+    .eq("id", params.generationId)
+    .maybeSingle();
+
+  if (!generationRow) {
+    return { decision: "failover_exhausted", reason: "generation_not_found" };
+  }
+
+  const generation = generationRow as Generation;
+  const model = findModel(generation.model);
+  const isMockProvider = model?.isMock === true;
+
+  // Every route this generation has already been sent to. Read from the
+  // attempt history rather than tracked in the workflow, so a workflow retry
+  // that replays from the start cannot re-select a route it already burned.
+  const { data: priorRows } = await admin
+    .from("generation_attempts")
+    .select("id, model_route_id")
+    .eq("generation_id", params.generationId);
+
+  const prior = (priorRows ?? []) as Pick<GenerationAttempt, "id" | "model_route_id">[];
+  const triedRouteIds = prior
+    .map((row) => row.model_route_id)
+    .filter((id): id is string => typeof id === "string");
+
+  const routing = await resolveHealthyRoute(admin, {
+    cinefieldModelId: generation.model,
+    excludeRouteIds: triedRouteIds,
+  });
+
+  const decision = decideFailover({
+    attempt,
+    errorCode: params.errorCode ?? attempt.error_code,
+    isMockProvider,
+    attemptCount: prior.length,
+    maxAttempts: DEFAULT_MAX_ATTEMPTS,
+    alternativeRoutesAvailable: routing.outcome === "selected" ? 1 : 0,
+  });
+
+  log({
+    generationId: params.generationId,
+    attemptId: params.attemptId,
+    result: "failover_plan",
+    decision: decision.decision,
+    reason: decision.reason,
+  });
+
+  if (decision.decision !== "safe_to_failover" || routing.outcome !== "selected") {
+    return {
+      decision: decision.decision === "safe_to_failover" ? "failover_exhausted" : decision.decision,
+      reason: decision.decision === "safe_to_failover" ? "no_alternative_route" : decision.reason,
+    };
+  }
+
+  // The new destination becomes the durable decision, so execution — which
+  // reads metadata.routing — actually goes somewhere else. Merged one level
+  // deep: overwriting the whole metadata object would drop the UI settings
+  // the request was made with.
+  const previous = (generation.metadata ?? {}) as Record<string, unknown>;
+  await admin
+    .from("generations")
+    .update({
+      metadata: {
+        ...previous,
+        routing: {
+          routeId: routing.selection.routeId,
+          modelVersionId: routing.selection.modelVersionId,
+          modelVersion: routing.selection.modelVersion,
+          providerId: routing.selection.providerId,
+          providerModelId: routing.selection.providerModelId,
+          selectionReason: routing.selection.selectionReason,
+          selectedAt: new Date().toISOString(),
+          failoverFromRouteId: attempt.model_route_id ?? null,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.generationId);
+
+  return {
+    decision: "safe_to_failover",
+    reason: decision.reason,
+    nextRoute: {
+      routeId: routing.selection.routeId,
+      providerId: routing.selection.providerId,
+      providerModelId: routing.selection.providerModelId,
+    },
+  };
 }

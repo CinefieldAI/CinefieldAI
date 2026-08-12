@@ -36,6 +36,9 @@ export type OrchestrationErrorCode =
   | "TRIGGER_DISPATCH_FAILED"
   | "GENERATION_OWNER_UNAVAILABLE"
   | "NO_ELIGIBLE_ROUTE"
+  | "NO_HEALTHY_ROUTE"
+  | "FAILOVER_EXHAUSTED"
+  | "RECONCILIATION_REQUIRED"
   | "INTERNAL_ERROR";
 
 interface ErrorDefinition {
@@ -163,6 +166,33 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
   NO_ELIGIBLE_ROUTE: {
     message: "This model is temporarily unavailable. Please try another model.",
     status: 503,
+    retryable: false,
+  },
+  // Phase 7-C. Routes exist and are configured correctly, but every one is
+  // currently excluded by an open circuit breaker. Distinct from
+  // NO_ELIGIBLE_ROUTE because the operator response differs: nothing is
+  // misconfigured, a provider is failing. Retryable — unlike a disabled route,
+  // a breaker heals on its own after its cooldown.
+  NO_HEALTHY_ROUTE: {
+    message: "This model is temporarily unavailable. Please try again shortly.",
+    status: 503,
+    retryable: true,
+  },
+  // Phase 7-C. Every safe alternative has been tried and the bound is reached.
+  // Not retryable: another attempt would exceed the attempt ceiling that
+  // exists to keep one request from becoming many billable jobs.
+  FAILOVER_EXHAUSTED: {
+    message: "Generation failed after trying every available provider.",
+    status: 502,
+    retryable: false,
+  },
+  // Phase 7-C. A provider job may exist and Cinefield cannot prove otherwise.
+  // Deliberately NOT retryable and deliberately NOT failed-over: this is the
+  // AMBIGUOUS != SAFE TO RETRY rule surfacing as a typed outcome.
+  RECONCILIATION_REQUIRED: {
+    message:
+      "This generation could not be confirmed and will not be retried automatically.",
+    status: 502,
     retryable: false,
   },
   INTERNAL_ERROR: { message: "Something went wrong. Please try again.", status: 500, retryable: false },

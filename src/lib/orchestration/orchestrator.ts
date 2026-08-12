@@ -15,7 +15,7 @@ import {
 import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
-import { getProviderAdapter } from "./provider-registry";
+import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
 import type { ProviderAdapter } from "./providers/provider-adapter";
 import { releaseGeminiResult } from "./providers/gemini-provider";
 import { releaseFalResult } from "./providers/fal-provider";
@@ -93,6 +93,28 @@ function readNumber(source: Record<string, unknown>, key: string): number | unde
  * any other workflow, so the original Unicode text is preserved byte-for-
  * byte through this step.
  */
+/**
+ * Reads the route the router chose, from the row's own metadata.
+ *
+ * Returns null for a generation created before routing existed, or one whose
+ * metadata is malformed — in both cases the caller falls back to the registry.
+ * The provider is additionally required to be a registered adapter: a route
+ * pointing at a provider this deployment cannot run must not silently become
+ * an "unknown adapter" crash deep inside submission.
+ */
+function readRoutingSelection(
+  metadata: Record<string, unknown> | null | undefined
+): { providerId: string; providerModelId: string } | null {
+  const routing = metadata?.routing;
+  if (!routing || typeof routing !== "object") return null;
+  const record = routing as Record<string, unknown>;
+  if (typeof record.providerId !== "string" || typeof record.providerModelId !== "string") {
+    return null;
+  }
+  if (!isProviderRegistered(record.providerId)) return null;
+  return { providerId: record.providerId, providerModelId: record.providerModelId };
+}
+
 function normalizeRequest(params: {
   generation: Generation;
   project: Project;
@@ -137,14 +159,22 @@ function normalizeRequest(params: {
     extra: metadata,
   };
 
+  const routing = readRoutingSelection(metadata);
+
   return {
     request: {
       generationId: generation.id,
       clerkUserId: generation.clerk_user_id,
       projectId: project.id,
       modelId: generation.model,
-      provider: model.providerId,
-      providerModelId: model.providerModelId,
+      // PHASE 7-B/7-C: the ROUTER decided where this runs, at creation or at
+      // failover, and that decision is durable on the row. Reading it back
+      // here is what makes a failover to another provider actually change the
+      // destination instead of quietly re-running the registry default.
+      // Absent (a generation older than routing) falls back to the registry —
+      // the exact pre-routing behaviour.
+      provider: routing?.providerId ?? model.providerId,
+      providerModelId: routing?.providerModelId ?? model.providerModelId,
       // The registry is the server-side source of truth. The row's
       // generation_type reflects the UI mode the browser was in, which may
       // not match the model's actual output type.
@@ -353,7 +383,10 @@ export async function executeGeneration(params: {
       isMock: model.isMock,
     });
 
-    const adapter = getProviderAdapter(model.providerId);
+    // The adapter follows the same decision the request carries. Using
+    // model.providerId here instead would submit to one provider while every
+    // log, attempt row and metadata field named another.
+    const adapter = getProviderAdapter(request.provider);
     const context = { generationId, clerkUserId, projectId: project.id };
 
     if (model.isMock) {

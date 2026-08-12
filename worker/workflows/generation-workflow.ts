@@ -88,6 +88,17 @@ export interface GenerationWorkflowInput {
   clerkUserId: string;
 }
 
+/**
+ * How many times one generation may be re-routed to a different provider.
+ *
+ * One. The original attempt plus one failover is two provider executions for
+ * a request the user made once, and that is already the ceiling worth
+ * defending: every additional hop multiplies the blast radius of a
+ * mis-classified "safe" and the cost of an outage. Temporal still owns
+ * retry WITHIN a route; this bounds movement BETWEEN routes.
+ */
+const MAX_FAILOVER_ATTEMPTS = 1;
+
 export type GenerationWorkflowResult = {
   generationId: string;
   outcome: "completed" | "failed" | "cancelled" | "ambiguous" | "abandoned";
@@ -130,6 +141,7 @@ const {
   checkGenerationStatus,
   recordWorkflowCorrelation,
   getAttempt,
+  planFailover,
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "2 minutes",
   retry: { maximumAttempts: 5, initialInterval: "2 seconds", backoffCoefficient: 2 },
@@ -326,18 +338,96 @@ export async function generationWorkflow(
       modelVersionId: descriptor.modelVersionId,
       routeId: descriptor.routeId,
     });
-    attemptId = attempt.attemptId;
+    // A non-nullable mirror of `attemptId`. The outer variable is nullable
+    // because the cancellation handler may run before any attempt exists;
+    // inside this block one always does, and the failover loop reassigns it,
+    // which is more than TypeScript can narrow through a closure.
+    let liveAttemptId: string = attempt.attemptId;
+    attemptId = liveAttemptId;
     attempts = attempt.attemptNo;
 
     if (cancelRequested) {
-      return await waitForCancellationToSettle(input.generationId, attemptId, attempts);
+      return await waitForCancellationToSettle(input.generationId, liveAttemptId, attempts);
     }
 
-    const submission = await submitGeneration({
+    let submission = await submitGeneration({
       generationId: input.generationId,
       clerkUserId: input.clerkUserId,
-      attemptId,
+      attemptId: liveAttemptId,
     });
+
+    // ---- PHASE 7-C: bounded safe failover -----------------------------------
+    //
+    // A failed submission MIGHT be worth trying somewhere else. Whether it is
+    // depends entirely on evidence, and the workflow does not evaluate that
+    // evidence itself — planFailover does, in an activity, against the attempt
+    // row and the route table. The workflow's job is to obey the answer and to
+    // keep the loop bounded.
+    //
+    // WHAT THIS LOOP MUST NEVER DO: create a second generation, or start a
+    // second provider execution when the first one may still be alive. Both
+    // are prevented upstream of the loop body — planFailover returns
+    // "reconciliation_required" for any ambiguous or job-bearing attempt, and
+    // this loop only ever continues on an explicit "safe_to_failover".
+    //
+    // The generation_id never changes. Only the attempt does.
+    let failoverCount = 0;
+    while (submission.result === "failed" && failoverCount < MAX_FAILOVER_ATTEMPTS) {
+      if (cancelRequested) {
+        return await waitForCancellationToSettle(input.generationId, liveAttemptId, attempts);
+      }
+
+      const plan = await planFailover({
+        generationId: input.generationId,
+        attemptId: liveAttemptId,
+        errorCode: submission.errorCode,
+      });
+
+      if (plan.decision === "reconciliation_required") {
+        // A provider job exists or may exist. Reported as ambiguous — the
+        // outcome that already means "do not retry, preserve the evidence".
+        return {
+          generationId: input.generationId,
+          outcome: "ambiguous",
+          attempts,
+          errorCode: submission.errorCode,
+        };
+      }
+
+      if (plan.decision !== "safe_to_failover" || !plan.nextRoute) {
+        // Local failure, or nowhere left to go. Either way this is a plain
+        // failure, not something another provider could rescue.
+        return {
+          generationId: input.generationId,
+          outcome: "failed",
+          attempts,
+          errorCode: submission.errorCode,
+        };
+      }
+
+      failoverCount += 1;
+
+      // A NEW attempt on the new route. The failed one keeps its own row,
+      // its own evidence and its own error code — failover must never rewrite
+      // history to make the second try look like the first.
+      const nextAttempt = await ensureAttempt({
+        generationId: input.generationId,
+        provider: plan.nextRoute.providerId,
+        providerModel: plan.nextRoute.providerModelId,
+        workflowId,
+        workflowRunId: runId,
+        routeId: plan.nextRoute.routeId,
+      });
+      liveAttemptId = nextAttempt.attemptId;
+      attemptId = liveAttemptId;
+      attempts = nextAttempt.attemptNo;
+
+      submission = await submitGeneration({
+        generationId: input.generationId,
+        clerkUserId: input.clerkUserId,
+        attemptId: liveAttemptId,
+      });
+    }
 
     if (submission.result === "completed") {
       return { generationId: input.generationId, outcome: "completed", attempts };

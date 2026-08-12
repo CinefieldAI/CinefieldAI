@@ -52,11 +52,12 @@ import "server-only";
 
 export const REDIS_KEY_VERSION = 1;
 
-/** The eight logical namespaces Redis Application State is scoped to. */
+/** The logical namespaces Redis Application State is scoped to. */
 export type RedisKeyNamespace =
   | "provider-health"
   | "provider-latency"
   | "provider-error-rate"
+  | "circuit-breaker"
   | "rate-limit"
   | "idempotency"
   | "model-cache"
@@ -74,6 +75,12 @@ export const REDIS_KEY_TTL_SECONDS: Readonly<Record<RedisKeyNamespace, number>> 
   "provider-health": 120,
   "provider-latency": 120,
   "provider-error-rate": 300,
+  // Phase 7-C. Longer than the health signals it is derived from, and for the
+  // opposite reason: an expired breaker key reads as CLOSED, so a TTL shorter
+  // than the cooldown would silently reopen a provider Cinefield had just
+  // decided to stop sending traffic to. Long enough to outlive the cooldown,
+  // short enough that a breaker cannot outlive the incident by hours.
+  "circuit-breaker": 1_800,
   // A rate-limit counter's TTL is the window itself — it must expire
   // exactly when the window it counts ends.
   "rate-limit": 60,
@@ -120,6 +127,48 @@ export function providerLatencyKey(providerId: string): string {
 /** `cinefield:v1:provider-error-rate:<providerId>` */
 export function providerErrorRateKey(providerId: string): string {
   return buildKey("provider-error-rate", identifier("providerId", providerId));
+}
+
+/**
+ * `cinefield:v1:circuit-breaker:<providerId>:<providerModelId>`
+ *
+ * Scoped to the provider MODEL, not just the provider (Phase 7-C). One
+ * endpoint failing is the common case — a model deprecated upstream, a single
+ * overloaded pool — and tripping every route through that provider because of
+ * it would turn a narrow outage into a total one.
+ *
+ * `providerModelId` is not a safe key segment on its own: real ids contain
+ * "/" and "." ("fal-ai/flux/schnell"). It is encoded to the identifier
+ * alphabet rather than rejected, since the alternative is a keyspace that
+ * cannot express the ids the system actually routes to.
+ */
+export function circuitBreakerKey(providerId: string, providerModelId: string): string {
+  return buildKey(
+    "circuit-breaker",
+    identifier("providerId", providerId),
+    identifier("providerModelId", encodeKeySegment(providerModelId))
+  );
+}
+
+/**
+ * Makes an arbitrary provider-owned id safe for a key segment.
+ *
+ * Deterministic and collision-free within the alphabet it produces: every
+ * character outside [A-Za-z0-9_-] becomes "_" plus its hex code, so "a/b" and
+ * "a.b" cannot map to the same segment the way a plain replace would.
+ */
+export function encodeKeySegment(value: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("redis-keys: empty key segment");
+  }
+  const encoded = value.replace(/[^A-Za-z0-9-]/g, (char) => {
+    const code = char.codePointAt(0) ?? 0;
+    return `_${code.toString(16)}`;
+  });
+  if (encoded.length > 128) {
+    throw new Error("redis-keys: key segment too long");
+  }
+  return encoded;
 }
 
 /** The kind of subject a rate-limit counter is scoped to. */
