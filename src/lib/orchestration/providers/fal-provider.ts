@@ -62,8 +62,21 @@ export function isFalConfigured(): boolean {
 }
 
 let cachedClient: FalClient | null = null;
+let testClient: FalClient | null = null;
+
+/**
+ * Injects a fal client for tests.
+ *
+ * The ONLY way this adapter is exercised without a credential or a paid call.
+ * Production never reaches it: `getFalClient()` prefers the injected client
+ * only when one has been set, and nothing outside a test sets one.
+ */
+export function __setFalClientForTesting(client: FalClient | null): void {
+  testClient = client;
+}
 
 function getFalClient(): FalClient {
+  if (testClient) return testClient;
   if (!isFalConfigured()) {
     throw new OrchestrationError("PROVIDER_NOT_CONFIGURED", {
       context: { providerId: "fal" },
@@ -154,14 +167,29 @@ function extensionForMimeType(mimeType: string): string {
 }
 
 /**
- * Holds the images produced by submit() until getResult() runs. In-memory
- * only for the lifetime of the request — never persisted, so the temporary
- * fal URLs never reach Supabase.
+ * NO PROCESS-LOCAL RESULT STATE.
+ *
+ * This adapter used to hold submit()'s images in a module-level Map keyed by
+ * generation id, and getResult() read them back out. That worked only while
+ * one Node process handled the whole generation. A crash between fal
+ * finishing and Cinefield storing the output lost a job that had ALREADY been
+ * billed, and a continuation resumed on another worker found nothing — the
+ * memory was the only copy.
+ *
+ * fal's queue is the durable copy. `queue.result(endpointId, { requestId })`
+ * returns a completed request's output to anyone holding those two
+ * identifiers, both of which live in PostgreSQL on the attempt and the
+ * submission. So the Map is gone rather than kept as a fast path: a fallback
+ * would hide exactly the defect this removal fixes, passing in the process
+ * that submitted and failing everywhere else.
+ *
+ * `releaseFalResult` is intentionally retained as a no-op export — the
+ * orchestrator's `finally` block calls it for every provider, and a
+ * provider-shaped hole there would be a worse artifact than one honest
+ * no-op. It is documented, not dead by accident.
  */
-const PENDING_RESULTS = new Map<string, FalImage[]>();
-
-export function releaseFalResult(generationId: string): void {
-  PENDING_RESULTS.delete(`fal-${generationId}`);
+export function releaseFalResult(_generationId: string): void {
+  void _generationId;
 }
 
 /**
@@ -299,12 +327,10 @@ class FalProvider implements ProviderAdapter {
         });
       }
 
-      // Keyed by generationId — an internal handoff key for the in-memory
-      // submit()→getResult() round trip within one process, independent of
-      // whatever this adapter reports as providerJobId (see getResult below,
-      // which looks the images up the same way).
-      PENDING_RESULTS.set(`fal-${request.generationId}`, images);
-
+      // NOTHING IS STASHED HERE. The images were just proven to exist, and
+      // getResult() fetches them from fal by (endpointId, requestId) — which
+      // is what makes the output recoverable from another process after this
+      // one is gone.
       return {
         // The real fal request id, not a Cinefield-internal key. This is
         // what gets persisted as "job" evidence if a later step in the sync
@@ -343,26 +369,95 @@ class FalProvider implements ProviderAdapter {
     }
   }
 
+  /**
+   * Asks fal for a request's current state.
+   *
+   * Used to echo the submission's own status, which made it useless to any
+   * process that had not just performed the submission. It now asks fal, via
+   * `queue.status(endpointId, { requestId })`, so a status check works from
+   * another worker or after a restart.
+   *
+   * A failed lookup does NOT become a failed job. fal's status union carries
+   * no failure state at all, and a transport error says nothing about the
+   * work — so an unanswerable check reports the status the caller already
+   * had rather than inventing a terminal one. Temporal's polling loop already
+   * treats a failed check as "keep checking", never as "the job died".
+   */
   async getStatus(
     submission: ProviderSubmission,
-    _context: ProviderExecutionContext
+    context: ProviderExecutionContext
   ): Promise<ProviderStatusResult> {
-    void _context;
-    return { status: submission.status, progress: submission.status === "completed" ? 100 : 0 };
+    const endpointId = endpointIdFor(submission);
+    if (!endpointId || isSyntheticJobId(submission.providerJobId, context.generationId)) {
+      return { status: submission.status };
+    }
+
+    try {
+      const client = getFalClient();
+      const status = await client.queue.status(endpointId, {
+        requestId: submission.providerJobId,
+      });
+      const mapped = mapFalQueueStatus(status.status);
+      return { status: mapped, progress: mapped === "completed" ? 100 : undefined };
+    } catch {
+      // Unanswerable, not terminal.
+      return { status: submission.status };
+    }
   }
 
+  /**
+   * Fetches a completed request's output from fal.
+   *
+   * DURABLE BY CONSTRUCTION. Everything this needs — the request id and the
+   * endpoint id — is persisted with the attempt, so any process holding the
+   * attempt row can call it: the worker that submitted, a different worker,
+   * or the same worker after a restart. There is no in-memory handoff and no
+   * fallback to one.
+   *
+   * Built on `queue.result(endpointId, { requestId })`, declared by the
+   * installed SDK (@fal-ai/client 1.10.1, src/queue.d.ts).
+   */
   async getResult(
     submission: ProviderSubmission,
     context: ProviderExecutionContext
   ): Promise<NormalizedOutput[]> {
-    // Looked up by generationId, NOT submission.providerJobId: that field is
-    // now the real fal request id (see submit() above), which no longer
-    // matches PENDING_RESULTS' internal `fal-<generationId>` key.
-    void submission;
-    const images = PENDING_RESULTS.get(`fal-${context.generationId}`);
-    if (!images || images.length === 0) {
+    const endpointId = endpointIdFor(submission);
+    if (!endpointId) {
+      // Without the endpoint id the request cannot be addressed. Reported as
+      // missing output rather than guessed at — the job may well exist, and
+      // saying otherwise would be the invented answer.
       throw new OrchestrationError("OUTPUT_MISSING", {
-        context: { provider: "fal", generationId: context.generationId },
+        context: { provider: "fal", generationId: context.generationId, reason: "unknown_endpoint" },
+      });
+    }
+    if (isSyntheticJobId(submission.providerJobId, context.generationId)) {
+      throw new OrchestrationError("OUTPUT_MISSING", {
+        context: {
+          provider: "fal",
+          generationId: context.generationId,
+          reason: "no_provider_request_id",
+        },
+      });
+    }
+
+    let images: FalImage[];
+    try {
+      const client = getFalClient();
+      const result = await client.queue.result(endpointId as never, {
+        requestId: submission.providerJobId,
+      });
+      images = extractImages((result as { data?: unknown }).data);
+    } catch (error) {
+      throw mapFalError(error);
+    }
+
+    if (images.length === 0) {
+      throw new OrchestrationError("OUTPUT_MISSING", {
+        context: {
+          provider: "fal",
+          generationId: context.generationId,
+          providerJobId: submission.providerJobId,
+        },
       });
     }
 
@@ -408,7 +503,7 @@ class FalProvider implements ProviderAdapter {
     submission: ProviderSubmission,
     context: ProviderExecutionContext
   ): Promise<void> {
-    const endpointId = endpointIdFor(submission, context);
+    const endpointId = endpointIdFor(submission);
     if (!endpointId) {
       // Without the endpoint id there is no call to make. Throwing lets the
       // caller record "failed / unknown" rather than a false confirmation.
@@ -494,15 +589,17 @@ export function mapFalQueueStatus(status: string): ProviderStatusResult["status"
   }
 }
 
-/** The fal endpoint a submission belongs to, resolved from the model registry. */
-function endpointIdFor(
-  submission: ProviderSubmission,
-  context: ProviderExecutionContext
-): string | null {
+/**
+ * The fal endpoint a submission belongs to.
+ *
+ * fal's queue API is keyed by (endpointId, requestId), so the endpoint is as
+ * necessary as the request id. It travels in the submission's own metadata,
+ * which the core persists verbatim as the job's resume data — durable, and
+ * handed back to every later call. A public model identifier, never a secret.
+ */
+export function endpointIdFor(submission: ProviderSubmission): string | null {
   const fromMetadata = submission.metadata?.endpointId;
-  if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
-  void context;
-  return null;
+  return typeof fromMetadata === "string" && fromMetadata.length > 0 ? fromMetadata : null;
 }
 
 /**
