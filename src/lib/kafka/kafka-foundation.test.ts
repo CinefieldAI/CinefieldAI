@@ -71,13 +71,21 @@ class FakeProducer implements KafkaProducerLike {
   }
 }
 
+// The payload matches the registered cinefield.generation.completed contract:
+// since Phase 6R.15 the producer validates before sending, so an off-contract
+// fixture would be refused at the schema gate instead of reaching the
+// transport behaviour these tests cover.
 const SAMPLE_EVENT = () =>
   buildDomainEvent({
     eventType: "generation.completed",
     eventVersion: 1,
     aggregateType: "generation",
     aggregateId: "gen-1",
-    payload: { status: "completed" },
+    payload: {
+      generationId: "33333333-3333-4333-8333-333333333333",
+      provider: "mock",
+      attemptNo: 1,
+    },
     traceId: "trace-1",
   });
 

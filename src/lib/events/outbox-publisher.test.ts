@@ -21,12 +21,19 @@ import type { KafkaProducerLike } from "@/lib/kafka/kafka-producer";
  * explicitly reported limitation.
  */
 
+// Payloads satisfy the Phase 6R.15 schema registry: since that phase the
+// producer validates every event before sending, so a fixture that does not
+// match its registered contract would be refused at the gate rather than
+// exercising the outbox behaviour these tests are about.
+const GEN_A = "11111111-1111-4111-8111-111111111111";
+const RES_B = "22222222-2222-4222-8222-222222222222";
+
 const EVENT_A = buildDomainEvent({
   eventType: "generation.completed",
   eventVersion: 1,
   aggregateType: "generation",
   aggregateId: "gen-a",
-  payload: { status: "completed" },
+  payload: { generationId: GEN_A, provider: "mock", attemptNo: 1 },
 });
 
 const EVENT_B = buildDomainEvent({
@@ -34,7 +41,7 @@ const EVENT_B = buildDomainEvent({
   eventVersion: 1,
   aggregateType: "credit_reservation",
   aggregateId: "res-b",
-  payload: { amount: 10 },
+  payload: { reservationId: RES_B, amount: 10 },
 });
 
 class FakeProducer implements KafkaProducerLike {

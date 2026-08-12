@@ -1,6 +1,7 @@
 import "server-only";
 import { getKafkaConfig } from "./kafka-config";
 import { topicForEventType } from "@/lib/events/event-topics";
+import { validateDomainEvent } from "@/lib/events/schema-registry";
 import type { DomainEventEnvelope } from "@/lib/events/domain-event";
 
 /**
@@ -83,6 +84,25 @@ export async function publishDomainEvent(
     // An unresolvable topic is a contract violation, not a transient
     // condition — refuse rather than guess where the fact belongs.
     return { outcome: "failed", errorCode: "unknown_event_topic" };
+  }
+
+  // Phase 6R.15: the schema gate. Nothing reaches a topic without matching a
+  // registered contract, checked BEFORE the send rather than discovered by a
+  // consumer later — an unschema'd fact on the bus is permanent, because
+  // consumers replay history. Ordered before the producer check on purpose:
+  // an invalid event is invalid whether or not Kafka happens to be up, and
+  // reporting it as merely "unavailable" would hide a caller bug behind an
+  // infrastructural one.
+  const validation = validateDomainEvent(event);
+  if (!validation.ok) {
+    log({
+      eventType: event.eventType,
+      eventVersion: event.eventVersion,
+      topic,
+      result: "rejected",
+      reason: validation.reason,
+    });
+    return { outcome: "failed", errorCode: validation.reason };
   }
 
   if (!producer) return { outcome: "unavailable" };
