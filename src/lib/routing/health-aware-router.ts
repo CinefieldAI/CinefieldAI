@@ -4,6 +4,7 @@ import { getBreaker } from "@/lib/redis/circuit-breaker-store";
 import { getProviderErrorRate } from "@/lib/redis/provider-error-rate-store";
 import { getProviderLatency } from "@/lib/redis/provider-latency-store";
 import { compareRoutes, listRouteCandidates } from "./route-repository";
+import { tryAcquireProbe } from "./half-open-probe";
 import { rejectionFor } from "./model-router";
 import {
   DEFAULT_HEALTH_POLICY,
@@ -153,7 +154,14 @@ export function selectHealthyRoute(
       health.get(healthKeyFor(candidate.providerId, candidate.providerModelId)) ??
       unknownHealth(candidate.providerId, candidate.providerModelId, now, true);
 
-    if (!routeHealth.admitsTraffic) {
+    // "deny" is an OPEN breaker: excluded outright.
+    //
+    // "probe_required" is HALF_OPEN, and this pure function deliberately does
+    // NOT decide it. Whether the single recovery slot is free is a question
+    // only an atomic operation can answer, so the candidate stays in the race
+    // and `resolveHealthyRoute` claims the lease before letting it win. A
+    // boolean here is exactly what let every waiting request through at once.
+    if (routeHealth.admission === "deny") {
       evaluations.push({
         routeId: candidate.routeId,
         providerId: candidate.providerId,
@@ -327,10 +335,58 @@ export async function resolveHealthyRoute(
   );
 
   const health = await loadRouteHealth(candidates, now, policy);
-  const resolution = selectHealthyRoute(request.cinefieldModelId, candidates, health, now, {
-    excludeRouteIds: request.excludeRouteIds,
+
+  // ---- Atomic HALF_OPEN admission -----------------------------------------
+  //
+  // A winner whose breaker is HALF_OPEN has to claim the single recovery
+  // probe before it may be used. Exactly one caller can, because the claim is
+  // a Redis SET NX. Everyone else re-selects with that route excluded and
+  // takes the next best one — so a recovering provider receives one trial
+  // request while the rest of the traffic goes somewhere healthy, instead of
+  // the entire backlog arriving at once.
+  //
+  // Bounded by the candidate count: each pass either succeeds or removes one
+  // route from consideration, so this cannot loop.
+  const deniedProbes: string[] = [];
+  let resolution = selectHealthyRoute(request.cinefieldModelId, candidates, health, now, {
+    excludeRouteIds: [...(request.excludeRouteIds ?? []), ...deniedProbes],
     policy,
   });
+
+  for (let pass = 0; pass < candidates.length; pass += 1) {
+    if (resolution.outcome !== "selected") break;
+
+    const winner = resolution.selection;
+    const winnerHealth = health.get(healthKeyFor(winner.providerId, winner.providerModelId));
+    if (winnerHealth?.admission !== "probe_required") break;
+
+    const probe = await tryAcquireProbe(winner.providerId, winner.providerModelId);
+    if (probe.granted) {
+      // NOTE: the lease is intentionally NOT released here. It expires on its
+      // own TTL, which is what makes it a rate limit on trials rather than a
+      // mutex around one function call — releasing it on the way out of
+      // selection would let the next request in immediately, before the first
+      // trial has produced any evidence at all.
+      log({
+        modelId: request.cinefieldModelId,
+        result: "half_open_probe_granted",
+        routeId: winner.routeId,
+      });
+      break;
+    }
+
+    log({
+      modelId: request.cinefieldModelId,
+      result: "half_open_probe_denied",
+      routeId: winner.routeId,
+      reason: probe.reason,
+    });
+    deniedProbes.push(winner.routeId);
+    resolution = selectHealthyRoute(request.cinefieldModelId, candidates, health, now, {
+      excludeRouteIds: [...(request.excludeRouteIds ?? []), ...deniedProbes],
+      policy,
+    });
+  }
 
   if (resolution.outcome === "selected") {
     log({

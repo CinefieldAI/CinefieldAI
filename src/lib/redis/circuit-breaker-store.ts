@@ -89,7 +89,6 @@ export function parseBreakerRecord(raw: string): CircuitBreakerRecord | null {
     state: value.state as BreakerState,
     consecutiveFailures: nonNegative(value.consecutiveFailures),
     halfOpenSuccesses: nonNegative(value.halfOpenSuccesses),
-    halfOpenInFlight: nonNegative(value.halfOpenInFlight),
     lastFailureAt: optionalIso(value.lastFailureAt),
     lastSuccessAt: optionalIso(value.lastSuccessAt),
     openedAt: optionalIso(value.openedAt),

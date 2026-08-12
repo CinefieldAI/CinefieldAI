@@ -5,13 +5,12 @@ import { test } from "node:test";
 
 import {
   DEFAULT_BREAKER_POLICY,
-  admitsTraffic,
+  admissionFor,
   effectiveBreakerState,
   initialBreakerRecord,
   isBreakerFresh,
   recordFailure,
   recordSuccess,
-  reserveHalfOpenSlot,
   type CircuitBreakerRecord,
 } from "@/lib/routing/circuit-breaker";
 import {
@@ -96,7 +95,7 @@ function healthFor(
       providerId: candidateRoute.providerId,
       providerModelId: candidateRoute.providerModelId,
       breakerState: "CLOSED",
-      admitsTraffic: true,
+      admission: "admit" as const,
       sampleCount: 50,
       consecutiveFailures: 0,
       observedAt: T0.toISOString(),
@@ -262,7 +261,7 @@ test("an open breaker excludes its route", () => {
   const open = candidate({ priority: 900 });
   const spare = candidate({ priority: 100 });
   const health: HealthSnapshot = new Map([
-    healthFor(open, { breakerState: "OPEN", admitsTraffic: false }),
+    healthFor(open, { breakerState: "OPEN", admission: "deny" as const }),
     healthFor(spare),
   ]);
 
@@ -282,8 +281,8 @@ test("every route open is no_healthy_route, NOT no_eligible_route", () => {
   const one = candidate();
   const two = candidate();
   const health: HealthSnapshot = new Map([
-    healthFor(one, { breakerState: "OPEN", admitsTraffic: false }),
-    healthFor(two, { breakerState: "OPEN", admitsTraffic: false }),
+    healthFor(one, { breakerState: "OPEN", admission: "deny" as const }),
+    healthFor(two, { breakerState: "OPEN", admission: "deny" as const }),
   ]);
 
   const result = selectHealthyRoute("model-a", [one, two], health, T0);
@@ -373,17 +372,17 @@ test("a missing health entry is never treated as healthy-with-data", () => {
 test("CLOSED admits traffic and opens only at the threshold", () => {
   let record = initialBreakerRecord(T0.toISOString());
   assert.equal(record.state, "CLOSED");
-  assert.equal(admitsTraffic(record, T0), true);
+  assert.equal(admissionFor(record, T0), "admit");
 
   for (let i = 1; i < DEFAULT_BREAKER_POLICY.failureThreshold; i += 1) {
     record = recordFailure(record, later(i));
     assert.equal(record.state, "CLOSED", `must not open at ${i} failures`);
-    assert.equal(admitsTraffic(record, later(i)), true);
+    assert.equal(admissionFor(record, later(i)), "admit");
   }
 
   record = recordFailure(record, later(DEFAULT_BREAKER_POLICY.failureThreshold));
   assert.equal(record.state, "OPEN");
-  assert.equal(admitsTraffic(record, later(DEFAULT_BREAKER_POLICY.failureThreshold)), false);
+  assert.equal(admissionFor(record, later(DEFAULT_BREAKER_POLICY.failureThreshold)), "deny");
 });
 
 test("a success resets the failure count before the threshold is reached", () => {
@@ -408,14 +407,23 @@ test("OPEN becomes HALF_OPEN when the cooldown elapses, and not before", () => {
   const openedAt = DEFAULT_BREAKER_POLICY.failureThreshold - 1;
   const justBefore = later(openedAt + DEFAULT_BREAKER_POLICY.cooldownSeconds - 1);
   assert.equal(effectiveBreakerState(record, justBefore), "OPEN");
-  assert.equal(admitsTraffic(record, justBefore), false);
+  assert.equal(admissionFor(record, justBefore), "deny");
 
   const justAfter = later(openedAt + DEFAULT_BREAKER_POLICY.cooldownSeconds + 1);
   assert.equal(effectiveBreakerState(record, justAfter), "HALF_OPEN");
-  assert.equal(admitsTraffic(record, justAfter), true);
+  assert.equal(
+    admissionFor(record, justAfter),
+    "probe_required",
+    "a cooled-down breaker defers to the atomic probe lease rather than answering itself"
+  );
 });
 
-test("HALF_OPEN admits only a bounded number of trial executions", () => {
+test("HALF_OPEN never answers the admission question by itself", () => {
+  // The bound is enforced by an atomic Redis lease, not by this record — see
+  // phase-7c-half-open-concurrency.e2e.test.ts, which proves it with genuinely
+  // concurrent callers. What matters HERE is that the pure policy reports
+  // "ask the lease" rather than "yes", because the version that answered
+  // "yes" admitted the whole backlog.
   let record = initialBreakerRecord(T0.toISOString());
   for (let i = 0; i < DEFAULT_BREAKER_POLICY.failureThreshold; i += 1) {
     record = recordFailure(record, later(i));
@@ -423,16 +431,7 @@ test("HALF_OPEN admits only a bounded number of trial executions", () => {
   const trialTime = later(
     DEFAULT_BREAKER_POLICY.failureThreshold + DEFAULT_BREAKER_POLICY.cooldownSeconds
   );
-
-  for (let i = 0; i < DEFAULT_BREAKER_POLICY.halfOpenMaxInFlight; i += 1) {
-    assert.equal(admitsTraffic(record, trialTime), true);
-    record = reserveHalfOpenSlot(record, trialTime);
-  }
-  assert.equal(
-    admitsTraffic(record, trialTime),
-    false,
-    "a recovering provider must not receive the whole backlog at once"
-  );
+  assert.equal(admissionFor(record, trialTime), "probe_required");
 });
 
 test("enough successful trials close the breaker; one failed trial reopens it", () => {
@@ -444,7 +443,6 @@ test("enough successful trials close the breaker; one failed trial reopens it", 
     DEFAULT_BREAKER_POLICY.failureThreshold + DEFAULT_BREAKER_POLICY.cooldownSeconds
   );
 
-  record = reserveHalfOpenSlot(record, trialTime);
   record = recordSuccess(record, trialTime);
   assert.equal(record.state, "HALF_OPEN", "one success must not be enough");
 
@@ -498,7 +496,7 @@ test("a stale breaker record stops being authoritative", () => {
     wayLater
   );
   assert.equal(normalized.breakerState, "CLOSED", "a stale OPEN must not exclude a route forever");
-  assert.equal(normalized.admitsTraffic, true);
+  assert.equal(normalized.admission, "admit");
 });
 
 test("no synthetic provider traffic is generated to probe health", () => {
@@ -509,6 +507,7 @@ test("no synthetic provider traffic is generated to probe health", () => {
     "src/lib/routing/health-aware-router.ts",
     "src/lib/routing/health-recorder.ts",
     "src/lib/redis/circuit-breaker-store.ts",
+    "src/lib/routing/half-open-probe.ts",
   ]) {
     const source = readSource(file);
     assert.ok(!/adapter\.submit\(/.test(source), `${file} must not submit to a provider`);
@@ -791,7 +790,7 @@ test("corrupted breaker state is treated as absent, never as OPEN", () => {
     JSON.stringify({ state: "OPEN", updatedAt: T0.toISOString(), consecutiveFailures: 3 })
   );
   assert.equal(valid?.state, "OPEN");
-  assert.equal(valid?.halfOpenInFlight, 0);
+  assert.equal(valid?.halfOpenSuccesses, 0);
 });
 
 test("breaker keys are namespaced, versioned and collision-free", () => {
@@ -909,7 +908,6 @@ test("health state carries no secret, prompt or payload", () => {
     "lastSuccessAt",
     "openedAt",
     "halfOpenSuccesses",
-    "halfOpenInFlight",
     "updatedAt",
   ]);
   for (const key of Object.keys(record)) {

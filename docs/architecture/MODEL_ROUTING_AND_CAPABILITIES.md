@@ -319,7 +319,26 @@ breaker record contains only its eight declared fields.
 | --- | --- |
 | `CLOSED` | routing allowed; 3 consecutive qualifying failures open it |
 | `OPEN` | excluded from selection for a 60s cooldown |
-| `HALF_OPEN` | 1 trial execution at a time; 2 successes close it, 1 failure reopens it and restarts the cooldown |
+| `HALF_OPEN` | ONE trial at a time, enforced by an atomic Redis lease; 2 successes close it, 1 failure reopens it and restarts the cooldown |
+
+**The single-flight bound is a lease, not a counter.** The first implementation
+kept an in-flight counter inside the breaker record and updated it
+read-modify-write, so two workers reaching a cooled-down breaker both read zero
+and both proceeded — and the counter was never incremented from the routing
+path at all, so HALF_OPEN in fact admitted the entire backlog. A counter cannot
+fix this: any read-then-write across a network round trip has a window. The
+admission decision must BE the atomic operation.
+
+`half-open-probe.ts` claims `cinefield:v1:lock:breaker-probe:<provider>-<model>`
+with `SET NX EX` through the existing `distributed-lock` primitive. Exactly one
+caller can create the key. The rest re-select with that route excluded and go
+somewhere healthy. The lease is NOT released at the end of selection — it
+expires on a 30s TTL, which makes it a rate limit on trials rather than a mutex
+around one function call, and a worker that dies mid-probe costs one interval
+rather than a deadlock. Unreachable Redis denies the probe (fail-closed);
+that path is only reached after a breaker was successfully read, so it means
+"cannot coordinate", and uncoordinated trial traffic is the thing being
+prevented.
 
 OPEN becomes HALF_OPEN by the passage of time, computed on read — so a breaker
 recovers even if nothing ever writes to it again, instead of staying open

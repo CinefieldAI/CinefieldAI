@@ -1,7 +1,7 @@
-import type { BreakerState, CircuitBreakerRecord } from "./circuit-breaker";
+import type { BreakerState, CircuitBreakerRecord, TrafficAdmission } from "./circuit-breaker";
 import {
   DEFAULT_BREAKER_POLICY,
-  admitsTraffic,
+  admissionFor,
   effectiveBreakerState,
   isBreakerFresh,
   type CircuitBreakerPolicy,
@@ -37,8 +37,15 @@ export interface RouteHealth {
   providerModelId: string;
   /** Breaker state AFTER cooldown is applied — what is true right now. */
   breakerState: BreakerState;
-  /** False when the breaker says this route must not be selected. */
-  admitsTraffic: boolean;
+  /**
+   * "admit" | "deny" | "probe_required".
+   *
+   * `probe_required` is a HALF_OPEN breaker: selectable ONLY by the one
+   * caller that wins the atomic probe lease. Deliberately not a boolean —
+   * a boolean forced the caller to guess, and guessing is what let every
+   * waiting request through at once.
+   */
+  admission: TrafficAdmission;
   /** Fraction in [0,1]. Undefined when unknown — never defaulted to 0. */
   errorRate?: number;
   /** Rolling average in ms. Undefined when unknown. */
@@ -110,7 +117,7 @@ export function unknownHealth(
     // absence, not by assumption — the store writes on every qualifying
     // failure, so silence is genuine evidence of no recent failures.
     breakerState: "CLOSED",
-    admitsTraffic: true,
+    admission: "admit",
     sampleCount: 0,
     consecutiveFailures: 0,
     observedAt: now.toISOString(),
@@ -165,7 +172,7 @@ export function normalizeHealth(
     providerId,
     providerModelId,
     breakerState,
-    admitsTraffic: breaker ? admitsTraffic(breaker, now, policy.breaker) : true,
+    admission: breaker ? admissionFor(breaker, now, policy.breaker) : "admit",
     errorRate: inputs.errorRate?.errorRate,
     averageLatencyMs: inputs.latency?.averageLatencyMs,
     sampleCount,

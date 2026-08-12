@@ -39,8 +39,6 @@ export interface CircuitBreakerRecord {
   openedAt?: string;
   /** Successes observed since entering HALF_OPEN. */
   halfOpenSuccesses: number;
-  /** How many trial executions HALF_OPEN has already handed out. */
-  halfOpenInFlight: number;
   /** ISO-8601 of the last write. Freshness is judged against this. */
   updatedAt: string;
 }
@@ -52,8 +50,6 @@ export interface CircuitBreakerPolicy {
   cooldownSeconds: number;
   /** Successes needed in HALF_OPEN to close it. */
   successThreshold: number;
-  /** Concurrent trial executions HALF_OPEN permits. */
-  halfOpenMaxInFlight: number;
 }
 
 /**
@@ -62,15 +58,17 @@ export interface CircuitBreakerPolicy {
  * Three failures rather than one: a single 5xx is noise, and opening on it
  * would make routing thrash on a provider that is fine. Sixty seconds rather
  * than five minutes: an OPEN breaker is a self-inflicted capacity reduction,
- * so it should expire quickly and be re-earned. Two successes to close, one
- * trial at a time: a single lucky response during a partial outage should not
- * reopen the floodgates.
+ * so it should expire quickly and be re-earned. Two successes to close: a
+ * single lucky response during a partial outage should not reopen the
+ * floodgates.
+ *
+ * How MANY concurrent trials HALF_OPEN allows is not configured here — it is
+ * one, structurally, because the probe is a single Redis key.
  */
 export const DEFAULT_BREAKER_POLICY: CircuitBreakerPolicy = {
   failureThreshold: 3,
   cooldownSeconds: 60,
   successThreshold: 2,
-  halfOpenMaxInFlight: 1,
 };
 
 export function initialBreakerRecord(nowIso: string): CircuitBreakerRecord {
@@ -78,7 +76,6 @@ export function initialBreakerRecord(nowIso: string): CircuitBreakerRecord {
     state: "CLOSED",
     consecutiveFailures: 0,
     halfOpenSuccesses: 0,
-    halfOpenInFlight: 0,
     updatedAt: nowIso,
   };
 }
@@ -108,37 +105,29 @@ export function effectiveBreakerState(
 }
 
 /**
- * May a route in this breaker state be selected?
+ * May a route in this breaker state be selected AT ALL?
  *
- * HALF_OPEN admits traffic only up to `halfOpenMaxInFlight`. Without that
- * bound, "cooldown elapsed" would release every queued request at a provider
- * that has proven nothing yet — the classic thundering herd that turns a
- * recovering outage back into an outage.
+ * Three-valued on purpose. CLOSED admits, OPEN excludes, and HALF_OPEN is
+ * "maybe — ask the probe lease", because whether a trial slot is free is not
+ * something this record can answer.
+ *
+ * IT USED TO TRY, AND THAT WAS A BUG. An in-flight counter inside the record
+ * is read, mutated and written back across a network round trip, so two
+ * workers both read zero and both proceed. The bound has to be enforced by an
+ * atomic operation, which is what half-open-probe.ts does with SET NX. This
+ * function therefore reports the state and stops short of the decision.
  */
-export function admitsTraffic(
-  record: CircuitBreakerRecord,
-  now: Date,
-  policy: CircuitBreakerPolicy = DEFAULT_BREAKER_POLICY
-): boolean {
-  const state = effectiveBreakerState(record, now, policy);
-  if (state === "CLOSED") return true;
-  if (state === "OPEN") return false;
-  return record.halfOpenInFlight < policy.halfOpenMaxInFlight;
-}
+export type TrafficAdmission = "admit" | "deny" | "probe_required";
 
-/** Records that a trial execution has been handed out under HALF_OPEN. */
-export function reserveHalfOpenSlot(
+export function admissionFor(
   record: CircuitBreakerRecord,
   now: Date,
   policy: CircuitBreakerPolicy = DEFAULT_BREAKER_POLICY
-): CircuitBreakerRecord {
-  if (effectiveBreakerState(record, now, policy) !== "HALF_OPEN") return record;
-  return {
-    ...record,
-    state: "HALF_OPEN",
-    halfOpenInFlight: record.halfOpenInFlight + 1,
-    updatedAt: now.toISOString(),
-  };
+): TrafficAdmission {
+  const state = effectiveBreakerState(record, now, policy);
+  if (state === "CLOSED") return "admit";
+  if (state === "OPEN") return "deny";
+  return "probe_required";
 }
 
 /**
@@ -166,7 +155,6 @@ export function recordFailure(
       openedAt: nowIso,
       lastFailureAt: nowIso,
       halfOpenSuccesses: 0,
-      halfOpenInFlight: 0,
       updatedAt: nowIso,
     };
   }
@@ -184,7 +172,6 @@ export function recordFailure(
       consecutiveFailures,
       lastFailureAt: nowIso,
       halfOpenSuccesses: 0,
-      halfOpenInFlight: 0,
       updatedAt: nowIso,
     };
   }
@@ -203,14 +190,12 @@ export function recordSuccess(
 
   if (state === "HALF_OPEN") {
     const halfOpenSuccesses = record.halfOpenSuccesses + 1;
-    const inFlight = Math.max(0, record.halfOpenInFlight - 1);
 
     if (halfOpenSuccesses >= policy.successThreshold) {
       return {
         state: "CLOSED",
         consecutiveFailures: 0,
         halfOpenSuccesses: 0,
-        halfOpenInFlight: 0,
         lastSuccessAt: nowIso,
         lastFailureAt: record.lastFailureAt,
         updatedAt: nowIso,
@@ -221,7 +206,6 @@ export function recordSuccess(
       ...record,
       state: "HALF_OPEN",
       halfOpenSuccesses,
-      halfOpenInFlight: inFlight,
       lastSuccessAt: nowIso,
       updatedAt: nowIso,
     };
