@@ -33,7 +33,7 @@ import {
   touchAttemptHeartbeat,
 } from "@/lib/orchestration/attempt-repository";
 import { ATTEMPT_STALE_AFTER_MS } from "@/lib/aws/sqs-topology";
-import type { CommandWireV1 } from "@/lib/contracts/command-wire";
+import { parseCommand, serializeCommand, type CommandWireV1 } from "@/lib/contracts/command-wire";
 import type { Generation } from "@/types/database";
 
 /**
@@ -46,8 +46,39 @@ import type { Generation } from "@/types/database";
  */
 const HEARTBEAT_INTERVAL_MS = 60_000;
 
+/**
+ * Why a message ended the way it did, independent of what happens to the
+ * message (Phase 6R-C).
+ *
+ * `action` answers "delete or redeliver". `classification` answers "was this
+ * command ever going to work". They are deliberately orthogonal, because the
+ * four useful combinations all occur:
+ *
+ *   safe          + delete   the command did its job (or a duplicate found it
+ *                            already done)
+ *   ambiguous     + delete   a submission MAY have reached the provider;
+ *                            evidence is persisted and the message must not
+ *                            be redelivered into a blind resubmit
+ *   retryable     + retain   no durable decision was possible yet; redelivery
+ *                            may succeed, and the redelivery budget bounds it
+ *   non_retryable + retain   the command is provably invalid and will never
+ *                            become valid. Retained so the redelivery budget
+ *                            carries it to the DLQ for investigation rather
+ *                            than deleting the only evidence.
+ *   non_retryable + delete   provably nothing to do, and nothing to
+ *                            investigate — a benign race, e.g. the generation
+ *                            already reached a terminal state elsewhere.
+ *
+ * Before this existed every failure was an undifferentiated `retain`, so a
+ * permanently-invalid command and a transient database blip were
+ * indistinguishable in logs and metrics, and both silently burned the whole
+ * redelivery budget.
+ */
+export type CommandClassification = "safe" | "ambiguous" | "retryable" | "non_retryable";
+
 export interface HandlerOutcome {
   action: "delete" | "retain";
+  classification: CommandClassification;
   /** Safe classification for logs — codes and ids only, never payloads. */
   reason: string;
 }
@@ -69,46 +100,70 @@ export function isAttemptClaimStale(updatedAtIso: string, nowMs: number): boolea
   return nowMs - updatedAtMs >= ATTEMPT_STALE_AFTER_MS;
 }
 
+/** Generation states in which a provider.submit command still means anything. */
+const SUBMITTABLE_GENERATION_STATUSES: ReadonlySet<string> = new Set(["queued", "processing"]);
+
 export async function handleProviderCommand(command: CommandWireV1): Promise<HandlerOutcome> {
   const admin = getSupabaseAdminClient();
 
-  // ---- Correlate: the attempt row is the only authority --------------------
+  // ---- 0. Re-validate the message against the wire contract ---------------
+  // The worker already parsed it; this repeats the check because the handler
+  // is a reusable entry point and "the caller validated it" is exactly the
+  // assumption that stops being true when a second caller appears. Cheap,
+  // and it makes the trust boundary self-contained rather than inherited.
+  const revalidated = parseCommand(serializeCommand(command));
+  if (!revalidated.ok) {
+    return {
+      action: "retain",
+      classification: "non_retryable",
+      reason: `schema_invalid:${revalidated.reason}`,
+    };
+  }
+
+  // ---- 1. Correlate: the attempt row is the only authority ----------------
   const attempt = await readAttempt(admin, command.attemptId);
   if (!attempt) {
     // The attempt is created BEFORE the command is enqueued, so a missing
-    // row is a real anomaly, not a race. No reconstruction is guessed; the
-    // message rides its redelivery budget into the DLQ.
-    return { action: "retain", reason: "attempt_not_found" };
+    // row is a real anomaly rather than a race. Retryable only in the weak
+    // sense that a read could have failed oddly; the redelivery budget bounds
+    // it and the DLQ is where it belongs.
+    return { action: "retain", classification: "retryable", reason: "attempt_not_found" };
   }
 
   if (attempt.generation_id !== command.generationId) {
     // The command's two ids disagree with the database. Nothing about this
-    // message can be trusted; never call a provider from it.
-    return { action: "retain", reason: "generation_mismatch" };
+    // message can be trusted; never call a provider from it. This can never
+    // become valid — the row's generation_id does not change — so it is
+    // poison, retained only so the DLQ preserves it for investigation.
+    return { action: "retain", classification: "non_retryable", reason: "generation_mismatch" };
   }
 
-  // ---- Duplicates of already-decided work are safe to delete ---------------
+  // ---- 2. Duplicates of already-decided work are safe to delete -----------
   if (
     attempt.status === "succeeded" ||
     attempt.status === "failed" ||
     attempt.status === "cancelled"
   ) {
-    return { action: "delete", reason: `already_terminal:${attempt.status}` };
+    return {
+      action: "delete",
+      classification: "safe",
+      reason: `already_terminal:${attempt.status}`,
+    };
   }
 
   if (attempt.provider_job_id !== null || attempt.submission_evidence !== "none") {
     // Evidence already exists — the earlier delivery did its job. This
     // duplicate has nothing left to do and must never submit.
-    return { action: "delete", reason: "evidence_already_recorded" };
+    return { action: "delete", classification: "safe", reason: "evidence_already_recorded" };
   }
 
-  // ---- Crash-window recovery ----------------------------------------------
+  // ---- 3. Crash-window recovery -------------------------------------------
   if (attempt.status === "claimed" || attempt.status === "submitting") {
     if (!isAttemptClaimStale(attempt.updated_at, Date.now())) {
       // A live handler may still be mid-call (FIFO ordering makes true
       // concurrency rare, but visibility expiry can produce it). Preempting
       // it could discard a job id about to be persisted — wait instead.
-      return { action: "retain", reason: "possibly_in_flight" };
+      return { action: "retain", classification: "retryable", reason: "possibly_in_flight" };
     }
     // The claim is stale: its handler died between the claim and a durable
     // outcome. A request MAY have reached the provider. Before declaring
@@ -139,7 +194,11 @@ export async function handleProviderCommand(command: CommandWireV1): Promise<Han
           result: "stale_claim_recovered_job_evidence_failed",
           applied: recorded,
         });
-        return { action: "delete", reason: "stale_claim_recovered_job_evidence_failed" };
+        return {
+          action: "delete",
+          classification: "safe",
+          reason: "stale_claim_recovered_job_evidence_failed",
+        };
       }
 
       const recorded = await recordProviderJob(
@@ -163,7 +222,7 @@ export async function handleProviderCommand(command: CommandWireV1): Promise<Han
         result: "stale_claim_recovered_job_evidence",
         applied: recorded,
       });
-      return { action: "delete", reason: "stale_claim_recovered_job_evidence" };
+      return { action: "delete", classification: "safe", reason: "stale_claim_recovered_job_evidence" };
     }
 
     // No job id was ever persisted for this generation — the request may or
@@ -181,7 +240,10 @@ export async function handleProviderCommand(command: CommandWireV1): Promise<Han
       result: "stale_claim_marked_ambiguous",
       applied: recorded,
     });
-    return { action: "delete", reason: "stale_claim_marked_ambiguous" };
+    // AMBIGUOUS, not safe: a request may already have reached the provider.
+    // The message is retired precisely so redelivery cannot turn an unknown
+    // outcome into a blind second submission.
+    return { action: "delete", classification: "ambiguous", reason: "stale_claim_marked_ambiguous" };
   }
 
   // ---- Fresh submission ----------------------------------------------------
@@ -196,19 +258,61 @@ export async function handleProviderCommand(command: CommandWireV1): Promise<Han
     .maybeSingle();
 
   if (error || !data) {
-    return { action: "retain", reason: "generation_not_found" };
+    // generation_attempts.generation_id carries a FOREIGN KEY to
+    // generations(id) ON DELETE CASCADE, so an existing attempt whose
+    // generation is missing is not replication lag — it is impossible under
+    // the schema. Treat it as poison rather than retrying into the same
+    // contradiction.
+    return { action: "retain", classification: "non_retryable", reason: "generation_not_found" };
   }
   const generation = data as Generation;
 
+  // ---- 4. Generation STATE must still admit a submission ------------------
+  // Previously only the ATTEMPT's status was checked here. A stale command
+  // whose generation had meanwhile been completed, failed or cancelled — by
+  // a webhook, a Temporal poll, or a cancellation — reached submitAttempt
+  // and was stopped one layer deeper, by claimGeneration's queued-only
+  // compare-and-set. That guard is real and no provider was ever called, but
+  // it surfaced as a thrown DUPLICATE_EXECUTION that closed the attempt as
+  // FAILED, which misrepresents a benign race as a generation failure.
+  //
+  // Checking here makes the refusal explicit, keeps the attempt untouched,
+  // and gives the message a deterministic classification instead of an
+  // exception path. The claim below remains the authority — this is an
+  // earlier, cheaper agreement with it, never a replacement.
+  if (!SUBMITTABLE_GENERATION_STATUSES.has(generation.status)) {
+    log({
+      attemptId: command.attemptId,
+      generationId: command.generationId,
+      result: "generation_not_submittable",
+      generationStatus: generation.status,
+    });
+    // Nothing to do and nothing to investigate: the generation resolved
+    // elsewhere, which is a legitimate race. Retire the message rather than
+    // parking a benign duplicate in the DLQ.
+    return {
+      action: "delete",
+      classification: "non_retryable",
+      reason: `generation_not_submittable:${generation.status}`,
+    };
+  }
+
   const model = findModel(generation.model);
   if (!model) {
-    return { action: "retain", reason: "unknown_model" };
+    // The registry does not know this model. Redelivery cannot change that
+    // within the message's life — only a deploy could.
+    return { action: "retain", classification: "non_retryable", reason: "unknown_model" };
   }
   if (model.providerId !== attempt.provider || !isProviderRegistered(attempt.provider)) {
     // The attempt's recorded provider disagrees with the registry's current
     // resolution (or is not registered at all). Submitting under a mismatch
     // could bill the wrong provider — poison, not a judgment call.
-    return { action: "retain", reason: "provider_mismatch" };
+    //
+    // Note what this also forecloses: the message cannot select a provider.
+    // The provider comes from the attempt row and is cross-checked against
+    // the registry's own resolution of the generation's model. SQS is
+    // transport; routing is not negotiable over the wire.
+    return { action: "retain", classification: "non_retryable", reason: "provider_mismatch" };
   }
 
   // Heartbeat while submitAttempt owns the attempt. Its runtime is NOT
@@ -254,5 +358,13 @@ export async function handleProviderCommand(command: CommandWireV1): Promise<Han
   // processing (job id persisted), failed (terminal persisted), ambiguous
   // (evidence persisted), skipped (another delivery already decided). All
   // satisfy the ack rule, so the message retires.
-  return { action: "delete", reason: `submitted:${outcome.result}` };
+  //
+  // "ambiguous" keeps its own classification all the way out: the evidence is
+  // persisted and the message is retired, which together are what stop a
+  // redelivery from becoming a blind second submission.
+  return {
+    action: "delete",
+    classification: outcome.result === "ambiguous" ? "ambiguous" : "safe",
+    reason: `submitted:${outcome.result}`,
+  };
 }

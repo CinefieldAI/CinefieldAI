@@ -110,7 +110,7 @@ async function main(): Promise<void> {
         // Poison: schema-invalid. Never call a provider from it; leave it
         // for the redelivery budget and the DLQ. The reason is logged so the
         // DLQ investigation starts with a classification, not a payload dump.
-        log({ result: "poison_message", reason: parsed.reason });
+        log({ result: "poison_message", classification: "non_retryable", reason: parsed.reason });
         continue;
       }
 
@@ -123,6 +123,7 @@ async function main(): Promise<void> {
         // retried submission from ever duplicating a provider job.
         log({
           result: "handler_failed",
+          classification: "retryable",
           attemptId: parsed.command.attemptId,
           error: caught instanceof Error ? caught.name : "UnknownError",
         });
@@ -133,7 +134,15 @@ async function main(): Promise<void> {
         result: "handled",
         attemptId: parsed.command.attemptId,
         action: outcome.action,
+        // Phase 6R-C: distinguishes a transient blip from a message that will
+        // never succeed. Without it a permanently-invalid command and a
+        // database hiccup look identical in logs, and both silently consume
+        // the whole redelivery budget before anyone notices which happened.
+        classification: outcome.classification,
         reason: outcome.reason,
+        ...(outcome.action === "retain"
+          ? { willDeadLetterAfterReceives: SQS_QUEUES.provider.maxReceiveCount }
+          : {}),
       });
 
       if (outcome.action === "delete") {
