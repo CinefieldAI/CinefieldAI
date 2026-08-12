@@ -55,3 +55,18 @@ cinefield-handoff.zip
 
 # Local video compression output — compare before swapping in, never deployed
 video-compressed/
+
+# Terraform / OpenTofu (Phase 6R.16)
+# State can contain resolved resource attributes; tfvars can contain account
+# ids and endpoints. Only *.example variable files are committed.
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+crash.log
+# .terraform.lock.hcl is deliberately NOT ignored — the provider lock file
+# belongs in git so every apply resolves identical provider versions. It does
+# not exist yet only because `init` has never been run here.
+override.tf
+override.tf.json

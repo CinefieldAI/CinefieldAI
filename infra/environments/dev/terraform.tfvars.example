@@ -1,0 +1,10 @@
+# Cinefield dev variables — EXAMPLE ONLY. Copy to terraform.tfvars.
+# No secrets belong in this file or in the real one.
+
+region = "eu-central-1"
+
+# HOST:PORT only. A redis:// URL or a password is rejected by the module.
+redis_a_provider = "undecided"
+redis_a_endpoint = ""
+redis_b_provider = "undecided"
+redis_b_endpoint = ""

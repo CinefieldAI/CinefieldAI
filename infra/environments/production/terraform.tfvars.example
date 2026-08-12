@@ -1,0 +1,48 @@
+# Cinefield production variables — EXAMPLE ONLY.
+#
+# Copy to terraform.tfvars (git-ignored) and fill in. Nothing in this file is
+# a secret and nothing in the real tfvars may become one: secrets are passed
+# as ARNs, and the values behind those ARNs live in Secrets Manager.
+
+region = "eu-central-1"
+
+# Network. Replace with the real VPC's private subnets and security groups.
+private_subnet_ids        = ["subnet-REPLACE-a", "subnet-REPLACE-b"]
+worker_security_group_ids = ["sg-REPLACE-workers"]
+
+# Digest-pinned in production — a mutable tag makes a rollback ambiguous.
+provider_worker_image = "ACCOUNT.dkr.ecr.eu-central-1.amazonaws.com/cinefield-provider-worker@sha256:REPLACE"
+temporal_worker_image = "ACCOUNT.dkr.ecr.eu-central-1.amazonaws.com/cinefield-temporal-worker@sha256:REPLACE"
+
+provider_worker_desired_count = 1
+temporal_worker_desired_count = 1
+
+# ARNs only. Never a secret value.
+provider_worker_secret_arns = {
+  # SUPABASE_SERVICE_ROLE_KEY = "arn:aws:secretsmanager:eu-central-1:ACCOUNT:secret:REPLACE"
+  # FAL_KEY                   = "arn:aws:secretsmanager:eu-central-1:ACCOUNT:secret:REPLACE"
+}
+temporal_worker_secret_arns = {
+  # TEMPORAL_API_KEY = "arn:aws:secretsmanager:eu-central-1:ACCOUNT:secret:REPLACE"
+  # REDIS_URL        = "arn:aws:secretsmanager:eu-central-1:ACCOUNT:secret:REPLACE"
+}
+# Every ARN listed above, flattened. Scopes the execution role's read access.
+task_secret_arns = []
+
+# Encryption. Null uses the AWS-managed key for that service — still
+# encrypted. Set require_customer_managed_keys once real keys exist so
+# "never chose" cannot pass silently as "chose AWS-managed".
+queue_kms_key_arn             = null
+log_kms_key_arn               = null
+msk_kms_key_arn               = null
+require_customer_managed_keys = false
+
+# Redis. HOST:PORT ONLY — never a redis:// URL and never a password.
+# Redis A is Redis Cloud and is not managed by this Terraform.
+redis_a_endpoint = ""
+redis_b_provider = "undecided"
+redis_b_endpoint = ""
+
+# Kafka/MSK is not provisioned. Leave false until the cluster is sized.
+enable_msk             = false
+msk_security_group_ids = []
