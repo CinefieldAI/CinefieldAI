@@ -1,4 +1,9 @@
 import "server-only";
+import {
+  checkRedisRoleIsolation,
+  describeRedisSecurity,
+  isBullmqConnectionSafe,
+} from "@/lib/redis/redis-isolation";
 
 /**
  * Cinefield BullMQ + dedicated Redis B configuration (Phase 6R.8).
@@ -91,10 +96,44 @@ export function getBullmqRedisConfig(): BullmqRedisConfig | null {
   if (!isBullmqRedisEnabled()) return null;
   const url = read("BULLMQ_REDIS_URL");
   if (!url) return null;
+
+  // 6R.25: separate variables were necessary but not sufficient. Nothing
+  // previously stopped BULLMQ_REDIS_URL being pointed at the same instance as
+  // REDIS_URL, and that is not a cosmetic mistake: BullMQ's job payloads,
+  // retry sets and completed lists would share an eviction policy with
+  // Cinefield's locks and idempotency records, so a queue backlog could evict
+  // the guards that prevent a duplicate provider submission.
+  //
+  // Refusing here means a misconfigured deployment reports "unconfigured" and
+  // runs no background jobs — visibly degraded — instead of silently writing
+  // queue state into Redis A.
+  if (!isBullmqConnectionSafe()) {
+    // Fingerprint only: identifies the collision without disclosing a URL.
+    console.error(
+      "[cinefield:bullmq-config]",
+      JSON.stringify({
+        result: "refused",
+        reason: "bullmq_redis_shares_instance_with_application_redis",
+        ...describeRedisSecurity().bullmq,
+      })
+    );
+    return null;
+  }
+
   return { url };
 }
 
-/** Safe description for logs/health checks: presence only, never the URL or any credential. */
-export function describeBullmqRedisConfig(): { configured: boolean } {
-  return { configured: getBullmqRedisConfig() !== null };
+/**
+ * Safe description for logs/health checks: presence only, never the URL or
+ * any credential. `isolatedFromApplicationRedis` is what an operator checks
+ * to confirm Redis B is genuinely a second instance.
+ */
+export function describeBullmqRedisConfig(): {
+  configured: boolean;
+  isolatedFromApplicationRedis: boolean;
+} {
+  return {
+    configured: getBullmqRedisConfig() !== null,
+    isolatedFromApplicationRedis: checkRedisRoleIsolation().verdict === "isolated",
+  };
 }

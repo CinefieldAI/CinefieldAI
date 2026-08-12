@@ -50,7 +50,14 @@ function withTempEnv(vars: Record<string, string | undefined>, fn: () => void): 
 test("config: Redis B missing -> explicit unconfigured (matches this repo's actual current state)", () => {
   assert.equal(isBullmqRedisEnabled(), false);
   assert.equal(getBullmqRedisConfig(), null);
-  assert.deepEqual(describeBullmqRedisConfig(), { configured: false });
+  // isolatedFromApplicationRedis was added in 6R.25: separate env vars were
+  // necessary but not sufficient, so an operator needs a direct read on
+  // whether Redis B is genuinely a second instance. Here neither is
+  // configured, so there is nothing to isolate from.
+  assert.deepEqual(describeBullmqRedisConfig(), {
+    configured: false,
+    isolatedFromApplicationRedis: false,
+  });
 });
 
 test("config: enablement requires BOTH BULLMQ_REDIS_ENABLED and BULLMQ_REDIS_URL, mirroring every other Cinefield transport gate", () => {
