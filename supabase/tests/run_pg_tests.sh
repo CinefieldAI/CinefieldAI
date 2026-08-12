@@ -44,7 +44,7 @@ for f in \
   "$ROOT/supabase/tests/bootstrap_test_schema.sql" \
   "$ROOT/supabase/migrations/20260810120000_generation_attempts.sql" \
   "$ROOT/supabase/migrations/20260812130000_outbox_events.sql" \
-  "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql"
+  "$ROOT/supabase/migrations/20260811120000_credit_system.sql"   "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -134,5 +134,74 @@ BEGIN
 END $$;
 SELECT 'CONCURRENCY PROOFS PASSED' AS result;
 SQL
+
+
+# ---------------------------------------------------------------------------
+# Phase 6R-G — REAL PARALLEL RACES
+#
+# Each racer is its own psql PROCESS on its own connection, launched with &
+# and joined with wait. That is genuine simultaneity: the outcomes are decided
+# by PostgreSQL's row locks and unique indexes, not by JavaScript await
+# ordering. Nothing here asserts an ORDER — only the invariants, because
+# ordering under contention is not deterministic and a test that depended on
+# it would be flaky rather than informative.
+# ---------------------------------------------------------------------------
+echo "==> concurrency race fixtures"
+psql_run -q < "$ROOT/supabase/tests/test_concurrency_races.sql" >/dev/null
+echo "    fixtures ready"
+
+# Launches N parallel connections, each running the same SQL with its worker
+# index substituted for %d.
+race() {
+  local n="$1"; shift
+  local sql_template="$1"
+  local pids=()
+  for i in $(seq 1 "$n"); do
+    local sql="${sql_template//__W__/$i}"
+    docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "$sql" >/dev/null 2>&1 &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+}
+
+echo "==> race: provider attempt claim (6 connections)"
+race 6 "SELECT claim_attempt_race('55555555-5555-4555-8555-555555555555', __W__);"
+
+echo "==> race: duplicate credit reserve, same idempotency key (6 connections)"
+race 6 "SELECT reserve_race(__W__, 'idem-race-key', 100, '44444444-4444-4444-8444-444444444444');"
+
+echo "==> race: duplicate settle of one reservation (6 connections)"
+RESERVATION=$(psql_run -qtA -c "SELECT id FROM credit_reservations WHERE clerk_user_id='user_race' LIMIT 1;" | tr -d '[:space:]')
+race 6 "SELECT settle_race(__W__, '${RESERVATION}'::uuid);"
+
+echo "==> race: settle vs refund of one reservation (2 connections, opposite intents)"
+psql_run -q -c "INSERT INTO profiles (clerk_user_id, plan, credits) VALUES ('user_race2','pro',1000) ON CONFLICT DO NOTHING;" >/dev/null
+psql_run -q -c "INSERT INTO credit_wallets (clerk_user_id, balance, reserved) VALUES ('user_race2',1000,0) ON CONFLICT DO NOTHING;" >/dev/null
+psql_run -q -c "SELECT reserve_credits('user_race2', 100, 'idem-settle-refund-race', NULL, '{}'::jsonb);" >/dev/null
+RES2=$(psql_run -qtA -c "SELECT id FROM credit_reservations WHERE clerk_user_id='user_race2' LIMIT 1;" | tr -d '[:space:]')
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB"   -c "SELECT settle_or_refund_race(1, '${RES2}'::uuid, 'settle');" >/dev/null 2>&1 &
+P1=$!
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB"   -c "SELECT settle_or_refund_race(2, '${RES2}'::uuid, 'refund');" >/dev/null 2>&1 &
+P2=$!
+wait "$P1" 2>/dev/null || true; wait "$P2" 2>/dev/null || true
+
+echo "==> race: insufficient funds / TOCTOU overdraw (6 connections)"
+psql_run -q -c "INSERT INTO profiles (clerk_user_id, plan, credits) VALUES ('user_overdraw','pro',100) ON CONFLICT DO NOTHING;" >/dev/null
+psql_run -q -c "INSERT INTO credit_wallets (clerk_user_id, balance, reserved) VALUES ('user_overdraw',100,0) ON CONFLICT DO NOTHING;" >/dev/null
+psql_run -q -c "CREATE OR REPLACE FUNCTION public.overdraw_race(p_worker integer) RETURNS void LANGUAGE plpgsql AS \$fn\$ DECLARE v jsonb; BEGIN v := reserve_credits('user_overdraw', 80, 'idem-over-' || p_worker, NULL, '{}'::jsonb); INSERT INTO race_results (race, worker, outcome, detail) VALUES ('overdraw', p_worker, CASE WHEN (v->>'replayed')::boolean THEN 'replayed' ELSE 'created' END, v->>'reservation_id'); EXCEPTION WHEN others THEN INSERT INTO race_results (race, worker, outcome, detail) VALUES ('overdraw', p_worker, 'rejected', SQLERRM); END; \$fn\$;" >/dev/null
+race 6 "SELECT overdraw_race(__W__);"
+
+echo "==> race: terminal transition complete vs fail vs cancel (3 connections)"
+psql_run -q -c "INSERT INTO generations (id, project_id, clerk_user_id, generation_type, provider, model, prompt, status) VALUES ('66666666-6666-4666-8666-666666666666','33333333-3333-4333-8333-333333333333','user_race','image','mock','mock-image','terminal race','processing');" >/dev/null
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "SELECT terminal_race(1,'66666666-6666-4666-8666-666666666666','complete');" >/dev/null 2>&1 &
+T1=$!
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "SELECT terminal_race(2,'66666666-6666-4666-8666-666666666666','fail');" >/dev/null 2>&1 &
+T2=$!
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "SELECT terminal_race(3,'66666666-6666-4666-8666-666666666666','cancel');" >/dev/null 2>&1 &
+T3=$!
+wait "$T1" 2>/dev/null || true; wait "$T2" 2>/dev/null || true; wait "$T3" 2>/dev/null || true
+
+echo "==> race invariants"
+psql_run < "$ROOT/supabase/tests/assert_concurrency_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> destroying the throwaway container"

@@ -17,6 +17,17 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Minimal `auth.jwt()` shim. The credit migration's RLS policies reference it,
+-- and a plain postgres image has no Supabase auth schema.
+--
+-- SCOPE: this exists so the migration APPLIES. It is never exercised — every
+-- proof connects as the table owner, for whom RLS is not enforced, and the
+-- functions under test are SECURITY DEFINER. No proof in this harness makes
+-- any claim about RLS behaviour; RLS is verified against Supabase itself.
+CREATE SCHEMA IF NOT EXISTS "auth";
+CREATE OR REPLACE FUNCTION "auth"."jwt"() RETURNS "jsonb"
+  LANGUAGE "sql" STABLE AS $$ SELECT '{}'::jsonb $$;
+
 -- Roles the real migrations GRANT to. Created as NOLOGIN placeholders so the
 -- grants apply unchanged; nothing ever connects as them.
 DO $$
@@ -44,6 +55,23 @@ begin
   return new;
 end;
 $$;
+
+-- The credit migration takes FKs to profiles and mirrors a balance onto it,
+-- so it must exist before that migration runs. Copied from remote_schema.sql
+-- minus the auth.jwt() default.
+CREATE TABLE IF NOT EXISTS "public"."profiles" (
+    "clerk_user_id" "text" NOT NULL PRIMARY KEY,
+    "username" "text",
+    "email" "text",
+    "display_name" "text",
+    "avatar_url" "text",
+    "credits" integer DEFAULT 0 NOT NULL,
+    "plan" "text" DEFAULT 'free'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "profiles_credits_check" CHECK (("credits" >= 0)),
+    CONSTRAINT "profiles_plan_check" CHECK (("plan" = ANY (ARRAY['free'::"text", 'starter'::"text", 'pro'::"text", 'business'::"text", 'enterprise'::"text"])))
+);
 
 CREATE TABLE IF NOT EXISTS "public"."projects" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL PRIMARY KEY,

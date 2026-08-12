@@ -1,0 +1,261 @@
+-- Cinefield Phase 6R-G — invariant assertions after the real parallel races.
+--
+-- Every assertion here follows genuine multi-connection contention driven by
+-- run_pg_tests.sh. Nothing is asserted about ORDERING, because ordering under
+-- contention is not deterministic and pretending otherwise would produce a
+-- flaky test that teaches nothing. What is asserted is the invariant: how
+-- many winners, how much money moved, which state survived.
+
+\set ON_ERROR_STOP on
+
+-- ===========================================================================
+-- G4 — PROVIDER ATTEMPT CLAIM RACE
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers integer;
+  v_won     integer;
+  v_status  text;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'attempt_claim';
+  ASSERT v_workers >= 4,
+    'G4: expected several racing connections, got ' || v_workers;
+
+  SELECT count(*) INTO v_won FROM race_results WHERE race = 'attempt_claim' AND outcome = 'won';
+  ASSERT v_won = 1,
+    'G4: exactly one worker may win the claim, got ' || v_won || ' of ' || v_workers;
+
+  -- Every loser got a deterministic answer, not an error.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM race_results WHERE race = 'attempt_claim' AND outcome NOT IN ('won', 'lost')
+  ), 'G4: a loser must receive a deterministic outcome, never an exception';
+
+  SELECT status INTO v_status FROM generation_attempts
+   WHERE id = '55555555-5555-4555-8555-555555555555';
+  ASSERT v_status = 'claimed', 'G4: the attempt is claimed exactly once, got ' || v_status;
+
+  RAISE NOTICE 'PROOF P PASS: attempt claim race — one winner, % losers', v_workers - 1;
+END $$;
+
+-- ===========================================================================
+-- G4b — THE DATABASE BACKSTOP BEHIND THE CLAIM
+--
+-- Even if the application predicate were wrong, the partial unique index
+-- refuses a second ACTIVE attempt for one generation.
+-- ===========================================================================
+
+DO $$
+DECLARE v_raised boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO generation_attempts (generation_id, attempt_no, provider, provider_model, status)
+    VALUES ('44444444-4444-4444-8444-444444444444', 2, 'mock', 'mock-image-v1', 'pending');
+  EXCEPTION WHEN unique_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised,
+    'G4b: generation_attempts_one_active_uniq must refuse a second active attempt';
+  RAISE NOTICE 'PROOF Q PASS: one-active-attempt index holds under a real insert';
+END $$;
+
+-- ===========================================================================
+-- G9-A — DUPLICATE CREDIT RESERVE UNDER CONTENTION
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers  integer;
+  v_created  integer;
+  v_rows     integer;
+  v_ledger   integer;
+  v_wallet   credit_wallets%ROWTYPE;
+  v_distinct integer;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'reserve';
+  ASSERT v_workers >= 4, 'G9-A: expected several racing reserves, got ' || v_workers;
+
+  -- Nothing may be rejected: every caller either created the reservation or
+  -- was told it already existed.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM race_results WHERE race = 'reserve' AND outcome = 'rejected'
+  ), 'G9-A: a concurrent duplicate must replay, never surface a constraint error';
+
+  SELECT count(*) INTO v_created FROM race_results WHERE race = 'reserve' AND outcome = 'created';
+  ASSERT v_created = 1, 'G9-A: exactly one reservation may be created, got ' || v_created;
+
+  -- And every caller was handed the SAME reservation id.
+  SELECT count(DISTINCT detail) INTO v_distinct FROM race_results WHERE race = 'reserve';
+  ASSERT v_distinct = 1,
+    'G9-A: all callers must receive one reservation id, got ' || v_distinct;
+
+  SELECT count(*) INTO v_rows FROM credit_reservations WHERE clerk_user_id = 'user_race';
+  ASSERT v_rows = 1, 'G9-A: one reservation row, got ' || v_rows;
+
+  -- THE MONEY. Exactly one hold was taken, so exactly one debit happened.
+  --
+  -- Only the DEBIT is asserted here. The `reserved` counter is deliberately
+  -- not: these assertions run after every race, and the settle race that
+  -- follows legitimately releases the hold. G9-B asserts reserved = 0 at that
+  -- point. Asserting a mid-flight value from the end of the run would be
+  -- asserting a moment that no longer exists.
+  SELECT * INTO v_wallet FROM credit_wallets WHERE clerk_user_id = 'user_race';
+  ASSERT v_wallet.balance = 900,
+    'G9-A: the balance must be debited exactly once (1000-100), got ' || v_wallet.balance;
+
+  SELECT count(*) INTO v_ledger
+    FROM credit_ledger WHERE clerk_user_id = 'user_race' AND entry_type = 'reserve';
+  ASSERT v_ledger = 1, 'G9-A: one ledger entry, got ' || v_ledger;
+
+  RAISE NOTICE 'PROOF R PASS: % concurrent reserves produced ONE hold and ONE debit', v_workers;
+END $$;
+
+-- ===========================================================================
+-- G9-B/C — DUPLICATE SETTLE UNDER CONTENTION
+--
+-- The release-blocking invariant: max ONE billable settlement.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers  integer;
+  v_settled  integer;
+  v_ledger   integer;
+  v_wallet   credit_wallets%ROWTYPE;
+  v_status   text;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'settle';
+  ASSERT v_workers >= 4, 'G9-B: expected several racing settles, got ' || v_workers;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM race_results WHERE race = 'settle' AND outcome = 'rejected'
+  ), 'G9-B: a concurrent duplicate settle must be a no-op, never an error';
+
+  SELECT count(*) INTO v_settled FROM race_results WHERE race = 'settle' AND outcome = 'settled';
+  ASSERT v_settled = 1,
+    'G9-B: MAX ONE BILLABLE SETTLEMENT — got ' || v_settled || ' effective settlements';
+
+  SELECT count(*) INTO v_ledger
+    FROM credit_ledger WHERE clerk_user_id = 'user_race' AND entry_type = 'settle';
+  ASSERT v_ledger = 1, 'G9-C: exactly one settle ledger entry, got ' || v_ledger;
+
+  SELECT status INTO v_status FROM credit_reservations WHERE clerk_user_id = 'user_race';
+  ASSERT v_status = 'settled', 'G9-B: the reservation is settled, got ' || v_status;
+
+  -- Settling releases the hold without touching the balance: the credits
+  -- left at reserve time and do not come back.
+  SELECT * INTO v_wallet FROM credit_wallets WHERE clerk_user_id = 'user_race';
+  ASSERT v_wallet.balance = 900, 'G9-B: settle must not move the balance, got ' || v_wallet.balance;
+  ASSERT v_wallet.reserved = 0, 'G9-B: the hold is released, got ' || v_wallet.reserved;
+
+  RAISE NOTICE 'PROOF S PASS: % concurrent settles produced ONE billable settlement', v_workers;
+END $$;
+
+-- ===========================================================================
+-- G9-E — SETTLE vs REFUND RACE
+--
+-- Both are economically meaningful and opposite. Exactly one may take effect.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_effective integer;
+  v_settle    integer;
+  v_refund    integer;
+  v_wallet    credit_wallets%ROWTYPE;
+BEGIN
+  SELECT count(*) INTO v_effective
+    FROM race_results
+   WHERE race = 'settle_vs_refund' AND detail = 'false' AND outcome NOT LIKE '%rejected%';
+  ASSERT v_effective = 1,
+    'G9-E: exactly one of settle/refund may take effect, got ' || v_effective;
+
+  SELECT count(*) INTO v_settle
+    FROM credit_ledger WHERE clerk_user_id = 'user_race2' AND entry_type = 'settle';
+  SELECT count(*) INTO v_refund
+    FROM credit_ledger WHERE clerk_user_id = 'user_race2' AND entry_type = 'refund';
+  ASSERT v_settle + v_refund = 1,
+    'G9-E: one financial outcome only, got settle=' || v_settle || ' refund=' || v_refund;
+
+  -- The wallet must be internally consistent whichever way it went: a refund
+  -- returns the credits, a settlement keeps them spent. Never both.
+  SELECT * INTO v_wallet FROM credit_wallets WHERE clerk_user_id = 'user_race2';
+  ASSERT v_wallet.reserved = 0, 'G9-E: the hold is resolved either way';
+  ASSERT (v_refund = 1 AND v_wallet.balance = 1000) OR (v_settle = 1 AND v_wallet.balance = 900),
+    'G9-E: the balance must match the outcome that won, got ' || v_wallet.balance;
+
+  RAISE NOTICE 'PROOF T PASS: settle vs refund — exactly one economic effect';
+END $$;
+
+-- ===========================================================================
+-- G9-F — INSUFFICIENT FUNDS UNDER CONTENTION (TOCTOU)
+--
+-- A wallet holding 100 with four concurrent reserves of 80. Without the
+-- FOR UPDATE lock each could read "100 available" and all four would pass
+-- affordability, overdrawing the wallet. Exactly one may succeed.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers integer;
+  v_created integer;
+  v_wallet  credit_wallets%ROWTYPE;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'overdraw';
+  ASSERT v_workers >= 4, 'G9-F: expected several racing reserves, got ' || v_workers;
+
+  SELECT count(*) INTO v_created FROM race_results WHERE race = 'overdraw' AND outcome = 'created';
+  ASSERT v_created = 1,
+    'G9-F: only one 80-credit hold fits in a 100-credit wallet, got ' || v_created;
+
+  SELECT * INTO v_wallet FROM credit_wallets WHERE clerk_user_id = 'user_overdraw';
+  ASSERT v_wallet.balance = 20,
+    'G9-F: the wallet must not be overdrawn, got ' || v_wallet.balance;
+  ASSERT v_wallet.balance >= 0, 'G9-F: the balance CHECK must never be violated';
+
+  RAISE NOTICE 'PROOF U PASS: no TOCTOU overdraw across % concurrent reserves', v_workers;
+END $$;
+
+-- ===========================================================================
+-- G11 — TERMINAL TRANSITION RACE, WITH THE EVENT
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers integer;
+  v_applied integer;
+  v_events  integer;
+  v_status  text;
+  v_kind    text;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'terminal';
+  ASSERT v_workers >= 3, 'G11: expected complete/fail/cancel racing, got ' || v_workers;
+
+  SELECT count(*) INTO v_applied
+    FROM race_results WHERE race = 'terminal' AND detail = 'applied';
+  ASSERT v_applied = 1,
+    'G11: exactly one terminal transition may apply, got ' || v_applied;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM race_results WHERE race = 'terminal' AND detail LIKE 'error:%'
+  ), 'G11: a losing contender must be refused deterministically, never error';
+
+  -- One terminal state, one event, and they agree.
+  SELECT status INTO v_status FROM generations WHERE id = '66666666-6666-4666-8666-666666666666';
+  ASSERT v_status IN ('completed', 'failed', 'cancelled'),
+    'G11: the row must be terminal, got ' || v_status;
+
+  SELECT count(*) INTO v_events
+    FROM outbox_events WHERE aggregate_id = '66666666-6666-4666-8666-666666666666';
+  ASSERT v_events = 1, 'G11: one terminal state means one event, got ' || v_events;
+
+  SELECT event_type INTO v_kind
+    FROM outbox_events WHERE aggregate_id = '66666666-6666-4666-8666-666666666666';
+  ASSERT v_kind = 'generation.' || v_status,
+    'G11: the surviving event must describe the surviving state — state=' || v_status
+      || ' event=' || v_kind;
+
+  RAISE NOTICE 'PROOF V PASS: terminal race — one state (%), one agreeing event', v_status;
+END $$;
+
+SELECT 'CONCURRENCY RACE PROOFS PASSED' AS result;
