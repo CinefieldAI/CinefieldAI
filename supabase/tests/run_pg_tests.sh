@@ -34,8 +34,12 @@ docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD="$PGPASS" -e POSTGRES_DB="$DB" \
   "$IMAGE" >/dev/null
 
+# -t 2 makes each probe WAIT up to two seconds rather than returning
+# instantly, so the loop is a real 120-second budget instead of sixty
+# immediate failures against a container that has not finished initdb.
 for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null 2>&1; then break; fi
+  if docker exec "$CONTAINER" pg_isready -t 2 -U postgres -d "$DB" >/dev/null 2>&1; then break; fi
+  sleep 1
 done
 docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null
 
@@ -46,7 +50,7 @@ for f in \
   "$ROOT/supabase/migrations/20260812130000_outbox_events.sql" \
   "$ROOT/supabase/migrations/20260811120000_credit_system.sql"   "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql" \
   "$ROOT/supabase/migrations/20260815000000_fix_cancel_metadata_nesting.sql" \
-  "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"
+  "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"   "$ROOT/supabase/migrations/20260817000000_model_routing.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -148,6 +152,9 @@ SQL
 # ordering under contention is not deterministic and a test that depended on
 # it would be flaky rather than informative.
 # ---------------------------------------------------------------------------
+echo "==> Phase 7-A routing schema proofs"
+psql_run < "$ROOT/supabase/tests/test_model_routing.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
 echo "==> concurrency race fixtures"
 psql_run -q < "$ROOT/supabase/tests/test_concurrency_races.sql" >/dev/null
 echo "    fixtures ready"

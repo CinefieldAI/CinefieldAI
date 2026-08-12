@@ -42,12 +42,44 @@ import { commandIdFor } from "@/lib/contracts/command-wire";
 import { isSqsCommandBusEnabled } from "@/lib/aws/sqs-config";
 import type { Generation } from "@/types/database";
 
+/**
+ * Reads the route the Phase 7-B router chose when the generation was created.
+ *
+ * Returns null for a generation created before routing existed, or one whose
+ * metadata is malformed — the caller then falls back to the registry, which is
+ * exactly the pre-routing behaviour.
+ */
+function readRoutingSelection(
+  metadata: Record<string, unknown> | null
+): {
+  providerId: string;
+  providerModelId: string;
+  modelVersionId: string | null;
+  routeId: string | null;
+} | null {
+  const routing = metadata?.routing;
+  if (!routing || typeof routing !== "object") return null;
+  const record = routing as Record<string, unknown>;
+  if (typeof record.providerId !== "string" || typeof record.providerModelId !== "string") {
+    return null;
+  }
+  return {
+    providerId: record.providerId,
+    providerModelId: record.providerModelId,
+    modelVersionId: typeof record.modelVersionId === "string" ? record.modelVersionId : null,
+    routeId: typeof record.routeId === "string" ? record.routeId : null,
+  };
+}
+
 /** What the workflow learns about a generation before doing anything. */
 export interface GenerationDescriptor {
   generationId: string;
   clerkUserId: string;
   provider: string;
   providerModel: string;
+  /** Phase 7-B correlation, null for generations created before routing. */
+  modelVersionId: string | null;
+  routeId: string | null;
   /** Terminal rows are reported so the workflow can finish without acting. */
   terminal: "completed" | "failed" | "cancelled" | null;
 }
@@ -114,11 +146,19 @@ export async function describeGeneration(params: {
       ? generation.status
       : null;
 
+  // PHASE 7-B: the router's decision, made at creation, is authoritative for
+  // WHERE this runs. Falling back to the registry keeps every generation that
+  // predates routing working unchanged — and keeps this activity honest about
+  // which source answered.
+  const routing = readRoutingSelection(generation.metadata as Record<string, unknown> | null);
+
   return {
     generationId: generation.id,
     clerkUserId: generation.clerk_user_id,
-    provider: model.providerId,
-    providerModel: model.providerModelId,
+    provider: routing?.providerId ?? model.providerId,
+    providerModel: routing?.providerModelId ?? model.providerModelId,
+    modelVersionId: routing?.modelVersionId ?? null,
+    routeId: routing?.routeId ?? null,
     terminal,
   };
 }
@@ -138,6 +178,8 @@ export async function ensureAttempt(params: {
   providerModel: string;
   workflowId: string;
   workflowRunId: string;
+  modelVersionId?: string | null;
+  routeId?: string | null;
 }): Promise<{ attemptId: string; attemptNo: number; reused: boolean }> {
   const admin = getSupabaseAdminClient();
 
@@ -153,6 +195,8 @@ export async function ensureAttempt(params: {
     providerModel: params.providerModel,
     workflowId: params.workflowId,
     workflowRunId: params.workflowRunId,
+    modelVersionId: params.modelVersionId ?? null,
+    routeId: params.routeId ?? null,
   });
 
   log({ generationId: params.generationId, attemptId: created.id, result: "attempt_created" });

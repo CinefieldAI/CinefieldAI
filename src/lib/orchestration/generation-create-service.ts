@@ -3,6 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { OrchestrationError } from "./errors";
 import { findModel } from "./model-registry";
 import { canonicalRequestHash, deriveIdempotencyIdentity } from "@/lib/redis/idempotency-identity";
+import { validateCapabilities } from "./capability-validator";
+import { mapMetadataToInputs, mapMetadataToSettings } from "./generation-settings-mapper";
+import { resolveWorkflow } from "./workflow-router";
+import { resolveRoute } from "@/lib/routing/model-router";
+
+function log(fields: Record<string, unknown>): void {
+  // Identifiers and codes only — never a prompt, a credential or a payload.
+  console.info("[cinefield:generation-create]", JSON.stringify(fields));
+}
 
 /**
  * Server-side generation creation (Phase 5 final convergence).
@@ -146,6 +155,49 @@ export async function createGeneration(
     throw new OrchestrationError("MODEL_DISABLED", { context: { modelId: model.id } });
   }
 
+  // ---- PHASE 7-F: capability validation, at the earliest safe point -------
+  //
+  // Before a row exists, before a workflow starts, before an attempt is
+  // claimed, before any provider is contacted. An unsupported aspect ratio or
+  // an over-limit duration is a property of the REQUEST, knowable here, and
+  // discovering it three layers deep costs a durable row and a workflow that
+  // exist only to fail.
+  //
+  // The same validator the orchestrator already runs, reading settings
+  // through the same mapper — so a request accepted here cannot be refused
+  // later for a capability reason, and vice versa.
+  const inputs = mapMetadataToInputs(request.inputUrl, request.metadata);
+  const workflow = resolveWorkflow(model, inputs);
+  validateCapabilities({
+    model,
+    workflow,
+    prompt: request.prompt,
+    inputs,
+    settings: mapMetadataToSettings(request.metadata),
+  });
+
+  // ---- PHASE 7-B: where will this run? ------------------------------------
+  //
+  // Resolved here so the decision is durable with the generation rather than
+  // re-derived at execution time from whatever the route table says later.
+  // The router selects; it does not create, execute, or own anything.
+  //
+  // A model with no eligible route is refused BEFORE the row is created. The
+  // alternative — a durable generation nothing can ever run — is a queue of
+  // work that silently never completes.
+  const routing = await resolveRoute(admin, { cinefieldModelId: model.id });
+  if (routing.outcome === "no_eligible_route") {
+    log({
+      modelId: model.id,
+      result: "no_eligible_route",
+      // Codes only, so an operator can see which switch is off.
+      rejected: routing.rejected.map((r) => r.reason),
+    });
+    throw new OrchestrationError("NO_ELIGIBLE_ROUTE", {
+      context: { modelId: model.id },
+    });
+  }
+
   const requestHash = canonicalRequestHash(canonicalForm(request));
 
   // Scoped to the actor as well as the payload (6R.24). The derived identity
@@ -172,7 +224,22 @@ export async function createGeneration(
     p_provider: model.providerId,
     p_model: model.id,
     p_prompt: request.prompt,
-    p_metadata: request.metadata ?? {},
+    // The routing decision travels with the generation. Recorded under a
+    // dedicated key so it never collides with UI settings, and read back by
+    // describeGeneration so the provider that EXECUTES is the one the router
+    // chose — not whatever the registry would resolve to at execution time.
+    p_metadata: {
+      ...(request.metadata ?? {}),
+      routing: {
+        routeId: routing.selection.routeId,
+        modelVersionId: routing.selection.modelVersionId,
+        modelVersion: routing.selection.modelVersion,
+        providerId: routing.selection.providerId,
+        providerModelId: routing.selection.providerModelId,
+        selectionReason: routing.selection.selectionReason,
+        selectedAt: new Date().toISOString(),
+      },
+    },
     p_input_url: request.inputUrl ?? null,
     p_negative_prompt: request.negativePrompt ?? null,
     p_idempotency_key: request.idempotencyKey ?? null,

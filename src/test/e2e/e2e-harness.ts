@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FakeSupabaseClient } from "./fake-supabase";
+import { listModels } from "@/lib/orchestration/model-registry";
 import type { CommandBus, CommandEnvelope } from "@/lib/contracts/command-bus";
 import { parseCommand, serializeCommand, commandIdFor, type WireCommandType } from "@/lib/contracts/command-wire";
 
@@ -133,6 +134,66 @@ export async function installFakeSupabase(db: FakeSupabaseClient): Promise<void>
 
   const { __setSupabaseAdminClientForTesting } = await import("@/lib/supabase/supabaseAdmin");
   __setSupabaseAdminClientForTesting(db as never);
+
+  seedRoutingTables(db);
+}
+
+/**
+ * Seeds the Phase 7-A routing tables the way the migration does.
+ *
+ * DERIVED FROM THE CODE REGISTRY, never hand-listed — the same source the
+ * migration's seed was generated from. If a model is added to the registry it
+ * appears here automatically, so the harness cannot silently fall behind and
+ * turn a real drift into a passing test. (The registry↔migration drift check
+ * itself lives in phase-7-routing.e2e.test.ts and reads the SQL.)
+ *
+ * Every route is enabled at the default priority, which is the seeded
+ * production state. A scenario that wants a disabled or contested route edits
+ * `db.state.model_routes` directly.
+ */
+export function seedRoutingTables(db: FakeSupabaseClient): void {
+  if ((db.state.model_routes ?? []).length > 0) return;
+
+  const providers = new Map<string, Record<string, unknown>>();
+  const models: Record<string, unknown>[] = [];
+  const versions: Record<string, unknown>[] = [];
+  const providerModels: Record<string, unknown>[] = [];
+  const routes: Record<string, unknown>[] = [];
+
+  for (const model of listModels()) {
+    providers.set(model.providerId, { id: model.providerId, enabled: true });
+
+    const versionId = randomUUID();
+    const providerModelId = randomUUID();
+
+    models.push({
+      id: model.id,
+      generation_type: model.generationType,
+      lifecycle: model.enabled ? "active" : "disabled",
+    });
+    versions.push({ id: versionId, model_id: model.id, version: 1, status: "active" });
+    providerModels.push({
+      id: providerModelId,
+      provider_id: model.providerId,
+      provider_model_id: model.providerModelId,
+      enabled: true,
+    });
+    routes.push({
+      id: randomUUID(),
+      model_id: model.id,
+      model_version_id: versionId,
+      provider_model_id: providerModelId,
+      enabled: true,
+      priority: 100,
+      status: "active",
+    });
+  }
+
+  db.state.providers = [...providers.values()];
+  db.state.models = models;
+  db.state.model_versions = versions;
+  db.state.provider_models = providerModels;
+  db.state.model_routes = routes;
 }
 
 /** Restores normal admin-client resolution after a scenario. */

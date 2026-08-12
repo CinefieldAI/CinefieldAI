@@ -47,6 +47,9 @@ export interface CreateAttemptInput {
   providerModel: string;
   workflowId?: string;
   workflowRunId?: string;
+  /** Phase 7-B: which model version and route this attempt was sent to. */
+  modelVersionId?: string | null;
+  routeId?: string | null;
 }
 
 /**
@@ -93,6 +96,12 @@ export async function createAttempt(
       submission_evidence: "none",
       workflow_id: input.workflowId ?? null,
       workflow_run_id: input.workflowRunId ?? null,
+      // PHASE 7-B correlation. Nullable and additive: an attempt for a
+      // generation created before routing existed simply carries null, and
+      // nothing downstream reads these to decide behaviour — they exist so an
+      // operator can answer "which route ran this?" after the fact.
+      model_version_id: input.modelVersionId ?? null,
+      model_route_id: input.routeId ?? null,
       started_at: new Date().toISOString(),
     })
     .select("*")

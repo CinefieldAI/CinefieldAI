@@ -320,6 +320,11 @@ export async function generationWorkflow(
       providerModel: descriptor.providerModel,
       workflowId,
       workflowRunId: runId,
+      // Phase 7-B correlation only. The workflow does not choose a route and
+      // does not interpret one — it carries the decision the creation boundary
+      // already made so the attempt row records where the work actually went.
+      modelVersionId: descriptor.modelVersionId,
+      routeId: descriptor.routeId,
     });
     attemptId = attempt.attemptId;
     attempts = attempt.attemptNo;

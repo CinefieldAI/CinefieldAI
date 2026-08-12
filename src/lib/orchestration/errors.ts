@@ -35,6 +35,7 @@ export type OrchestrationErrorCode =
   | "MOCK_VIDEO_NOT_IMPLEMENTED"
   | "TRIGGER_DISPATCH_FAILED"
   | "GENERATION_OWNER_UNAVAILABLE"
+  | "NO_ELIGIBLE_ROUTE"
   | "INTERNAL_ERROR";
 
 interface ErrorDefinition {
@@ -151,6 +152,16 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
   // a client loop that looks like an outage recovering when it is not.
   GENERATION_OWNER_UNAVAILABLE: {
     message: "Generation is temporarily unavailable. Please try again later.",
+    status: 503,
+    retryable: false,
+  },
+  // Phase 7-B. The model is real and the request is valid, but no enabled
+  // route can serve it — every candidate provider is disabled, retired, or has
+  // no adapter in the running deployment. Not retryable: retrying changes
+  // nothing until an operator enables a route, and the router will never
+  // invent a destination.
+  NO_ELIGIBLE_ROUTE: {
+    message: "This model is temporarily unavailable. Please try another model.",
     status: 503,
     retryable: false,
   },

@@ -117,7 +117,7 @@ export class FakeSupabaseClient {
 
   from(table: string) {
     if (!this.state[table]) this.state[table] = [];
-    return new FakeQueryBuilder(this.state[table], table);
+    return new FakeQueryBuilder(this.state[table], table, this.state);
   }
 
   /** Minimal Supabase Storage double — records intent, never touches a real bucket. */
@@ -392,13 +392,17 @@ class FakeQueryBuilder {
   private insertRows: Row[] = [];
   private selectAfterWrite = false;
   private limitCount: number | null = null;
+  private selectColumns = "*";
+  private state: FakeSupabaseState;
 
-  constructor(rows: Row[], table: string) {
+  constructor(rows: Row[], table: string, state: FakeSupabaseState) {
     this.rows = rows;
     this.table = table;
+    this.state = state;
   }
 
-  select(_cols?: string) {
+  select(cols?: string) {
+    if (typeof cols === "string") this.selectColumns = cols;
     if (this.mode === "select") this.mode = "select";
     else this.selectAfterWrite = true;
     return this;
@@ -522,8 +526,42 @@ class FakeQueryBuilder {
       return { data: matched, error: null };
     }
 
-    const selected = this.limitCount === null ? this.matching() : this.matching().slice(0, this.limitCount);
-    return { data: selected, error: null };
+    const matched = this.matching();
+    const selected = this.limitCount === null ? matched : matched.slice(0, this.limitCount);
+    return { data: this.embed(selected), error: null };
+  }
+
+  /**
+   * Resolves the PostgREST embedded-resource syntax for the ROUTING tables
+   * (Phase 7-B): `provider_models ( ..., providers ( ... ) )`.
+   *
+   * A foreign-key walk, nothing more. It contains no routing policy — every
+   * eligibility decision and the whole tie-break still run in production code
+   * against the rows this returns. Scoped to the join the route repository
+   * actually issues rather than a general PostgREST parser, because a
+   * half-correct general implementation would be a second query engine whose
+   * bugs would read as routing bugs.
+   */
+  private embed(rows: Row[]): Row[] {
+    if (!this.selectColumns.includes("(")) return rows;
+
+    const find = (table: string, id: unknown): Row | null =>
+      (this.state[table] ?? []).find((r) => r.id === id) ?? null;
+
+    if (this.table === "model_routes") {
+      return rows.map((row) => {
+        const providerModel = find("provider_models", row.provider_model_id);
+        const embedded: Row = { ...row };
+        embedded.models = find("models", row.model_id);
+        embedded.model_versions = find("model_versions", row.model_version_id);
+        embedded.provider_models = providerModel
+          ? { ...providerModel, providers: find("providers", providerModel.provider_id) }
+          : null;
+        return embedded;
+      });
+    }
+
+    return rows;
   }
 
   async single() {
