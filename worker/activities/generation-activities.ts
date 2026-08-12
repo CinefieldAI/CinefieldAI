@@ -26,7 +26,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { toOrchestrationError } from "@/lib/orchestration/errors";
 import { findModel } from "@/lib/orchestration/model-registry";
 import { checkAsyncGeneration } from "@/lib/orchestration/orchestrator";
-import { markCancelled } from "@/lib/orchestration/status-manager";
+import { markCancelled, readPersistedProviderJob } from "@/lib/orchestration/status-manager";
 import { submitAttempt } from "@/lib/orchestration/attempt-submission-service";
 import {
   cancelPendingAttempt,
@@ -35,6 +35,8 @@ import {
   readActiveAttempt,
   readAttempt,
 } from "@/lib/orchestration/attempt-repository";
+import { getProviderAdapter, isProviderRegistered } from "@/lib/orchestration/provider-registry";
+import type { ProviderCancelOutcome } from "@/lib/orchestration/cancellation";
 import { getCommandBus } from "@/lib/contracts/command-bus";
 import { commandIdFor } from "@/lib/contracts/command-wire";
 import { isSqsCommandBusEnabled } from "@/lib/aws/sqs-config";
@@ -326,4 +328,127 @@ export async function recordWorkflowCorrelation(params: {
 export async function getAttempt(params: { attemptId: string }) {
   const admin = getSupabaseAdminClient();
   return await readAttempt(admin, params.attemptId);
+}
+
+/**
+ * Asks the PROVIDER to stop a running job (Phase 6R-H closure).
+ *
+ * The third of the three cancellation concepts, and the only one that
+ * involves someone else's system. Kept as its own activity because it is the
+ * only part of cancellation that performs external I/O, and because its
+ * outcome must be recorded honestly rather than folded into a boolean.
+ *
+ * EVERY INPUT COMES FROM THE DURABLE ATTEMPT. The provider id and the
+ * external job id are read from the row that already owns the remote job —
+ * never from a request, never from the workflow argument. A browser cannot
+ * name a provider to cancel, and this activity does not consult the model
+ * registry to re-derive one: the attempt that created the job is the only
+ * authority on which provider holds it. (Re-deriving would also be the first
+ * step toward Phase 7 routing, which is out of scope.)
+ *
+ * IT NEVER SUBMITS. It cannot: it reaches only `adapter.cancel`, and an
+ * adapter without one is reported as `unsupported` rather than worked
+ * around. No cancellation outcome — including a failed one — is ever a
+ * reason to send the job somewhere else.
+ *
+ * The returned outcome feeds classifyCancellation(), which turns it into the
+ * settlement evidence Phase 10 will need. This activity settles nothing.
+ */
+export async function cancelProviderJob(params: {
+  attemptId: string;
+}): Promise<ProviderCancelOutcome> {
+  const admin = getSupabaseAdminClient();
+  const attempt = await readAttempt(admin, params.attemptId);
+
+  if (!attempt) {
+    return { outcome: "no_job" };
+  }
+
+  // Nothing was ever sent: there is no remote job to stop, and asking a
+  // provider about a job id we never received would be meaningless.
+  if (!attempt.provider_job_id) {
+    return { outcome: "no_job" };
+  }
+
+  if (
+    attempt.status === "succeeded" ||
+    attempt.status === "failed" ||
+    attempt.status === "cancelled"
+  ) {
+    return { outcome: "already_terminal" };
+  }
+
+  if (!isProviderRegistered(attempt.provider)) {
+    // An unregistered provider cannot be reached. Reporting "failed" would
+    // imply we tried; this is closer to unsupported, and either way it is
+    // classified as possibly-billable rather than free.
+    log({ attemptId: params.attemptId, result: "cancel_provider_unregistered" });
+    return { outcome: "unsupported" };
+  }
+
+  const adapter = getProviderAdapter(attempt.provider);
+  if (!adapter.cancel) {
+    // The common case. Most providers cannot stop a running job, and saying
+    // so plainly is what keeps the settlement classification correct.
+    log({ attemptId: params.attemptId, provider: attempt.provider, result: "cancel_unsupported" });
+    return { outcome: "unsupported" };
+  }
+
+  try {
+    await adapter.cancel(
+      {
+        providerJobId: attempt.provider_job_id,
+        provider: attempt.provider,
+        status: attempt.status === "processing" ? "processing" : "queued",
+        metadata: readPersistedProviderJob(await readGenerationMetadata(admin, attempt.generation_id))
+          ?.resume,
+      },
+      {
+        generationId: attempt.generation_id,
+        clerkUserId: await readGenerationOwner(admin, attempt.generation_id),
+        projectId: "",
+      }
+    );
+    log({ attemptId: params.attemptId, provider: attempt.provider, result: "cancel_confirmed" });
+    return { outcome: "cancelled" };
+  } catch (caught) {
+    // The call failed, so the job's fate is UNKNOWN. Not "cancelled", and not
+    // "unsupported" — classifyCancellation routes this to reconciliation
+    // precisely because guessing either way could refund a billed job or
+    // charge for a stopped one. Only the sanitized code is kept.
+    const error = toOrchestrationError(caught);
+    log({
+      attemptId: params.attemptId,
+      provider: attempt.provider,
+      result: "cancel_failed",
+      errorCode: error.code,
+    });
+    return { outcome: "failed", errorCode: error.code };
+  }
+}
+
+/** Reads a generation's metadata for the provider's resume blob. */
+async function readGenerationMetadata(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  generationId: string
+): Promise<Record<string, unknown> | null> {
+  const { data } = await admin
+    .from("generations")
+    .select("metadata")
+    .eq("id", generationId)
+    .maybeSingle();
+  return (data?.metadata ?? null) as Record<string, unknown> | null;
+}
+
+/** Server-derived owner. Never taken from a request or a workflow argument. */
+async function readGenerationOwner(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  generationId: string
+): Promise<string> {
+  const { data } = await admin
+    .from("generations")
+    .select("clerk_user_id")
+    .eq("id", generationId)
+    .maybeSingle();
+  return (data as { clerk_user_id?: string } | null)?.clerk_user_id ?? "";
 }

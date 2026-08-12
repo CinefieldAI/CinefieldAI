@@ -147,17 +147,12 @@ test("G16: every production writer of generations.status is enumerated and class
     WRITE.lastIndex = 0;
   }
 
-  // Exactly two, and both are known:
-  //   status-manager.ts   the sanctioned state machine, whose terminal
-  //                       transitions now all go through SQL functions
-  //   the legacy Gemini route — the documented second lifecycle owner,
-  //                       Phase 5 convergence scope, deliberately untouched
+  // Exactly ONE, since Phase 5 convergence retired the legacy Gemini route
+  // as a lifecycle owner: the sanctioned state machine, whose terminal
+  // transitions all go through SQL functions.
   assert.deepEqual(
     writers.sort(),
-    [
-      "src/app/api/generations/[generationId]/execute/route.ts",
-      "src/lib/orchestration/status-manager.ts",
-    ],
+    ["src/lib/orchestration/status-manager.ts"],
     "a NEW writer of generations.status appeared — every one must be classified against Temporal ownership"
   );
 });
@@ -220,34 +215,36 @@ test("G18: the 6R objects are user-bound server-side; workspace binding is still
 // G27 — THE KNOWN CONVERGENCE BLOCKERS, RE-AUDITED
 // ===========================================================================
 
-test("G27: /api/generate still does not exist, and the legacy owner is still present", () => {
+test("G27 (CLOSED): /api/generate exists and the legacy route no longer owns a lifecycle", () => {
+  // This test previously pinned the blocker so it could not vanish from a
+  // report while remaining in the code. Phase 5 convergence closed it, so it
+  // now pins the closure instead — a regression would fail here.
   assert.equal(
     existsSync(join(root, "src/app/api/generate/route.ts")),
-    false,
-    "API_GENERATE_EXISTS=false — Phase 5 convergence is still outstanding"
+    true,
+    "API_GENERATE_EXISTS — the canonical endpoint"
   );
 
   const legacy = join(root, "src/app/api/generations/[generationId]/execute/route.ts");
-  assert.ok(statSync(legacy).isFile(), "the legacy Gemini route is still present");
+  assert.ok(statSync(legacy).isFile(), "the URL is preserved for its frozen caller");
 
   const code = strip(readFileSync(legacy, "utf8"));
-  // It genuinely is a second lifecycle owner: it claims, calls a paid
-  // provider, uploads, and finalizes inline. Asserted so the blocker cannot
-  // quietly disappear from a report while remaining in the code.
-  assert.ok(/\.eq\("status", "queued"\)/.test(code), "it performs its own claim");
-  assert.ok(/status: "completed"/.test(code), "and its own completion");
-  assert.ok(
-    !/startGenerationWorkflow|getCommandBus|submitAttempt/.test(code),
-    "bypassing Temporal, SQS and the attempt ledger entirely"
-  );
+  // Everything that made it an owner is gone.
+  assert.ok(!/\.eq\("status", "queued"\)/.test(code), "it no longer claims");
+  assert.ok(!/status: "completed"/.test(code), "nor completes");
+  assert.ok(!/getGeminiClient/.test(code), "nor calls a provider");
+  assert.ok(/respondToGenerationRequest/.test(code), "it delegates to the canonical behaviour");
 });
 
-test("G27: the browser hook still keys its polling off the retired trigger contract", () => {
+test("G27 (CLOSED): the browser hook understands the canonical Temporal contract", () => {
   const hook = readSource("src/hooks/useGeneration.ts");
   assert.ok(
-    /execJson\.mode === "trigger"/.test(hook),
-    "CLIENT_TEMPORAL_CONTRACT_CONVERGED=false — the hook polls only on the retired mode field, " +
-      "so enabling Temporal ownership would show a failure for a generation that succeeded"
+    !/execJson\.mode === "trigger"/.test(hook),
+    "the transport-coupled branch is gone"
+  );
+  assert.ok(
+    /execJson\.status === "queued" \|\| execJson\.status === "processing"/.test(hook),
+    "CLIENT_TEMPORAL_CONTRACT_CONVERGED — the hook branches on status alone"
   );
 });
 
@@ -353,12 +350,22 @@ const OWNERSHIP_MATRIX = [
   {
     plane: "Legacy Gemini route",
     intended: "must not exist as a lifecycle owner",
-    // The one non-compliant entry, recorded rather than omitted. Marking the
-    // matrix "all green" while this route still claims, calls a paid
-    // provider, uploads and finalizes would be the single most misleading
-    // thing this audit could do.
-    check: () => existsSync(join(root, "src/app/api/generations/[generationId]/execute/route.ts")),
-    compliant: false,
+    // Closed by Phase 5 convergence. It kept its URL — a frozen caller
+    // depends on it — but Gemini moved into the orchestration core as a
+    // registered adapter, so the route delegates instead of executing. The
+    // check is what makes that real: it fails if the route ever regrows a
+    // provider client or a terminal write.
+    check: () => {
+      const code = strip(
+        readFileSync(join(root, "src/app/api/generations/[generationId]/execute/route.ts"), "utf8")
+      );
+      return (
+        code.includes("respondToGenerationRequest") &&
+        !code.includes("getGeminiClient") &&
+        !code.includes('status: "completed"')
+      );
+    },
+    compliant: true,
   },
 ] as const;
 
@@ -374,24 +381,30 @@ test("G26/G28: the ownership matrix matches the repository, including where it d
   const nonCompliant = OWNERSHIP_MATRIX.filter((e) => !e.compliant).map((e) => e.plane);
   assert.deepEqual(
     nonCompliant,
-    ["Legacy Gemini route"],
-    "exactly one known non-compliant plane; a new one must be declared, not discovered later"
+    [],
+    "every plane complies; a new non-compliant one must be declared here, not discovered later"
   );
 });
 
-test("G32: Phase 6R cannot be declared complete while a second lifecycle owner exists", () => {
-  const secondOwnerExists = existsSync(
-    join(root, "src/app/api/generations/[generationId]/execute/route.ts")
+test("G32: the completion rule now measures ownership, not file existence", () => {
+  // The rule used to key off the legacy route's mere presence, which was a
+  // fair proxy while that route executed. It no longer is: the file survives
+  // as a delegating wrapper. What must be measured is whether a SECOND
+  // LIFECYCLE OWNER exists — i.e. whether anything outside the sanctioned
+  // state machine can write a terminal generation state.
+  const legacy = strip(
+    readFileSync(join(root, "src/app/api/generations/[generationId]/execute/route.ts"), "utf8")
   );
-  const apiGenerateExists = existsSync(join(root, "src/app/api/generate/route.ts"));
+  const secondOwnerExists =
+    legacy.includes("getGeminiClient") ||
+    legacy.includes('status: "completed"') ||
+    legacy.includes('eq("status", "queued")');
 
-  // The completion rule, expressed as code so it cannot be argued around in
-  // prose: while the second owner is present, PHASE_6R_COMPLETE is false.
-  const phase6rComplete = !secondOwnerExists && apiGenerateExists;
+  assert.equal(secondOwnerExists, false, "no second production lifecycle owner may remain");
   assert.equal(
-    phase6rComplete,
-    false,
-    "if this ever passes as true, update the closure report — do not relax the rule"
+    existsSync(join(root, "src/app/api/generate/route.ts")),
+    true,
+    "and the canonical endpoint must exist"
   );
 });
 

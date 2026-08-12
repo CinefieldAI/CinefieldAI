@@ -145,6 +145,26 @@ const { cancelGeneration } = proxyActivities<typeof activities>({
 });
 
 /**
+ * Provider cancellation (Phase 6R-H closure) — the only cancellation step
+ * that touches someone else's system.
+ *
+ * Separate from cancelGeneration on purpose. That activity settles
+ * CINEFIELD's own state; this one asks the PROVIDER to stop, and the two
+ * answers are independent: a provider that cannot cancel does not stop
+ * Cinefield from cancelling, and a Cinefield cancellation does not claim the
+ * remote job halted.
+ *
+ * Its retry budget is deliberately small. A cancel that keeps failing is
+ * informative — it means the job's fate is unknown, which
+ * classifyCancellation routes to reconciliation — and retrying it forever
+ * would delay the Cinefield-side settlement for no gain.
+ */
+const { cancelProviderJob } = proxyActivities<typeof activities>({
+  startToCloseTimeout: "1 minute",
+  retry: { maximumAttempts: 2, initialInterval: "2 seconds" },
+});
+
+/**
  * Attempts to finalize cancellation right now. Returns the workflow's final
  * result once the race is resolved, or null when an attempt is currently
  * claimed/submitting — a handler may be talking to a provider RIGHT NOW, and
@@ -162,6 +182,22 @@ async function settleCancellation(
 ): Promise<GenerationWorkflowResult | null> {
   const outcome = await cancelGeneration({ generationId, attemptId });
   if (!outcome.settled) return null;
+
+  // The provider is asked to stop only AFTER Cinefield's own state is
+  // settled. Two reasons for that order. First, cancelGeneration is what
+  // proves no handler is mid-flight — asking a provider to cancel a job
+  // whose submission is still in progress races the very evidence write we
+  // must not lose. Second, the provider's answer never changes whether
+  // Cinefield cancelled; it only refines what Phase 10 can later conclude
+  // about cost.
+  //
+  // The result is deliberately not branched on. `unsupported` is the common
+  // case and is not a failure, and a failed cancel means the job's fate is
+  // unknown rather than that cancellation failed. The durable attempt
+  // evidence — untouched by this call — is what classifyCancellation reads.
+  if (attemptId) {
+    await cancelProviderJob({ attemptId });
+  }
 
   if (!attemptId) {
     return { generationId, outcome: "cancelled", attempts };

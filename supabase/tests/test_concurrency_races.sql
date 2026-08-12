@@ -152,3 +152,106 @@ END;
 $$;
 
 SELECT 'RACE FIXTURES READY' AS result;
+
+-- ---------------------------------------------------------------------------
+-- Phase 5 / 6R-H closure races
+-- ---------------------------------------------------------------------------
+
+-- A generation the endpoint race will contend over.
+INSERT INTO generations (id, project_id, clerk_user_id, generation_type, provider, model, prompt, status)
+VALUES ('77777777-7777-4777-8777-777777777777',
+        '33333333-3333-4333-8333-333333333333', 'user_race',
+        'image', 'mock', 'mock-image', 'endpoint race', 'queued');
+
+-- And one for the duplicate-cancel race.
+INSERT INTO generations (id, project_id, clerk_user_id, generation_type, provider, model, prompt, status)
+VALUES ('88888888-8888-4888-8888-888888888888',
+        '33333333-3333-4333-8333-333333333333', 'user_race',
+        'image', 'mock', 'mock-image', 'cancel race', 'processing');
+
+/**
+ * The ATTEMPT side of a duplicate endpoint request.
+ *
+ * Two concurrent POSTs for the same generation both reach ensureAttempt,
+ * whose insert is guarded by generation_attempts_one_active_uniq. Only one
+ * may open an attempt; the other must find the existing one. This is the
+ * database half of "one logical request, one generation" — the Temporal half
+ * is the deterministic workflow id, which cannot be raced from SQL.
+ */
+CREATE OR REPLACE FUNCTION public.ensure_attempt_race(p_worker integer, p_generation uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM generation_attempts
+   WHERE generation_id = p_generation
+     AND status IN ('pending','claimed','submitting','submitted','processing');
+
+  IF FOUND THEN
+    INSERT INTO race_results (race, worker, outcome, detail)
+    VALUES ('ensure_attempt', p_worker, 'reused', v_id::text);
+    RETURN;
+  END IF;
+
+  INSERT INTO generation_attempts (generation_id, attempt_no, provider, provider_model, status)
+  VALUES (p_generation, 1, 'mock', 'mock-image-v1', 'pending')
+  RETURNING id INTO v_id;
+
+  INSERT INTO race_results (race, worker, outcome, detail)
+  VALUES ('ensure_attempt', p_worker, 'created', v_id::text);
+EXCEPTION WHEN unique_violation THEN
+  -- The index decided the race. Report the attempt that actually exists.
+  SELECT id INTO v_id FROM generation_attempts
+   WHERE generation_id = p_generation
+     AND status IN ('pending','claimed','submitting','submitted','processing');
+  INSERT INTO race_results (race, worker, outcome, detail)
+  VALUES ('ensure_attempt', p_worker, 'reused', v_id::text);
+END;
+$$;
+
+/**
+ * Duplicate cancel intent, mirroring recordCancelIntent's compare-and-set:
+ * write the intent only from a non-terminal state, and never restamp one
+ * that already exists.
+ */
+CREATE OR REPLACE FUNCTION public.cancel_intent_race(p_worker integer, p_generation uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_applied uuid; v_existing text;
+BEGIN
+  SELECT metadata #>> '{orchestration,cancelRequested,requestedAt}' INTO v_existing
+    FROM generations WHERE id = p_generation;
+
+  IF v_existing IS NOT NULL THEN
+    INSERT INTO race_results (race, worker, outcome, detail)
+    VALUES ('cancel_intent', p_worker, 'already', v_existing);
+    RETURN;
+  END IF;
+
+  -- One-level path plus a merge. A two-level jsonb_set path does NOT create
+  -- the intermediate object, so on a generation with empty metadata the
+  -- write silently did nothing and every racer's guard kept passing.
+  UPDATE generations
+     SET metadata = jsonb_set(
+                      COALESCE(metadata, '{}'::jsonb),
+                      '{orchestration}',
+                      COALESCE(metadata -> 'orchestration', '{}'::jsonb)
+                        || jsonb_build_object(
+                             'cancelRequested',
+                             jsonb_build_object(
+                               'requestedAt', to_char(clock_timestamp() AT TIME ZONE 'UTC',
+                                                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+                               'reason', 'user_requested',
+                               'worker', p_worker
+                             )
+                           ),
+                      true
+                    )
+   WHERE id = p_generation
+     AND status IN ('queued','processing')
+     AND metadata #>> '{orchestration,cancelRequested,requestedAt}' IS NULL
+  RETURNING id INTO v_applied;
+
+  INSERT INTO race_results (race, worker, outcome, detail)
+  VALUES ('cancel_intent', p_worker,
+          CASE WHEN v_applied IS NULL THEN 'already' ELSE 'recorded' END, NULL);
+END;
+$$;

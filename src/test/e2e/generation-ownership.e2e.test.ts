@@ -432,9 +432,12 @@ test("6R-B ARCHITECTURE: the production ownership chain imports no Trigger.dev g
 
 test("6R-B ARCHITECTURE: the route delegates ownership and decides nothing itself", () => {
   const specifiers = importedModules("src/app/api/orchestration/execute/route.ts");
+  // Since Phase 5 convergence the route delegates one step further out, to
+  // the shared canonical contract, so every generation route produces the
+  // same response through the same function.
   assert.ok(
-    specifiers.some((s) => s.includes("generation-execution-service")),
-    "the route hands off to the production execution service"
+    specifiers.some((s) => s.includes("generation-api-contract")),
+    "the route hands off to the canonical generation contract"
   );
   assert.ok(
     !specifiers.some((s) => s.includes("orchestration/orchestrator")),
@@ -483,10 +486,13 @@ test("6R-B: the owner resolver takes no arguments - a client cannot influence it
     "an argument-free resolver is the simplest guarantee that no request can name an owner"
   );
 
+  // Body parsing now lives in the shared contract, so ONE reader enforces
+  // "generationId and nothing else" for every generation route at once.
+  const contract = readSource("src/lib/orchestration/generation-api-contract.ts");
+  const bodyReads = [...contract.matchAll(/body as \{\s*(\w+)/g)].map((m) => m[1]);
+  assert.deepEqual(bodyReads, ["generationId"], "generationId is the only field read from a request");
+
   const routeSource = readSource("src/app/api/orchestration/execute/route.ts");
-  // The route reads exactly one field out of the body.
-  const bodyReads = [...routeSource.matchAll(/body as \{\s*(\w+)/g)].map((m) => m[1]);
-  assert.deepEqual(bodyReads, ["generationId"], "generationId is the only field read from the request");
   for (const forbidden of ["executionMode", "mode", "owner", "useTemporal", "useTrigger"]) {
     assert.ok(
       !new RegExp(`body\\b[^\\n]*\\b${forbidden}\\b`).test(routeSource),

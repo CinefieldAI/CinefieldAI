@@ -258,4 +258,123 @@ BEGIN
   RAISE NOTICE 'PROOF V PASS: terminal race — one state (%), one agreeing event', v_status;
 END $$;
 
+-- ===========================================================================
+-- Y — the jsonb_set nesting fix (corrective migration 20260815000000)
+--
+-- Regression for a defect a concurrency test found: a two-level jsonb_set
+-- path does not create intermediate objects, so cancelling a generation
+-- whose metadata was still the '{}' default silently dropped the stage
+-- marker. metadata = '{}' is the column DEFAULT, so this was the common case
+-- for a generation cancelled before it ever started.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_gen uuid;
+  v_row generations%ROWTYPE;
+BEGIN
+  INSERT INTO generations
+    (project_id, clerk_user_id, generation_type, provider, model, prompt, status, metadata)
+  VALUES
+    ('33333333-3333-4333-8333-333333333333', 'user_race', 'image', 'mock',
+     'mock-image', 'empty metadata cancel', 'queued', '{}'::jsonb)
+  RETURNING id INTO v_gen;
+
+  PERFORM cancel_generation_tx(v_gen, 'user_requested');
+
+  SELECT * INTO v_row FROM generations WHERE id = v_gen;
+  ASSERT v_row.status = 'cancelled', 'Y: the cancellation applies';
+  ASSERT v_row.metadata #>> '{orchestration,stage}' = 'cancelled',
+    'Y: the stage marker must survive an empty starting metadata';
+
+  -- And an EXISTING orchestration object is still merged, not replaced.
+  INSERT INTO generations
+    (project_id, clerk_user_id, generation_type, provider, model, prompt, status, metadata)
+  VALUES
+    ('33333333-3333-4333-8333-333333333333', 'user_race', 'image', 'mock',
+     'mock-image', 'existing metadata cancel', 'processing',
+     '{"orchestration":{"providerJob":{"id":"job-y"}}}'::jsonb)
+  RETURNING id INTO v_gen;
+
+  PERFORM cancel_generation_tx(v_gen, 'user_requested');
+
+  SELECT * INTO v_row FROM generations WHERE id = v_gen;
+  ASSERT v_row.metadata #>> '{orchestration,providerJob,id}' = 'job-y',
+    'Y: existing provider job evidence must survive the cancellation';
+  ASSERT v_row.metadata #>> '{orchestration,stage}' = 'cancelled', 'Y: and the marker applies';
+
+  RAISE NOTICE 'PROOF Y PASS: cancel metadata merges at one level, creating and preserving';
+END $$;
+
 SELECT 'CONCURRENCY RACE PROOFS PASSED' AS result;
+
+-- ===========================================================================
+-- A8 — ENDPOINT-LEVEL DUPLICATE REQUEST (Phase 5)
+--
+-- Closes the gap 6R-G reported as blocked: concurrent duplicate requests for
+-- one logical generation must not produce a second generation or a second
+-- active attempt.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers   integer;
+  v_created   integer;
+  v_distinct  integer;
+  v_attempts  integer;
+  v_gens      integer;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'ensure_attempt';
+  ASSERT v_workers >= 4, 'A8: expected several concurrent requests, got ' || v_workers;
+
+  SELECT count(*) INTO v_created
+    FROM race_results WHERE race = 'ensure_attempt' AND outcome = 'created';
+  ASSERT v_created = 1,
+    'A8: exactly one attempt may be opened for one logical request, got ' || v_created;
+
+  SELECT count(DISTINCT detail) INTO v_distinct FROM race_results WHERE race = 'ensure_attempt';
+  ASSERT v_distinct = 1,
+    'A8: every concurrent request must converge on ONE attempt, got ' || v_distinct;
+
+  SELECT count(*) INTO v_attempts
+    FROM generation_attempts WHERE generation_id = '77777777-7777-4777-8777-777777777777';
+  ASSERT v_attempts = 1, 'A8: one attempt row, got ' || v_attempts;
+
+  -- And the generation itself was never duplicated.
+  SELECT count(*) INTO v_gens
+    FROM generations WHERE id = '77777777-7777-4777-8777-777777777777';
+  ASSERT v_gens = 1, 'A8: SECOND_GENERATION_CREATED must be false';
+
+  RAISE NOTICE 'PROOF W PASS: % concurrent requests -> ONE generation, ONE attempt', v_workers;
+END $$;
+
+-- ===========================================================================
+-- C7 — CONCURRENT DUPLICATE CANCEL
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers  integer;
+  v_recorded integer;
+  v_status   text;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'cancel_intent';
+  ASSERT v_workers >= 4, 'C7: expected several concurrent cancels, got ' || v_workers;
+
+  SELECT count(*) INTO v_recorded
+    FROM race_results WHERE race = 'cancel_intent' AND outcome = 'recorded';
+  ASSERT v_recorded = 1,
+    'C7: exactly one cancel intent may be recorded, got ' || v_recorded;
+
+  -- The intent exists exactly once, and the generation was NOT transitioned
+  -- by the intent alone — Temporal decides when that is safe.
+  ASSERT (SELECT metadata #>> '{orchestration,cancelRequested,requestedAt}'
+            FROM generations WHERE id = '88888888-8888-4888-8888-888888888888') IS NOT NULL,
+    'C7: the intent must be durable';
+
+  SELECT status INTO v_status FROM generations WHERE id = '88888888-8888-4888-8888-888888888888';
+  ASSERT v_status = 'processing',
+    'C7: recording intent must not transition the generation, got ' || v_status;
+
+  RAISE NOTICE 'PROOF X PASS: % concurrent cancels -> ONE durable intent', v_workers;
+END $$;
