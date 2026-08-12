@@ -17,6 +17,7 @@ import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
 import { getProviderAdapter } from "./provider-registry";
 import type { ProviderAdapter } from "./providers/provider-adapter";
+import { releaseGeminiResult } from "./providers/gemini-provider";
 import { releaseFalResult } from "./providers/fal-provider";
 import { registerMockRequest, releaseMockRequest } from "./providers/mock-provider";
 import {
@@ -577,6 +578,9 @@ export async function executeGeneration(params: {
     }
     if (model.providerId === "fal") {
       releaseFalResult(generationId);
+    }
+    if (model.providerId === "gemini") {
+      releaseGeminiResult(generationId);
     }
   }
 }

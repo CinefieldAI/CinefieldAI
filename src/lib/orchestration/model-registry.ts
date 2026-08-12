@@ -1,3 +1,9 @@
+import {
+  getGeminiModelId,
+  IMAGE_SIZE_SUPPORT,
+  SUPPORTED_ASPECT_RATIOS,
+  SUPPORTS_THINKING_LEVEL,
+} from "@/lib/gemini/geminiModelMapping";
 import { isBlockedModelId } from "@/lib/blockedModels";
 import type { GenerationType, WorkflowType } from "./types";
 
@@ -557,8 +563,63 @@ const CLOUDFLARE_MODELS: ModelRegistryEntry[] = [
   },
 ];
 
+/**
+ * Gemini image models ("Nano Banana"), migrated into the orchestration
+ * pipeline during Phase 5 production convergence.
+ *
+ * These already existed and already ran in production — inline, inside
+ * src/app/api/generations/[generationId]/execute/route.ts, which owned the
+ * whole generation lifecycle outside Temporal. Registering them here is what
+ * lets that route delegate instead of executing, so the second lifecycle
+ * owner can be retired without breaking the UI that calls its URL.
+ *
+ * Capabilities are copied from the per-model support tables in
+ * src/lib/gemini/geminiModelMapping.ts rather than restated, so the registry
+ * and the adapter cannot drift: image sizes come from IMAGE_SIZE_SUPPORT,
+ * thinking support from SUPPORTS_THINKING_LEVEL, aspect ratios from
+ * SUPPORTED_ASPECT_RATIOS.
+ */
+const GEMINI_MODELS: ModelRegistryEntry[] = (
+  ["nano-banana-pro", "nano-banana-2", "nano-banana-2-lite"] as const
+).map((id) => ({
+  id,
+  label:
+    id === "nano-banana-pro"
+      ? "Nano Banana Pro"
+      : id === "nano-banana-2"
+        ? "Nano Banana 2"
+        : "Nano Banana 2 Lite",
+  providerId: "gemini",
+  providerModelId: getGeminiModelId(id),
+  generationType: "image" as const,
+  // Gemini accepts an optional reference image, which the legacy route
+  // already forwarded when its MIME type was supported.
+  supportedWorkflows: ["text-to-image", "image-to-image"] as const,
+  executionMode: "sync" as const,
+  acceptedInputMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  maxInputs: 1,
+  capabilities: {
+    supportedAspectRatios: [...SUPPORTED_ASPECT_RATIOS],
+    supportedResolutions: [...IMAGE_SIZE_SUPPORT[id]],
+    supportedDurationsSeconds: [],
+    minOutputCount: 1,
+    // interactions.create returns one image per call.
+    maxOutputCount: 1,
+    supportsThinking: SUPPORTS_THINKING_LEVEL[id],
+    supportedThinkingValues: SUPPORTS_THINKING_LEVEL[id] ? ["low", "medium", "high"] : [],
+    requiresPrompt: true,
+    maxPromptLength: 10_000,
+  },
+  defaults: { aspectRatio: "1:1", resolution: IMAGE_SIZE_SUPPORT[id][0], outputCount: 1 },
+  enabled: true,
+  isMock: false,
+}));
+
 const REGISTRY: ReadonlyMap<string, ModelRegistryEntry> = new Map(
-  [...MOCK_MODELS, ...FAL_MODELS, ...CLOUDFLARE_MODELS].map((model) => [model.id, model])
+  [...MOCK_MODELS, ...FAL_MODELS, ...CLOUDFLARE_MODELS, ...GEMINI_MODELS].map((model) => [
+    model.id,
+    model,
+  ])
 );
 
 /**

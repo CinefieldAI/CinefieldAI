@@ -15,7 +15,7 @@
  * model card can be routed to an orchestration provider by accident.
  */
 
-export type OrchestrationProviderId = "mock" | "fal" | "cloudflare-workers-ai";
+export type OrchestrationProviderId = "mock" | "fal" | "cloudflare-workers-ai" | "gemini";
 
 interface OrchestrationModelDescriptor {
   generationType: "image" | "video" | "audio";
@@ -36,6 +36,12 @@ const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
   "fal-z-image-turbo": { generationType: "image", provider: "fal", isMock: false },
   "fal-nano-banana": { generationType: "image", provider: "fal", isMock: false },
   "fal-nano-banana-2": { generationType: "image", provider: "fal", isMock: false },
+  // Gemini image models. Migrated into the orchestration pipeline during
+  // Phase 5 convergence — they used to run inline in a legacy route that
+  // owned their whole lifecycle outside Temporal.
+  "nano-banana-pro": { generationType: "image", provider: "gemini", isMock: false },
+  "nano-banana-2": { generationType: "image", provider: "gemini", isMock: false },
+  "nano-banana-2-lite": { generationType: "image", provider: "gemini", isMock: false },
   // Registered here for id/type consistency with the server registry.
   // Real Cloudflare requests still require CLOUDFLARE_AI_ENABLED="true"
   // server-side (isCloudflareEnabled()) — this client descriptor alone

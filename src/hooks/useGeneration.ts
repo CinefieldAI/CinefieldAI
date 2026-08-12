@@ -23,7 +23,7 @@ import {
  * Owns the full request lifecycle that was previously embedded in
  * CinemaStudioWorkspace: resolve the active project, upload an optional
  * input file, insert the generations row, dispatch
- * POST /api/orchestration/execute, poll the row in trigger mode, sign the
+ * POST /api/generate (canonical), observe the row while queued/processing, sign the
  * delivery URL, and surface typed loading/success/error state.
  *
  * Deliberately provider-neutral: routing is decided only by the
@@ -106,7 +106,13 @@ async function pollGenerationUntilTerminal(
       .eq("id", generationId)
       .maybeSingle();
 
-    if (data && (data.status === "completed" || data.status === "failed")) {
+    // "cancelled" is terminal too. Omitting it meant a cancelled generation
+    // polled until the attempt ceiling and then reported a timeout, which
+    // told the user the wrong thing about their own action.
+    if (
+      data &&
+      (data.status === "completed" || data.status === "failed" || data.status === "cancelled")
+    ) {
       return data as GenerationTerminalRow;
     }
 
@@ -288,7 +294,8 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
           });
 
           try {
-            const execResponse = await fetch("/api/orchestration/execute", {
+            // The CANONICAL generation endpoint (Phase 5 convergence).
+            const execResponse = await fetch("/api/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ generationId }),
@@ -305,8 +312,16 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
                   typeof execJson.error === "string" ? execJson.error : "Generation failed."
                 )
               );
-            } else if (execJson.mode === "trigger" && execJson.status === "queued") {
-              // Dispatch acknowledged — poll the row until terminal.
+            } else if (execJson.status === "queued" || execJson.status === "processing") {
+              // ACCEPTED, NOT FAILED.
+              //
+              // This branch used to require `mode === "trigger"`, which was
+              // the transport leaking into the client: any other owner
+              // returning a perfectly healthy queued generation fell through
+              // to the failure branch below. Enabling Temporal ownership
+              // would have shown an error for a generation that succeeded.
+              // Now the client branches on `status` alone and does not care
+              // who is carrying the work.
               const finalRow = await pollGenerationUntilTerminal(
                 supabase,
                 generationId,
@@ -314,8 +329,17 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
               );
               if (unmountedRef.current) return;
 
-              if (!finalRow || finalRow.status !== "completed") {
-                setError(finalRow?.error_message ?? "Generation failed.");
+              if (!finalRow) {
+                setError("Generation timed out. Please check back shortly.");
+              } else if (finalRow.status === "cancelled") {
+                // A cancellation is a legitimate outcome, not a failure.
+                safeSet(() => {
+                  setStatus("idle");
+                  setMessage("Generation cancelled.");
+                  setResult(null);
+                });
+              } else if (finalRow.status !== "completed") {
+                setError(finalRow.error_message ?? "Generation failed.");
               } else {
                 let signedUrl: string | null = null;
                 if (finalRow.output_url) {
@@ -334,6 +358,12 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
                   );
                 });
               }
+            } else if (execJson.status === "cancelled") {
+              safeSet(() => {
+                setStatus("idle");
+                setMessage("Generation cancelled.");
+                setResult(null);
+              });
             } else if (execJson.status !== "completed") {
               safeSet(() =>
                 setError(
