@@ -304,7 +304,13 @@ test("E8: Redis A stays application state and never becomes a source of truth", 
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, "");
     // Not a queue, not a workflow store, not an event log.
-    assert.ok(!/bullmq|BullMQ/.test(code), `${file}: Redis A is not BullMQ's queue storage`);
+    //
+    // redis-isolation.ts is the one exception and must be: the guard that
+    // proves Redis A and Redis B are different instances has to know both
+    // exist. It holds no state and touches neither store.
+    if (!file.endsWith("redis-isolation.ts")) {
+      assert.ok(!/bullmq|BullMQ/.test(code), `${file}: Redis A is not BullMQ's queue storage`);
+    }
     assert.ok(!/outbox|domain-event/i.test(code), `${file}: Redis A is not the event log`);
     assert.ok(!/workflowId|GenerationWorkflow/.test(code), `${file}: Redis A is not workflow state`);
     // Forbidden Redis commands that would turn a bounded cache into a

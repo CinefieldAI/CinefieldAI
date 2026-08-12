@@ -63,10 +63,18 @@ const GENERATION_CREATED: JsonSchema = {
   },
 };
 
+// attemptNo is OPTIONAL, and that is a correction wiring the producer
+// revealed (Phase 6R-E Gate 0). The shared finalization tail is reached by
+// transports that do not all carry an attempt — a direct in-process run has
+// none — so requiring it would have made the event unemittable exactly when
+// the transition happened. Relaxing it is safe here and only here: no
+// generation.completed had ever been produced or consumed before this phase,
+// so there is no lagging consumer to break. The same relaxation after a real
+// consumer exists would be a version bump.
 const GENERATION_COMPLETED: JsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["generationId", "provider", "attemptNo"],
+  required: ["generationId", "provider"],
   properties: {
     generationId: UUID,
     provider: SHORT_ID,

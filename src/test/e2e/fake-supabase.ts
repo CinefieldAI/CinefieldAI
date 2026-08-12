@@ -157,6 +157,12 @@ export class FakeSupabaseClient {
     if (fn === "cancel_generation_tx") {
       return { data: this.cancelGenerationTx(args ?? {}), error: null };
     }
+    if (fn === "complete_generation_tx") {
+      return { data: this.completeGenerationTx(args ?? {}), error: null };
+    }
+    if (fn === "fail_generation_tx") {
+      return { data: this.failGenerationTx(args ?? {}), error: null };
+    }
     return { data: null, error: null };
   }
 
@@ -196,6 +202,118 @@ export class FakeSupabaseClient {
     });
 
     return { applied: true, status: "cancelled", event_id: eventId };
+  }
+
+  /** Merges only the orchestration keys the SQL owns, as jsonb_set does. */
+  private mergeOrchestration(row: Row, patch: Record<string, unknown>): void {
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    const orchestration = { ...((metadata.orchestration ?? {}) as Record<string, unknown>) };
+    row.metadata = {
+      ...metadata,
+      orchestration: { ...orchestration, ...patch, updatedAt: new Date().toISOString() },
+    };
+  }
+
+  /** Latest attempt number, which the SQL derives rather than accepting. */
+  private latestAttemptNo(generationId: string): number | null {
+    const numbers = this.state.generation_attempts
+      .filter((a) => a.generation_id === generationId)
+      .map((a) => Number(a.attempt_no))
+      .filter((n) => Number.isInteger(n));
+    return numbers.length > 0 ? Math.max(...numbers) : null;
+  }
+
+  private recordEvent(
+    eventType: string,
+    generationId: string,
+    payload: Row,
+    args: Record<string, unknown>
+  ): string {
+    const eventId = (args.p_event_id as string) ?? randomUUID();
+    this.outboxEvents.push({
+      event_id: eventId,
+      event_type: eventType,
+      event_version: 1,
+      aggregate_type: "generation",
+      aggregate_id: generationId,
+      trace_id: (args.p_trace_id as string) ?? null,
+      // jsonb_strip_nulls: an absent optional field is omitted, not null.
+      payload: Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== null && v !== undefined)),
+      status: "pending",
+      published_at: null,
+    });
+    return eventId;
+  }
+
+  private completeGenerationTx(args: Record<string, unknown>) {
+    const generationId = args.p_generation_id as string;
+    const row = this.state.generations.find((g) => g.id === generationId);
+
+    // Same predicate as the SQL: processing only.
+    if (!row || row.status !== "processing") {
+      return { applied: false, status: row?.status ?? null, event_id: null };
+    }
+
+    row.status = "completed";
+    row.output_url = args.p_output_url as string;
+    row.thumbnail_url = (args.p_thumbnail_url as string) ?? null;
+    row.error_message = null;
+    row.completed_at = new Date().toISOString();
+    this.mergeOrchestration(row, {
+      stage: "completed",
+      provider: args.p_provider,
+      workflow: args.p_workflow,
+      isMock: args.p_is_mock,
+    });
+    row.updated_at = new Date().toISOString();
+
+    const eventId = this.recordEvent(
+      "generation.completed",
+      generationId,
+      {
+        generationId,
+        provider: args.p_provider,
+        attemptNo: this.latestAttemptNo(generationId),
+        durationMs: args.p_duration_ms ?? null,
+      },
+      args
+    );
+
+    return { applied: true, status: "completed", event_id: eventId };
+  }
+
+  private failGenerationTx(args: Record<string, unknown>) {
+    const generationId = args.p_generation_id as string;
+    const row = this.state.generations.find((g) => g.id === generationId);
+
+    if (!row || row.status !== "processing") {
+      return { applied: false, status: row?.status ?? null, event_id: null };
+    }
+
+    row.status = "failed";
+    row.error_message = (args.p_error_message as string) ?? null;
+    row.completed_at = new Date().toISOString();
+    this.mergeOrchestration(row, {
+      stage: "failed",
+      errorCode: args.p_error_code,
+      retryable: args.p_retryable,
+      ...(args.p_provider_job ? { providerJob: args.p_provider_job } : {}),
+    });
+    row.updated_at = new Date().toISOString();
+
+    const eventId = this.recordEvent(
+      "generation.failed",
+      generationId,
+      {
+        generationId,
+        provider: (args.p_provider as string) ?? row.provider,
+        errorCode: args.p_error_code,
+        attemptNo: this.latestAttemptNo(generationId),
+      },
+      args
+    );
+
+    return { applied: true, status: "failed", event_id: eventId };
   }
 }
 

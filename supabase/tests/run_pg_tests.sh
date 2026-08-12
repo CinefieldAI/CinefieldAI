@@ -44,14 +44,17 @@ for f in \
   "$ROOT/supabase/tests/bootstrap_test_schema.sql" \
   "$ROOT/supabase/migrations/20260810120000_generation_attempts.sql" \
   "$ROOT/supabase/migrations/20260812130000_outbox_events.sql" \
-  "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"
+  "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
 done
 
-echo "==> transaction proofs"
+echo "==> transaction proofs (cancellation + outbox primitives)"
 psql_run < "$ROOT/supabase/tests/test_transactional_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> finalization proofs (completed + failed)"
+psql_run < "$ROOT/supabase/tests/test_finalization_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 # ---------------------------------------------------------------------------
 # Claim concurrency — two genuinely separate connections.

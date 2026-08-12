@@ -137,31 +137,47 @@ export async function markCompleted(
   admin: SupabaseClient,
   generationId: string,
   existingMetadata: Record<string, unknown> | null,
-  result: { outputUrl: string; thumbnailUrl?: string | null; provider: string; workflow: string; isMock: boolean }
+  result: {
+    outputUrl: string;
+    thumbnailUrl?: string | null;
+    provider: string;
+    workflow: string;
+    isMock: boolean;
+    /** Observability only; travels in the domain event, never a cost figure. */
+    durationMs?: number;
+    traceId?: string;
+    /** Supply to keep ONE event identity across an application-level retry. */
+    eventId?: string;
+  }
 ): Promise<void> {
-  // Compare-and-set from "processing" only. The sync path always arrives here
-  // in "processing" (claimGeneration put it there), so this changes nothing
-  // for it — but an async continuation may race a cancellation or a second
-  // checker, and cancelled → completed / completed → completed must lose.
-  const { data, error } = await admin
-    .from("generations")
-    .update({
-      status: "completed",
-      output_url: result.outputUrl,
-      thumbnail_url: result.thumbnailUrl ?? null,
-      error_message: null,
-      completed_at: new Date().toISOString(),
-      metadata: mergeOrchestrationMetadata(existingMetadata, {
-        stage: "completed",
-        provider: result.provider,
-        workflow: result.workflow,
-        isMock: result.isMock,
-      }),
-    })
-    .eq("id", generationId)
-    .eq("status", "processing")
-    .select("id")
-    .maybeSingle();
+  // PHASE 6R-E GATE 0: transactional. The compare-and-set from "processing"
+  // and the generation.completed outbox row commit together inside one
+  // PL/pgSQL body, so there is no window in which a generation is completed
+  // but the fact was never recorded. The predicate itself is unchanged: the
+  // sync path always arrives here in "processing", but an async continuation
+  // may race a cancellation or a second checker, and cancelled → completed /
+  // completed → completed must lose.
+  //
+  // The Storage upload has already happened, outside this transaction and on
+  // purpose — see the migration header.
+  //
+  // `existingMetadata` is no longer sent: the SQL merges only the
+  // orchestration keys it owns, instead of replacing the whole JSON from a
+  // possibly-stale snapshot. Kept in the signature for call-site
+  // compatibility and documented as ignored.
+  void existingMetadata;
+
+  const { data, error } = await admin.rpc("complete_generation_tx", {
+    p_generation_id: generationId,
+    p_output_url: result.outputUrl,
+    p_thumbnail_url: result.thumbnailUrl ?? null,
+    p_provider: result.provider,
+    p_workflow: result.workflow,
+    p_is_mock: result.isMock,
+    p_duration_ms: result.durationMs ?? null,
+    p_trace_id: result.traceId ?? null,
+    p_event_id: result.eventId ?? null,
+  });
 
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
@@ -169,9 +185,10 @@ export async function markCompleted(
     });
   }
 
-  if (!data) {
+  if (!(data as { applied?: boolean } | null)?.applied) {
     // The row left "processing" under us (completed elsewhere, cancelled, or
-    // requeued). Completing it now would be an invalid transition.
+    // requeued). Completing it now would be an invalid transition — and no
+    // event was emitted for the completion that did not happen.
     throw new OrchestrationError("DUPLICATE_EXECUTION", {
       context: { generationId, operation: "markCompleted" },
     });
@@ -747,25 +764,40 @@ export async function markFailed(
      * already exists" on a failed row before considering another provider.
      */
     providerJob?: PersistedProviderJob;
+    traceId?: string;
+    /** Supply to keep ONE event identity across an application-level retry. */
+    eventId?: string;
   }
 ): Promise<void> {
+  // PHASE 6R-E GATE 0: transactional. The failure transition and the
+  // generation.failed outbox row commit together, on the same
+  // status='processing' predicate this function has always used — so a
+  // failure raised BECAUSE the row already went terminal still cannot drag
+  // completed or cancelled back to failed, and a lost transition emits
+  // nothing.
+  //
+  // Metadata is merged in place by the SQL rather than replaced from the
+  // caller's snapshot; the parameter is kept for call-site compatibility.
+  void existingMetadata;
+
   try {
-    await admin
-      .from("generations")
-      .update({
-        status: "failed",
-        error_message: failure.userMessage,
-        completed_at: new Date().toISOString(),
-        metadata: mergeOrchestrationMetadata(existingMetadata, {
-          stage: "failed",
-          errorCode: failure.errorCode,
-          retryable: failure.retryable,
-          ...(failure.providerJob ? { providerJob: failure.providerJob } : {}),
-        }),
-      })
-      .eq("id", generationId)
-      .eq("status", "processing");
+    await admin.rpc("fail_generation_tx", {
+      p_generation_id: generationId,
+      // User-facing prose: stored on the row, deliberately NOT put in the
+      // event, which carries the normalized code only.
+      p_error_message: failure.userMessage,
+      p_error_code: failure.errorCode,
+      p_retryable: failure.retryable,
+      p_provider: null,
+      p_provider_job: failure.providerJob ?? null,
+      p_trace_id: failure.traceId ?? null,
+      p_event_id: failure.eventId ?? null,
+    });
   } catch {
-    // Swallow: the caller is already reporting the original failure.
+    // Swallowed, exactly as before: this runs inside a catch block and must
+    // not mask the original error. The swallow lives HERE rather than in the
+    // SQL on purpose — a function that hid a failed write would also hide a
+    // failed event, and silently losing the event is precisely what the
+    // outbox exists to prevent.
   }
 }
