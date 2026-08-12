@@ -274,6 +274,40 @@ class MockProvider implements ProviderAdapter {
       : { status: "processing", progress: 50 };
   }
 
+  /**
+   * Deterministic cancel, so Phase 6R-H can exercise all three provider
+   * behaviours offline without inventing capability data for a real provider.
+   *
+   * The mode travels in the persisted `resume` blob, exactly like the async
+   * progression does, so the outcome is stable across processes:
+   *   async-pending  → throws (a cancel call that failed)
+   *   async-failure  → the job is already terminal
+   *   everything else → cancelled
+   *
+   * Adapters that do NOT implement cancel at all are represented by the
+   * absence of this method on fal/cloudflare — which is the real state of
+   * the world and is deliberately left alone.
+   */
+  async cancel(
+    submission: ProviderSubmission,
+    _context: ProviderExecutionContext
+  ): Promise<void> {
+    void _context;
+    const mode = readResumeMode(submission.metadata);
+
+    if (mode === "async-pending") {
+      throw new OrchestrationError("PROVIDER_TIMEOUT", {
+        context: { provider: "mock", mode, reason: "mock_cancel_transient_failure" },
+      });
+    }
+    if (mode === "async-failure") {
+      throw new OrchestrationError("PROVIDER_FAILED", {
+        context: { provider: "mock", mode, reason: "mock_job_already_terminal" },
+      });
+    }
+    // Confirmed stopped. No output is produced and nothing is finalized.
+  }
+
   async getResult(
     submission: ProviderSubmission,
     context: ProviderExecutionContext
