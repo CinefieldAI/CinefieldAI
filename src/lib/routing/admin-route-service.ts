@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OrchestrationError } from "@/lib/orchestration/errors";
+import { clearRoutingControl, setRoutingControl } from "@/lib/redis/routing-control-store";
+import type { ControlReason, FlagTargetKind } from "./runtime-flags";
 
 /**
  * Route administration — NARROW SCOPE (Phase 7-B).
@@ -183,4 +185,72 @@ export async function setRoutePriority(
     });
   }
   return data !== null;
+}
+
+/* ------------------------------------------------------------------------ */
+/* PHASE 7-E — runtime routing controls                                      */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Sets or clears a runtime routing control.
+ *
+ * SAME FAIL-CLOSED GATE as every other mutation in this file: an empty
+ * ROUTE_ADMIN_CLERK_USER_IDS means nobody may do this, which is its state
+ * today. No new authorization mechanism was invented for the kill switch —
+ * inventing one would be exactly the "second security model" mistake, and a
+ * kill switch is the last thing that should have a weaker gate than the
+ * priority slider next to it.
+ *
+ * THIS IS NOT CANCELLATION. A control changes which routes FUTURE decisions
+ * may choose. It does not touch a running generation, does not signal
+ * Temporal, does not ask a provider to stop, and does not mutate a single
+ * historical attempt. A job already accepted by a provider stays accepted; if
+ * it must be stopped, that is the cancellation path, which is a different
+ * system with different safety rules.
+ *
+ * NO MCP OR AI-AGENT PATH. This is a server function behind an operator
+ * allowlist. Nothing exposes it as a tool, and Phase 7-E deliberately adds no
+ * HTTP route for it — a kill switch reachable by an agent is a kill switch
+ * that will eventually be pulled by one.
+ */
+export async function setRuntimeRoutingControl(
+  clerkUserId: string,
+  input: {
+    kind: FlagTargetKind;
+    targetId: string;
+    reason: ControlReason;
+    note?: string;
+    ttlSeconds?: number;
+  }
+): Promise<boolean> {
+  assertRouteAdmin(clerkUserId);
+
+  if (typeof input.targetId !== "string" || input.targetId.length === 0) {
+    throw new OrchestrationError("INVALID_INPUT", {
+      userMessage: "A target is required.",
+    });
+  }
+
+  return setRoutingControl(
+    {
+      kind: input.kind,
+      targetId: input.targetId,
+      reason: input.reason,
+      setAt: new Date().toISOString(),
+      // Truncated and never a secret: an operator note travels into Redis and
+      // into logs.
+      note: input.note?.slice(0, 200),
+    },
+    input.ttlSeconds
+  );
+}
+
+/** Lifts a runtime control. Same gate, same non-ownership of the lifecycle. */
+export async function clearRuntimeRoutingControl(
+  clerkUserId: string,
+  kind: FlagTargetKind,
+  targetId: string
+): Promise<boolean> {
+  assertRouteAdmin(clerkUserId);
+  return clearRoutingControl(kind, targetId);
 }

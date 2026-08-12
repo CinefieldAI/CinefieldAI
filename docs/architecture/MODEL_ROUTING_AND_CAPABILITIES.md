@@ -1,4 +1,4 @@
-# Model Routing and Capabilities — Phase 7 (7-A / 7-F / 7-B / 7-C / 7-D)
+# Model Routing and Capabilities — Phase 7 (7-A / 7-F / 7-B / 7-C / 7-D / 7-E)
 
 Status: implemented. Scope is deliberately narrow — read "What this is NOT"
 before extending anything here.
@@ -539,12 +539,132 @@ asked during an incident is never "what was the score" but "why that one".
 Provider economics stay server-side: the browser catalog carries no cost, price,
 credit or quality field, and the routing modules are `server-only`.
 
+## 7-E — runtime routing controls and the emergency stop
+
+### Seven questions, seven owners
+
+| Layer | Question | Source |
+| --- | --- | --- |
+| Capability Registry | what can this model do? | `model-registry.ts` |
+| Durable Route Config | is this route configured to be available? | PostgreSQL `model_routes` etc. |
+| Runtime Route Flag | has an operator temporarily turned this off? | Redis A `routing-control` |
+| Circuit Breaker | has this route been failing? | Redis A `circuit-breaker` |
+| Health | how is it performing? | Redis A error rate / latency |
+| Cost | what does it cost to run? | `model_pricing`, provider side |
+| Quality | how good are its results? | Phase 22, not yet produced |
+
+### Final evaluation order
+
+```
+Model Capability
+   -> Durable Eligibility        (PostgreSQL: enabled, status, lifecycle, adapter)
+   -> Runtime Flags / Kill       (operator override — structural exclusion)
+   -> Circuit Breaker            (OPEN excludes; HALF_OPEN needs the probe lease)
+   -> Health                     (error rate, latency, confidence)
+   -> Cost                       (provider execution economics)
+   -> Trusted Quality            (inert until Phase 22)
+   -> Deterministic Selection    (score, then the 7-B comparator)
+```
+
+A runtime-disabled route is excluded **before anything is scored** — its
+evaluation carries no score at all, asserted by a test. It cannot be rescued by
+better health, lower cost, higher quality, or a higher static priority.
+
+### Tighten only, never loosen
+
+```
+effective_availability = durable_enabled AND NOT runtime_disabled
+```
+
+A control can take a route out of rotation. It can never put one back in — the
+`RuntimeControl` type has no "enable" shape, so a route disabled in PostgreSQL
+stays disabled whatever any flag says. That asymmetry is the safety story: a
+misconfigured, compromised or simply unavailable flag layer can only ever
+*reduce* what production can reach.
+
+### Flag targets and hierarchy
+
+`model:<id>` · `provider:<id>` · `provider-model:<id>` · `route:<id>`
+
+A control on a provider excludes every route through it — "stop sending
+anything to fal" is one action, not an operator editing rows during an
+incident. The narrowest matching level is what the decision reports.
+
+### Source, availability and TTL
+
+No OpenFeature or LaunchDarkly package is installed and no credentials exist,
+so `RuntimeFlagSource` is an **interface** a real SDK can implement later, and
+the shipped implementation reads Redis A — a real mechanism an operator can use
+today rather than a fake provider that returns whatever a test wants.
+
+Evaluation source is recorded on every decision: `database_baseline` (no
+override layer), `runtime_flag`, `cached_runtime_flag`, `unavailable`.
+
+**When Redis cannot be read**, the source returns `unavailable` with no
+controls and the durable PostgreSQL configuration governs alone. The trade-off
+is stated rather than hidden: an emergency kill set two minutes ago stops being
+enforced while Redis is down. Failing the other way — treating an unreachable
+cache as "everything is killed" — would take the entire generation platform
+offline whenever an optional cache blipped, and a routing override layer must
+never cause a larger outage than the thing it protects against. The gap is
+bounded by design: the kill is the FAST path, and the durable path is disabling
+the route, provider model or provider in PostgreSQL, which survives a Redis
+outage because eligibility reads it on every decision. **Anything that must
+hold while Redis is down belongs in PostgreSQL.**
+
+A partial read is discarded entirely rather than served — a partial view looks
+authoritative while missing controls. Corrupt data is treated as absent, so one
+bad write cannot cause an unexplained outage.
+
+Controls carry a **1-hour TTL**. An emergency kill that outlives its incident
+is a silent capacity loss nobody remembers to undo; expiry forces the decision
+to be re-made or moved into PostgreSQL where it belongs permanently.
+
+### Runtime disable != provider cancellation
+
+A control changes which routes FUTURE decisions may choose. It does not touch a
+running generation, does not signal Temporal, does not ask a provider to stop,
+and does not mutate a single historical attempt. A job already accepted by a
+provider stays accepted; stopping it is the cancellation path, a different
+system with different safety rules.
+
+### Runtime disable does not override AMBIGUOUS submission safety
+
+Killing provider A while A's submission is ambiguous does **not** authorize
+running provider B. `decideFailover` evaluates evidence first and returns
+`reconciliation_required`; the failover policy has no flag parameter and no
+flag import, so there is no path by which a kill switch could become an input
+to that decision. Tested explicitly.
+
+### Flags and the breaker stay separate
+
+Different questions — "a person decided this must not be used" versus "this has
+been failing" — kept apart in types, storage (`routing-control` vs
+`circuit-breaker` keyspaces), rejection reasons (`runtime_disabled` /
+`emergency_kill` vs `circuit_open`) and explanation metadata. Merging them would
+make a deliberate operator decision look automatic, and an outage look like
+policy.
+
+### Who may set one
+
+The same fail-closed `ROUTE_ADMIN_CLERK_USER_IDS` allowlist as every other route
+mutation — empty today, meaning nobody. A kill switch must not have a weaker
+gate than the priority slider beside it.
+
+**There is no HTTP route and no MCP tool that can write a control**, asserted by
+a test that walks every file under `src/app/api`. A kill switch reachable by an
+agent is a kill switch that will eventually be pulled by one. Full flag
+management UX is Phase 16/21.
+
 ## What this is NOT
 
 Explicitly out of scope, and absent rather than stubbed:
 
 - **Phase 22**: quality score production, Braintrust, golden datasets,
   evaluators, regression gates. The router consumes; Phase 22 produces.
+- **Phase 21**: flag governance — approval workflows, expiry policy, a flag
+  registry, canary percentages, SLO-driven rollback, experimentation, MCP
+  writes. Phase 7-E is the router-side consumer contract and nothing else.
 - **7-E / Phase 21**: LaunchDarkly, OpenFeature, canary rollout.
 - **Phase 8**: real provider API calls, credentials, paid smoke tests.
 - **Phase 10**: Stripe, credit wallet, ledger, pricing engine.
@@ -581,7 +701,12 @@ Explicitly out of scope, and absent rather than stubbed:
   provider, every option a bound card offers is accepted by the real
   validator, a manipulated request is still refused, unbound cards are
   returned untouched.
-- `src/test/e2e/phase-7d-cost-quality-routing.e2e.test.ts` — 31 tests: cost
+- `src/test/e2e/phase-7e-runtime-flags.e2e.test.ts` — 30 tests: the four
+  durable×runtime combinations, the provider/provider-model/model/route
+  hierarchy, optimization never bypassing a flag, flags and the breaker staying
+  separate, ambiguous-submission safety under a kill, source unavailable /
+  partial / corrupt behaviour, and the security boundary.
+- `src/test/e2e/phase-7d-cost-quality-routing.e2e.test.ts` — 38 tests: cost
   normalization and every unknown/stale/invalid path, cost-aware selection,
   cost and quality both losing to a breaker and to eligibility, the empty
   trusted-evaluator allowlist, unknown-is-not-low, determinism, the billing

@@ -58,6 +58,7 @@ export type RedisKeyNamespace =
   | "provider-latency"
   | "provider-error-rate"
   | "circuit-breaker"
+  | "routing-control"
   | "rate-limit"
   | "idempotency"
   | "model-cache"
@@ -81,6 +82,12 @@ export const REDIS_KEY_TTL_SECONDS: Readonly<Record<RedisKeyNamespace, number>> 
   // decided to stop sending traffic to. Long enough to outlive the cooldown,
   // short enough that a breaker cannot outlive the incident by hours.
   "circuit-breaker": 1_800,
+  // Phase 7-E. An emergency kill that outlives its incident is a silent
+  // capacity loss nobody remembers to undo, so a runtime control expires and
+  // has to be re-made. Long enough to cover an incident, short enough that
+  // "we forgot" is bounded. Anything that must hold permanently belongs in
+  // PostgreSQL, not here.
+  "routing-control": 3_600,
   // A rate-limit counter's TTL is the window itself — it must expire
   // exactly when the window it counts ends.
   "rate-limit": 60,
@@ -169,6 +176,22 @@ export function encodeKeySegment(value: string): string {
     throw new Error("redis-keys: key segment too long");
   }
   return encoded;
+}
+
+/**
+ * `cinefield:v1:routing-control:<kind>:<encodedTargetId>`
+ *
+ * `kind` is one of model / provider / provider-model / route, so a control on
+ * a provider cannot collide with one on a route that happens to share an id.
+ * Target ids are encoded because provider model ids and Cinefield model ids
+ * both contain characters the key alphabet rejects.
+ */
+export function routingControlKey(kind: string, targetId: string): string {
+  return buildKey(
+    "routing-control",
+    identifier("controlKind", kind.replace(/-/g, "_")),
+    identifier("targetId", encodeKeySegment(targetId))
+  );
 }
 
 /** The kind of subject a rate-limit counter is scoped to. */

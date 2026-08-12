@@ -89,6 +89,7 @@ test("every namespace has a documented TTL", () => {
     "provider-latency",
     "provider-error-rate",
     "circuit-breaker",
+    "routing-control",
     "rate-limit",
     "idempotency",
     "model-cache",

@@ -5,6 +5,17 @@ import { getProviderErrorRate } from "@/lib/redis/provider-error-rate-store";
 import { getProviderLatency } from "@/lib/redis/provider-latency-store";
 import { compareRoutes, listRouteCandidates } from "./route-repository";
 import { tryAcquireProbe } from "./half-open-probe";
+import { resolveRuntimeFlagSource } from "@/lib/redis/routing-control-store";
+import {
+  emptySnapshot,
+  findRuntimeExclusion,
+  rejectionForControl,
+  targetsForRoute,
+  type ControlSource,
+  type FlagTarget,
+  type RuntimeControlSnapshot,
+  type RuntimeFlagSource,
+} from "./runtime-flags";
 import { rejectionFor } from "./model-router";
 import {
   DEFAULT_HEALTH_POLICY,
@@ -65,7 +76,15 @@ export type HealthRejectionReason =
   /** The breaker for this provider model is OPEN, or HALF_OPEN and saturated. */
   | "circuit_open"
   /** Excluded by the caller — usually an attempt already failed on it. */
-  | "already_attempted";
+  | "already_attempted"
+  /**
+   * Phase 7-E. An operator turned this off at runtime. Deliberately distinct
+   * from `circuit_open`: a breaker is the system reacting to failures, this is
+   * a person deciding. During an incident the difference is the first thing
+   * anyone needs to know.
+   */
+  | "runtime_disabled"
+  | "emergency_kill";
 
 /** Everything that went into one route's evaluation. Safe to log. */
 export interface RouteEvaluation {
@@ -75,6 +94,13 @@ export interface RouteEvaluation {
   priority: number;
   eligible: boolean;
   rejection?: HealthRejectionReason;
+  /** Phase 7-E. Which level of control excluded it, and where the answer came from. */
+  runtimeControl?: {
+    kind: FlagTarget["kind"];
+    targetId: string;
+    reason: string;
+    source: ControlSource;
+  };
   health?: RouteHealth;
   /** Phase 7-D. Provider execution cost, never a customer price. */
   cost?: RouteCost;
@@ -85,6 +111,8 @@ export interface RouteEvaluation {
 export interface RoutingDecision {
   cinefieldModelId: string;
   evaluations: RouteEvaluation[];
+  /** Phase 7-E. Where the runtime control answer came from, for this decision. */
+  controlSource: ControlSource;
   decidedAt: string;
 }
 
@@ -147,12 +175,15 @@ export function selectHealthyRoute(
     /** Phase 7-D. Absent means every route is unpriced and unevaluated. */
     optimization?: OptimizationSnapshot;
     routingPolicy?: RoutingPolicy;
+    /** Phase 7-E. Absent means no runtime override layer; baseline governs. */
+    runtimeControls?: RuntimeControlSnapshot;
   }
 ): HealthAwareResolution {
   const policy = options?.policy ?? DEFAULT_HEALTH_POLICY;
   const routingPolicy = options?.routingPolicy ?? DEFAULT_ROUTING_POLICY;
   const costs = options?.optimization?.cost;
   const qualities = options?.optimization?.quality;
+  const runtimeControls = options?.runtimeControls ?? emptySnapshot("database_baseline");
   const excluded = new Set(options?.excludeRouteIds ?? []);
   const evaluations: RouteEvaluation[] = [];
 
@@ -170,6 +201,40 @@ export function selectHealthyRoute(
         priority: candidate.priority,
         eligible: false,
         rejection: hardRejection,
+      });
+      continue;
+    }
+
+    // --- PHASE 7-E: runtime controls, BEFORE the breaker and before any
+    // --- scoring. Structural exclusion: a runtime-disabled route cannot be
+    // --- rescued by better health, lower cost, higher quality or a higher
+    // --- static priority, because it never reaches the code that weighs
+    // --- those. Note this runs AFTER durable eligibility, which is what makes
+    // --- the control tighten-only — it can never re-enable a row the database
+    // --- has disabled.
+    const exclusion = findRuntimeExclusion(
+      {
+        cinefieldModelId: candidate.cinefieldModelId,
+        providerId: candidate.providerId,
+        providerModelId: candidate.providerModelId,
+        routeId: candidate.routeId,
+      },
+      runtimeControls
+    );
+    if (exclusion) {
+      evaluations.push({
+        routeId: candidate.routeId,
+        providerId: candidate.providerId,
+        providerModelId: candidate.providerModelId,
+        priority: candidate.priority,
+        eligible: false,
+        rejection: rejectionForControl(exclusion.control),
+        runtimeControl: {
+          kind: exclusion.matchedTarget.kind,
+          targetId: exclusion.matchedTarget.id,
+          reason: exclusion.control.reason,
+          source: runtimeControls.source,
+        },
       });
       continue;
     }
@@ -219,7 +284,12 @@ export function selectHealthyRoute(
   const decidedAt = now.toISOString();
 
   if (eligible.length === 0) {
-    const decision = { cinefieldModelId, evaluations, decidedAt };
+    const decision = {
+      cinefieldModelId,
+      evaluations,
+      controlSource: runtimeControls.source,
+      decidedAt,
+    };
     return anyEligibleBeforeHealth
       ? { outcome: "no_healthy_route", decision }
       : { outcome: "no_eligible_route", decision };
@@ -287,7 +357,12 @@ export function selectHealthyRoute(
       priority: winner.candidate.priority,
       selectionReason: buildReason(winner.candidate.priority, healthInfluenced, contested),
     },
-    decision: { cinefieldModelId, evaluations, decidedAt },
+    decision: {
+      cinefieldModelId,
+      evaluations,
+      controlSource: runtimeControls.source,
+      decidedAt,
+    },
   };
 }
 
@@ -367,6 +442,34 @@ export async function loadRouteHealth(
 }
 
 /**
+ * Loads runtime controls for every level that governs these candidates
+ * (Phase 7-E).
+ *
+ * One read per distinct target, deduplicated — twelve routes through three
+ * providers ask about three providers, not twelve.
+ */
+export async function loadRuntimeControls(
+  candidates: RouteCandidate[],
+  flagSource: RuntimeFlagSource
+): Promise<RuntimeControlSnapshot> {
+  if (candidates.length === 0) return emptySnapshot("database_baseline");
+
+  const targets = new Map<string, FlagTarget>();
+  for (const candidate of candidates) {
+    for (const target of targetsForRoute({
+      cinefieldModelId: candidate.cinefieldModelId,
+      providerId: candidate.providerId,
+      providerModelId: candidate.providerModelId,
+      routeId: candidate.routeId,
+    })) {
+      targets.set(`${target.kind}:${target.id}`, target);
+    }
+  }
+
+  return flagSource.read([...targets.values()]);
+}
+
+/**
  * Loads the Phase 7-D optimization inputs.
  *
  * Both are fail-soft and both default to UNKNOWN rather than to a value.
@@ -441,7 +544,8 @@ export async function resolveHealthyRoute(
   now: Date = new Date(),
   policy: HealthPolicy = DEFAULT_HEALTH_POLICY,
   routingPolicy: RoutingPolicy = DEFAULT_ROUTING_POLICY,
-  qualitySource: QualitySignalProvider = NO_TRUSTED_QUALITY_SOURCE
+  qualitySource: QualitySignalProvider = NO_TRUSTED_QUALITY_SOURCE,
+  flagSource: RuntimeFlagSource = resolveRuntimeFlagSource()
 ): Promise<HealthAwareResolution> {
   const candidates = await listRouteCandidates(
     admin,
@@ -449,6 +553,7 @@ export async function resolveHealthyRoute(
     request.modelVersion
   );
 
+  const runtimeControls = await loadRuntimeControls(candidates, flagSource);
   const health = await loadRouteHealth(candidates, now, policy);
   const optimization = await loadOptimizationInputs(
     admin,
@@ -476,6 +581,7 @@ export async function resolveHealthyRoute(
     policy,
     optimization,
     routingPolicy,
+    runtimeControls,
   });
 
   for (let pass = 0; pass < candidates.length; pass += 1) {
@@ -512,6 +618,7 @@ export async function resolveHealthyRoute(
       policy,
       optimization,
       routingPolicy,
+      runtimeControls,
     });
   }
 
@@ -522,6 +629,7 @@ export async function resolveHealthyRoute(
       routeId: resolution.selection.routeId,
       providerId: resolution.selection.providerId,
       reason: resolution.selection.selectionReason,
+      controlSource: resolution.decision.controlSource,
     });
   } else {
     log({
