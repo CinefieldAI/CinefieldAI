@@ -189,7 +189,13 @@ export async function createGeneration(
   // all and a model whose every route is behind an open breaker are different
   // failures and get different typed errors — one is a misconfiguration, the
   // other is an outage that heals itself.
-  const routing = await resolveHealthyRoute(admin, { cinefieldModelId: model.id });
+  const routing = await resolveHealthyRoute(admin, {
+    cinefieldModelId: model.id,
+    // PHASE 7-D: the request's own billing shape, derived server-side from
+    // the already-validated settings. A client can ask for four images; it
+    // cannot tell the server what four images cost.
+    costShape: { outputCount: mapMetadataToSettings(request.metadata).outputCount ?? 1 },
+  });
   if (routing.outcome !== "selected") {
     log({
       modelId: model.id,

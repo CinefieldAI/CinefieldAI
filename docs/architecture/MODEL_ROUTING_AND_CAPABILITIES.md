@@ -1,4 +1,4 @@
-# Model Routing and Capabilities — Phase 7 (7-A / 7-F / 7-B / 7-C)
+# Model Routing and Capabilities — Phase 7 (7-A / 7-F / 7-B / 7-C / 7-D)
 
 Status: implemented. Scope is deliberately narrow — read "What this is NOT"
 before extending anything here.
@@ -425,11 +425,126 @@ Global invariant, preserved and re-proven against real PostgreSQL:
 The router decides **where**. It is not a workflow engine: a test asserts the
 routing modules import no Temporal, no SQS, and no provider adapter.
 
+## 7-D — cost-aware and quality-aware routing
+
+### The full pipeline
+
+```
+Hard Eligibility  (7-B)      route/model/version/provider enabled, adapter present
+        |
+        v
+Circuit Breaker   (7-C)      OPEN excludes; HALF_OPEN needs the atomic probe lease
+        |
+        v
+Health            (7-C)      error rate, latency, confidence
+        |
+        v
+Cost              (7-D)      provider execution cost for THIS request
+        |
+        v
+Quality           (7-D)      trusted evaluation signal — inert today
+        |
+        v
+Deterministic Tie-Break      score, then the 7-B comparator
+```
+
+**Safety precedes optimization, and the ordering is structural rather than a
+matter of weights.** Eligibility and the breaker run before scoring and can
+veto; nothing in the scorer can revive what they rejected. A cheaper or
+better-rated route that is disabled, incompatible, or behind an open breaker
+never reaches the scoring function at all. Tests assert this for both axes.
+
+### Two things called "cost", and they are not the same system
+
+| | Phase 7-D | Phase 10 |
+| --- | --- | --- |
+| Column | `model_pricing.provider_unit_cost` | `model_pricing.credit_price_per_unit` |
+| Question | where should this run? | what does the user pay? |
+| Owner | the router | the credit/wallet system |
+
+The routing modules read **only** the provider side. `creditPricePerUnit`
+appears nowhere in `routing-cost.ts` or `route-scoring.ts`, the router imports
+nothing matching credit/wallet/ledger/stripe, and a test enforces both. Changing
+a routing price can change the selected route; it cannot move a balance.
+
+### Cost normalization
+
+Source: the existing `model_pricing` table — server-only under RLS, versioned,
+one active row per model, already separating provider cost from credit price.
+**No second pricing table was created.** Routing reads it by
+`(provider, provider_model_id)` rather than by `platform_model_id`, because two
+routes for the same model may run on different providers.
+
+| State | Meaning |
+| --- | --- |
+| `known` | verified, active, fresh, comparable currency |
+| `stale` | verified more than 180 days ago — reported, but discounted |
+| `unknown` | no active row, unusable currency, corrupt value, or uncomputable units |
+
+**UNKNOWN COST != ZERO COST.** An unpriced route is not free; it is unpriced.
+It scores *neutral* on the cost axis and takes a confidence discount, so a
+verified-free route beats an unpriced one while an unpriced route stays
+selectable. Scoring it zero would be worse than useless today — `model_pricing`
+contains four rows, all mock models at a verified zero, so **every real provider
+route is currently UNKNOWN** and excluding unpriced routes would disable
+production routing entirely.
+
+A price in a currency the policy cannot compare is UNKNOWN rather than
+converted: conversion needs an exchange rate nobody has set, and inventing one
+to make a comparison work is the fabrication this phase forbids.
+
+### Quality — CONTRACT_READY_BUT_NO_TRUSTED_SIGNAL
+
+The router can consume a trusted quality signal. It does not produce one, and
+today it receives none.
+
+`NO_TRUSTED_QUALITY_SOURCE` returns `null` for every model. That is not a stub
+awaiting a plausible number — it is the correct implementation for a platform
+with no evaluation system, and a test asserts it stays that way. Producing and
+governing scores is **Phase 22**.
+
+Provenance is checked first and hardest: `trustedEvaluators` is **empty**, so a
+signal from an unnamed or unlisted evaluator is discarded as UNKNOWN rather than
+downgraded — "we do not trust this source" is a different statement from "this
+source is unsure". Thin (< 20 samples), unconfident (< 0.7) or stale (> 90 days)
+signals become `low_confidence`.
+
+**UNKNOWN QUALITY != LOW QUALITY.** Both `unknown` and `low_confidence` score
+*neutral*. An unevaluated model has not scored badly; it has not been scored, so
+it competes on its other merits and gains no fabricated advantage.
+
+### One policy, no scattered constants
+
+`src/lib/routing/routing-policy.ts` holds every weight and threshold.
+
+| Weight | Value | Why |
+| --- | --- | --- |
+| staticPriority | 1.0 | the operator's explicit instruction; optimization does not overturn it |
+| errorRate | 0.35 | a route that fails is worse than one that is slow, and costs a retry too |
+| latency | 0.15 | |
+| cost | 0.2 | a cheaper provider that fails more is not a saving |
+| quality | 0.25 | declared for Phase 22; multiplies a neutral 1.0 today |
+
+`staticPriority > cost + quality` is asserted by a test. The policy is static
+and server-managed: no environment reads, no flag client, no runtime override —
+that is Phase 7-E / Phase 21.
+
+### Explainability
+
+`RouteEvaluation` records eligibility, rejection reason, health, breaker state,
+cost (state + estimate + pricing version), quality state, every score axis, and
+the tie-break reason. There is no single opaque number, because the question
+asked during an incident is never "what was the score" but "why that one".
+
+Provider economics stay server-side: the browser catalog carries no cost, price,
+credit or quality field, and the routing modules are `server-only`.
+
 ## What this is NOT
 
 Explicitly out of scope, and absent rather than stubbed:
 
-- **7-D / Phase 22**: quality scoring, Braintrust, evals, cost-aware routing.
+- **Phase 22**: quality score production, Braintrust, golden datasets,
+  evaluators, regression gates. The router consumes; Phase 22 produces.
 - **7-E / Phase 21**: LaunchDarkly, OpenFeature, canary rollout.
 - **Phase 8**: real provider API calls, credentials, paid smoke tests.
 - **Phase 10**: Stripe, credit wallet, ledger, pricing engine.
@@ -466,6 +581,15 @@ Explicitly out of scope, and absent rather than stubbed:
   provider, every option a bound card offers is accepted by the real
   validator, a manipulated request is still refused, unbound cards are
   returned untouched.
+- `src/test/e2e/phase-7d-cost-quality-routing.e2e.test.ts` — 31 tests: cost
+  normalization and every unknown/stale/invalid path, cost-aware selection,
+  cost and quality both losing to a breaker and to eligibility, the empty
+  trusted-evaluator allowlist, unknown-is-not-low, determinism, the billing
+  separation, and "no fabricated price or quality was seeded".
+- `src/test/e2e/phase-7c-half-open-concurrency.e2e.test.ts` — 10 tests: 20
+  simultaneous probe claims yield exactly one grant, repeated over 50 rounds;
+  per-provider-model isolation; stale-owner protection; fail-closed on an
+  unreachable Redis.
 - `src/test/e2e/phase-7c-health-routing.e2e.test.ts` — 49 tests: static
   compatibility, determinism over 100 runs and 4 shuffles, health/latency/error
   influence, eligibility supremacy, every breaker transition, freshness,

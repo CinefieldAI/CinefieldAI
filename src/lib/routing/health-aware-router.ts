@@ -9,12 +9,26 @@ import { rejectionFor } from "./model-router";
 import {
   DEFAULT_HEALTH_POLICY,
   normalizeHealth,
-  scoreRoute,
   unknownHealth,
   type HealthPolicy,
-  type HealthScoreBreakdown,
   type RouteHealth,
 } from "./route-health";
+import { scoreRouteComposite, type CompositeScoreBreakdown } from "./route-scoring";
+import { DEFAULT_ROUTING_POLICY, type RoutingPolicy } from "./routing-policy";
+import {
+  normalizeRoutingCost,
+  unknownCost,
+  type CostRequestShape,
+  type RouteCost,
+} from "./routing-cost";
+import { costKeyFor, readActiveRouteCosts } from "./routing-cost-repository";
+import {
+  NO_TRUSTED_QUALITY_SOURCE,
+  normalizeQuality,
+  unknownQuality,
+  type QualitySignalProvider,
+  type RouteQuality,
+} from "./route-quality";
 import type {
   RouteCandidate,
   RouteRejectionReason,
@@ -62,7 +76,10 @@ export interface RouteEvaluation {
   eligible: boolean;
   rejection?: HealthRejectionReason;
   health?: RouteHealth;
-  score?: HealthScoreBreakdown;
+  /** Phase 7-D. Provider execution cost, never a customer price. */
+  cost?: RouteCost;
+  quality?: RouteQuality;
+  score?: CompositeScoreBreakdown;
 }
 
 export interface RoutingDecision {
@@ -90,10 +107,23 @@ export interface HealthAwareRouteRequest extends RouteRequest {
    * telemetry that would have degraded it may not have landed yet.
    */
   excludeRouteIds?: string[];
+  /**
+   * Phase 7-D. What the request costs in billing units — output count today.
+   * Derived server-side from the validated request, never accepted as a
+   * price: a client can say "four images", it cannot say what four images
+   * cost.
+   */
+  costShape?: CostRequestShape;
 }
 
 /** Health for every candidate, keyed by `providerId::providerModelId`. */
 export type HealthSnapshot = ReadonlyMap<string, RouteHealth>;
+
+/** Phase 7-D optimization inputs, same keying. Both default to unknown. */
+export interface OptimizationSnapshot {
+  cost?: ReadonlyMap<string, RouteCost>;
+  quality?: ReadonlyMap<string, RouteQuality>;
+}
 
 export function healthKeyFor(providerId: string, providerModelId: string): string {
   return `${providerId}::${providerModelId}`;
@@ -111,9 +141,18 @@ export function selectHealthyRoute(
   candidates: RouteCandidate[],
   health: HealthSnapshot,
   now: Date,
-  options?: { excludeRouteIds?: readonly string[]; policy?: HealthPolicy }
+  options?: {
+    excludeRouteIds?: readonly string[];
+    policy?: HealthPolicy;
+    /** Phase 7-D. Absent means every route is unpriced and unevaluated. */
+    optimization?: OptimizationSnapshot;
+    routingPolicy?: RoutingPolicy;
+  }
 ): HealthAwareResolution {
   const policy = options?.policy ?? DEFAULT_HEALTH_POLICY;
+  const routingPolicy = options?.routingPolicy ?? DEFAULT_ROUTING_POLICY;
+  const costs = options?.optimization?.cost;
+  const qualities = options?.optimization?.quality;
   const excluded = new Set(options?.excludeRouteIds ?? []);
   const evaluations: RouteEvaluation[] = [];
 
@@ -189,10 +228,26 @@ export function selectHealthyRoute(
   const maxPriority = eligible.reduce((max, c) => Math.max(max, c.priority), 0);
 
   const scored = eligible.map((candidate) => {
+    const key = healthKeyFor(candidate.providerId, candidate.providerModelId);
     const routeHealth =
-      health.get(healthKeyFor(candidate.providerId, candidate.providerModelId)) ??
+      health.get(key) ??
       unknownHealth(candidate.providerId, candidate.providerModelId, now, true);
-    const score = scoreRoute(candidate.priority, maxPriority, routeHealth, policy);
+    // Phase 7-D: absent optimization data is UNKNOWN, never a default value.
+    // An unpriced route is not free and an unevaluated one is not bad.
+    const routeCost =
+      costs?.get(key) ?? unknownCost(candidate.providerId, candidate.providerModelId);
+    const routeQuality =
+      qualities?.get(key) ?? unknownQuality(candidate.providerId, candidate.providerModelId);
+
+    const score = scoreRouteComposite(
+      candidate.priority,
+      maxPriority,
+      routeHealth,
+      routeCost,
+      routeQuality,
+      { ...routingPolicy, health: policy }
+    );
+
     evaluations.push({
       routeId: candidate.routeId,
       providerId: candidate.providerId,
@@ -200,6 +255,8 @@ export function selectHealthyRoute(
       priority: candidate.priority,
       eligible: true,
       health: routeHealth,
+      cost: routeCost,
+      quality: routeQuality,
       score,
     });
     return { candidate, score, health: routeHealth };
@@ -309,8 +366,64 @@ export async function loadRouteHealth(
   return snapshot;
 }
 
+/**
+ * Loads the Phase 7-D optimization inputs.
+ *
+ * Both are fail-soft and both default to UNKNOWN rather than to a value.
+ * A pricing read that fails leaves every route unpriced; a quality source
+ * that has nothing leaves every route unevaluated. Neither can stop a
+ * generation, and neither can invent a number.
+ */
+export async function loadOptimizationInputs(
+  admin: SupabaseClient,
+  candidates: RouteCandidate[],
+  costShape: CostRequestShape,
+  now: Date,
+  routingPolicy: RoutingPolicy = DEFAULT_ROUTING_POLICY,
+  qualitySource: QualitySignalProvider = NO_TRUSTED_QUALITY_SOURCE
+): Promise<OptimizationSnapshot> {
+  const cost = new Map<string, RouteCost>();
+  const quality = new Map<string, RouteQuality>();
+
+  const unique = new Map<string, { providerId: string; providerModelId: string }>();
+  for (const candidate of candidates) {
+    unique.set(healthKeyFor(candidate.providerId, candidate.providerModelId), {
+      providerId: candidate.providerId,
+      providerModelId: candidate.providerModelId,
+    });
+  }
+  if (unique.size === 0) return { cost, quality };
+
+  const pricing = await readActiveRouteCosts(admin, [...unique.values()]);
+
+  await Promise.all(
+    [...unique.entries()].map(async ([key, { providerId, providerModelId }]) => {
+      cost.set(
+        key,
+        normalizeRoutingCost(
+          providerId,
+          providerModelId,
+          pricing.get(costKeyFor(providerId, providerModelId)) ?? null,
+          costShape,
+          now,
+          routingPolicy.cost
+        )
+      );
+
+      const signal = await qualitySource.read(providerId, providerModelId);
+      quality.set(
+        key,
+        normalizeQuality(providerId, providerModelId, signal, now, routingPolicy.quality)
+      );
+    })
+  );
+
+  return { cost, quality };
+}
+
 function log(fields: Record<string, unknown>): void {
-  // Identifiers, states and numbers. Never a prompt, a payload or a secret.
+  // Identifiers, states and numbers. Never a prompt, a payload, a secret —
+  // and never a provider unit cost, which is internal commercial detail.
   console.info("[cinefield:health-router]", JSON.stringify(fields));
 }
 
@@ -326,7 +439,9 @@ export async function resolveHealthyRoute(
   admin: SupabaseClient,
   request: HealthAwareRouteRequest,
   now: Date = new Date(),
-  policy: HealthPolicy = DEFAULT_HEALTH_POLICY
+  policy: HealthPolicy = DEFAULT_HEALTH_POLICY,
+  routingPolicy: RoutingPolicy = DEFAULT_ROUTING_POLICY,
+  qualitySource: QualitySignalProvider = NO_TRUSTED_QUALITY_SOURCE
 ): Promise<HealthAwareResolution> {
   const candidates = await listRouteCandidates(
     admin,
@@ -335,6 +450,14 @@ export async function resolveHealthyRoute(
   );
 
   const health = await loadRouteHealth(candidates, now, policy);
+  const optimization = await loadOptimizationInputs(
+    admin,
+    candidates,
+    request.costShape ?? { outputCount: 1 },
+    now,
+    routingPolicy,
+    qualitySource
+  );
 
   // ---- Atomic HALF_OPEN admission -----------------------------------------
   //
@@ -351,6 +474,8 @@ export async function resolveHealthyRoute(
   let resolution = selectHealthyRoute(request.cinefieldModelId, candidates, health, now, {
     excludeRouteIds: [...(request.excludeRouteIds ?? []), ...deniedProbes],
     policy,
+    optimization,
+    routingPolicy,
   });
 
   for (let pass = 0; pass < candidates.length; pass += 1) {
@@ -385,6 +510,8 @@ export async function resolveHealthyRoute(
     resolution = selectHealthyRoute(request.cinefieldModelId, candidates, health, now, {
       excludeRouteIds: [...(request.excludeRouteIds ?? []), ...deniedProbes],
       policy,
+      optimization,
+      routingPolicy,
     });
   }
 
