@@ -815,3 +815,169 @@ test("the default weights keep safety above optimization", () => {
   assert.ok(weights.errorRate > weights.latency, "failing is worse than slow");
   assert.ok(weights.cost < weights.errorRate, "price must not outweigh reliability");
 });
+
+// ---------------------------------------------------------------------------
+// Closure correction — unknown contributes NOTHING, not a neutral constant
+// ---------------------------------------------------------------------------
+
+test("unknown quality contributes exactly zero, not a neutral 1.0", () => {
+  const breakdown = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("mock", "pm", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("mock", "pm"),
+    unknownQuality("mock", "pm")
+  );
+
+  assert.equal(breakdown.qualityContribution, 0, "no evidence must contribute no score");
+  assert.equal(breakdown.qualityState, "unknown");
+  // And the weight itself must not be counted, or the mean is diluted by an
+  // axis that knows nothing.
+  assert.equal(
+    breakdown.appliedWeight,
+    DEFAULT_ROUTING_POLICY.weights.staticPriority +
+      DEFAULT_ROUTING_POLICY.weights.errorRate +
+      DEFAULT_ROUTING_POLICY.weights.latency,
+    "an absent axis must claim none of the weight"
+  );
+});
+
+test("unknown cost also contributes zero and claims no weight", () => {
+  const breakdown = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("mock", "pm", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("mock", "pm"),
+    unknownQuality("mock", "pm")
+  );
+  assert.equal(breakdown.costContribution, 0);
+  assert.equal(breakdown.costState, "unknown");
+});
+
+test("a measured-mediocre quality no longer LOSES to an unmeasured one", () => {
+  // The bug the correction fixes: unknown scored 1.0 on the quality axis, so
+  // a route with a real 0.4 ranked below a route nobody had evaluated.
+  const measured = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("m", "p"),
+    { providerId: "m", providerModelId: "p", state: "known", score: 0.4 }
+  );
+  const unmeasured = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p2", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("m", "p2"),
+    unknownQuality("m", "p2")
+  );
+
+  assert.ok(
+    measured.total < unmeasured.total,
+    "measured-bad SHOULD rank below unmeasured — the only route known to be bad is the measured one"
+  );
+  assert.equal(unmeasured.qualityContribution, 0);
+  assert.ok(measured.qualityContribution > 0);
+});
+
+test("a measured-excellent quality beats an unmeasured one", () => {
+  const excellent = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p", T0, false), confidence: "observed", errorRate: 0.5, averageLatencyMs: 0 },
+    unknownCost("m", "p"),
+    { providerId: "m", providerModelId: "p", state: "known", score: 1 }
+  );
+  const unmeasured = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p2", T0, false), confidence: "observed", errorRate: 0.5, averageLatencyMs: 0 },
+    unknownCost("m", "p2"),
+    unknownQuality("m", "p2")
+  );
+  assert.ok(excellent.total > unmeasured.total);
+});
+
+test("a low-confidence signal contributes nothing, exactly like unknown", () => {
+  const lowConfidence = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("m", "p"),
+    { providerId: "m", providerModelId: "p", state: "low_confidence", score: 0.99 }
+  );
+  const unknown = scoreRouteComposite(
+    100,
+    100,
+    { ...unknownHealth("m", "p", T0, false), confidence: "observed", errorRate: 0, averageLatencyMs: 0 },
+    unknownCost("m", "p"),
+    unknownQuality("m", "p")
+  );
+  assert.equal(lowConfidence.qualityContribution, 0);
+  assert.equal(lowConfidence.total, unknown.total);
+});
+
+test("an absent quality axis cannot change which route is selected", () => {
+  // Two routes identical in everything the system actually knows. Adding an
+  // unknown quality entry to one of them must not move the winner.
+  const a = candidate({ priority: 100, providerModelId: "pm-aaa" });
+  const b = candidate({ priority: 100, providerModelId: "pm-bbb" });
+  const snapshot: HealthSnapshot = new Map([health(a), health(b)]);
+
+  const without = selectHealthyRoute("model-a", [a, b], snapshot, T0);
+  const withUnknownQuality = selectHealthyRoute("model-a", [a, b], snapshot, T0, {
+    optimization: {
+      quality: new Map<string, RouteQuality>([
+        [healthKeyFor(a.providerId, a.providerModelId), unknownQuality(a.providerId, a.providerModelId)],
+      ]),
+    },
+  });
+
+  assert.equal(without.outcome, "selected");
+  assert.equal(withUnknownQuality.outcome, "selected");
+  if (without.outcome !== "selected" || withUnknownQuality.outcome !== "selected") return;
+  assert.equal(withUnknownQuality.selection.routeId, without.selection.routeId);
+});
+
+test("an absent quality axis cannot alter eligibility, admission or the breaker", () => {
+  // Quality is an optimization input and nothing else. It must not be able to
+  // revive an excluded route or exclude an eligible one.
+  const openBreaker = candidate({ priority: 900, providerModelId: "pm-aaa" });
+  const healthy = candidate({ priority: 100, providerModelId: "pm-zzz" });
+  const snapshot: HealthSnapshot = new Map([
+    health(openBreaker, { breakerState: "OPEN", admission: "deny" }),
+    health(healthy),
+  ]);
+
+  for (const optimization of [
+    undefined,
+    {
+      quality: new Map<string, RouteQuality>([
+        [
+          healthKeyFor(openBreaker.providerId, openBreaker.providerModelId),
+          { providerId: "mock", providerModelId: "pm-aaa", state: "known" as const, score: 1 },
+        ],
+      ]),
+    },
+    {
+      quality: new Map<string, RouteQuality>([
+        [
+          healthKeyFor(openBreaker.providerId, openBreaker.providerModelId),
+          unknownQuality(openBreaker.providerId, openBreaker.providerModelId),
+        ],
+      ]),
+    },
+  ]) {
+    const result = selectHealthyRoute("model-a", [openBreaker, healthy], snapshot, T0, {
+      optimization,
+    });
+    assert.equal(result.outcome, "selected");
+    if (result.outcome !== "selected") continue;
+    assert.equal(result.selection.routeId, healthy.routeId);
+    assert.equal(
+      result.decision.evaluations.find((e) => e.routeId === openBreaker.routeId)?.rejection,
+      "circuit_open",
+      "quality state must not change an admission decision"
+    );
+  }
+});
