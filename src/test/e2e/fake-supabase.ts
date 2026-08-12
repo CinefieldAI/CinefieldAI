@@ -142,8 +142,60 @@ export class FakeSupabaseClient {
     }),
   };
 
-  async rpc(_fn: string, _args?: unknown) {
+  /**
+   * Emulates the PL/pgSQL functions the application calls as RPCs.
+   *
+   * SCOPE, STATED PLAINLY: this is a stand-in so the orchestration chain can
+   * run offline. It does NOT prove the transactional guarantee — a JS
+   * function cannot. That guarantee is proven against real PostgreSQL in
+   * supabase/tests/test_transactional_outbox.sql, which runs the actual
+   * migration in a throwaway container. What this emulation must get right
+   * is the CONTRACT the callers depend on: the same compare-and-set
+   * predicate, the same return shape, and no event on a refused transition.
+   */
+  async rpc(fn: string, args?: Record<string, unknown>) {
+    if (fn === "cancel_generation_tx") {
+      return { data: this.cancelGenerationTx(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /** Outbox rows the emulated RPCs wrote. Asserted on; never a real table. */
+  outboxEvents: Row[] = [];
+
+  private cancelGenerationTx(args: Record<string, unknown>) {
+    const generationId = args.p_generation_id as string;
+    const row = this.state.generations.find((g) => g.id === generationId);
+
+    // Same predicate as the SQL: queued/processing only.
+    if (!row || (row.status !== "queued" && row.status !== "processing")) {
+      return { applied: false, status: row?.status ?? null, event_id: null };
+    }
+
+    row.status = "cancelled";
+    row.completed_at = new Date().toISOString();
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    const orchestration = { ...((metadata.orchestration ?? {}) as Record<string, unknown>) };
+    orchestration.stage = "cancelled";
+    row.metadata = { ...metadata, orchestration };
+    row.updated_at = new Date().toISOString();
+
+    // The event is written only because the transition applied — the same
+    // ordering the SQL guarantees, even though only the SQL makes it atomic.
+    const eventId = (args.p_event_id as string) ?? randomUUID();
+    this.outboxEvents.push({
+      event_id: eventId,
+      event_type: "generation.cancelled",
+      event_version: 1,
+      aggregate_type: "generation",
+      aggregate_id: generationId,
+      trace_id: (args.p_trace_id as string) ?? null,
+      payload: { generationId, provider: row.provider },
+      status: "pending",
+      published_at: null,
+    });
+
+    return { applied: true, status: "cancelled", event_id: eventId };
   }
 }
 

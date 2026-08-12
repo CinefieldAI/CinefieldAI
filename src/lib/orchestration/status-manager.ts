@@ -466,19 +466,38 @@ export async function recordContinuationHalt(
 export async function markCancelled(
   admin: SupabaseClient,
   generationId: string,
-  existingMetadata: Record<string, unknown> | null
+  existingMetadata: Record<string, unknown> | null,
+  options?: { reason?: string; traceId?: string; eventId?: string }
 ): Promise<boolean> {
-  const { data, error } = await admin
-    .from("generations")
-    .update({
-      status: "cancelled",
-      completed_at: new Date().toISOString(),
-      metadata: mergeOrchestrationMetadata(existingMetadata, { stage: "cancelled" }),
-    })
-    .eq("id", generationId)
-    .in("status", ["queued", "processing"])
-    .select("id")
-    .maybeSingle();
+  // PHASE 6R-E: this is the first TRANSACTIONAL writer in the codebase.
+  //
+  // It used to be a PostgREST .update(). That was a correct compare-and-set,
+  // but emitting the matching domain event would have meant a SECOND HTTP
+  // request and therefore a second transaction — and the crash between them
+  // is precisely the window the outbox pattern exists to close. Calling two
+  // Supabase requests in a row and describing it as transactional would have
+  // been a fiction. cancel_generation_tx performs the guarded UPDATE and the
+  // outbox insert in ONE PL/pgSQL body, so they commit together or not at
+  // all. Proven on real PostgreSQL in supabase/tests/test_transactional_outbox.sql.
+  //
+  // `existingMetadata` is no longer sent, deliberately. The old version
+  // rebuilt the whole metadata JSON from the caller's snapshot and wrote it
+  // wholesale, which silently discarded any concurrent metadata write. The
+  // SQL uses jsonb_set to touch only orchestration.stage. The parameter stays
+  // for call-site compatibility and is documented as ignored rather than
+  // quietly removed.
+  void existingMetadata;
+
+  const { data, error } = await admin.rpc("cancel_generation_tx", {
+    p_generation_id: generationId,
+    // A short reason CODE only; the function rejects anything else. Never a
+    // user-supplied message — this value is copied into a retained event.
+    p_reason: options?.reason ?? null,
+    p_trace_id: options?.traceId ?? null,
+    // Supplying an id is how an application-level retry keeps ONE event
+    // identity instead of announcing the same cancellation twice.
+    p_event_id: options?.eventId ?? null,
+  });
 
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
@@ -486,7 +505,7 @@ export async function markCancelled(
     });
   }
 
-  return data !== null;
+  return Boolean((data as { applied?: boolean } | null)?.applied);
 }
 
 /**
