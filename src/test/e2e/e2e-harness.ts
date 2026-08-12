@@ -37,6 +37,27 @@ export class FakeSqsTransport implements CommandBus {
   enqueueCount = 0;
   dedupDroppedCount = 0;
 
+  /**
+   * Optional consumer that drains the queue as soon as a message is accepted.
+   *
+   * WHY: under Temporal's time-skipping clock the workflow burns through its
+   * entire dispatch-observe window in a few milliseconds of real time, so a
+   * test that drained the queue from the outside would always lose the race
+   * and the workflow would give up before the worker ever ran. Delivering
+   * immediately removes QUEUE LATENCY, which is not a property this suite
+   * claims to prove — it does not remove or weaken a single production
+   * guard. The workflow still runs its real dispatch-observe loop against the
+   * attempt row, and the message still travels through production's own
+   * serialize/parse contract into the real provider worker handler.
+   *
+   * Scenarios that need manual control (duplicate redelivery, dedup) simply
+   * leave this unset and drain by hand, exactly as before.
+   */
+  consumer: ((raw: { body: string; messageGroupId: string; deduplicationId: string }) => Promise<void>) | null = null;
+
+  /** Reasons returned by the real worker handler for auto-consumed messages. */
+  consumedReasons: string[] = [];
+
   async enqueue(envelope: CommandEnvelope): Promise<void> {
     this.enqueueCount += 1;
 
@@ -57,11 +78,18 @@ export class FakeSqsTransport implements CommandBus {
     }
     this.acceptedDedupIds.add(envelope.idempotencyKey);
 
-    this.messages.push({
+    const raw = {
       body,
       messageGroupId: envelope.command.generationId,
       deduplicationId: envelope.idempotencyKey,
-    });
+    };
+
+    if (this.consumer) {
+      await this.consumer(raw);
+      return;
+    }
+
+    this.messages.push(raw);
   }
 
   /** Pops the next message, parsed by PRODUCTION's parser. */
@@ -113,19 +141,38 @@ export async function uninstallFakeSupabase(): Promise<void> {
   __setSupabaseAdminClientForTesting(null);
 }
 
-/** Fixture builders shared by the E2E scenarios. */
+/**
+ * Fixture builders shared by the E2E scenarios.
+ *
+ * The matching `projects` row is NOT optional garnish: executeGeneration
+ * loads the project and re-verifies its owner before it will touch a
+ * provider. An earlier version of this harness seeded only the generation,
+ * so every scenario died at that ownership check long before reaching the
+ * adapter — which is precisely why the completion path went unproven in the
+ * first pass of Phase 6R.12.
+ */
 export function seedGeneration(
   db: FakeSupabaseClient,
   overrides: Record<string, unknown> = {}
-): { generationId: string; clerkUserId: string } {
+): { generationId: string; clerkUserId: string; projectId: string } {
   // A real UUID: production's command-wire contract validates generationId
   // against a strict UUID pattern, so a fixture must satisfy it too.
   const generationId = (overrides.id as string) ?? randomUUID();
   const clerkUserId = (overrides.clerk_user_id as string) ?? "user_e2e";
+  const projectId = (overrides.project_id as string) ?? randomUUID();
+
+  if (!db.state.projects) db.state.projects = [];
+  db.state.projects.push({
+    id: projectId,
+    clerk_user_id: clerkUserId,
+    name: "e2e project",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 
   db.state.generations.push({
     id: generationId,
-    project_id: "project-e2e",
+    project_id: projectId,
     clerk_user_id: clerkUserId,
     generation_type: "image",
     provider: "mock",
@@ -145,5 +192,5 @@ export function seedGeneration(
     ...overrides,
   });
 
-  return { generationId, clerkUserId };
+  return { generationId, clerkUserId, projectId };
 }

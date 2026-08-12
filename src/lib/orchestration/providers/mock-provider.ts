@@ -49,10 +49,19 @@ export type MockMode =
    *   async-flaky:   check 1 → transient error, 2 → processing,
    *                  3 → processing, 4 → completed
    *   async-pending: never completes (exercises the polling ceiling)
+   *   async-failure: check 1 → processing, 2 → the PROVIDER ITSELF reports
+   *                  the job failed. This is the one and only way a status
+   *                  check may terminally fail a row, and it was previously
+   *                  unreachable offline — every other mock failure mode
+   *                  throws from submit(), which is a different code path
+   *                  with different evidence rules. Added in the Phase 6R.12
+   *                  completion pass so the submitted → processing → failed
+   *                  lifecycle can be proven end-to-end at zero cost.
    */
   | "async-success"
   | "async-flaky"
-  | "async-pending";
+  | "async-pending"
+  | "async-failure";
 
 const VALID_MODES: ReadonlySet<string> = new Set<MockMode>([
   "success",
@@ -62,12 +71,14 @@ const VALID_MODES: ReadonlySet<string> = new Set<MockMode>([
   "async-success",
   "async-flaky",
   "async-pending",
+  "async-failure",
 ]);
 
 const ASYNC_MODES: ReadonlySet<string> = new Set<MockMode>([
   "async-success",
   "async-flaky",
   "async-pending",
+  "async-failure",
 ]);
 
 export function isAsyncMockMode(mode: MockMode): boolean {
@@ -239,6 +250,14 @@ class MockProvider implements ProviderAdapter {
 
     if (mode === "async-pending") {
       return { status: "processing", progress: 10 };
+    }
+
+    if (mode === "async-failure") {
+      // NOT a thrown error: a thrown getStatus is a CHECK failure and the
+      // core deliberately keeps polling. Returning "failed" is the provider
+      // answering that the job itself is dead, which is the only signal that
+      // may terminally fail the row.
+      return checksSoFar >= 1 ? { status: "failed", progress: 0 } : { status: "processing", progress: 50 };
     }
 
     if (mode === "async-flaky" && checksSoFar === 0) {

@@ -31,6 +31,51 @@ import { randomUUID } from "node:crypto";
 
 type Row = Record<string, unknown>;
 
+/**
+ * Columns that exist in the real schema but are absent from a typical INSERT.
+ *
+ * Postgres materializes those as NULL; a naive JS object leaves them
+ * `undefined`, and the difference is NOT cosmetic. Production's duplicate
+ * guard in worker/provider-command-handler.ts reads
+ * `attempt.provider_job_id !== null` — against `undefined` that is true, so a
+ * brand-new attempt looked like one that already carried provider evidence
+ * and every submission was refused as a duplicate. Modelling the NULLs is
+ * what lets the real guard behave the way it does against Postgres.
+ *
+ * Taken from supabase/migrations/20260810120000_generation_attempts.sql. Only
+ * the nullable columns need listing — NOT NULL columns with defaults are
+ * always supplied by the code under test.
+ */
+const NULLABLE_COLUMNS: Record<string, readonly string[]> = {
+  generation_attempts: [
+    "provider_job_id",
+    "submission_error_code",
+    "workflow_id",
+    "workflow_run_id",
+    "cost_amount",
+    "cost_currency",
+    "latency_ms",
+    "error_code",
+    "started_at",
+    "submitted_at",
+    "completed_at",
+  ],
+  generations: [
+    "input_url",
+    "output_url",
+    "thumbnail_url",
+    "error_message",
+    "negative_prompt",
+    "completed_at",
+    "temporal_workflow_id",
+  ],
+};
+
+/** Column defaults the real schema applies when an INSERT omits them. */
+const COLUMN_DEFAULTS: Record<string, Row> = {
+  generation_attempts: { status: "pending", submission_evidence: "none" },
+};
+
 export interface FakeSupabaseState {
   generations: Row[];
   generation_attempts: Row[];
@@ -211,14 +256,20 @@ class FakeQueryBuilder {
 
   private execute(): { data: unknown; error: null } {
     if (this.mode === "insert") {
+      const nullable = NULLABLE_COLUMNS[this.table] ?? [];
       const inserted = this.insertRows.map((r) => {
         const row: Row = {
           // Real UUIDs: production's wire/keyspace contracts validate ids.
           id: r.id ?? randomUUID(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          ...(COLUMN_DEFAULTS[this.table] ?? {}),
           ...r,
         };
+        // Omitted nullable columns read back as NULL, exactly as in Postgres.
+        for (const column of nullable) {
+          if (row[column] === undefined) row[column] = null;
+        }
         this.rows.push(row);
         return row;
       });

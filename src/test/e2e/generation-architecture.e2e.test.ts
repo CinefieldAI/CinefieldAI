@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { randomUUID } from "node:crypto";
 import { test, before, after } from "node:test";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
@@ -384,6 +385,456 @@ test("E2E ARCHITECTURE: the legacy Trigger.dev generation owner is not part of t
     importLines.includes("worker/activities/generation-activities"),
     "the E2E drives the real Temporal activities"
   );
+});
+
+// ===========================================================================
+// COMPLETION PASS (Phase 6R.12 GATE 0)
+//
+// The first pass of this suite proved the SUBMISSION half of the chain and
+// reported the completion half as unproven. The root cause was a fixture
+// defect, not an architectural one: `seedGeneration` never created the
+// `projects` row that executeGeneration loads and owner-checks before it will
+// touch an adapter, so every scenario died at that check long before reaching
+// the provider. With the row seeded, the real orchestration core runs to the
+// end and the scenarios below drive it there.
+//
+// The only other harness change is FakeSqsTransport.consumer, which delivers
+// a message the instant the transport accepts it. Under time-skipping the
+// workflow exhausts its whole dispatch-observe window in milliseconds of real
+// time, so an externally-driven drain always lost the race. Removing queue
+// LATENCY is not removing a guard: the message still travels through
+// production's serialize/parse contract into the real worker handler, and the
+// workflow still runs its real dispatch-observe loop against the attempt row.
+// ===========================================================================
+
+/**
+ * A scenario whose queue is drained by the REAL provider worker handler the
+ * moment a command is accepted. `onSubmitted` runs immediately after the
+ * worker finished with the command — the hook the callback scenario uses to
+ * deliver its webhook while the workflow is still live.
+ */
+async function setupAutoScenario(
+  mode: string,
+  onSubmitted?: (ctx: { generationId: string; clerkUserId: string }) => Promise<void>
+) {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const sqs = new FakeSqsTransport();
+  setCommandBus(sqs);
+  process.env.SQS_COMMAND_BUS_ENABLED = "true";
+  process.env.CINEFIELD_SQS_PROVIDER_QUEUE_URL = "https://fake-sqs.invalid/queue.fifo";
+
+  const { generationId, clerkUserId } = seedGeneration(db, { metadata: { mock_mode: mode } });
+
+  sqs.consumer = async (raw) => {
+    // Round-trip through the production parser, then the production handler.
+    sqs.messages.push(raw);
+    const next = sqs.receive();
+    if (!next) return;
+    const outcome = await handleProviderCommand(next.command);
+    sqs.consumedReasons.push(outcome.reason);
+    if (onSubmitted) await onSubmitted({ generationId, clerkUserId });
+  };
+
+  return { db, sqs, generationId, clerkUserId };
+}
+
+/** The durable facts that define "this generation finished successfully". */
+function terminalShape(db: FakeSupabaseClient) {
+  const generation = db.state.generations[0];
+  const attempt = db.state.generation_attempts[0];
+  return {
+    generationStatus: generation.status,
+    hasOutputUrl: typeof generation.output_url === "string" && generation.output_url.length > 0,
+    hasCompletedAt: typeof generation.completed_at === "string",
+    attemptStatus: attempt?.status,
+    attemptEvidence: attempt?.submission_evidence,
+    attemptHasProviderJob: typeof attempt?.provider_job_id === "string",
+    uploads: db.storageUploads.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 0.2 POLLING SUCCESS TO TERMINAL, THROUGH REAL FINALIZATION
+// ---------------------------------------------------------------------------
+
+test("E2E: polling drives the real workflow to a terminal generation through the real finalization tail", { timeout: 180_000 }, async () => {
+  const { db, sqs, generationId, clerkUserId } = await setupAutoScenario("async-success");
+
+  const result = await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+
+  assert.equal(result.outcome, "completed", "the real workflow reported a completed generation");
+
+  const shape = terminalShape(db);
+  assert.equal(shape.generationStatus, "completed", "the generation row is terminally completed");
+  assert.ok(shape.hasOutputUrl, "markCompleted persisted a real storage path");
+  assert.ok(shape.hasCompletedAt, "completed_at was stamped");
+  assert.equal(shape.attemptStatus, "succeeded", "the attempt reached its terminal success state");
+  assert.ok(shape.attemptHasProviderJob, "the provider job id was correlated onto the attempt");
+
+  // The finalization tail genuinely ran: getResult → normalize → upload.
+  assert.equal(shape.uploads, 1, "the real finalization uploaded exactly one output");
+  assert.equal(db.storageUploads[0].bucket, "generation-outputs");
+  assert.ok(db.storageUploads[0].bytes > 0, "real encoded PNG bytes reached the storage boundary");
+
+  // And it got there without ever submitting twice.
+  assert.equal(sqs.enqueueCount, 1, "exactly one provider command was ever dispatched");
+  assert.deepEqual(sqs.consumedReasons, ["submitted:processing"]);
+  assert.equal(db.state.generation_attempts.length, 1, "exactly one attempt existed throughout");
+});
+
+// ---------------------------------------------------------------------------
+// 0.3 CALLBACK SUCCESS TO TERMINAL
+// ---------------------------------------------------------------------------
+
+test("E2E: a verified webhook signals the live workflow, which then finalizes for real", { timeout: 180_000 }, async () => {
+  const { markWebhookEventVerified } = await import("@/lib/orchestration/webhook-continuation");
+  const { bridgeVerifiedWebhookToTemporal } = await import("@/lib/orchestration/webhook-temporal-bridge");
+
+  let bridgeOutcome: unknown = null;
+  let observedAttemptStatusAtSignal: unknown = null;
+
+  const scenario = await setupAutoScenario("async-success", async ({ generationId }) => {
+    // The provider "calls back" the moment its job exists — while the
+    // workflow is genuinely live on the Temporal test server.
+    const event = markWebhookEventVerified({
+      provider: "mock",
+      providerJobId: `mock-${generationId}`,
+      reportedState: "completed",
+      transport: "webhook",
+    });
+
+    bridgeOutcome = await bridgeVerifiedWebhookToTemporal(event, {
+      isAdminConfigured: () => true,
+      getAdmin: () => scenario.db as never,
+      // The production signal transport builds a Temporal Cloud client from
+      // deployment config, which does not exist here. Injecting the test
+      // server's client is the ONLY substitution: the signal itself is a real
+      // Temporal signal delivered to the real running workflow, and the
+      // production transport's own outcome mapping is covered by the 6R.10
+      // unit suite.
+      signal: async (gid, payload) => {
+        await env.client.workflow
+          .getHandle(generationWorkflowId(gid))
+          .signal("providerEvent", payload);
+        observedAttemptStatusAtSignal = scenario.db.state.generation_attempts[0]?.status;
+        return { outcome: "signalled" };
+      },
+    });
+  });
+
+  const { db, generationId, clerkUserId } = scenario;
+
+  const result = await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+
+  // The bridge did its job: correlated, recorded durably, signalled.
+  assert.deepEqual(
+    bridgeOutcome,
+    { outcome: "accepted", generationId, attemptId: db.state.generation_attempts[0].id },
+    "the verified webhook was accepted and correlated from Cinefield's own row"
+  );
+  assert.equal(
+    observedAttemptStatusAtSignal,
+    "processing",
+    "the durable observation was written BEFORE the signal, never after"
+  );
+
+  // And the workflow that received it reached a real terminal state.
+  assert.equal(result.outcome, "completed");
+  const shape = terminalShape(db);
+  assert.equal(shape.generationStatus, "completed");
+  assert.equal(shape.attemptStatus, "succeeded");
+  assert.equal(shape.uploads, 1, "the callback path finalized exactly once, for real");
+});
+
+// ---------------------------------------------------------------------------
+// 0.4 CALLBACK / POLL CONVERGENCE
+// ---------------------------------------------------------------------------
+
+test("E2E: the callback path and the poll path reach an identical terminal durable state", { timeout: 240_000 }, async () => {
+  const { markWebhookEventVerified } = await import("@/lib/orchestration/webhook-continuation");
+  const { bridgeVerifiedWebhookToTemporal } = await import("@/lib/orchestration/webhook-temporal-bridge");
+
+  // --- poll only -----------------------------------------------------------
+  const pollScenario = await setupAutoScenario("async-success");
+  await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(pollScenario.generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId: pollScenario.generationId, clerkUserId: pollScenario.clerkUserId }],
+    })
+  );
+  const pollShape = terminalShape(pollScenario.db);
+
+  // --- callback + poll -----------------------------------------------------
+  const cbScenario = await setupAutoScenario("async-success", async ({ generationId }) => {
+    await bridgeVerifiedWebhookToTemporal(
+      markWebhookEventVerified({
+        provider: "mock",
+        providerJobId: `mock-${generationId}`,
+        reportedState: "completed",
+        transport: "webhook",
+      }),
+      {
+        isAdminConfigured: () => true,
+        getAdmin: () => cbScenario.db as never,
+        signal: async (gid, payload) => {
+          await env.client.workflow
+            .getHandle(generationWorkflowId(gid))
+            .signal("providerEvent", payload);
+          return { outcome: "signalled" };
+        },
+      }
+    );
+  });
+  await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(cbScenario.generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId: cbScenario.generationId, clerkUserId: cbScenario.clerkUserId }],
+    })
+  );
+  const callbackShape = terminalShape(cbScenario.db);
+
+  // Transport mechanics differ; the durable outcome must not.
+  assert.deepEqual(callbackShape, pollShape, "both transports converge on one terminal state");
+  assert.equal(pollShape.generationStatus, "completed");
+  assert.equal(pollShape.uploads, 1);
+});
+
+// ---------------------------------------------------------------------------
+// 0.5 FINALIZATION ONCE
+// ---------------------------------------------------------------------------
+
+test("E2E: a duplicate poll after completion does not finalize a second time", { timeout: 180_000 }, async () => {
+  const { db, generationId, clerkUserId } = await setupAutoScenario("async-success");
+
+  await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+  assert.equal(db.storageUploads.length, 1);
+  const completedAt = db.state.generations[0].completed_at;
+
+  // Exactly what a redelivered poll does — the real continuation entry point.
+  const { checkAsyncGeneration } = await import("@/lib/orchestration/orchestrator");
+  const again = await checkAsyncGeneration({ generationId, clerkUserId, source: "poll" });
+
+  assert.equal(again.status, "completed", "the terminal row is reported idempotently");
+  assert.equal(db.storageUploads.length, 1, "no second upload");
+  assert.equal(db.state.generations[0].completed_at, completedAt, "completion was not restamped");
+});
+
+test("E2E: a duplicate verified callback after completion does not finalize a second time", { timeout: 180_000 }, async () => {
+  const { markWebhookEventVerified } = await import("@/lib/orchestration/webhook-continuation");
+  const { bridgeVerifiedWebhookToTemporal } = await import("@/lib/orchestration/webhook-temporal-bridge");
+
+  const { db, generationId, clerkUserId } = await setupAutoScenario("async-success");
+  await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+  assert.equal(db.storageUploads.length, 1);
+
+  let signalCalls = 0;
+  const late = await bridgeVerifiedWebhookToTemporal(
+    markWebhookEventVerified({
+      provider: "mock",
+      providerJobId: `mock-${generationId}`,
+      reportedState: "completed",
+      transport: "webhook",
+    }),
+    {
+      isAdminConfigured: () => true,
+      getAdmin: () => db as never,
+      signal: async () => {
+        signalCalls += 1;
+        return { outcome: "signalled" };
+      },
+    }
+  );
+
+  assert.equal(late.outcome, "already_processed", "a post-terminal callback is a no-op");
+  assert.equal(signalCalls, 0, "a terminal attempt is never signalled again");
+  assert.equal(db.storageUploads.length, 1, "no second upload");
+  assert.equal(db.state.generations[0].status, "completed", "terminal state preserved");
+});
+
+test("E2E: two concurrent completion observations finalize exactly once (single-flight lease)", async () => {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+
+  // A job already at its completion threshold: BOTH observers will see the
+  // provider report "completed", which is precisely the race the
+  // finalization lease exists for.
+  const { generationId, clerkUserId } = seedGeneration(db, {
+    status: "processing",
+    metadata: {
+      mock_mode: "async-success",
+      orchestration: {
+        stage: "waiting-provider",
+        workflow: "text-to-image",
+        providerJob: {
+          id: "mock-race",
+          provider: "mock",
+          state: "processing",
+          lastCheckedAt: new Date().toISOString(),
+          checkCount: 2,
+          resume: { mock: true, mode: "async-success" },
+        },
+      },
+    },
+  });
+  // The mock derives its job id from the generation id; keep them consistent.
+  const meta = db.state.generations[0].metadata as {
+    orchestration: { providerJob: { id: string } };
+  };
+  meta.orchestration.providerJob.id = `mock-${generationId}`;
+
+  const { checkAsyncGeneration } = await import("@/lib/orchestration/orchestrator");
+  const results = await Promise.allSettled([
+    checkAsyncGeneration({ generationId, clerkUserId, source: "poll" }),
+    checkAsyncGeneration({ generationId, clerkUserId, source: "webhook" }),
+  ]);
+
+  assert.equal(db.storageUploads.length, 1, "the lease admitted exactly one finalizer");
+  assert.equal(db.state.generations[0].status, "completed");
+  const completed = results.filter(
+    (r) => r.status === "fulfilled" && r.value.status === "completed"
+  );
+  assert.ok(completed.length >= 1, "at least one observer reports the terminal state");
+});
+
+// ---------------------------------------------------------------------------
+// 0.6 PROVIDER FAILURE TO TERMINAL
+// ---------------------------------------------------------------------------
+
+test("E2E: submitted -> processing -> provider-reported failure drives the workflow to a terminal failure", { timeout: 180_000 }, async () => {
+  const { db, sqs, generationId, clerkUserId } = await setupAutoScenario("async-failure");
+
+  const result = await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+
+  assert.equal(result.outcome, "failed", "the workflow reported a real terminal failure");
+  assert.equal(db.state.generations[0].status, "failed", "the generation row is terminally failed");
+  assert.equal(db.state.generation_attempts[0].status, "failed", "the attempt is terminally failed");
+
+  // A failure must never masquerade as, or leave behind, a success.
+  assert.equal(db.storageUploads.length, 0, "no output was finalized for a failed job");
+  assert.equal(db.state.generations[0].output_url, null, "no output url on a failed generation");
+
+  // And it must never cost a second submission.
+  assert.equal(sqs.enqueueCount, 1, "exactly one provider command was ever dispatched");
+  assert.equal(db.state.generation_attempts.length, 1, "no retry attempt was opened");
+});
+
+test("E2E: a submit-time provider failure is terminal and never resubmitted", { timeout: 180_000 }, async () => {
+  const { db, sqs, generationId, clerkUserId } = await setupAutoScenario("provider-failure");
+
+  const result = await withWorker(async () =>
+    env.client.workflow.execute("generationWorkflow", {
+      taskQueue: TASK_QUEUES.generation,
+      workflowId: generationWorkflowId(generationId),
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      args: [{ generationId, clerkUserId }],
+    })
+  );
+
+  assert.equal(result.outcome, "failed");
+  assert.equal(db.state.generations[0].status, "failed");
+  assert.equal(db.state.generation_attempts[0].status, "failed");
+  assert.equal(sqs.enqueueCount, 1, "the failure did not trigger a second dispatch");
+  assert.equal(db.storageUploads.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// 0.7 AMBIGUOUS SUBMISSION
+//
+// The orchestrator-level ambiguous marker is deliberately UNREACHABLE with
+// the mock provider: orchestrator.ts exempts mocks from the fail-closed
+// ambiguity rule because a mock makes no external call, so no billable job
+// can exist whatever error its test modes raise. That exemption is a
+// production safety decision and is not weakened here.
+//
+// The ambiguity that IS reachable — and is the one that actually guards
+// money — lives at the worker boundary: a handler that died between claiming
+// an attempt and persisting any evidence. That path is driven for real below.
+// ---------------------------------------------------------------------------
+
+test("E2E: a stale claim with no evidence is recorded as ambiguous and never blindly resubmitted", async () => {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const { generationId } = seedGeneration(db, { status: "processing" });
+
+  const { ATTEMPT_STALE_AFTER_MS } = await import("@/lib/aws/sqs-topology");
+  const attemptId = randomUUID();
+  db.state.generation_attempts.push({
+    id: attemptId,
+    generation_id: generationId,
+    attempt_no: 1,
+    provider: "mock",
+    provider_model: "mock-image-v1",
+    provider_job_id: null,
+    submission_evidence: "none",
+    status: "submitting",
+    // A handler that claimed the attempt and then died. No evidence of any
+    // kind exists, and nothing can prove whether a request went out.
+    updated_at: new Date(Date.now() - ATTEMPT_STALE_AFTER_MS - 60_000).toISOString(),
+  });
+
+  const { commandIdFor, parseCommand, serializeCommand } = await import("@/lib/contracts/command-wire");
+  const parsed = parseCommand(
+    serializeCommand({
+      commandId: commandIdFor("provider.submit", attemptId),
+      type: "provider.submit",
+      generationId,
+      attemptId,
+      issuedAt: new Date().toISOString(),
+    })
+  );
+  assert.ok(parsed.ok, "the fixture command satisfies the production wire contract");
+
+  const outcome = await handleProviderCommand(parsed.command);
+
+  assert.equal(outcome.reason, "stale_claim_marked_ambiguous");
+  assert.equal(outcome.action, "delete", "the message retires — it must not be redelivered to resubmit");
+  assert.equal(
+    db.state.generation_attempts[0].submission_evidence,
+    "ambiguous",
+    "the uncertainty is recorded durably rather than guessed away"
+  );
+  assert.equal(db.storageUploads.length, 0, "no provider work was performed");
+  assert.equal(db.state.generation_attempts.length, 1, "no second attempt was opened");
 });
 
 test("E2E COST: no real provider, AWS, storage, or credit side effect occurred", async () => {
