@@ -51,6 +51,25 @@ export function isTemporalConfigured(): boolean {
 }
 
 /**
+ * Whether Temporal owns generation lifecycle in this deployment
+ * (Phase 6R-B — moved here from generation-starter.ts).
+ *
+ * Lives in this module, not in the starter, so the execution-owner resolver
+ * can ask the question without pulling `@temporalio/client` into its import
+ * graph. Same two-key rule as every other Cinefield transport: an explicit
+ * flag AND real configuration. Credentials alone never switch ownership.
+ *
+ * WHAT `false` MEANS HAS CHANGED. Before Phase 6R-B it meant "keep running
+ * the direct/trigger paths". It now means the deployment has NO generation
+ * owner, and the production execution boundary fails closed. There is no
+ * fallback owner, because a fallback is how a generation ends up with two
+ * lifecycle owners and, eventually, two provider jobs.
+ */
+export function isTemporalGenerationEnabled(): boolean {
+  return process.env.TEMPORAL_GENERATION_ENABLED === "true" && isTemporalConfigured();
+}
+
+/**
  * Returns the configuration, or null when it is absent or contradictory.
  *
  * Supplying BOTH an API key and mTLS material is treated as unconfigured

@@ -34,6 +34,7 @@ export type OrchestrationErrorCode =
   | "DUPLICATE_EXECUTION"
   | "MOCK_VIDEO_NOT_IMPLEMENTED"
   | "TRIGGER_DISPATCH_FAILED"
+  | "GENERATION_OWNER_UNAVAILABLE"
   | "INTERNAL_ERROR";
 
 interface ErrorDefinition {
@@ -143,6 +144,15 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "The background job could not be queued. Please try again.",
     status: 503,
     retryable: true,
+  },
+  // Phase 6R-B fail-closed outcome: no generation owner is available in this
+  // deployment. Deliberately NOT retryable — retrying changes nothing until an
+  // operator enables Temporal ownership, and marking it retryable would invite
+  // a client loop that looks like an outage recovering when it is not.
+  GENERATION_OWNER_UNAVAILABLE: {
+    message: "Generation is temporarily unavailable. Please try again later.",
+    status: 503,
+    retryable: false,
   },
   INTERNAL_ERROR: { message: "Something went wrong. Please try again.", status: 500, retryable: false },
 };

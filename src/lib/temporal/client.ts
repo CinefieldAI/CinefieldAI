@@ -34,6 +34,22 @@ export class TemporalNotConfiguredError extends Error {
  */
 let clientPromise: Promise<Client> | null = null;
 
+/**
+ * TEST-ONLY seam (Phase 6R-B). Primes the cache with a client built against
+ * the @temporalio/testing time-skipping server, so the zero-cost ownership
+ * tests can drive the REAL production execution service — resolver, starter,
+ * workflow id, conflict policy and all — instead of a reimplementation of it.
+ *
+ * Mirrors `__setSupabaseAdminClientForTesting` in src/lib/supabase/
+ * supabaseAdmin.ts: one explicit, reviewable injection point rather than
+ * module patching (impossible under ESM).
+ *
+ * Production never calls this. Passing null restores normal resolution.
+ */
+export function __setTemporalClientForTesting(client: Client | null): void {
+  clientPromise = client === null ? null : Promise.resolve(client);
+}
+
 async function connect(): Promise<Client> {
   const config = readTemporalConfig();
   if (!config) throw new TemporalNotConfiguredError();

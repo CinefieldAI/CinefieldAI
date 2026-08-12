@@ -122,12 +122,24 @@ test("no operational file invents a provider price or mutates a balance", () => 
 // LEGACY BOUNDARY
 // ---------------------------------------------------------------------------
 
-test("the legacy generation tasks are explicitly marked as legacy and scheduled for removal", () => {
+test("the retired generation tasks are marked retired AND cannot run in production", () => {
+  // Strengthened at the Phase 6R-B cutover. Until then these tasks were the
+  // live production owner and the only assertable property was a doc marker.
+  // Now they have no production caller, so the real invariant is enforceable:
+  // they refuse to execute in a production process at all.
   for (const file of ["generation-task.ts", "async-continuation-task.ts"]) {
     const source = readFileSync(join(TRIGGER_DIR, file), "utf8");
     assert.ok(
-      source.includes("LEGACY") && source.includes("Phase 6R.11"),
-      `${file} must carry the 6R.11 legacy marker so its ownership status is unambiguous`
+      source.includes("RETIRED") && source.includes("Phase 6R-B"),
+      `${file} must carry the 6R-B retirement marker so its ownership status is unambiguous`
+    );
+    assert.ok(
+      /NODE_ENV === "production"/.test(stripComments(source)),
+      `${file} must refuse to run in production — a dormant second owner is still a second owner`
+    );
+    assert.ok(
+      /AbortTaskRunError/.test(stripComments(source)),
+      `${file} must abort without retry: retrying cannot change the refusal`
     );
   }
 });

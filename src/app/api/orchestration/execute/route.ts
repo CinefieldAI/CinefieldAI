@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { OrchestrationError, toOrchestrationError } from "@/lib/orchestration/errors";
-import { resolveExecutionMode } from "@/lib/orchestration/execution-mode";
-import { executeGeneration } from "@/lib/orchestration/orchestrator";
-import { generationTask } from "@/trigger/generation-task";
+import { executeGenerationRequest } from "@/lib/orchestration/generation-execution-service";
 
 /**
  * POST /api/orchestration/execute
@@ -15,14 +13,28 @@ import { generationTask } from "@/trigger/generation-task";
  * and the model registry — nothing about identity or routing is taken from
  * the request body.
  *
- * Execution mode ("direct" vs "trigger") is resolved server-side via
- * resolveExecutionMode() and defaults to "direct" — the exact synchronous
- * path already proven by the mock and fal.ai end-to-end tests — unless
- * GENERATION_EXECUTION_MODE=trigger is set AND TRIGGER_SECRET_KEY is
- * present. In "trigger" mode this route only dispatches the job; the browser
- * response reflects "queued", not a finished result, since the generic
- * generationTask (src/trigger/generation-task.ts) calls the exact same
- * executeGeneration() in the background.
+ * PHASE 6R-B — TEMPORAL IS THE PRODUCTION OWNER
+ * This route no longer decides anything about execution. It authenticates,
+ * validates the one input, and hands off to the production execution service
+ * (src/lib/orchestration/generation-execution-service.ts), which resolves the
+ * owner server-side. In production that owner is Temporal's
+ * GenerationWorkflow or nothing at all:
+ *
+ *   started      202  Temporal owns the generation; nothing has finished yet,
+ *                     so the caller must observe the row, not this response
+ *   completed    200  non-production dev path only
+ *   unavailable  503  no owner — fail closed, nothing was dispatched
+ *
+ * THERE IS NO TRIGGER BRANCH, AND NO FALLBACK. Trigger.dev is operational
+ * infrastructure (reconciliation, audit, health, cleanup); it is not a
+ * generation owner and cannot be selected here by configuration or by the
+ * request. Nothing in this file imports a Trigger task.
+ *
+ * CLIENT CONTRACT NOTE: the 202 response is deliberately not a result. A
+ * caller that treats a non-"completed" status as failure will misread it —
+ * the browser hook still keys its polling off the retired `mode: "trigger"`
+ * field, which is why enabling Temporal ownership requires that client
+ * contract to be generalized first (Phase 5 convergence on /api/generate).
  */
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,6 +48,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // ---- Request body validation -------------------------------------------
+  // generationId and nothing else. Any other field in the body is ignored
+  // outright — in particular there is no way to name an execution owner,
+  // which is the simplest guarantee that a client cannot choose one.
   let generationId: string;
   try {
     const body: unknown = await request.json();
@@ -59,40 +74,40 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(error.toResponseBody(), { status: error.status });
   }
 
-  // ---- Trigger mode: dispatch and return immediately -----------------------
-  if (resolveExecutionMode() === "trigger") {
-    try {
-      // idempotencyKey scopes duplicate-dispatch protection to this
-      // generation id: a second POST for the same id within the TTL returns
-      // the existing run instead of starting a second one. This is in
-      // addition to, not instead of, claimGeneration()'s own compare-and-set
-      // inside executeGeneration once the task actually runs.
-      const handle = await generationTask.trigger(
-        { generationId, clerkUserId: userId },
-        { idempotencyKey: generationId, idempotencyKeyTTL: "1h" }
-      );
+  // ---- Hand off to the owner ----------------------------------------------
+  try {
+    const outcome = await executeGenerationRequest({ generationId, clerkUserId: userId });
 
+    if (outcome.outcome === "unavailable") {
+      // Fail closed. The reason is a stable, non-sensitive classification;
+      // the user-facing message comes from the typed error, not from here.
+      const error = new OrchestrationError("GENERATION_OWNER_UNAVAILABLE");
       return NextResponse.json(
-        { generationId, status: "queued", mode: "trigger", triggerRunId: handle.id },
+        { ...error.toResponseBody(), reason: outcome.reason },
+        { status: error.status }
+      );
+    }
+
+    if (outcome.outcome === "started") {
+      return NextResponse.json(
+        {
+          generationId: outcome.generationId,
+          status: "queued",
+          owner: "temporal",
+          // Safe to expose: a deterministic id derived from the generation id
+          // the caller already holds. Carries no secret and grants nothing.
+          workflowId: outcome.workflowId,
+        },
         { status: 202 }
       );
-    } catch (caught) {
-      const error =
-        caught instanceof OrchestrationError
-          ? caught
-          : new OrchestrationError("TRIGGER_DISPATCH_FAILED");
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
     }
-  }
 
-  // ---- Direct mode: synchronous execution (unchanged from prior phases) ---
-  try {
-    const result = await executeGeneration({ generationId, clerkUserId: userId });
-
+    const { result } = outcome;
     return NextResponse.json(
       {
         generationId: result.generationId,
         status: result.status,
+        owner: "direct-dev",
         workflow: result.workflow,
         provider: result.provider,
         modelId: result.modelId,

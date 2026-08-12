@@ -1,6 +1,5 @@
 import "server-only";
 import { WorkflowIdConflictPolicy } from "@temporalio/client";
-import { isTemporalConfigured } from "./config";
 import { getTemporalClient } from "./client";
 import { TASK_QUEUES } from "./task-queues";
 import { generationWorkflowId } from "./workflow-ids";
@@ -8,12 +7,16 @@ import { generationWorkflowId } from "./workflow-ids";
 /**
  * Starts the Temporal GenerationWorkflow for one generation (Phase 6R.3).
  *
- * OFF BY DEFAULT. Temporal ownership activates only when
- * TEMPORAL_GENERATION_ENABLED is exactly "true" AND a namespace is actually
- * configured — the same two-key pattern `resolveExecutionMode()` already uses
- * for Trigger.dev. Credentials alone never switch ownership, so an
- * environment that merely has a Temporal namespace keeps running the proven
- * direct/trigger paths.
+ * Since Phase 6R-B this is the PRODUCTION generation owner's entry point,
+ * called by src/lib/orchestration/generation-execution-service.ts. It is
+ * gated by `isTemporalGenerationEnabled()`, which now lives in ./config so
+ * the execution-owner resolver can read it without importing a Temporal
+ * client.
+ *
+ * This function does not decide whether Temporal SHOULD own the generation —
+ * the resolver does that, and there is no fallback if the answer is no. What
+ * this function must never grow is a catch that hands the work to another
+ * owner: a failure here is a failure, reported as such.
  *
  * The workflow argument set is deliberately tiny: a generation id and the
  * clerk user id captured from a verified server-side session. Everything else
@@ -21,10 +24,6 @@ import { generationWorkflowId } from "./workflow-ids";
  * from the database and the model registry. Nothing secret is passed, because
  * a workflow argument is written into Temporal's durable history.
  */
-
-export function isTemporalGenerationEnabled(): boolean {
-  return process.env.TEMPORAL_GENERATION_ENABLED === "true" && isTemporalConfigured();
-}
 
 export interface StartGenerationWorkflowResult {
   workflowId: string;

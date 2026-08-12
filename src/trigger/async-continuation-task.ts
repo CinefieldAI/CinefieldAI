@@ -1,4 +1,4 @@
-import { task, wait } from "@trigger.dev/sdk";
+import { task, wait, AbortTaskRunError } from "@trigger.dev/sdk";
 import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import {
   FIRST_CHECK_DELAY_SECONDS,
@@ -17,16 +17,17 @@ import type { ContinuationHaltReason } from "@/lib/orchestration/types";
 
 /**
  * ===========================================================================
- * LEGACY GENERATION CONTINUATION — SCHEDULED FOR REMOVAL (Phase 6R.11)
+ * RETIRED GENERATION CONTINUATION — NOT PRODUCTION-REACHABLE (Phase 6R-B)
  * ===========================================================================
  * Provider polling/continuation belongs to Temporal's GenerationWorkflow,
- * not to Trigger.dev, whose post-6R.11 role is operational only (see
+ * not to Trigger.dev, whose role is operational only (see
  * src/trigger/operational/).
  *
- * STILL LIVE: this task is dispatched by generation-task.ts, which is
- * itself the current production generation owner. It shares that file's
- * removal dependencies exactly — see the LEGACY header there. Do not
- * delete it independently, and do not add new callers.
+ * Its only dispatcher is generation-task.ts, which as of Phase 6R-B has no
+ * production caller and refuses to run in a production process at all — so
+ * this task is unreachable in production by construction. It carries the
+ * same run-time refusal for the case where it is dispatched directly (a
+ * stale queued run from before the cutover, or a manual trigger).
  *
  * Note this task already cannot own a submission: it imports only
  * checkAsyncGeneration, never executeGeneration, so no continuation retry
@@ -141,6 +142,17 @@ export const asyncContinuationTask = task({
   retry: { maxAttempts: 1 },
   run: async (payload: AsyncContinuationPayload): Promise<ContinuationOutcome> => {
     const { generationId, clerkUserId } = payload;
+
+    // Phase 6R-B: Temporal's poll loop owns continuation in production. A
+    // second polling chain would race the finalization lease for no benefit,
+    // so a stale or manual dispatch is refused rather than run.
+    if (process.env.NODE_ENV === "production") {
+      log({ generationId, result: "legacy_trigger_continuation_refused" });
+      throw new AbortTaskRunError(
+        "LEGACY_TRIGGER_CONTINUATION_DISABLED: Temporal owns provider polling (Phase 6R-B)"
+      );
+    }
+
     const startedAt = Date.now();
     let consecutiveFailures = 0;
     let lastErrorCode: string | undefined;

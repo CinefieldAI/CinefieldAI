@@ -7,34 +7,34 @@ import { asyncContinuationTask } from "./async-continuation-task";
 
 /**
  * ===========================================================================
- * LEGACY GENERATION OWNER — SCHEDULED FOR REMOVAL (Phase 6R.11)
+ * RETIRED GENERATION OWNER — NOT PRODUCTION-REACHABLE (Phase 6R-B)
  * ===========================================================================
- * Per the locked Phase 6R architecture, Trigger.dev is an OPERATIONAL
- * platform (reconciliation, audit, health, cleanup — see
- * src/trigger/operational/), NOT the owner of a generation's lifecycle.
- * Temporal's GenerationWorkflow is the intended owner.
+ * Per the locked v1.6 architecture, Trigger.dev is an OPERATIONAL platform
+ * (reconciliation, audit, health, cleanup — see src/trigger/operational/),
+ * NOT the owner of a generation's lifecycle. Temporal's GenerationWorkflow
+ * is the owner, and as of Phase 6R-B it is the ONLY one:
+ * `/api/orchestration/execute` hands off to
+ * src/lib/orchestration/generation-execution-service.ts, which resolves the
+ * owner server-side and has no Trigger branch at all.
  *
- * THIS FILE IS STILL LIVE AND MUST NOT BE DELETED YET. It is currently the
- * only working production generation path: `/api/orchestration/execute`
- * dispatches here whenever `resolveExecutionMode()` returns "trigger",
- * which is the case in the current environment. Meanwhile Temporal
- * generation ownership is not enabled (TEMPORAL_GENERATION_ENABLED is
- * unset) and `startGenerationWorkflow()` has no production caller — so
- * removing this task today would break generation outright with nothing to
- * take over.
+ * WHAT CHANGED IN 6R-B
+ *   - the route's "trigger" dispatch is gone; this task has NO production
+ *     caller and cannot acquire one through configuration
+ *   - resolveExecutionMode() no longer exists; the resolver returns
+ *     "temporal" | "direct-dev" | "unavailable", and production only ever
+ *     sees the first or the last
+ *   - Temporal unavailable now FAILS CLOSED rather than falling back here
  *
- * REMOVAL DEPENDENCIES, in order:
- *   1. A server-side generation entry point that starts the Temporal
- *      workflow (the /api/generate migration — explicitly out of scope for
- *      6R.11, and itself blocked on real per-model pricing; see the Phase
- *      E3/E3B reports).
- *   2. TEMPORAL_GENERATION_ENABLED switched on with a running Temporal
- *      worker, so the workflow actually owns generations.
- *   3. Only then: retire this task and asyncContinuationTask, and drop the
- *      "trigger" branch from resolveExecutionMode().
+ * THE RUNTIME GUARD BELOW IS THE POINT. The file is kept for dev/test
+ * reference rather than deleted, so the guard makes "no production caller"
+ * into "cannot run in production even if dispatched" — by a stale queued run
+ * from before the cutover, a manual trigger from the dashboard, or a future
+ * caller added by mistake. A retired owner that can still be invoked is not
+ * retired; it is dormant, and a dormant second owner is how one generation
+ * ends up with two provider jobs.
  *
- * DO NOT add new callers of this task, and do not extend it. New generation
- * work belongs to the Temporal path.
+ * DO NOT add callers, do not extend it, and do not weaken the guard. New
+ * generation work belongs to the Temporal path.
  * ===========================================================================
  *
  * Cinefield's one generic background generation task.
@@ -56,10 +56,34 @@ export interface GenerationTaskPayload {
   clerkUserId: string;
 }
 
+/**
+ * Refuses to run this retired owner in a production process.
+ *
+ * Checked at RUN time rather than import time on purpose: the task must stay
+ * registered (so a stale run is consumed and fails loudly instead of sitting
+ * queued forever), while being incapable of touching a production generation.
+ * AbortTaskRunError means no retry — a retry would not change the answer.
+ */
+function assertNotProductionOwner(generationId: string): void {
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "[cinefield:orchestration]",
+      JSON.stringify({ generationId, result: "legacy_trigger_owner_refused" })
+    );
+    throw new AbortTaskRunError(
+      "LEGACY_TRIGGER_GENERATION_OWNER_DISABLED: Temporal owns generation lifecycle (Phase 6R-B)"
+    );
+  }
+}
+
 export const generationTask = task({
   id: "cinefield-generation",
   maxDuration: 300,
   run: async (payload: GenerationTaskPayload, { ctx }) => {
+    // Before anything else, and above all before executeGeneration could
+    // reach a provider.
+    assertNotProductionOwner(payload.generationId);
+
     try {
       const result = await executeGeneration({
         generationId: payload.generationId,
