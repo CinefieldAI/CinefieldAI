@@ -58,7 +58,7 @@ today. Nothing is inferred from memory or from what a provider probably does.
 
 | Capability | Status | Evidence |
 | --- | --- | --- |
-| Submit | `implemented_not_live_validated` | `client.subscribe()`, with `onEnqueue` capturing the real request id |
+| Submit | `implemented_not_live_validated` | `queue.submit(endpointId, { input })` → `request_id`, enqueue only |
 | Status | `implemented_not_live_validated` | `queue.status(endpointId, { requestId })` — real lookup, works cross-process |
 | Result | `implemented_not_live_validated` | `queue.result(endpointId, { requestId })` — real fetch, works cross-process |
 | Polling | `implemented_not_live_validated` | Temporal-driven; the SDK supports status lookup |
@@ -84,21 +84,40 @@ The internal plumbing is ready: `webhook-continuation.ts` accepts only a
 branded `VerifiedWebhookEvent`, which a plain object literal cannot satisfy, so
 an unverified payload cannot reach the continuation even by accident.
 
-## fal execution model — durable by identifier
+## fal execution model — asynchronous, durable by identifier
 
 ```
 Router-selected route      (server-side, persisted on the generation)
    -> Temporal              owns lifecycle, retry timing, cancellation
    -> SQS                   transports the command
-   -> Provider Worker       executes the activity
-   -> fal submit            client.subscribe(), onEnqueue captures the request id
-   -> provider request id   persisted on generation_attempts.provider_job_id
-   -> endpoint id           persisted in the submission's resume metadata
-   -> Temporal              controls what happens next
+   -> Provider Worker       runs the submit activity
+   -> queue.submit          ENQUEUE ONLY — returns fal's request_id
+   -> request id persisted  generations.metadata.orchestration.providerJob
+                            -> generation_attempts.provider_job_id
+   -> activity RETURNS      nothing is waiting on a provider any more
+   -> Temporal timers       decide when to look again
    -> queue.status          by (endpointId, requestId)
    -> queue.result          by (endpointId, requestId)
    -> normalized output
 ```
+
+### A provider request ID for an accepted, billable job must never exist only in worker process memory
+
+That is the rule this phase closed, and it took two passes.
+
+The first pass fixed **result** recovery. The second found the window before
+it: `submit()` used `client.subscribe()`, which held the connection open until
+fal finished, and the request id lived in a local variable for that entire
+time — often a minute or more. A worker that died there left a job fal was
+running, and billing, that Cinefield could no longer name. No
+`provider_job_id` on the attempt, nothing for reconciliation to ask about, no
+way to collect the output.
+
+`queue.submit` returns the moment fal accepts, carrying `request_id`. The
+orchestrator's async branch persists it before anything waits. Acceptance and
+identification are now one short POST, which also makes the **ambiguity window
+narrower than it was**: the uncertain interval is a single request rather than
+a whole generation.
 
 ### Provider result recovery MUST NOT depend on worker process memory
 
@@ -124,32 +143,25 @@ else — hiding exactly the defect it appears to fix.
 Any process holding the attempt row can recover the output: the worker that
 submitted, a different worker, or the same worker after a restart.
 
-**The cost, stated:** in the synchronous path `subscribe()` already has the
-images in hand and `getResult()` fetches them again from the queue. That is
-one extra HTTP round-trip per generation against an already-completed request.
-It buys recoverability of a billed job, and the only way to avoid it is the
-in-memory copy that caused the defect.
+There is no longer a redundant fetch to apologise for: `submit()` never holds
+the images, so `getResult()` is the only place they are read.
 
-### `subscribe()` is retained — deliberately
+### `subscribe()` is gone
 
-`submit()` still uses `client.subscribe()`, which keeps the activity open until
-fal finishes. The alternative — `queue.submit()` returning immediately, with
-Temporal timers driving the polling — is the architecturally cleaner shape and
-the SDK supports it.
+The previous batch retained it and said so; this one removed it. What changed
+is not the SDK but the question being asked: once "can the request id be lost
+to a process failure?" was answered honestly, keeping a minute-long wait inside
+an activity was no longer a style preference.
 
-It was **not** adopted in this repair batch, for reasons that are about risk
-rather than preference. Switching fal to asynchronous changes its registry
-`executionMode`, moves it onto the workflow's dispatch-and-observe path, and
-alters which submission outcomes are reachable — including the ambiguity
-classification, which is the one part of this system where being wrong costs a
-duplicate charge. That is a behavioural change deserving its own batch and live
-validation, not a side effect of fixing result durability.
+fal models are now `executionMode: "async"` in the registry — a declarative
+field nothing branches on, so the behavioural switch is `submission.status`
+returning `"queued"` instead of `"completed"`. The async machinery it hands off
+to is the one Phase 6B/6C built and tested: `markProcessingAsync` persists the
+job, the activity returns, and `checkAsyncGeneration` collects later.
 
-Lifecycle ownership is not violated in the meantime: Temporal still owns retry,
-cancellation, finalization and the polling schedule; the activity's wait is
-bounded by Cinefield's own 90-second timeout inside Temporal's 5-minute
-start-to-close. What `subscribe()` costs is a long-held activity, not
-authority.
+Temporal owns the waiting outright now. The adapter holds no timer except a
+90-second abort ceiling on the enqueue POST, and contains no polling loop —
+asserted by a test.
 
 ## Submission evidence
 
@@ -215,28 +227,55 @@ reconciliation block and let Cinefield submit a job fal is already running. The
 synthetic `fal-<generationId>` fallback id is rejected before any call for the
 same reason — fal has never seen it, so a "not found" would prove nothing.
 
-## Other adapters still hold results in memory
+## Gemini and Cloudflare — production-routable, and still in-memory
 
-Gemini and Cloudflare Workers AI keep a process-local result map between
-`submit()` and `getResult()`. That is **not** the same defect and is not fixed
-here, because it is not fixable the same way: both complete inside `submit()`,
-neither returns a job handle, and neither provider offers a
-"fetch result by id" API this repository can verify. There is nothing durable
-to read back.
+An earlier report implied this was a deferred, non-production concern. It is
+not, and the correction matters:
 
-The consequence is bounded and worth stating: a crash mid-`executeGeneration`
-loses their output, and the generation goes to reconciliation rather than
-silently completing. Closing that properly means either a durable
-intermediate store or a provider-side retrieval API, and neither should be
-invented here.
+| Provider | Routable? | Evidence |
+| --- | --- | --- |
+| gemini | **PRODUCTION_ROUTABLE** | seeded routes, enabled, priority 100; the nano-banana models are the executable cards on /generate |
+| cloudflare-workers-ai | **PRODUCTION_ROUTABLE** | seeded routes, enabled, priority 100 |
+
+Both still hold their output in a process-local map between `submit()` and
+`getResult()`.
+
+**Why this is not the same defect fal had, and why the difference is real.**
+Both complete *inside* `submit()` and the orchestrator calls `getResult()` in
+the same call stack, so the exposed window is a couple of database writes — not
+a provider's runtime. fal's was a minute-long wait on a job running elsewhere.
+The magnitudes differ by orders of magnitude.
+
+**Why it cannot be fixed the same way.** Neither provider returns a job handle
+and neither offers a verifiable fetch-result-by-id API. There is nothing
+durable to read back, so the fal solution has no analogue here. Closing it
+properly needs a durable output handoff, and Phase 9 owns the media plane —
+inventing a blob store in a provider batch would be the wrong fix in the wrong
+phase.
+
+**What was done instead.** The state is pinned by regression guards in
+`phase-8-provider-reachability.e2e.test.ts`: the adapters may not be declared
+asynchronous while they depend on process memory (an async declaration would
+turn a millisecond window into guaranteed loss), and any asynchronous adapter
+must declare real status and result capabilities.
+
+**What is NOT done, and needs a decision.** The residual window is not closed.
+The options are a durable output handoff (Phase 9 scope) or removing these
+providers from production route eligibility — which would take /generate's only
+working image models offline. That trade is a product call, not one to make
+silently inside a provider batch.
 
 ## Status
 
 ```
-FAL.AI FOUNDATION CODE:  restart-safe result/status recovery implemented
-FAL.AI LIVE VALIDATION:  PENDING — no paid call has been made from this repo
-FAL.AI WEBHOOK SECURITY: PROVIDER_MECHANISM_NOT_VERIFIED — gate open
-ADDITIONAL PROVIDERS:    NOT_CONFIGURED
+FAL RESULT DURABILITY:      PASS — recovered from (endpointId, requestId)
+FAL SUBMISSION DURABILITY:  PASS — request id persisted before any wait
+FAL ASYNC EXECUTION:        PASS — enqueue-and-return, Temporal observes
+FAL LIVE VALIDATION:        PENDING — no paid call has been made from this repo
+FAL WEBHOOK SECURITY:       PROVIDER_MECHANISM_NOT_VERIFIED — gate open
+GEMINI DURABILITY:          PARTIAL — routable, in-memory, no provider fix available
+CLOUDFLARE DURABILITY:      PARTIAL — same
+ADDITIONAL PROVIDERS:       NOT_CONFIGURED
 ```
 
 This is not a claim of public-production readiness.

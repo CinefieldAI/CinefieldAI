@@ -251,6 +251,12 @@ const MOCK_MODELS: ModelRegistryEntry[] = [
  */
 const FAL_IMAGE_SIZE_ASPECT_RATIOS = ["1:1", "4:3", "3:4", "16:9", "9:16"];
 
+/**
+ * fal.ai endpoints. ASYNCHRONOUS since the Phase 8 durability closure: the
+ * adapter enqueues and returns a request id, and Temporal observes the job
+ * from there. They were declared "sync" while the adapter used subscribe() to
+ * wait for completion inside the submit call.
+ */
 const FAL_MODELS: ModelRegistryEntry[] = [
   {
     id: "fal-flux-schnell",
@@ -259,7 +265,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/flux/schnell",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -285,7 +291,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/flux/dev",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -310,7 +316,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/bytedance/seedream/v4/text-to-image",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -338,7 +344,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/recraft/v3/text-to-image",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -366,7 +372,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/z-image/turbo",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -392,7 +398,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/nano-banana",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {
@@ -419,7 +425,7 @@ const FAL_MODELS: ModelRegistryEntry[] = [
     providerModelId: "fal-ai/nano-banana-2",
     generationType: "image",
     supportedWorkflows: ["text-to-image"],
-    executionMode: "sync",
+    executionMode: "async",
     acceptedInputMimeTypes: [],
     maxInputs: 0,
     capabilities: {

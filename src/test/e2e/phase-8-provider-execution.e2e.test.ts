@@ -331,16 +331,23 @@ test("a provider timeout is never downgraded into a clean failure", () => {
   assert.equal(provesNoProviderJob(new OrchestrationError("CAPABILITY_NOT_SUPPORTED")), true);
 });
 
-test("fal submit captures the real request id before waiting for the result", () => {
-  // Without onEnqueue, every failure after acceptance would lose the id and
-  // force permanent ambiguity. With it, the error carries JOB evidence that
-  // reconciliation can act on.
+test("fal submit obtains the request id WITHOUT waiting for the result", () => {
+  // This test used to assert the `onEnqueue` hook, which captured the id
+  // partway through a subscribe() call that then waited for completion. That
+  // whole mechanism is gone: `queue.submit` returns the id as its response, so
+  // the id cannot be lost to a long wait because there is no long wait.
   const source = readSource("src/lib/orchestration/providers/fal-provider.ts");
-  assert.match(source, /onEnqueue:/);
-  assert.match(source, /enqueuedRequestId/);
-  const catchBlock = /\} catch \(error\) \{[\s\S]*?throw mapped;/.exec(source);
-  assert.ok(catchBlock);
-  assert.match(catchBlock[0], /providerJobId: enqueuedRequestId/);
+  const submitBody = /async submit\([\s\S]*?\n  \}/.exec(source);
+  assert.ok(submitBody);
+
+  assert.match(submitBody[0], /client\.queue\.submit\(/);
+  assert.match(submitBody[0], /request_id/);
+  assert.match(submitBody[0], /status: "queued"/);
+  assert.ok(!/client\.subscribe\(/.test(submitBody[0]), "submit must not wait for completion");
+  assert.ok(!/onEnqueue/.test(submitBody[0]), "no mid-call capture hook is needed any more");
+
+  // And an unnamed acceptance is ambiguity, not success.
+  assert.match(submitBody[0], /PROVIDER_SUBMISSION_UNKNOWN/);
 });
 
 test("provider failures classify into the Phase 7-C health vocabulary", () => {
@@ -509,7 +516,7 @@ test("submission metadata carries identifiers only, never payloads or URLs", () 
 // ---------------------------------------------------------------------------
 
 test("the declared matrices match what this batch actually built", () => {
-  assert.equal(FAL_CAPABILITIES.executionShape, "synchronous");
+  assert.equal(FAL_CAPABILITIES.executionShape, "asynchronous");
   assert.equal(MOCK_CAPABILITIES.cancel, "proven");
   assert.equal(GEMINI_CAPABILITIES.cancel, "unsupported_by_adapter");
   assert.equal(CLOUDFLARE_CAPABILITIES.cancel, "unsupported_by_adapter");

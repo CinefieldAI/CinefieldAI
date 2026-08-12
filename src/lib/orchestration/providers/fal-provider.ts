@@ -234,8 +234,8 @@ export const FAL_CAPABILITIES: ProviderCapabilityMatrix = {
   // options. Cinefield's own idempotency is unaffected — it never depended on
   // the provider having this.
   nativeIdempotency: "unknown_provider_capability",
-  // submit() uses client.subscribe(), which waits for completion.
-  executionShape: "synchronous",
+  // submit() enqueues and returns; Temporal owns the observation.
+  executionShape: "asynchronous",
 };
 
 class FalProvider implements ProviderAdapter {
@@ -253,12 +253,11 @@ class FalProvider implements ProviderAdapter {
 
     const client = getFalClient();
 
-    // Cinefield-owned timeout, independent of any provider-side limit.
+    // Cinefield-owned timeout on the ENQUEUE call only. It no longer bounds
+    // a generation — it bounds one short POST — so a slow model may take as
+    // long as fal needs without any Cinefield timer being involved.
     const timeoutController = new AbortController();
     const timeoutHandle = setTimeout(() => timeoutController.abort(), FAL_REQUEST_TIMEOUT_MS);
-
-    // Captured by onEnqueue below; read by the catch, so declared outside it.
-    let enqueuedRequestId: string | null = null;
 
     try {
       const requestedCount = request.settings.outputCount ?? model.defaults.outputCount;
@@ -296,74 +295,60 @@ class FalProvider implements ProviderAdapter {
 
       if (typeof request.settings.seed === "number") input.seed = request.settings.seed;
 
-      // `subscribe` waits for the queued job to finish, which keeps this a
-      // synchronous adapter from the orchestrator's point of view.
+      // ENQUEUE ONLY. `queue.submit` returns the moment fal accepts the
+      // request, carrying fal's own `request_id`.
       //
-      // `onEnqueue` is the officially documented client hook that fires the
-      // moment fal accepts the job, BEFORE the wait for completion. Capturing
-      // the request id here closes the Phase 6R.1 audit window: any failure
-      // after this point (network drop mid-poll, timeout, unparseable
-      // result) previously lost the id and forced fail-closed ambiguity —
-      // now the error carries it, so the orchestrator records precise JOB
-      // evidence that reconciliation can query fal about directly.
-      const result = await client.subscribe(model.providerModelId as never, {
+      // THIS REPLACED `subscribe()`, AND THE REASON IS DURABILITY.
+      // subscribe() held the connection open until the job finished, and for
+      // that entire window — often a minute or more — the request id existed
+      // only in a local variable. A worker that died there left a job fal was
+      // running, and billing, that Cinefield could no longer name: the attempt
+      // row carried no provider_job_id, so reconciliation had nothing to ask
+      // about and the output was unrecoverable.
+      //
+      // Now acceptance and identification happen in one short POST. The
+      // orchestrator persists the id before anything waits, and the waiting
+      // belongs to Temporal.
+      const accepted = await client.queue.submit(model.providerModelId as never, {
         input: input as never,
         abortSignal: timeoutController.signal,
-        onEnqueue: (requestId: string) => {
-          enqueuedRequestId = requestId;
-        },
       } as never);
 
-      const images = extractImages((result as { data?: unknown }).data);
-      if (images.length === 0) {
-        throw new OrchestrationError("OUTPUT_MISSING", {
-          context: {
-            provider: "fal",
-            generationId: context.generationId,
-            // The job COMPLETED at fal (and was billed) — only its payload
-            // was unusable. The id makes that provable later.
-            ...(enqueuedRequestId ? { providerJobId: enqueuedRequestId } : {}),
-          },
+      const requestId = (accepted as { request_id?: unknown }).request_id;
+      if (typeof requestId !== "string" || requestId.length === 0) {
+        // fal answered but named nothing. A job may exist and could never be
+        // addressed — ambiguous by definition. Reported as such rather than
+        // as a failure, so no retry is authorized.
+        throw new OrchestrationError("PROVIDER_SUBMISSION_UNKNOWN", {
+          context: { provider: "fal", generationId: context.generationId },
         });
       }
 
-      // NOTHING IS STASHED HERE. The images were just proven to exist, and
-      // getResult() fetches them from fal by (endpointId, requestId) — which
-      // is what makes the output recoverable from another process after this
-      // one is gone.
       return {
-        // The real fal request id, not a Cinefield-internal key. This is
-        // what gets persisted as "job" evidence if a later step in the sync
-        // tail (upload, normalization) fails — reconciliation must be able
-        // to query fal by this id directly; a synthetic `fal-<generationId>`
-        // string means nothing to fal's own status endpoint and would let a
-        // reconciler that treats "provider doesn't recognize this id" as
-        // proof-of-no-job clear the block and resubmit a job that already
-        // exists (Phase 6R Package B review). Falls back to the synthetic
-        // key only in the defensive case onEnqueue never fired.
-        providerJobId: enqueuedRequestId ?? `fal-${request.generationId}`,
+        // fal's own request id, durable from this moment: the orchestrator's
+        // async branch writes it into the row's provider job before returning,
+        // and the attempt row mirrors it.
+        providerJobId: requestId,
         provider: this.providerId,
-        status: "completed",
-        // Deliberately free of provider URLs and raw payloads. The
-        // endpoint id is needed to address this request later — fal's queue
-        // API is keyed by (endpointId, requestId), not by requestId alone —
-        // and it is a public model identifier, not a secret.
-        metadata: { imageCount: images.length, endpointId: model.providerModelId },
+        // "queued", never "completed" — the work has not been done yet, and
+        // claiming otherwise would send the generation into the finalization
+        // tail before any output exists.
+        status: "queued",
+        // Deliberately free of provider URLs and raw payloads. The endpoint id
+        // is needed to address this request later — fal's queue API is keyed
+        // by (endpointId, requestId), not by requestId alone — and it is a
+        // public model identifier, not a secret. Persisted as the job's resume
+        // data, which is what makes status, result and cancel work from any
+        // process.
+        metadata: { endpointId: model.providerModelId },
       };
     } catch (error) {
-      const mapped = mapFalError(error);
-      // Attach the enqueued request id (an identifier, never a payload or a
-      // URL) to the typed error's safe context. The orchestrator reads it to
-      // record job evidence instead of ambiguity. mapFalError may have
-      // already carried context from an inner OrchestrationError — preserved,
-      // never overwritten.
-      if (enqueuedRequestId && mapped.context?.providerJobId === undefined) {
-        throw new OrchestrationError(mapped.code, {
-          userMessage: mapped.userMessage,
-          context: { ...mapped.context, provider: "fal", providerJobId: enqueuedRequestId },
-        });
-      }
-      throw mapped;
+      // No id can be captured here: `queue.submit` either returns one or
+      // throws. That is a NARROWER ambiguity window than subscribe() had — the
+      // uncertain interval is one POST rather than a whole generation — and
+      // the fail-closed classification in errors.ts still decides whether the
+      // failure proves no job was created.
+      throw mapFalError(error);
     } finally {
       clearTimeout(timeoutHandle);
     }
@@ -603,12 +588,13 @@ export function endpointIdFor(submission: ProviderSubmission): string | null {
 }
 
 /**
- * True for the fallback id submit() uses when onEnqueue never fired.
+ * True for the synthetic `fal-<generationId>` id the OLD adapter fell back to
+ * when `onEnqueue` never fired.
  *
- * That id is a Cinefield-internal string fal has never seen. Treating it as a
- * request id would send fal a lookup it cannot resolve, and reading the
- * resulting "not found" as evidence is exactly the mistake reconciliation
- * exists to prevent.
+ * Nothing writes one any more — `queue.submit` either returns a real request
+ * id or throws — but rows written before that change still carry them, and
+ * they must never be sent to fal: it has never seen the string, so a
+ * "not found" would prove nothing while looking like proof.
  */
 export function isSyntheticJobId(providerJobId: string, generationId: string): boolean {
   return providerJobId === `fal-${generationId}`;
