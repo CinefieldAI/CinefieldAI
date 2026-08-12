@@ -14,7 +14,6 @@ import {
   isOrchestrationModel,
   isMockOrchestrationModel,
   getOrchestrationGenerationType,
-  getOrchestrationProvider,
 } from "@/lib/orchestration/orchestration-models";
 
 /**
@@ -226,9 +225,13 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
         const orchestrationType = getOrchestrationGenerationType(effectiveModel);
         const generationType =
           orchestrationType ?? mapCinemaModeToGenerationType(request.uiMode);
-        const provider =
-          getOrchestrationProvider(effectiveModel) ??
-          deriveProviderFromModelId(effectiveModel);
+        // PHASE 7-F: the browser no longer holds an opinion about which
+        // provider runs an orchestration model — the server's router decides,
+        // and the client module that used to answer this no longer can. This
+        // value is used ONLY by the legacy placeholder insert below, for model
+        // ids the server registry does not know and that therefore never
+        // reach the production generation path at all.
+        const legacyPlaceholderProvider = deriveProviderFromModelId(effectiveModel);
 
         if (attachedFile) {
           const path = buildInputStoragePath(user.id, activeProject.id, attachedFile.name);
@@ -272,7 +275,7 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
           const placeholder: GenerationInsertPayload = {
             project_id: activeProject.id,
             generation_type: generationType,
-            provider,
+            provider: legacyPlaceholderProvider,
             model: effectiveModel,
             prompt: effectivePrompt,
             negative_prompt: null,

@@ -328,6 +328,12 @@ test("7-F: the projection covers the registry and is derived from it", () => {
 });
 
 test("7-F: the projection leaks no routing or provider detail", () => {
+  // ROUTING and PROVIDER identity, none of which is the client's business.
+  //
+  // `isMock` is deliberately NOT on this list. It names no provider, endpoint,
+  // cost or route — it says only "this model never reaches a real provider",
+  // which the browser already tells the user after a mock run. Publishing it
+  // is what lets the client stop maintaining its own copy of that fact.
   const forbidden = [
     "provider",
     "providerId",
@@ -335,7 +341,6 @@ test("7-F: the projection leaks no routing or provider detail", () => {
     "priority",
     "cost",
     "health",
-    "isMock",
     "apiKey",
     "endpoint",
     "falModelId",

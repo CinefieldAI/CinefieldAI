@@ -1,79 +1,69 @@
+import { PUBLIC_MODEL_CATALOG } from "./public-model-catalog";
+import type { PublicModelDescriptor } from "./capability-projection";
+
 /**
- * Client-safe descriptor of the models wired into the Cinefield
- * orchestration pipeline.
+ * Client-safe view of the models wired into the Cinefield orchestration
+ * pipeline.
  *
- * This module is deliberately free of server-only imports so the browser can
- * decide whether a given modelId should be executed via
- * POST /api/orchestration/execute. The authoritative definitions live in
- * model-registry.ts (server-only); the ids here must stay in sync with it.
+ * PHASE 7-F: THIS FILE NO LONGER KNOWS ANYTHING ON ITS OWN.
+ * It used to be a hand-maintained map — sixteen entries repeating each
+ * model's generation type and provider, under a comment asking whoever
+ * touched it to "keep the ids in sync" with the server registry. That is a
+ * second source of truth by construction, and the two only agreed as long as
+ * nobody forgot. Everything below is now derived from the canonical
+ * capability projection, which is derived from the one registry the server
+ * validates against. Adding a model to the registry adds it here; there is
+ * nothing left to forget.
  *
- * Architectural rule: model buttons are pure selectors. Adding a model means
- * one entry here plus one in the server registry — never a new API route,
- * generate handler, or provider-specific branch.
+ * THE PROVIDER IS GONE, AND ITS ABSENCE IS THE POINT.
+ * This module used to export `getOrchestrationProvider()`, so a browser could
+ * state which provider a model runs on. It cannot any more: the projection
+ * carries no provider identity, and the Phase 7-B router — server-side, from
+ * the route table — is the only thing that decides where a generation runs.
+ * A client sends a Cinefield model id and nothing else that names a
+ * destination.
  *
- * None of these ids collide with the visible model catalog, so no existing
- * model card can be routed to an orchestration provider by accident.
+ * Safe to import from a client component, and deliberately reads the
+ * GENERATED catalog rather than the projection itself: evaluating the
+ * projection in the browser would drag the registry — and every
+ * providerModelId in it — into the bundle. See
+ * scripts/generate-public-catalog.ts.
  */
 
-export type OrchestrationProviderId = "mock" | "fal" | "cloudflare-workers-ai" | "gemini";
+const BY_ID: ReadonlyMap<string, PublicModelDescriptor> = new Map(
+  PUBLIC_MODEL_CATALOG.map((model) => [model.id, model])
+);
 
-interface OrchestrationModelDescriptor {
-  generationType: "image" | "video" | "audio";
-  provider: OrchestrationProviderId;
-  /** True for offline development models that never call an external API. */
-  isMock: boolean;
+/** Every orchestratable model id. Derived, never listed. */
+export const ORCHESTRATION_MODEL_IDS: string[] = PUBLIC_MODEL_CATALOG.map((model) => model.id);
+
+/** The public capability descriptor for a model, or null when it has none. */
+export function getPublicModel(modelId: string): PublicModelDescriptor | null {
+  return BY_ID.get(modelId) ?? null;
 }
-
-const ORCHESTRATION_MODELS: Record<string, OrchestrationModelDescriptor> = {
-  "mock-image": { generationType: "image", provider: "mock", isMock: true },
-  "mock-image-edit": { generationType: "image", provider: "mock", isMock: true },
-  "mock-video": { generationType: "video", provider: "mock", isMock: true },
-  "mock-tts": { generationType: "audio", provider: "mock", isMock: true },
-  "fal-flux-schnell": { generationType: "image", provider: "fal", isMock: false },
-  "fal-flux-dev": { generationType: "image", provider: "fal", isMock: false },
-  "fal-seedream-v4": { generationType: "image", provider: "fal", isMock: false },
-  "fal-recraft-v3": { generationType: "image", provider: "fal", isMock: false },
-  "fal-z-image-turbo": { generationType: "image", provider: "fal", isMock: false },
-  "fal-nano-banana": { generationType: "image", provider: "fal", isMock: false },
-  "fal-nano-banana-2": { generationType: "image", provider: "fal", isMock: false },
-  // Gemini image models. Migrated into the orchestration pipeline during
-  // Phase 5 convergence — they used to run inline in a legacy route that
-  // owned their whole lifecycle outside Temporal.
-  "nano-banana-pro": { generationType: "image", provider: "gemini", isMock: false },
-  "nano-banana-2": { generationType: "image", provider: "gemini", isMock: false },
-  "nano-banana-2-lite": { generationType: "image", provider: "gemini", isMock: false },
-  // Registered here for id/type consistency with the server registry.
-  // Real Cloudflare requests still require CLOUDFLARE_AI_ENABLED="true"
-  // server-side (isCloudflareEnabled()) — this client descriptor alone
-  // never activates anything.
-  "cloudflare-melotts": { generationType: "audio", provider: "cloudflare-workers-ai", isMock: false },
-  "cloudflare-aura-2-en": { generationType: "audio", provider: "cloudflare-workers-ai", isMock: false },
-};
-
-export const ORCHESTRATION_MODEL_IDS = Object.keys(ORCHESTRATION_MODELS);
 
 /** True when this model executes through the orchestration pipeline. */
 export function isOrchestrationModel(modelId: string): boolean {
-  return Object.prototype.hasOwnProperty.call(ORCHESTRATION_MODELS, modelId);
+  return BY_ID.has(modelId);
 }
 
 /**
- * Generation type for an orchestration model, or null if it is not one. Lets
- * the browser insert a row that is self-consistent with the server registry;
- * the registry remains authoritative at execution time.
+ * Generation type for an orchestration model, or null if it is not one.
+ *
+ * Lets the browser present a self-consistent request. The server re-derives
+ * this from the registry regardless of what arrives, so this is convenience,
+ * never authority.
  */
 export function getOrchestrationGenerationType(
   modelId: string
 ): "image" | "video" | "audio" | null {
-  return ORCHESTRATION_MODELS[modelId]?.generationType ?? null;
+  return BY_ID.get(modelId)?.generationType ?? null;
 }
 
-/** Provider id for an orchestration model, or null if it is not one. */
-export function getOrchestrationProvider(modelId: string): OrchestrationProviderId | null {
-  return ORCHESTRATION_MODELS[modelId]?.provider ?? null;
-}
-
-/** True only for offline mock models — used to label results honestly. */
+/**
+ * True only for offline mock models — used to label a result honestly rather
+ * than to decide anything.
+ */
 export function isMockOrchestrationModel(modelId: string): boolean {
-  return ORCHESTRATION_MODELS[modelId]?.isMock === true;
+  return BY_ID.get(modelId)?.isMock === true;
 }

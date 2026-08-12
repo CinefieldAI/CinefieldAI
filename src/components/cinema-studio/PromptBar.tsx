@@ -14,6 +14,7 @@ import {
 import GenerateButton from "./GenerateButton";
 import ModelSelector from "./ModelSelector";
 import AspectRatioDropdown from "./AspectRatioDropdown";
+import { getPublicModel } from "@/lib/orchestration/orchestration-models";
 import GeminiAspectRatioControl from "./GeminiAspectRatioControl";
 import Kling3AspectRatioControl from "./Kling3AspectRatioControl";
 import ReferencesControl from "./ReferencesControl";
@@ -722,6 +723,64 @@ export default function PromptBar(props: PromptBarProps) {
   // explicit follow-up request, but WITHOUT the "+" References popover or
   // Enhance chip (not asked for on this model).
   const isMinimax23PlainOnly = model === "minimax-2.3";
+
+  /* ---------------------------------------------------------------- */
+  /* PHASE 7-F — canonical capability binding                          */
+  /* ---------------------------------------------------------------- */
+  //
+  // Most cards in this bar are catalog art: they have no server-side model
+  // and cannot execute, so their hardcoded option lists decide nothing and
+  // are left exactly as they are. A handful DO execute — the ones with an
+  // entry in the model registry — and for those the lists above were a second
+  // opinion about what the model supports. They disagreed with the server,
+  // and the disagreement was not theoretical:
+  //
+  //   Nano Banana Pro shipped a fixed "2K" chip while the shared resolution
+  //   state stayed "1080p", so the request carried a resolution the registry
+  //   does not accept.
+  //   Its batch stepper defaulted to 4 of 10; the registry allows exactly 1
+  //   image per call.
+  //   The ratio list offered "Auto", which no model declares.
+  //
+  // Each of those produced CAPABILITY_NOT_SUPPORTED at the server — a refusal
+  // that reads to a user as a broken product. So for an executable model the
+  // options come from the canonical catalog, and the current selection is
+  // coerced into that catalog rather than left pointing at something the
+  // server will reject.
+  const canonicalModel = getPublicModel(model);
+  const canonicalRatios = canonicalModel?.capabilities.aspectRatios ?? null;
+  const canonicalResolutions = canonicalModel?.capabilities.resolutions ?? null;
+
+  useEffect(() => {
+    if (!canonicalModel) return;
+    const caps = canonicalModel.capabilities;
+
+    if (caps.aspectRatios.length > 0 && !caps.aspectRatios.includes(aspectRatio)) {
+      onAspectRatioChange(canonicalModel.defaults.aspectRatio ?? caps.aspectRatios[0]);
+    }
+    if (caps.resolutions.length > 0 && !caps.resolutions.includes(resolution)) {
+      onResolutionChange(canonicalModel.defaults.resolution ?? caps.resolutions[0]);
+    }
+
+    // Batch travels as an "n/max" string; both halves have to respect the
+    // model, or the stepper lets a user climb past what the server allows.
+    const [countRaw, maxRaw] = batch.split("/");
+    const count = Number(countRaw) || 1;
+    const max = Number(maxRaw) || 4;
+    const allowed = caps.maxOutputCount;
+    if (max !== allowed || count > allowed || count < caps.minOutputCount) {
+      const next = Math.min(Math.max(count, caps.minOutputCount, 1), allowed);
+      onBatchChange(`${next}/${allowed}`);
+    }
+  }, [
+    canonicalModel,
+    aspectRatio,
+    resolution,
+    batch,
+    onAspectRatioChange,
+    onResolutionChange,
+    onBatchChange,
+  ]);
 
   // Set Gemini Omni Flash defaults
   useEffect(() => {
@@ -1606,11 +1665,14 @@ export default function PromptBar(props: PromptBarProps) {
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
                   options={
-                    isHappyHorse
+                    // Canonical first: an executable model's ratios come from
+                    // the registry, never from this file.
+                    canonicalRatios ??
+                    (isHappyHorse
                       ? ["16:9", "9:16", "1:1", "4:3", "3:4"]
                       : isWan
                         ? ["16:9", "9:16", "4:3", "3:4", "1:1"]
-                        : undefined
+                        : undefined)
                   }
                 />
               )
@@ -1641,7 +1703,8 @@ export default function PromptBar(props: PromptBarProps) {
                 width={isCinema35 ? 120 : undefined}
                 collisionPadding={isCinema35 ? 12 : undefined}
                 options={
-                  isCinema25
+                  canonicalResolutions ??
+                  (isCinema25
                     ? ["720p", "1080p"]
                     : isKling3 || isKling3Turbo || isKling3Omni
                     ? ["720p", "1080p", "4K"]
@@ -1661,7 +1724,7 @@ export default function PromptBar(props: PromptBarProps) {
                             ? ["480p", "720p", "1080p", "4K"]
                             : isWan
                               ? ["720p", "1080p"]
-                              : undefined
+                              : undefined)
                 }
               />
             )}
@@ -1671,7 +1734,10 @@ export default function PromptBar(props: PromptBarProps) {
                 option) rather than introducing a second resolution component. */}
             {isNanoBananaPro && (
               <ResolutionPopover
-                value="2K"
+                // Was a hardcoded fixed "2K" that the shared resolution state
+                // never actually held. Now the model's own list, so the chip
+                // shows what will be sent and the server accepts it.
+                value={resolution}
                 onChange={onResolutionChange}
                 isOpen={activePromptPopover === "resolution"}
                 portalContainer={portalRoot}
@@ -1679,7 +1745,7 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("resolution");
                   else if (activePromptPopover === "resolution") setActivePromptPopover(null);
                 }}
-                options={["2K"]}
+                options={canonicalResolutions ?? ["2K"]}
               />
             )}
 

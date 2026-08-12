@@ -1,3 +1,5 @@
+import { getPublicModel } from "@/lib/orchestration/orchestration-models";
+
 export interface AspectRatioChoice {
   value: string;
   width: number;
@@ -948,8 +950,120 @@ export const MODEL_CAPABILITIES: Record<string, ImageModelCapabilities> = {
 
 export const KLING_O1_RESOLUTION_OPTIONS = ["1K", "2K"] as const;
 
-export function getCapabilities(modelName: string): ImageModelCapabilities | null {
-  return MODEL_CAPABILITIES[modelName] ?? null;
+/* ------------------------------------------------------------------ */
+/* PHASE 7-F — canonical capability binding                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ratio shapes are PRESENTATION. Which ratios a model supports is not.
+ *
+ * The pixel dimensions below only tell the little preview rectangle how to
+ * look, so they stay hand-written. The LIST of ratios offered for an
+ * executable model comes from the canonical registry, and any ratio the
+ * registry names that has no shape here still renders — squared, rather than
+ * silently dropped, because dropping it would quietly re-create the drift
+ * this binding exists to remove.
+ */
+const RATIO_SHAPES: Record<string, { width: number; height: number }> = {};
+for (const choice of [
+  ...STANDARD_ASPECT_RATIOS,
+  ...MULTI_REFERENCE_ASPECT_RATIOS,
+  ...RECRAFT_ASPECT_RATIOS,
+]) {
+  if (!RATIO_SHAPES[choice.value]) {
+    RATIO_SHAPES[choice.value] = { width: choice.width, height: choice.height };
+  }
+}
+
+function ratioChoice(value: string): AspectRatioChoice {
+  const shape = RATIO_SHAPES[value] ?? { width: 16, height: 16 };
+  return { value, width: shape.width, height: shape.height };
+}
+
+/** Resolution descriptions are presentation; the list is not. */
+const RESOLUTION_DESCRIPTIONS: Record<string, string> = {};
+for (const option of GPT_RESOLUTION_OPTIONS) {
+  RESOLUTION_DESCRIPTIONS[option.value] = option.description;
+}
+
+/**
+ * Overlays the canonical capability contract onto a presentation entry.
+ *
+ * WHAT THIS CLOSES. The table above is a UI catalog: roughly thirty cards,
+ * most of them models that cannot execute at all. For the handful that CAN —
+ * the ids in the server's model registry — its ratio and resolution lists
+ * were a second opinion about what the model supports, and they disagreed
+ * with the server. Nano Banana 2 Lite is the clean example: the registry
+ * accepts 1K only, the card offered 1K/2K/4K, and picking 4K produced a
+ * CAPABILITY_NOT_SUPPORTED refusal that reads to a user as a broken product.
+ * The "Auto" ratio no model actually declares was the same bug with a
+ * friendlier name.
+ *
+ * So for an executable model the executable fields — which ratios, which
+ * resolutions, how many outputs — are replaced by the canonical values.
+ * Everything else (trigger size, which controls exist, upload affordances,
+ * copy) is presentation and is left exactly as it was: this is a capability
+ * binding, not a redesign.
+ *
+ * Non-executable catalog cards are returned untouched. They never reach the
+ * server, so there is no contract for them to drift from.
+ */
+function bindCanonicalCapabilities(
+  entry: ImageModelCapabilities,
+  modelId: string
+): ImageModelCapabilities {
+  const canonical = getPublicModel(modelId);
+  if (!canonical) return entry;
+
+  const { aspectRatios, resolutions, minOutputCount, maxOutputCount } = canonical.capabilities;
+  const bound: ImageModelCapabilities = { ...entry };
+
+  if (entry.aspectRatio !== false && aspectRatios.length > 0) {
+    bound.aspectRatioOptions = aspectRatios.map(ratioChoice);
+    // Keep the card's default when the model really supports it; otherwise
+    // fall back to the model's own default rather than leaving a selected
+    // value the server would reject.
+    bound.defaultAspectRatio =
+      entry.defaultAspectRatio && aspectRatios.includes(entry.defaultAspectRatio)
+        ? entry.defaultAspectRatio
+        : (canonical.defaults.aspectRatio ?? aspectRatios[0]);
+  }
+
+  if (entry.resolution !== false && resolutions.length > 0) {
+    bound.resolutionOptions = resolutions.map((value) => ({
+      value,
+      description: RESOLUTION_DESCRIPTIONS[value] ?? value,
+    }));
+    bound.defaultResolution =
+      entry.defaultResolution && resolutions.includes(entry.defaultResolution)
+        ? entry.defaultResolution
+        : (canonical.defaults.resolution ?? resolutions[0]);
+  }
+
+  if (entry.batchSize) {
+    bound.maxBatchSize = maxOutputCount;
+    const preferred = entry.defaultBatchSize ?? canonical.defaults.outputCount;
+    bound.defaultBatchSize = Math.min(Math.max(preferred, minOutputCount), maxOutputCount);
+  }
+
+  return bound;
+}
+
+/**
+ * Capability descriptor for a model card.
+ *
+ * `modelId` is the Cinefield model id when the caller knows it. Supplying it
+ * is what binds the card to the canonical registry; omitting it returns the
+ * presentation entry unchanged, which is correct for the catalog cards that
+ * have no server-side model at all.
+ */
+export function getCapabilities(
+  modelName: string,
+  modelId?: string
+): ImageModelCapabilities | null {
+  const entry = MODEL_CAPABILITIES[modelName] ?? null;
+  if (!entry || !modelId) return entry;
+  return bindCanonicalCapabilities(entry, modelId);
 }
 
 export { DEFAULT_CAPABILITIES };

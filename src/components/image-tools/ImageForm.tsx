@@ -460,7 +460,9 @@ export default function ImageForm({
   // GPT Image 2 / Higgsfield Soul Cinema / WAN 2.2 / Multi Reference / Flux
   // Kontext Max / FLUX.2 Max / FLUX.2 Pro / FLUX.2 Flex behave identically on
   // this page. Kept separate from the legacy state above.
-  const capabilities = getCapabilities(config?.label ?? "");
+  // PHASE 7-F: bound to the canonical capability registry by model id, so an
+  // executable model offers exactly what the server accepts.
+  const capabilities = getCapabilities(config?.label ?? "", modelParam);
   const [gptQuality, setGptQuality] = useState("High");
   const [modelQuality, setModelQuality] = useState(capabilities?.defaultQuality ?? "Pro");
   const [modelResolution, setModelResolution] = useState(capabilities?.defaultResolution ?? "2K");

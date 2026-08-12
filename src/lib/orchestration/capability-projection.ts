@@ -56,6 +56,17 @@ export interface PublicModelDescriptor {
   supportedWorkflows: WorkflowType[];
   acceptedInputMimeTypes: string[];
   maxInputs: number;
+  /**
+   * True for offline development models that never reach a real provider.
+   *
+   * This is NOT provider identity — it names no provider, endpoint, cost or
+   * route. It is published because the browser already tells the user "no
+   * real AI provider was used" after a mock run, and that sentence has to be
+   * driven by the same source as the run itself. Keeping it out would mean
+   * the client re-deriving it from a hand-maintained list, which is the exact
+   * duplication this projection exists to end.
+   */
+  isMock: boolean;
   capabilities: PublicModelCapabilities;
   defaults: {
     aspectRatio?: string;
@@ -79,6 +90,7 @@ export function projectModel(entry: ModelRegistryEntry): PublicModelDescriptor {
     supportedWorkflows: [...entry.supportedWorkflows],
     acceptedInputMimeTypes: [...entry.acceptedInputMimeTypes],
     maxInputs: entry.maxInputs,
+    isMock: entry.isMock,
     capabilities: {
       aspectRatios: [...c.supportedAspectRatios],
       resolutions: [...c.supportedResolutions],

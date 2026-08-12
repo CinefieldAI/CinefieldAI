@@ -64,7 +64,11 @@ export default function CinemaStudioImagePanel({
   // cinemaStudioData.ts uses the all-caps "FLUX.2 MAX" label; the shared
   // capability map (built for /generate/image) keys it as "FLUX.2 Max".
   const capabilityName = selectedModel.name === "FLUX.2 MAX" ? "FLUX.2 Max" : selectedModel.name;
-  const capabilities = getCapabilities(capabilityName);
+  // PHASE 7-F: the model id binds this card to the canonical capability
+  // registry, so the ratio/resolution/batch options offered here are the ones
+  // the server will actually accept. Cards with no server-side model resolve
+  // to null inside getCapabilities and keep their presentation lists.
+  const capabilities = getCapabilities(capabilityName, model);
 
   const [gptQuality, setGptQuality] = useState("High");
   const [modelQuality, setModelQuality] = useState(capabilities?.defaultQuality ?? "Pro");

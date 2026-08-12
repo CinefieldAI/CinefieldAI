@@ -10,8 +10,24 @@ largely to stop them being answered by the same code.
 
 | Question | Owner | Source of truth |
 | --- | --- | --- |
-| What can this model do? | Capability Registry | `src/lib/orchestration/model-registry.ts` |
+| What can this model do? | Capability Registry | `src/lib/orchestration/model-registry.ts` — the LIVE authoritative contract |
 | Where will this generation run? | Production Model Router | `src/lib/routing/` + the `model_routes` table |
+| What could this model do when that attempt ran? | DB capability snapshot | `model_versions.capabilities` — audit/correlation only, **never** authority |
+
+### The client contract
+
+A client sends a **Cinefield model id** and generation parameters. It does not
+send, and has no field for, a provider, a provider endpoint, a route, a health
+policy or a failover policy. This is enforced by the types (`RouteRequest` and
+`GenerationCreateRequest` have no provider field) and, since the 7-F closure,
+by the browser bundle itself, which contains no provider identity at all.
+
+### Two different things both called "pricing"
+
+`model_pricing` is **provider routing cost metadata** — what a provider charges
+Cinefield per unit. Phase 10 pricing is **customer credit truth** — what a user
+is charged. They are separate systems and must not be merged; this phase
+deliberately did not recreate or extend `model_pricing`.
 
 Mixing them is how "this model supports 4K" quietly becomes "this model
 supports 4K on whichever provider happened to be healthy" — which is not a
@@ -58,10 +74,91 @@ model ids, every route enabled at priority 100.
 `src/lib/orchestration/capability-projection.ts` projects each registry entry
 into a public-safe descriptor, served by `GET /api/models` (authenticated).
 
+```
+model-registry.ts   (live authoritative contract, server-only)
+      |
+      +--> capability-validator.ts        server-side validation (AUTHORITY)
+      |
+      +--> capability-projection.ts       public-safe descriptor
+                |
+                +--> GET /api/models                       (runtime, server)
+                +--> public-model-catalog.ts  (generated)   (build, browser)
+                          |
+                          +--> orchestration-models.ts
+                          +--> imageModelCapabilities.getCapabilities()
+                                    |
+                                    +--> /generate image cards
+```
+
+**Why a generated file and not a direct import.** The projection is derived
+from the registry, which also holds `providerId` and `providerModelId`.
+Importing the projection from a client component evaluates the registry in the
+browser and ships `fal-ai/flux/schnell` and friends in the bundle. So the
+projection runs at build time (`npm run catalog:generate`) and only its output
+is committed. `public-model-catalog.ts` is a **build artifact, not a second
+source of truth**: a test regenerates it in memory and fails if the committed
+file differs, so a registry change that was not regenerated breaks the suite
+instead of drifting quietly. Verified after `npm run build` — zero occurrences
+of `fal-ai/flux` under `.next/static`, twelve under `.next/server`.
+
 The projection builds its output **field by field** rather than spreading the
 registry entry, so a field added to the registry is never exposed by accident.
 Not projected: `providerId`, `providerModelId`, route priority, cost, health,
-adapter hints, `isMock`.
+adapter hints.
+
+`isMock` **is** projected, and deliberately so. It names no provider, endpoint,
+cost or route — only "this model never reaches a real provider", which the
+browser already tells the user after a mock run. Keeping it out would have
+forced the client to re-derive it from a hand-maintained list, which is exactly
+the duplication this projection exists to end.
+
+### The UI is bound to the same contract (7-F closure)
+
+Two surfaces render model controls, and both are bound.
+
+**`PromptBar.tsx`** is what /generate actually renders in image mode. It looks
+up `getPublicModel(model)`; when that returns a descriptor the aspect-ratio and
+resolution lists come from it, and an effect **coerces the current selection**
+into the contract. Offering the right options is not enough on its own — the
+old bar showed Nano Banana Pro a fixed "2K" chip while the shared resolution
+state still held `1080p`, so the chip was describing a value the request did
+not carry.
+
+**`getCapabilities(modelName, modelId)`** in
+`src/components/landing/createImage/imageModelCapabilities.ts` is the
+chokepoint for the card-driven panels (`CinemaStudioImagePanel`, `ImageForm`).
+Same rule: executable fields replaced by canonical values, presentation
+untouched.
+
+What this fixed, concretely — each of these produced a real
+`CAPABILITY_NOT_SUPPORTED` refusal from the server:
+
+- Nano Banana Pro sent `resolution: "1080p"`, which the model does not accept,
+  because the "2K" chip never wrote to the state the request read.
+- Its batch stepper defaulted to **4 of 10**; the registry allows **1**.
+- Nano Banana 2 Lite offered 1K/2K/4K; the registry accepts **1K only**.
+- Every bound control offered an **"Auto"** aspect ratio no model declares.
+
+Observed live at `/generate` after the change: Nano Banana Pro's row reads
+`16:9 | 2K | 1/1`, its ratio panel no longer lists Auto, and its resolution
+panel lists 1K/2K/4K. Video mode is byte-for-byte unchanged
+(`Cinema Studio 3.5 | 16:9 | 1080p | 8s`).
+
+One nuance worth recording: `AspectRatioDropdown` renders only ratios it has
+preview shapes for, so the registry's `2:3`, `3:2`, `4:5` and `5:4` are not
+shown. That is a **subset** of what the model supports — every option offered
+is accepted — not a superset, which is the direction that breaks.
+
+Cards with no server-side model — most of the /generate catalog, including
+every video model — are untouched. They cannot execute, so there is no contract
+for them to drift from; binding them to a registry entry they do not have would
+be the bug, not the fix.
+
+`src/lib/orchestration/orchestration-models.ts` was a hand-maintained map of
+sixteen models repeating each one's generation type **and provider**, under a
+comment asking whoever edited it to keep the ids in sync. It is now derived
+from the generated catalog, and `getOrchestrationProvider()` is deleted — the
+browser has no way to name a provider.
 
 `src/lib/orchestration/generation-settings-mapper.ts` was extracted so the
 creation boundary and the orchestrator read `aspect_ratio`, `resolution` and
@@ -129,10 +226,14 @@ ROUTE_ADMIN_CLERK_USER_IDS=user_xxx,user_yyy
 ```
 
 Unset — its state today — means **nobody** is an admin and every mutation
-throws `FORBIDDEN`. An allowlist is not the admin model this platform will end
-up with (a Clerk organization role almost certainly is); it is the honest
-placeholder while that decision is unmade. **Phase 16's Admin Operations
-Center is not built here.**
+throws `FORBIDDEN`. The value is read, never logged.
+
+**This is a TEMPORARY, INTERNAL Phase 7 authorization boundary.** It is not the
+admin model this platform will end up with; a Clerk organization role almost
+certainly is. Final admin governance — a real role source, an Admin Operations
+Center, an audit trail — belongs to the later Admin/Security phase (Phase 16)
+and is deliberately not started here. The allowlist exists so route mutations
+are not shipped with no boundary at all while that decision is unmade.
 
 ## What this is NOT
 
@@ -149,16 +250,23 @@ Explicitly out of scope, and absent rather than stubbed:
 
 ## Known gaps, stated rather than hidden
 
-1. **The frozen `/generate` UI still hardcodes capabilities.**
-   `src/components/cinema-studio/CinemaStudioWorkspace.tsx` and `PromptBar.tsx`
-   carry their own aspect-ratio and resolution lists. `GET /api/models` exists
-   and is correct, but AGENTS.md freezes that page absent an explicit unlock,
-   which this phase does not grant. Until it is consumed, the UI and the server
-   can still drift — the server simply refuses what the UI wrongly offered.
-2. **No admin UI, and no real admin role source.** See above.
-3. **`model_versions.capabilities` is a snapshot, not the live contract.** The
+1. **`/image/create`'s `PromptComposer` is not bound.** It calls
+   `getCapabilities(selectedModel)` with a display name and no model id, so it
+   still uses presentation lists. None of its cards is executable today, and
+   that page sits outside the narrow /generate unlock. Binding it is a
+   one-argument change the day one of its models becomes real.
+2. **`PromptBar.tsx`'s video-model constants were left in place.** Its
+   per-model ratio/resolution lists for Kling, Sora, Wan, Minimax, Higgsfield
+   and Gemini Omni Flash describe cards with **no server-side model**, which
+   cannot reach `/api/generate` at all. They decide nothing, so rewriting them
+   would be churn on a frozen page. The canonical lookup sits in front of them:
+   the moment one of those models gets a registry entry, it binds through the
+   same path with no further edit.
+3. **No admin UI, and no real admin role source.** See above.
+4. **`model_versions.capabilities` is a snapshot, not the live contract.** The
    code registry remains authoritative; the column exists for audit and for
-   reasoning about an attempt that ran months ago.
+   reasoning about an attempt that ran months ago. Nothing reads it to make a
+   capability decision — the router reads only `status`.
 
 ## Proofs
 
@@ -167,8 +275,15 @@ Explicitly out of scope, and absent rather than stubbed:
   rejection reason, refusal before row creation, projection safety, admin
   fail-closed, and three end-to-end runs through the real repository and
   create service.
-- `supabase/tests/test_model_routing.sql` — 7 proofs against a throwaway
+- `src/test/e2e/phase-7-capability-contract.e2e.test.ts` — 9 tests: the
+  generated catalog matches the registry, the browser catalog names no
+  provider, every option a bound card offers is accepted by the real
+  validator, a manipulated request is still refused, unbound cards are
+  returned untouched.
+- `supabase/tests/test_model_routing.sql` — 8 proofs against a throwaway
   PostgreSQL: one-active-version, unique version numbers, unique provider
   endpoints, unique routes, bounded priority/status, additive attempt
-  correlation surviving route deletion, RLS closed.
+  correlation surviving route deletion, RLS closed, and Phase 6R attempt
+  semantics intact (unique indexes, the single `generations` foreign key,
+  `generation_id NOT NULL`, exactly one attempt table).
   Run with `bash supabase/tests/run_pg_tests.sh`.

@@ -161,6 +161,54 @@ BEGIN
      AND c.relrowsecurity;
   ASSERT v_count = 5, 'ROUTING: all five route tables must have RLS enabled, got ' || v_count;
   RAISE NOTICE 'PROOF R7 PASS: routing data is service-role only';
+
+  -- ---- PROOF 8: Phase 6R attempt semantics survived the 7-A migration --
+  -- The routing columns were added to a table whose concurrency guarantees
+  -- predate them. Those guarantees are the reason one click cannot become two
+  -- billable provider jobs, so an additive migration has to leave every one
+  -- of them in place — this asserts the structures themselves, not a comment
+  -- claiming they are still there.
+  SELECT count(*) INTO v_count
+    FROM pg_indexes
+   WHERE schemaname = 'public'
+     AND tablename = 'generation_attempts'
+     AND indexdef ILIKE '%UNIQUE%'
+     AND indexdef ILIKE '%generation_id%';
+  ASSERT v_count >= 2,
+    'ATTEMPTS: the one-active-attempt and attempt_no unique indexes must survive, found '
+      || v_count;
+
+  SELECT count(*) INTO v_count
+    FROM pg_constraint
+   WHERE conrelid = 'public.generation_attempts'::regclass
+     AND contype = 'f'
+     AND confrelid = 'public.generations'::regclass;
+  ASSERT v_count = 1,
+    'ATTEMPTS: the generation_id foreign key must remain exactly one, found ' || v_count;
+
+  -- generation_id stays NOT NULL: an attempt that belongs to no generation
+  -- would break the 1 request = 1 generation = max 1 settlement invariant.
+  SELECT count(*) INTO v_count
+    FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'generation_attempts'
+     AND column_name = 'generation_id' AND is_nullable = 'NO';
+  ASSERT v_count = 1, 'ATTEMPTS: generation_id must remain NOT NULL';
+
+  -- And the two new columns must be the ONLY thing 7-A added.
+  SELECT count(*) INTO v_count
+    FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'generation_attempts'
+     AND column_name IN ('model_version_id','model_route_id')
+     AND is_nullable = 'YES';
+  ASSERT v_count = 2, 'ATTEMPTS: both routing columns must exist and be nullable';
+
+  -- No second attempt system was introduced alongside the first.
+  SELECT count(*) INTO v_count
+    FROM information_schema.tables
+   WHERE table_schema = 'public' AND table_name LIKE '%attempt%';
+  ASSERT v_count = 1,
+    'ATTEMPTS: there must be exactly one attempt table, found ' || v_count;
+  RAISE NOTICE 'PROOF R8 PASS: Phase 6R attempt semantics are intact and additive';
 END $$;
 
 SELECT 'ROUTING PROOFS PASSED' AS result;
