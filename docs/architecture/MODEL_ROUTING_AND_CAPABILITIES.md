@@ -600,6 +600,14 @@ today rather than a fake provider that returns whatever a test wants.
 Evaluation source is recorded on every decision: `database_baseline` (no
 override layer), `runtime_flag`, `cached_runtime_flag`, `unavailable`.
 
+> **Stated plainly, so it cannot be misread as a guarantee:** the runtime
+> emergency kill is **NOT durable**. It holds only while the runtime-control
+> source is reachable. There is no last-known-good cache and no secondary
+> enforcement path. A kill that must survive a Redis outage has to be a
+> **durable disable in PostgreSQL** — `model_routes.enabled = false`, or the
+> provider/provider-model equivalent — which eligibility reads on every
+> routing decision.
+
 **When Redis cannot be read**, the source returns `unavailable` with no
 controls and the durable PostgreSQL configuration governs alone. The trade-off
 is stated rather than hidden: an emergency kill set two minutes ago stops being

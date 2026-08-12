@@ -429,10 +429,12 @@ test("C5: an adapter with no cancel is reported unsupported, and assumed billabl
     id: attemptId,
     generation_id: generationId,
     attempt_no: 1,
-    // fal implements no cancel() — the real state of the world.
-    provider: "fal",
-    provider_model: "fal-flux-schnell",
-    provider_job_id: "fal-job-1",
+    // Gemini implements no cancel(): it completes inside submit and hands
+    // back no job handle to stop. (This case named fal until Phase 8, which
+    // gave fal a real cancel built on the SDK's own queue.cancel.)
+    provider: "gemini",
+    provider_model: "gemini-3-pro-image",
+    provider_job_id: "gemini-job-1",
     submission_evidence: "job",
     status: "processing",
     updated_at: new Date().toISOString(),
@@ -446,6 +448,39 @@ test("C5: an adapter with no cancel is reported unsupported, and assumed billabl
     "unsupported never means free"
   );
   assert.equal(db.state.generations[0].status, "processing", "and nothing was transitioned");
+});
+
+test("C5b: a cancel that cannot be addressed is FAILED, never a false confirmation", async () => {
+  // fal can cancel, but only a request it can identify. This attempt carries
+  // no endpoint id, so the adapter throws before any network call — and the
+  // activity reports "failed" (fate unknown), never "cancelled". Reporting a
+  // confirmation here would stop tracking a job that is still running and
+  // still billing.
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const { generationId } = seedGeneration(db, { status: "processing" });
+  const attemptId = randomUUID();
+  db.state.generation_attempts.push({
+    id: attemptId,
+    generation_id: generationId,
+    attempt_no: 1,
+    provider: "fal",
+    provider_model: "fal-ai/flux/schnell",
+    provider_job_id: "req_unaddressable",
+    submission_evidence: "job",
+    status: "processing",
+    updated_at: new Date().toISOString(),
+  });
+
+  const outcome = await activities.cancelProviderJob({ attemptId });
+  assert.equal(outcome.outcome, "failed", "an unaddressable cancel is a failure, not a success");
+  assert.equal(
+    classifyCancellation(db.state.generation_attempts[0] as never, outcome).settlementClass,
+    "unknown_reconcile",
+    "a failed cancel is MORE conservative than an unsupported one: the job's " +
+      "fate is unknown, so settlement must wait for reconciliation rather " +
+      "than assume either outcome"
+  );
 });
 
 test("C4: nothing to cancel and already-terminal are distinguished from a real stop", async () => {

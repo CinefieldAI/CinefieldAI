@@ -2,7 +2,8 @@ import "server-only";
 import { createFalClient, ApiError, type FalClient } from "@fal-ai/client";
 import { OrchestrationError } from "../errors";
 import { findModel } from "../model-registry";
-import type { ProviderAdapter } from "./provider-adapter";
+import type { ProviderAdapter, ProviderReconciliation } from "./provider-adapter";
+import type { ProviderCapabilityMatrix } from "./provider-capabilities";
 import type {
   NormalizedGenerationRequest,
   NormalizedOutput,
@@ -163,8 +164,55 @@ export function releaseFalResult(generationId: string): void {
   PENDING_RESULTS.delete(`fal-${generationId}`);
 }
 
+/**
+ * fal.ai capabilities, each traced to the evidence that justifies it
+ * (Phase 8).
+ *
+ * The source of truth for every "implemented" below is the INSTALLED SDK's
+ * own type surface — node_modules/@fal-ai/client/src/queue.d.ts declares
+ * `submit`, `status`, `result` and `cancel` on QueueClient. That is
+ * verifiable in this repository today, which is why those may be
+ * implemented. Nothing here is inferred from a blog post or from what a
+ * provider "probably" does.
+ *
+ * NOTHING IS "proven": proven means exercised against the live provider, and
+ * this batch makes no paid call. Every implemented capability is therefore
+ * `implemented_not_live_validated`, which is the honest state.
+ */
+export const FAL_CAPABILITIES: ProviderCapabilityMatrix = {
+  submit: "implemented_not_live_validated",
+  // queue.status(endpointId, { requestId })
+  status: "implemented_not_live_validated",
+  // queue.result(endpointId, { requestId })
+  result: "implemented_not_live_validated",
+  polling: "implemented_not_live_validated",
+  // The SDK exposes a `webhookUrl` submit option, so fal can call back. But
+  // Cinefield does not use it, and there is no ingress route for it.
+  webhook: "unsupported_by_adapter",
+  // AND THIS IS WHY. The SDK ships no signature verifier, no documented
+  // header, and no timestamp/nonce scheme that can be checked from this
+  // repository. Without a way to prove a callback came from fal, a webhook
+  // endpoint is an unauthenticated way for anyone to claim a job finished.
+  // Inventing a scheme would be worse than having none, so the capability
+  // stays unverified and the ingress stays unbuilt.
+  webhookAuthentication: "unknown_provider_capability",
+  // queue.cancel(endpointId, { requestId }) — declared to throw if the
+  // request cannot be cancelled.
+  cancel: "implemented_not_live_validated",
+  // Reconciliation rides on queue.status: asking fal about a request id is
+  // exactly the question an ambiguous submission needs answered.
+  reconcileAmbiguousSubmission: "implemented_not_live_validated",
+  // No caller-supplied idempotency key appears anywhere in the SDK's submit
+  // options. Cinefield's own idempotency is unaffected — it never depended on
+  // the provider having this.
+  nativeIdempotency: "unknown_provider_capability",
+  // submit() uses client.subscribe(), which waits for completion.
+  executionShape: "synchronous",
+};
+
 class FalProvider implements ProviderAdapter {
   readonly providerId = "fal";
+  readonly capabilities = FAL_CAPABILITIES;
 
   async submit(
     request: NormalizedGenerationRequest,
@@ -270,8 +318,11 @@ class FalProvider implements ProviderAdapter {
         providerJobId: enqueuedRequestId ?? `fal-${request.generationId}`,
         provider: this.providerId,
         status: "completed",
-        // Deliberately free of provider URLs and raw payloads.
-        metadata: { imageCount: images.length },
+        // Deliberately free of provider URLs and raw payloads. The
+        // endpoint id is needed to address this request later — fal's queue
+        // API is keyed by (endpointId, requestId), not by requestId alone —
+        // and it is a public model identifier, not a secret.
+        metadata: { imageCount: images.length, endpointId: model.providerModelId },
       };
     } catch (error) {
       const mapped = mapFalError(error);
@@ -333,6 +384,137 @@ class FalProvider implements ProviderAdapter {
       };
     });
   }
+
+  /**
+   * Asks fal to stop a queued or running request.
+   *
+   * Built on `queue.cancel(endpointId, { requestId })`, which the installed
+   * SDK declares and documents as throwing when the request cannot be
+   * cancelled.
+   *
+   * WHAT THIS DOES NOT CLAIM. A resolved promise means fal accepted the
+   * cancellation, not that the job was free or that no work was performed —
+   * the SDK's own subscribe() documentation warns the server may be unable to
+   * stop a request already running. The caller records "the provider
+   * confirmed the stop"; deciding what that costs is Phase 10's, from the
+   * settlement evidence, and this adapter deliberately supplies no opinion.
+   *
+   * A throw is reported by the CALLER as a failed cancel with unknown
+   * outcome. This method never converts a failure into a success — an
+   * uncancelled job reported as cancelled is how a running provider job stops
+   * being tracked while it continues to bill.
+   */
+  async cancel(
+    submission: ProviderSubmission,
+    context: ProviderExecutionContext
+  ): Promise<void> {
+    const endpointId = endpointIdFor(submission, context);
+    if (!endpointId) {
+      // Without the endpoint id there is no call to make. Throwing lets the
+      // caller record "failed / unknown" rather than a false confirmation.
+      throw new OrchestrationError("PROVIDER_FAILED", {
+        context: { provider: "fal", reason: "unknown_endpoint" },
+      });
+    }
+
+    if (isSyntheticJobId(submission.providerJobId, context.generationId)) {
+      // The synthetic fallback id means onEnqueue never fired, so fal never
+      // acknowledged a request and there is nothing it could identify.
+      throw new OrchestrationError("PROVIDER_FAILED", {
+        context: { provider: "fal", reason: "no_provider_request_id" },
+      });
+    }
+
+    const client = getFalClient();
+    await client.queue.cancel(endpointId, { requestId: submission.providerJobId });
+  }
+
+  /**
+   * Asks fal whether an unconfirmed submission actually produced a job.
+   *
+   * `queue.status` answers precisely the question an AMBIGUOUS submission
+   * leaves open. A status — IN_QUEUE, IN_PROGRESS, COMPLETED — proves the job
+   * exists and must never be duplicated.
+   *
+   * A FAILING STATUS CALL IS NOT PROOF OF ABSENCE, and this is the trap the
+   * method is written to avoid. A 404 from a queue endpoint could mean "no
+   * such request" or could mean a wrong endpoint id, an expired record, a
+   * transient routing failure, or a shape this code does not recognize.
+   * Returning "no_such_job" for any of those would clear the reconciliation
+   * block and let Cinefield submit a job fal is already running. So every
+   * error becomes "unknown" and the generation stays blocked — the outcome
+   * that costs a manual look instead of a duplicate charge.
+   */
+  async reconcileSubmission(
+    providerJobId: string,
+    request: NormalizedGenerationRequest,
+    context: ProviderExecutionContext
+  ): Promise<ProviderReconciliation> {
+    if (isSyntheticJobId(providerJobId, context.generationId)) {
+      // A synthetic id was never known to fal; asking about it would produce
+      // a "not found" that proves nothing.
+      return { outcome: "unknown", errorCode: "no_provider_request_id" };
+    }
+
+    const model = findModel(request.modelId);
+    if (!model) return { outcome: "unknown", errorCode: "UNKNOWN_MODEL" };
+
+    try {
+      const client = getFalClient();
+      const status = await client.queue.status(model.providerModelId, {
+        requestId: providerJobId,
+      });
+      return { outcome: "job_exists", status: mapFalQueueStatus(status.status) };
+    } catch (error) {
+      const mapped = mapFalError(error);
+      return { outcome: "unknown", errorCode: mapped.code };
+    }
+  }
+}
+
+/**
+ * fal's queue vocabulary, mapped onto Cinefield's.
+ *
+ * Note what is absent: fal's QueueStatus union is IN_QUEUE | IN_PROGRESS |
+ * COMPLETED and carries no failure state — a failed request surfaces as an
+ * error when the result is fetched, not as a status. So this never produces
+ * "failed", and anything unrecognized becomes "processing" rather than a
+ * terminal guess.
+ */
+export function mapFalQueueStatus(status: string): ProviderStatusResult["status"] {
+  switch (status) {
+    case "IN_QUEUE":
+      return "queued";
+    case "IN_PROGRESS":
+      return "processing";
+    case "COMPLETED":
+      return "completed";
+    default:
+      return "processing";
+  }
+}
+
+/** The fal endpoint a submission belongs to, resolved from the model registry. */
+function endpointIdFor(
+  submission: ProviderSubmission,
+  context: ProviderExecutionContext
+): string | null {
+  const fromMetadata = submission.metadata?.endpointId;
+  if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
+  void context;
+  return null;
+}
+
+/**
+ * True for the fallback id submit() uses when onEnqueue never fired.
+ *
+ * That id is a Cinefield-internal string fal has never seen. Treating it as a
+ * request id would send fal a lookup it cannot resolve, and reading the
+ * resulting "not found" as evidence is exactly the mistake reconciliation
+ * exists to prevent.
+ */
+export function isSyntheticJobId(providerJobId: string, generationId: string): boolean {
+  return providerJobId === `fal-${generationId}`;
 }
 
 export const falProvider: ProviderAdapter = new FalProvider();

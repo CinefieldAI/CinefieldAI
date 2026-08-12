@@ -12,6 +12,7 @@ import {
 import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { OrchestrationError } from "../errors";
 import type { ProviderAdapter } from "./provider-adapter";
+import type { ProviderCapabilityMatrix } from "./provider-capabilities";
 import type {
   NormalizedGenerationRequest,
   NormalizedOutput,
@@ -123,7 +124,31 @@ async function loadInputImage(
   return { type: "image", mime_type: input.mimeType, data: bytes.toString("base64") };
 }
 
+/**
+ * Gemini image generation, migrated into the orchestration core in Phase 5.
+ *
+ * It ran in production before that migration, but through a route that owned
+ * its own lifecycle — so "it has worked" is not evidence about THIS adapter's
+ * behaviour under the current contract, and the honest status is
+ * implemented-but-not-live-validated here.
+ */
+export const GEMINI_CAPABILITIES: ProviderCapabilityMatrix = {
+  submit: "implemented_not_live_validated",
+  // interactions.create returns the image inline; there is no job handle.
+  status: "unsupported_by_adapter",
+  result: "unsupported_by_adapter",
+  polling: "unsupported_by_adapter",
+  webhook: "unknown_provider_capability",
+  webhookAuthentication: "unknown_provider_capability",
+  cancel: "unsupported_by_adapter",
+  reconcileAmbiguousSubmission: "unknown_provider_capability",
+  nativeIdempotency: "unknown_provider_capability",
+  executionShape: "synchronous",
+};
+
 class GeminiProvider implements ProviderAdapter {
+  readonly capabilities = GEMINI_CAPABILITIES;
+
   readonly providerId = "gemini";
 
   async submit(

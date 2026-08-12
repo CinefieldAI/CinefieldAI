@@ -36,6 +36,7 @@ import {
   readAttempt,
 } from "@/lib/orchestration/attempt-repository";
 import { getProviderAdapter, isProviderRegistered } from "@/lib/orchestration/provider-registry";
+import { isUsable } from "@/lib/orchestration/providers/provider-capabilities";
 import type { ProviderCancelOutcome } from "@/lib/orchestration/cancellation";
 import { getCommandBus } from "@/lib/contracts/command-bus";
 import { commandIdFor } from "@/lib/contracts/command-wire";
@@ -433,10 +434,19 @@ export async function cancelProviderJob(params: {
   }
 
   const adapter = getProviderAdapter(attempt.provider);
-  if (!adapter.cancel) {
-    // The common case. Most providers cannot stop a running job, and saying
-    // so plainly is what keeps the settlement classification correct.
-    log({ attemptId: params.attemptId, provider: attempt.provider, result: "cancel_unsupported" });
+
+  // PHASE 8: the DECLARED capability decides, not the presence of a method.
+  // A method can exist and be a stub; a declaration states what the
+  // integration actually supports, and the difference is what keeps
+  // "unsupported" from quietly becoming "we called something that did
+  // nothing and reported success".
+  if (!adapter.cancel || !isUsable(adapter.capabilities.cancel)) {
+    log({
+      attemptId: params.attemptId,
+      provider: attempt.provider,
+      result: "cancel_unsupported",
+      capability: adapter.capabilities.cancel,
+    });
     return { outcome: "unsupported" };
   }
 
@@ -446,6 +456,9 @@ export async function cancelProviderJob(params: {
         providerJobId: attempt.provider_job_id,
         provider: attempt.provider,
         status: attempt.status === "processing" ? "processing" : "queued",
+        // The adapter's own resume data, persisted at submission. For fal
+        // this carries the endpoint id its queue API is keyed by; the core
+        // stores it verbatim and never reads into it.
         metadata: readPersistedProviderJob(await readGenerationMetadata(admin, attempt.generation_id))
           ?.resume,
       },

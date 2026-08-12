@@ -500,14 +500,35 @@ test("H5/D-E-F: the three provider cancel behaviours are distinguishable", async
     "a failing cancel must surface, not be swallowed as success"
   );
 
-  // E: adapters that implement no cancel at all — the real state of the
-  // world for Cinefield's actual providers, left deliberately untouched.
-  const { falProvider } = await import("@/lib/orchestration/providers/fal-provider");
-  assert.equal(
-    typeof (falProvider as { cancel?: unknown }).cancel,
-    "undefined",
-    "no capability was invented for a provider that has none"
+  // E: adapters that implement no cancel at all.
+  //
+  // This used to name fal, which was accurate until Phase 8. fal now HAS a
+  // cancel, and it is not an invention: the installed SDK declares
+  // queue.cancel(endpointId, { requestId }). Gemini and Cloudflare remain
+  // genuinely cancel-less — they complete inside submit and hand back no job
+  // handle to stop — so they are what this case is about now.
+  const { geminiProvider } = await import("@/lib/orchestration/providers/gemini-provider");
+  const { cloudflareWorkersAiProvider } = await import(
+    "@/lib/orchestration/providers/cloudflare-workers-ai-provider"
   );
+  for (const adapter of [geminiProvider, cloudflareWorkersAiProvider]) {
+    assert.equal(
+      typeof (adapter as { cancel?: unknown }).cancel,
+      "undefined",
+      "no capability was invented for a provider that has none"
+    );
+    assert.equal(
+      adapter.capabilities.cancel,
+      "unsupported_by_adapter",
+      "and the declaration says so rather than leaving it to be inferred"
+    );
+  }
+
+  // fal's cancel is declared, but only as far as the evidence goes: built on
+  // the SDK's own surface, never exercised against the live provider.
+  const { falProvider } = await import("@/lib/orchestration/providers/fal-provider");
+  assert.equal(typeof (falProvider as { cancel?: unknown }).cancel, "function");
+  assert.equal(falProvider.capabilities.cancel, "implemented_not_live_validated");
   assert.equal(
     classifyCancellation(
       attempt({ status: "processing", submission_evidence: "job", provider_job_id: "job-3" }),

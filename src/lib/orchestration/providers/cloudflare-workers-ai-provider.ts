@@ -7,6 +7,7 @@ import { isCloudflareEnabled } from "@/lib/cloudflare/gateway-config";
 import { OrchestrationError } from "../errors";
 import { findModel } from "../model-registry";
 import type { ProviderAdapter } from "./provider-adapter";
+import type { ProviderCapabilityMatrix } from "./provider-capabilities";
 import type {
   NormalizedGenerationRequest,
   NormalizedOutput,
@@ -102,7 +103,32 @@ function mapCloudflareError(error: unknown): OrchestrationError {
   });
 }
 
+/**
+ * Cloudflare Workers AI: a single request/response call, implemented here and
+ * never run against the live API from this repository.
+ *
+ * Everything beyond submit is `unknown_provider_capability` rather than
+ * `unsupported_by_adapter` where the provider might well offer it and nobody
+ * here has checked — the distinction between "we did not build it" and "we do
+ * not know" is the point of having two values.
+ */
+export const CLOUDFLARE_CAPABILITIES: ProviderCapabilityMatrix = {
+  submit: "implemented_not_live_validated",
+  // The adapter completes inside submit, so there is no job to ask about.
+  status: "unsupported_by_adapter",
+  result: "unsupported_by_adapter",
+  polling: "unsupported_by_adapter",
+  webhook: "unknown_provider_capability",
+  webhookAuthentication: "unknown_provider_capability",
+  cancel: "unsupported_by_adapter",
+  reconcileAmbiguousSubmission: "unknown_provider_capability",
+  nativeIdempotency: "unknown_provider_capability",
+  executionShape: "synchronous",
+};
+
 class CloudflareWorkersAiProvider implements ProviderAdapter {
+  readonly capabilities = CLOUDFLARE_CAPABILITIES;
+
   readonly providerId = "cloudflare-workers-ai";
 
   async submit(

@@ -6,6 +6,7 @@ import { readPersistedProviderJob } from "../status-manager";
 import { encodePng, paintMockCard } from "./png-encoder";
 import { encodeWav, synthesizeMockTone, wavDurationSeconds } from "./wav-encoder";
 import type { ProviderAdapter } from "./provider-adapter";
+import type { ProviderCapabilityMatrix } from "./provider-capabilities";
 import type {
   NormalizedGenerationRequest,
   NormalizedOutput,
@@ -187,7 +188,30 @@ function buildMockAudio(request: NormalizedGenerationRequest, index: number): No
   };
 }
 
+/**
+ * The mock provider's capabilities are "proven" in the only sense that word
+ * can mean here: it IS the implementation, so there is no external behaviour
+ * left to verify. It reaches no network and creates no billable job.
+ */
+export const MOCK_CAPABILITIES: ProviderCapabilityMatrix = {
+  submit: "proven",
+  status: "proven",
+  result: "proven",
+  polling: "proven",
+  // A mock has no reason to call itself back.
+  webhook: "unsupported_by_adapter",
+  webhookAuthentication: "unsupported_by_adapter",
+  cancel: "proven",
+  // There is never an ambiguous submission to reconcile: nothing leaves the
+  // process, so "did a job get created" is never in doubt.
+  reconcileAmbiguousSubmission: "unsupported_by_adapter",
+  nativeIdempotency: "unsupported_by_adapter",
+  executionShape: "synchronous",
+};
+
 class MockProvider implements ProviderAdapter {
+  readonly capabilities = MOCK_CAPABILITIES;
+
   readonly providerId = "mock";
 
   async submit(
