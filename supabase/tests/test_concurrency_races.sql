@@ -151,6 +151,37 @@ EXCEPTION WHEN others THEN
 END;
 $$;
 
+/**
+ * The CREATION side of a duplicate endpoint request (Phase 5 convergence).
+ *
+ * Calls the real create_generation_tx, which is what POST /api/generate now
+ * uses. Six concurrent callers with the same idempotency key must produce ONE
+ * generation — decided by generations_user_idempotency_uniq, not by ordering.
+ */
+CREATE OR REPLACE FUNCTION public.create_generation_race(
+  p_worker integer, p_key text, p_prompt text DEFAULT 'canonical race prompt'
+) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v jsonb;
+BEGIN
+  v := create_generation_tx(
+    'user_race',
+    '33333333-3333-4333-8333-333333333333',
+    'image', 'mock', 'mock-image',
+    p_prompt,
+    '{}'::jsonb, NULL, NULL,
+    p_key,
+    md5(p_prompt)
+  );
+  INSERT INTO race_results (race, worker, outcome, detail)
+  VALUES ('create_generation', p_worker,
+          CASE WHEN (v->>'created')::boolean THEN 'created' ELSE 'replayed' END,
+          v->>'generation_id');
+EXCEPTION WHEN others THEN
+  INSERT INTO race_results (race, worker, outcome, detail)
+  VALUES ('create_generation', p_worker, 'rejected', SQLERRM);
+END;
+$$;
+
 SELECT 'RACE FIXTURES READY' AS result;
 
 -- ---------------------------------------------------------------------------

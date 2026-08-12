@@ -163,6 +163,9 @@ export class FakeSupabaseClient {
     if (fn === "fail_generation_tx") {
       return { data: this.failGenerationTx(args ?? {}), error: null };
     }
+    if (fn === "create_generation_tx") {
+      return this.createGenerationTx(args ?? {});
+    }
     return { data: null, error: null };
   }
 
@@ -202,6 +205,69 @@ export class FakeSupabaseClient {
     });
 
     return { applied: true, status: "cancelled", event_id: eventId };
+  }
+
+  /**
+   * Emulates create_generation_tx. Same predicate the SQL uses: an existing
+   * (owner, idempotency_key) is a replay, and the project must belong to the
+   * caller. The ATOMICITY is proven on real PostgreSQL, not here.
+   */
+  private createGenerationTx(args: Record<string, unknown>) {
+    const owner = args.p_clerk_user_id as string;
+    const projectId = args.p_project_id as string;
+    const key = (args.p_idempotency_key as string) ?? null;
+
+    if (!this.state.projects) this.state.projects = [];
+    const project = this.state.projects.find((p) => p.id === projectId);
+    if (!project || project.clerk_user_id !== owner) {
+      return { data: null, error: { message: "project_not_found" } };
+    }
+
+    if (key !== null) {
+      const existing = this.state.generations.find(
+        (g) => g.clerk_user_id === owner && g.idempotency_key === key
+      );
+      if (existing) {
+        return {
+          data: {
+            generation_id: existing.id,
+            created: false,
+            request_hash: existing.request_hash ?? null,
+            status: existing.status,
+          },
+          error: null,
+        };
+      }
+    }
+
+    const id = randomUUID();
+    this.state.generations.push({
+      id,
+      project_id: projectId,
+      clerk_user_id: owner,
+      generation_type: args.p_generation_type,
+      provider: args.p_provider,
+      model: args.p_model,
+      prompt: args.p_prompt,
+      negative_prompt: (args.p_negative_prompt as string) ?? null,
+      status: "queued",
+      input_url: (args.p_input_url as string) ?? null,
+      output_url: null,
+      thumbnail_url: null,
+      error_message: null,
+      metadata: (args.p_metadata as Record<string, unknown>) ?? {},
+      idempotency_key: key,
+      request_hash: (args.p_request_hash as string) ?? null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: null,
+      temporal_workflow_id: null,
+    });
+
+    return {
+      data: { generation_id: id, created: true, request_hash: args.p_request_hash ?? null, status: "queued" },
+      error: null,
+    };
   }
 
   /** Merges only the orchestration keys the SQL owns, as jsonb_set does. */

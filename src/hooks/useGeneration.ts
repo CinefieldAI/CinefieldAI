@@ -257,35 +257,126 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
           metadata.storage_object_path = uploadedPath;
         }
 
-        const payload: GenerationInsertPayload = {
-          project_id: activeProject.id,
-          generation_type: generationType,
-          provider,
-          model: effectiveModel,
-          prompt: effectivePrompt,
-          negative_prompt: null,
-          input_url: uploadedPath,
-          metadata,
-        };
+        // ---- Non-orchestration models: unchanged placeholder path ----------
+        //
+        // These model ids are not in the server registry, so they have no
+        // provider, no adapter and no way to execute — today they insert an
+        // inert "queued" row that nothing ever picks up, and a page may
+        // supply its own executeLegacy for it. That path is NOT the canonical
+        // production generation path and never reaches the server generation
+        // boundary; routing it through /api/generate would only turn a
+        // harmless placeholder into a hard UNKNOWN_MODEL error on a frozen
+        // UI. It stays exactly as it was, and is reported as the one
+        // remaining browser insert.
+        if (!isOrchestrationModel(effectiveModel)) {
+          const placeholder: GenerationInsertPayload = {
+            project_id: activeProject.id,
+            generation_type: generationType,
+            provider,
+            model: effectiveModel,
+            prompt: effectivePrompt,
+            negative_prompt: null,
+            input_url: uploadedPath,
+            metadata,
+          };
 
-        const { data, error: insertError } = await supabase
-          .from("generations")
-          .insert([payload])
-          .select()
-          .single();
+          const { data, error: insertError } = await supabase
+            .from("generations")
+            .insert([placeholder])
+            .select()
+            .single();
 
-        if (insertError) {
-          if (uploadedPath) {
-            await supabase.storage.from("generation-inputs").remove([uploadedPath]);
+          if (insertError) {
+            if (uploadedPath) {
+              await supabase.storage.from("generation-inputs").remove([uploadedPath]);
+            }
+            setError(`Failed to queue generation: ${insertError.message}`);
+            return;
           }
-          setError(`Failed to queue generation: ${insertError.message}`);
+
+          const placeholderId = String(data.id);
+
+          if (request.executeLegacy) {
+            safeSet(() => {
+              setStatus("processing");
+              setMessage(null);
+              setResult(null);
+            });
+            try {
+              const outcome = await request.executeLegacy(placeholderId);
+              if (unmountedRef.current) return;
+              if (!outcome.ok) setError(outcome.error);
+              else {
+                setStatus("success");
+                setMessage(outcome.message);
+                setResult(outcome.url ? { url: outcome.url, type: outcome.type } : null);
+              }
+            } catch {
+              safeSet(() => setError("Generation failed. Please try again."));
+            }
+            return;
+          }
+
+          safeSet(() => {
+            setStatus("success");
+            setMessage(`Generation queued (${placeholderId.slice(0, 8)}...)`);
+          });
           return;
         }
 
-        const generationId = String(data.id);
+        // PHASE 5 FINAL CONVERGENCE — the row is created SERVER-SIDE.
+        //
+        // The browser used to insert it here under RLS and hand the id to the
+        // server. That put the last piece of the production path on the wrong
+        // side of the trust boundary: the client chose when a generation came
+        // into existence, supplied its provider and generation_type, and two
+        // clicks produced two rows before any server code ran.
+        //
+        // Now the client describes the request and the server derives the
+        // rest. `provider` and `generationType` are still computed above for
+        // the non-orchestration legacy branch further down; the canonical
+        // path does not send them, and the server would ignore them if it
+        // did — routing comes from the model registry.
+        //
+        // The idempotency key is per ATTEMPT-TO-SUBMIT, generated here, so a
+        // double click or a retried fetch resolves to one generation instead
+        // of two. It is bound server-side to the authenticated actor and to a
+        // hash of this exact request.
+        const idempotencyKey = `gen-${crypto.randomUUID()}`;
+
+        const createResponse = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: effectiveModel,
+            prompt: effectivePrompt,
+            projectId: activeProject.id,
+            negativePrompt: null,
+            inputUrl: uploadedPath,
+            metadata,
+            idempotencyKey,
+          }),
+        });
+        const createJson = await createResponse.json();
+
+        if (!createResponse.ok) {
+          if (uploadedPath) {
+            await supabase.storage.from("generation-inputs").remove([uploadedPath]);
+          }
+          safeSet(() =>
+            setError(
+              typeof createJson.error === "string"
+                ? createJson.error
+                : "Failed to queue generation."
+            )
+          );
+          return;
+        }
+
+        const generationId = String(createJson.generationId);
 
         // ---- Orchestration pipeline (registry-listed models only) ----------
-        if (isOrchestrationModel(effectiveModel)) {
+        {
           const usesMockProvider = isMockOrchestrationModel(effectiveModel);
           safeSet(() => {
             setStatus("processing");
@@ -294,13 +385,12 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
           });
 
           try {
-            // The CANONICAL generation endpoint (Phase 5 convergence).
-            const execResponse = await fetch("/api/generate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ generationId }),
-            });
-            const execJson = await execResponse.json();
+            // The canonical endpoint CREATED the generation and started its
+            // workflow in one call, so its response is already the execution
+            // response — there is no second request to make. Issuing one
+            // would be a duplicate the server would have to deduplicate.
+            const execResponse = createResponse;
+            const execJson = createJson;
 
             const successMessage = usesMockProvider
               ? "Cinefield mock orchestration test completed. No real AI provider was used."
@@ -388,36 +478,6 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
           return;
         }
 
-        // ---- Page-supplied legacy execution path ---------------------------
-        if (request.executeLegacy) {
-          safeSet(() => {
-            setStatus("processing");
-            setMessage(null);
-            setResult(null);
-          });
-
-          try {
-            const outcome = await request.executeLegacy(generationId);
-            if (unmountedRef.current) return;
-
-            if (!outcome.ok) {
-              setError(outcome.error);
-            } else {
-              setStatus("success");
-              setMessage(outcome.message);
-              setResult(outcome.url ? { url: outcome.url, type: outcome.type } : null);
-            }
-          } catch {
-            safeSet(() => setError("Generation failed. Please try again."));
-          }
-          return;
-        }
-
-        // ---- No execution path: row stays queued (pre-existing default) ----
-        safeSet(() => {
-          setStatus("success");
-          setMessage(`Generation queued (${generationId.slice(0, 8)}...)`);
-        });
       } catch (error) {
         safeSet(() =>
           setError(error instanceof Error ? error.message : "Failed to queue generation")

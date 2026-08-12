@@ -75,6 +75,23 @@ export function readGenerationId(body: unknown): string {
 }
 
 /**
+ * Distinguishes the two body shapes /api/generate accepts.
+ *
+ * A full request is canonical: the server creates the generation. The
+ * `{ generationId }` shape is the execute-only form the compatibility
+ * wrappers use for a row that already exists, and it stays supported so one
+ * endpoint serves both rather than the behaviours diverging across routes.
+ */
+export function isExecuteOnlyBody(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "generationId" in body &&
+    !("model" in body)
+  );
+}
+
+/**
  * THE shared server behaviour behind every generation entry point.
  *
  * Every route that starts a generation calls this and returns what it

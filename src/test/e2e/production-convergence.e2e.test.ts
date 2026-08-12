@@ -502,3 +502,166 @@ test("C6: cancel while claimed or submitting still defers, and destroys no evide
     assert.equal(db.outboxEvents.length, 0, "and a deferred cancel announces nothing");
   }
 });
+
+// ===========================================================================
+// PHASE 5 FINAL — SERVER-SIDE GENERATION CREATION
+// ===========================================================================
+
+test("A2-final: /api/generate accepts a FULL request and creates the row server-side", () => {
+  const route = strip(readSource("src/app/api/generate/route.ts"));
+
+  assert.ok(/createGeneration\(/.test(route), "the canonical shape creates the generation");
+  assert.ok(/isExecuteOnlyBody/.test(route), "the { generationId } shape stays supported for wrappers");
+
+  // Creation commits BEFORE Temporal starts, so a Temporal failure leaves a
+  // durable generation instead of losing the request.
+  assert.ok(
+    route.indexOf("createGeneration(") < route.indexOf("respondToGenerationRequest(generationId"),
+    "the row must be durable before the workflow is started"
+  );
+
+  // The route still owns nothing.
+  for (const forbidden of ["getGeminiClient", "getProviderAdapter", "startGenerationWorkflow"]) {
+    assert.ok(!route.includes(forbidden), `the route must not reference ${forbidden}`);
+  }
+});
+
+test("A5-final: the canonical request type has no field for an internal identity", () => {
+  const service = readSource("src/lib/orchestration/generation-create-service.ts");
+  const requestType = service.match(/export interface GenerationCreateRequest \{[\s\S]*?\n\}/)![0];
+
+  // The strongest form of "a client cannot choose these": there is nowhere
+  // to put them.
+  for (const forbidden of [
+    "provider",
+    "providerJobId",
+    "attemptId",
+    "workflowId",
+    "generationType",
+    "workspaceId",
+    "credits",
+    "queue",
+  ]) {
+    assert.ok(
+      !new RegExp(`^\s*${forbidden}[?:]`, "m").test(requestType),
+      `GenerationCreateRequest must not accept ${forbidden}`
+    );
+  }
+
+  // And the fields that ARE derived are taken from the registry.
+  assert.ok(/p_generation_type: model\.generationType/.test(service));
+  assert.ok(/p_provider: model\.providerId/.test(service));
+});
+
+test("A7-final: the server derives routing and refuses an unknown model", async () => {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const projectId = randomUUID();
+  db.state.projects = [{ id: projectId, clerk_user_id: "user_create", title: "p" }];
+
+  const { createGeneration } = await import("@/lib/orchestration/generation-create-service");
+
+  const created = await createGeneration(db as never, "user_create", {
+    model: "mock-image",
+    prompt: "a cat",
+    projectId,
+  });
+  assert.equal(created.outcome, "created");
+
+  const row = db.state.generations[0];
+  assert.equal(row.provider, "mock", "provider comes from the registry, not the client");
+  assert.equal(row.generation_type, "image", "so does the generation type");
+  assert.equal(row.clerk_user_id, "user_create", "and the owner from the session");
+  assert.equal(row.status, "queued");
+
+  await assert.rejects(
+    createGeneration(db as never, "user_create", {
+      model: "not-a-real-model",
+      prompt: "x",
+      projectId,
+    }),
+    /UNKNOWN_MODEL|not available/i,
+    "the registry is authoritative for what may be generated"
+  );
+});
+
+test("A8-final: a replayed request returns the SAME generation, a changed payload is refused", async () => {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const projectId = randomUUID();
+  db.state.projects = [{ id: projectId, clerk_user_id: "user_create", title: "p" }];
+
+  const { createGeneration } = await import("@/lib/orchestration/generation-create-service");
+  const base = { model: "mock-image", prompt: "a cat", projectId, idempotencyKey: "client-key-123" };
+
+  const first = await createGeneration(db as never, "user_create", base);
+  assert.equal(first.outcome, "created");
+
+  // Same key, same payload — even with the object keys written in a
+  // different order, which must not change the canonical hash.
+  const replay = await createGeneration(db as never, "user_create", {
+    idempotencyKey: "client-key-123",
+    projectId,
+    prompt: "a cat",
+    model: "mock-image",
+  });
+  assert.equal(replay.outcome, "replayed");
+  assert.equal(
+    replay.outcome === "replayed" && replay.generationId,
+    first.outcome === "created" ? first.generationId : "",
+    "one logical request, one generation id"
+  );
+  assert.equal(db.state.generations.length, 1, "and no second row");
+
+  // Same key, DIFFERENT payload — refused rather than silently served.
+  const conflict = await createGeneration(db as never, "user_create", {
+    ...base,
+    prompt: "a dog",
+  });
+  assert.deepEqual(conflict, { outcome: "idempotency_conflict" });
+  assert.equal(db.state.generations.length, 1);
+});
+
+test("A6-final: a project belonging to someone else is not usable, and reports not-found", async () => {
+  const db = new FakeSupabaseClient();
+  await installFakeSupabase(db);
+  const victimProject = randomUUID();
+  db.state.projects = [{ id: victimProject, clerk_user_id: "user_victim", title: "victim" }];
+
+  const { createGeneration } = await import("@/lib/orchestration/generation-create-service");
+
+  await assert.rejects(
+    createGeneration(db as never, "user_attacker", {
+      model: "mock-image",
+      prompt: "x",
+      projectId: victimProject,
+    }),
+    /GENERATION_NOT_FOUND|Project not found/i,
+    "ownership is re-checked server-side; the error does not confirm the project exists"
+  );
+  assert.equal(db.state.generations.length, 0, "and nothing was created");
+});
+
+test("A12-final: the browser no longer inserts a canonical generation row", () => {
+  const hook = readSource("src/hooks/useGeneration.ts");
+
+  // The canonical path posts the full request.
+  assert.ok(/fetch\("\/api\/generate"/.test(hook), "it calls the canonical endpoint");
+  assert.ok(/idempotencyKey/.test(hook), "with a per-submission idempotency key");
+  assert.ok(
+    /model: effectiveModel,[\s\S]{0,200}?projectId: activeProject\.id/.test(hook),
+    "sending the request, not a pre-made row id"
+  );
+
+  // The remaining insert is reachable ONLY for non-orchestration placeholder
+  // models, which have no provider and never reach the server generation
+  // boundary. Asserted structurally so it cannot quietly grow back onto the
+  // canonical path.
+  const inserts = [...hook.matchAll(/\.from\("generations"\)\s*\n\s*\.insert\(/g)];
+  assert.equal(inserts.length, 1, "exactly one insert remains");
+  const guard = hook.slice(0, inserts[0].index!);
+  assert.ok(
+    /if \(!isOrchestrationModel\(effectiveModel\)\) \{[\s\S]*$/.test(guard),
+    "and it sits inside the non-orchestration placeholder branch"
+  );
+});

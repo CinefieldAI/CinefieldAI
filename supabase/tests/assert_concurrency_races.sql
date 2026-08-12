@@ -306,6 +306,135 @@ BEGIN
   RAISE NOTICE 'PROOF Y PASS: cancel metadata merges at one level, creating and preserving';
 END $$;
 
+-- ===========================================================================
+-- Z — SERVER-SIDE GENERATION CREATION UNDER REAL CONTENTION (Phase 5)
+--
+-- The last endpoint-level gap. Six concurrent callers of the real
+-- create_generation_tx, same actor and same idempotency key, must produce
+-- ONE generation. The partial unique index decides; the unique_violation
+-- handler turns the losers into replays rather than errors.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v_workers  integer;
+  v_created  integer;
+  v_distinct integer;
+  v_rows     integer;
+BEGIN
+  SELECT count(*) INTO v_workers FROM race_results WHERE race = 'create_generation';
+  ASSERT v_workers >= 4, 'Z: expected several concurrent creations, got ' || v_workers;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM race_results WHERE race = 'create_generation' AND outcome = 'rejected'
+  ), 'Z: a concurrent duplicate must replay, never surface a constraint error';
+
+  SELECT count(*) INTO v_created
+    FROM race_results WHERE race = 'create_generation' AND outcome = 'created';
+  ASSERT v_created = 1,
+    'Z: exactly ONE generation may be created for one logical request, got ' || v_created;
+
+  SELECT count(DISTINCT detail) INTO v_distinct
+    FROM race_results WHERE race = 'create_generation';
+  ASSERT v_distinct = 1,
+    'Z: every caller must receive the SAME generation id, got ' || v_distinct;
+
+  SELECT count(*) INTO v_rows
+    FROM generations WHERE clerk_user_id = 'user_race' AND idempotency_key = 'idem-create-race-key';
+  ASSERT v_rows = 1, 'Z: one durable generation row, got ' || v_rows;
+
+  RAISE NOTICE 'PROOF Z PASS: % concurrent creations -> ONE generation id', v_workers;
+END $$;
+
+-- ===========================================================================
+-- Z2 — SAME KEY, DIFFERENT PAYLOAD
+--
+-- The stored request hash must come back so the service can refuse rather
+-- than hand over a generation the caller did not ask for.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v      jsonb;
+  v_rows integer;
+BEGIN
+  v := create_generation_tx(
+    'user_race', '33333333-3333-4333-8333-333333333333',
+    'image', 'mock', 'mock-image', 'a DIFFERENT prompt',
+    '{}'::jsonb, NULL, NULL,
+    'idem-create-race-key', md5('a DIFFERENT prompt')
+  );
+
+  ASSERT (v->>'created')::boolean IS FALSE, 'Z2: the key is already used, so nothing new is created';
+  ASSERT v->>'request_hash' = md5('canonical race prompt'),
+    'Z2: the STORED hash must be returned so the caller can detect the mismatch';
+
+  SELECT count(*) INTO v_rows
+    FROM generations WHERE clerk_user_id = 'user_race' AND idempotency_key = 'idem-create-race-key';
+  ASSERT v_rows = 1, 'Z2: and no second row appears';
+
+  RAISE NOTICE 'PROOF Z2 PASS: key reuse with a different payload is detectable';
+END $$;
+
+-- ===========================================================================
+-- Z3 — CROSS-ACTOR KEY REUSE
+--
+-- The same key from a different owner is a DIFFERENT generation. It must
+-- never resolve to the first actor's row.
+-- ===========================================================================
+
+DO $$
+DECLARE
+  v        jsonb;
+  v_first  uuid;
+  v_second uuid;
+BEGIN
+  SELECT id INTO v_first FROM generations
+   WHERE clerk_user_id = 'user_race' AND idempotency_key = 'idem-create-race-key';
+
+  INSERT INTO profiles (clerk_user_id, plan, credits)
+  VALUES ('user_other', 'pro', 100) ON CONFLICT DO NOTHING;
+  INSERT INTO projects (id, clerk_user_id, title)
+  VALUES ('99999999-9999-4999-8999-999999999999', 'user_other', 'other project')
+  ON CONFLICT DO NOTHING;
+
+  v := create_generation_tx(
+    'user_other', '99999999-9999-4999-8999-999999999999',
+    'image', 'mock', 'mock-image', 'canonical race prompt',
+    '{}'::jsonb, NULL, NULL,
+    'idem-create-race-key', md5('canonical race prompt')
+  );
+
+  ASSERT (v->>'created')::boolean IS TRUE,
+    'Z3: another tenant reusing the key gets their OWN generation';
+  v_second := (v->>'generation_id')::uuid;
+  ASSERT v_second IS DISTINCT FROM v_first,
+    'Z3: a key must never cross a tenant boundary';
+
+  RAISE NOTICE 'PROOF Z3 PASS: idempotency keys are tenant-scoped';
+END $$;
+
+-- ===========================================================================
+-- Z4 — A GENERATION MAY NOT BE ATTACHED TO SOMEONE ELSE'S PROJECT
+-- ===========================================================================
+
+DO $$
+DECLARE v_raised boolean := false;
+BEGIN
+  BEGIN
+    PERFORM create_generation_tx(
+      'user_other', '33333333-3333-4333-8333-333333333333',
+      'image', 'mock', 'mock-image', 'stolen project',
+      '{}'::jsonb, NULL, NULL, NULL, NULL
+    );
+  EXCEPTION WHEN others THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised,
+    'Z4: a SECURITY DEFINER function bypasses RLS and must check ownership itself';
+  RAISE NOTICE 'PROOF Z4 PASS: project ownership is re-checked inside the function';
+END $$;
+
 SELECT 'CONCURRENCY RACE PROOFS PASSED' AS result;
 
 -- ===========================================================================

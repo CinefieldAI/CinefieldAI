@@ -1,42 +1,45 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { OrchestrationError } from "@/lib/orchestration/errors";
+import { OrchestrationError, toOrchestrationError } from "@/lib/orchestration/errors";
 import {
+  isExecuteOnlyBody,
   readGenerationId,
   respondToGenerationRequest,
 } from "@/lib/orchestration/generation-api-contract";
+import {
+  createGeneration,
+  type GenerationCreateRequest,
+} from "@/lib/orchestration/generation-create-service";
+import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 
 /**
- * POST /api/generate — THE canonical production generation entry point
- * (Phase 5 production convergence).
+ * POST /api/generate — THE canonical production generation entry point.
  *
- * Body: { "generationId": "<uuid>" }
+ * CANONICAL BODY (Phase 5 final convergence):
+ *   {
+ *     model, prompt, projectId,
+ *     negativePrompt?, inputUrl?, metadata?, idempotencyKey?
+ *   }
  *
- * Every production generation surface converges here or on a compatibility
- * wrapper that delegates to the same server behaviour:
+ * The server creates the generation and then starts Temporal. Everything
+ * internal is derived here, not accepted: the owner comes from the verified
+ * session, provider and generation type from the model registry, and the
+ * generation id from the database. There is no field through which a client
+ * could name a provider, an attempt, a workflow, a queue, or a credit
+ * outcome — the request type has none, so none can be smuggled in.
  *
- *   POST /api/generate                              canonical
- *   POST /api/orchestration/execute                 wrapper, kept for callers
- *   POST /api/generations/[generationId]/execute    wrapper, kept for the
- *                                                   frozen /generate UI
+ * COMPATIBILITY BODY:
+ *   { generationId }
+ * Executes a row that already exists. This is what the two wrapper routes
+ * send, and keeping it here means one endpoint serves both shapes instead of
+ * the behaviours drifting apart across routes.
  *
- * All three call respondToGenerationRequest(), so there is exactly one
- * ownership decision and one response contract. A route cannot become a
- * lifecycle owner because a route has nothing to own with.
+ * CREATION AND EXECUTION ARE SEPARATE, AND THE ORDER MATTERS. The row commits
+ * first; Temporal starts after. A Temporal failure therefore leaves a
+ * durable, recoverable generation rather than losing the request — and the
+ * database transaction is never held open across a network call to Temporal.
  *
- * WHAT THIS ROUTE DOES NOT DO
- * It does not call a provider, does not touch Trigger.dev, does not compute
- * a price and does not reserve credits. Pricing and the credit lifecycle are
- * Phase 10 and are deliberately not wired here — see the report's Phase 10
- * dependency note rather than assuming silence means they are handled.
- *
- * WHY THE BODY IS ONLY AN ID
- * The durable generation row is created by the authenticated browser client
- * under RLS, which is the architecture that predates this phase; this
- * endpoint takes ownership of the row's EXECUTION. Accepting a full
- * generation request and creating the row server-side is the remaining
- * increment of Phase 5 and is called out in the report — it is not implied
- * by this route existing.
+ * Pricing and credit reservation are deliberately not wired — Phase 10.
  */
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -47,19 +50,64 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(error.toResponseBody(), { status: error.status });
   }
 
-  let generationId: string;
+  let body: unknown;
   try {
-    generationId = readGenerationId(await request.json());
-  } catch (caught) {
-    const error =
-      caught instanceof OrchestrationError
-        ? caught
-        : new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
+    body = await request.json();
+  } catch {
+    const error = new OrchestrationError("INVALID_INPUT", {
+      userMessage: "Invalid request body.",
+    });
     return NextResponse.json(error.toResponseBody(), { status: error.status });
   }
 
-  // Ownership of the row is verified server-side inside the execution
-  // service's activities against the durable row — this route never widens
-  // what the caller may touch.
+  // ---- Compatibility shape: execute an existing row ----------------------
+  if (isExecuteOnlyBody(body)) {
+    try {
+      return respondToGenerationRequest(readGenerationId(body), userId);
+    } catch (caught) {
+      const error = toOrchestrationError(caught);
+      return NextResponse.json(error.toResponseBody(), { status: error.status });
+    }
+  }
+
+  // ---- Canonical shape: create, then execute -----------------------------
+  if (!isSupabaseAdminConfigured()) {
+    const error = new OrchestrationError("PROVIDER_NOT_CONFIGURED", {
+      userMessage: "The server is not fully configured.",
+    });
+    return NextResponse.json(error.toResponseBody(), { status: error.status });
+  }
+
+  let generationId: string;
+  try {
+    const created = await createGeneration(
+      getSupabaseAdminClient(),
+      userId,
+      body as GenerationCreateRequest
+    );
+
+    if (created.outcome === "idempotency_conflict") {
+      // The key was reused with a different payload. Returning the earlier
+      // generation would answer a question this caller did not ask.
+      const error = new OrchestrationError("DUPLICATE_EXECUTION", {
+        userMessage:
+          "This idempotency key was already used for a different request.",
+      });
+      return NextResponse.json(
+        { ...error.toResponseBody(), reason: "idempotency_key_reused_with_different_request" },
+        { status: error.status }
+      );
+    }
+
+    generationId = created.generationId;
+  } catch (caught) {
+    const error = toOrchestrationError(caught);
+    return NextResponse.json(error.toResponseBody(), { status: error.status });
+  }
+
+  // The row is durable from here. Starting Temporal is a separate step, so a
+  // failure to start reports unavailable while the generation survives for a
+  // retry or reconciliation to pick up — it is never deleted to hide an
+  // orchestration failure.
   return respondToGenerationRequest(generationId, userId);
 }

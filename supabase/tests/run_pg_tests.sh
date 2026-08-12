@@ -45,7 +45,8 @@ for f in \
   "$ROOT/supabase/migrations/20260810120000_generation_attempts.sql" \
   "$ROOT/supabase/migrations/20260812130000_outbox_events.sql" \
   "$ROOT/supabase/migrations/20260811120000_credit_system.sql"   "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql" \
-  "$ROOT/supabase/migrations/20260815000000_fix_cancel_metadata_nesting.sql"
+  "$ROOT/supabase/migrations/20260815000000_fix_cancel_metadata_nesting.sql" \
+  "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -207,6 +208,9 @@ race 6 "SELECT ensure_attempt_race(__W__, '77777777-7777-4777-8777-777777777777'
 
 echo "==> race: duplicate cancel intent (6 connections)"
 race 6 "SELECT cancel_intent_race(__W__, '88888888-8888-4888-8888-888888888888');"
+
+echo "==> race: server-side generation creation, same idempotency key (6 connections)"
+race 6 "SELECT create_generation_race(__W__, 'idem-create-race-key');"
 
 echo "==> race invariants"
 psql_run < "$ROOT/supabase/tests/assert_concurrency_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
