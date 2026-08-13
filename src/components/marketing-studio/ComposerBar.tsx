@@ -2,16 +2,20 @@
 
 type ComposerMode = "image" | "video";
 
+import { AtSign, Minus, Monitor, Plus } from "lucide-react";
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
+import MarketingImageModelSelector from "./MarketingImageModelSelector";
 
 interface ComposerBarProps {
   prompt: string;
   onPromptChange: (value: string) => void;
   composerMode: ComposerMode;
   onComposerModeChange: (mode: ComposerMode) => void;
+  selectedImageModel: string;
+  onImageModelChange: (name: string) => void;
   attachedProductMedia: UploadedMedia[];
   onGenerate: () => void;
   resizeWidth: number;
@@ -90,6 +94,8 @@ export default function ComposerBar({
   onPromptChange,
   composerMode,
   onComposerModeChange,
+  selectedImageModel,
+  onImageModelChange,
   attachedProductMedia,
   onGenerate,
   resizeWidth,
@@ -170,8 +176,8 @@ export default function ComposerBar({
           cornerLabel="Resize marketing prompt width and height"
         />
 
-        {/* LEFT: PROMPT INPUT */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center pr-3">
+        {/* LEFT: PROMPT INPUT + IMAGE CONTROLS */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-3 pr-3">
           <div className="flex items-start gap-3">
             <input
               type="text"
@@ -181,6 +187,59 @@ export default function ComposerBar({
               className="min-h-[32px] flex-1 resize-none bg-transparent pt-1 text-sm text-white outline-none placeholder:text-white/55"
             />
           </div>
+          {composerMode === "image" && (
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                aria-label="Add"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#101112] text-white/90 transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
+              >
+                <Plus className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Mention"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#101112] text-white/90 transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
+              >
+                <AtSign className="size-4" />
+              </button>
+              <MarketingImageModelSelector
+                selected={selectedImageModel}
+                onSelect={onImageModelChange}
+              />
+              <button
+                type="button"
+                className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#101112] px-3 text-xs font-semibold text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
+              >
+                <span className="h-3 w-4 rounded-[3px] border border-white/65" />
+                16:9
+              </button>
+              <button
+                type="button"
+                className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#101112] px-3 text-xs font-semibold text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d]"
+              >
+                <Monitor className="size-4 text-white/80" />
+                2K
+              </button>
+              <div className="flex h-8 shrink-0 items-center rounded-lg border border-white/[0.08] bg-[#101112] text-xs font-semibold text-white">
+                <button
+                  type="button"
+                  aria-label="Decrease count"
+                  className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white"
+                >
+                  <Minus className="size-3.5" />
+                </button>
+                <span className="px-2">1/1</span>
+                <button
+                  type="button"
+                  aria-label="Increase count"
+                  className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RIGHT: ATTACHED MEDIA + GENERATE */}
