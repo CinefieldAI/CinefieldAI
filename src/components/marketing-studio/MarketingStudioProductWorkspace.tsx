@@ -47,6 +47,7 @@ export default function MarketingStudioProductWorkspace() {
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [composerMode, setComposerMode] = useState<ComposerMode>("image");
+  const [selectedImageModel, setSelectedImageModel] = useState("Nano Banana Pro");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
   const searchQuery = "";
@@ -439,6 +440,8 @@ export default function MarketingStudioProductWorkspace() {
                       onPromptChange={setPrompt}
                       composerMode={composerMode}
                       onComposerModeChange={setComposerMode}
+                      selectedImageModel={selectedImageModel}
+                      onImageModelChange={setSelectedImageModel}
                       attachedProductMedia={attachedProductMedia}
                       onGenerate={handleGenerate}
                       resizeWidth={composerWidth}
@@ -505,6 +508,8 @@ export default function MarketingStudioProductWorkspace() {
                   onPromptChange={setPrompt}
                   composerMode={composerMode}
                   onComposerModeChange={setComposerMode}
+                  selectedImageModel={selectedImageModel}
+                  onImageModelChange={setSelectedImageModel}
                   attachedProductMedia={attachedProductMedia}
                   onGenerate={handleGenerate}
                   resizeWidth={composerWidth}
