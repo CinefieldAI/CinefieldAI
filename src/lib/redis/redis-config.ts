@@ -1,4 +1,5 @@
 import "server-only";
+import { OrchestrationError } from "@/lib/orchestration/errors";
 
 /**
  * Cinefield Redis configuration (Phase 6R — Redis foundation, Phase A).
@@ -48,13 +49,67 @@ export function isRedisConfigured(): boolean {
 }
 
 /**
- * Resolves Redis configuration, or null when Redis is not usable — either
- * because it was never explicitly enabled, or because no URL was supplied.
- * Callers must treat null as "do not attempt a connection."
+ * Schemes ioredis understands. `redis:` is plaintext, `rediss:` is TLS.
+ * Anything else — an http URL, a pasted CLI command, a connection string
+ * from a different product — is an operator mistake, not a connection.
+ */
+const SUPPORTED_SCHEMES = new Set(["redis:", "rediss:"]);
+
+/**
+ * Non-secret reason a URL was rejected. Safe to log and to attach to an
+ * error: it describes the SHAPE of the mistake, never any part of the value.
+ */
+export type RedisConfigProblem = "missing_url" | "invalid_url" | "unsupported_scheme";
+
+/**
+ * Validates REDIS_URL without ever revealing it.
+ *
+ * WHY THIS EXISTS (M4). `getRedisConfig()` used to check only that the
+ * variable was non-empty, so a malformed value sailed through and became a
+ * raw `TypeError: Invalid URL` inside `new Redis(...)`. That surfaced as a
+ * crash in the middle of route resolution and took down every generation
+ * request — observed live on 2026-08-13, where a pasted block of prose had
+ * ended up in REDIS_URL. A configuration mistake must fail as a typed
+ * configuration error at the boundary, not as an unhandled exception three
+ * layers down.
+ *
+ * NOT re-interpreted as "Redis disabled". Silently degrading would take
+ * rate limits, distributed locks and the Phase 7-E runtime routing controls
+ * offline while everything looked healthy.
+ */
+export function validateRedisUrl(url: string | undefined): RedisConfigProblem | null {
+  if (!url) return "missing_url";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "invalid_url";
+  }
+
+  if (!SUPPORTED_SCHEMES.has(parsed.protocol)) return "unsupported_scheme";
+  return null;
+}
+
+/**
+ * Resolves Redis configuration, or null when Redis was never enabled.
+ *
+ * Enabled-but-broken is NOT null — it throws `REDIS_CONFIGURATION_INVALID`
+ * carrying only the shape of the problem. The two states are different
+ * facts and callers must be able to tell them apart.
  */
 export function getRedisConfig(): RedisConfig | null {
   if (!isRedisEnabled()) return null;
+
   const url = read("REDIS_URL");
-  if (!url) return null;
-  return { url };
+  const problem = validateRedisUrl(url);
+  if (problem) {
+    throw new OrchestrationError("REDIS_CONFIGURATION_INVALID", {
+      // `reason` is one of three fixed strings. The URL, its length, its
+      // prefix and any credential inside it never appear here.
+      context: { reason: problem },
+    });
+  }
+
+  return { url: url as string };
 }

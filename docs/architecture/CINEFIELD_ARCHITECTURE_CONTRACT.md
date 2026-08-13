@@ -329,6 +329,58 @@ A user double-clicking a button must not cause double charging. Every generation
 
 **Current implementation note:** already implemented for the Trigger.dev dispatch path — `generationTask.trigger()` is called with `idempotencyKey: generationId` (1-hour TTL), and independently, `claimGeneration`'s `.eq("status","queued")` compare-and-set in `status-manager.ts` prevents a second execution of the same row regardless of dispatch path. No credit system exists yet, so the "double charge" half of this rule has nothing to apply to yet.
 
+### 9.1 A committed generation is not a started workflow (M6)
+
+`create_generation_tx()` and the Temporal start call are two separate
+operations against two separate systems. Committing the row therefore does
+NOT mean a workflow exists, and for a while this codebase quietly assumed it
+did — `/api/generate` called the result "a durable, recoverable generation"
+while nothing in the system recovered it. A crash, redeploy or Temporal
+outage in that window left a row in `queued` that no worker would ever pick
+up. Once Phase 10 reserves credit in the same transaction, that stranded row
+takes an open reservation with it.
+
+The intent to start is now durable. `create_generation_tx()` writes one row
+into `workflow_start_outbox` in the SAME transaction as the generation, so
+"committed" and "somebody is obliged to start this" became the same fact.
+
+```
+create_generation_tx()  ──┐
+  generation row          │  one transaction
+  workflow-start intent ──┘
+        │
+        ├─ fast path:  the request starts Temporal immediately and retires
+        │              the intent (best effort — losing this costs nothing)
+        │
+        └─ relay:      claims due intents under a lease, starts the SAME
+                       deterministic workflow id, marks delivered
+```
+
+Four properties make redelivery safe rather than dangerous:
+
+- **Deterministic id.** `generationWorkflowId()` is a pure function of the
+  generation id, and the starter passes `WorkflowIdConflictPolicy.USE_EXISTING`.
+  Temporal itself refuses a second workflow, so at-least-once delivery costs
+  at most a redundant API call. The dangerous direction — never starting — is
+  the one the outbox removes.
+- **An already-running workflow is a delivered intent**, not a conflict. The
+  obligation was that a workflow exists, not that this caller created it.
+- **Failure is never terminal.** `mark_workflow_start_failed()` returns the
+  row to pending with backoff. An undeliverable start stays owed; abandoning
+  it would recreate the stranded generation, just with a tidier table.
+- **The relay may only start workflows.** It cannot create a generation,
+  submit provider work, write generation state or touch credits — asserted by
+  tests over its imports and its source. Temporal remains the sole generation
+  lifecycle owner; this is a delivery guarantee in front of it, not a second
+  owner.
+
+Generations that predate the mechanism are retired rather than replayed
+(`20260818010000`). Inventing an obligation retroactively is not recovery —
+on the live database it would have started 91 workflows for abandoned
+early-August test rows.
+
+Audit defect **M6 = CLOSED**.
+
 ## 10. Credit and Cost System
 
 Platform credit must be kept separate from provider cost. The following concepts must not be conflated: provider cost, platform credit price, user subscription, promotional credit, refunded credit.

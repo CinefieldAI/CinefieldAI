@@ -2,6 +2,11 @@ import "server-only";
 import { resolveGenerationOwner, type GenerationOwner } from "./execution-mode";
 import { executeGeneration } from "./orchestrator";
 import { startGenerationWorkflow } from "@/lib/temporal/generation-starter";
+import {
+  getSupabaseAdminClient,
+  isSupabaseAdminConfigured,
+} from "@/lib/supabase/supabaseAdmin";
+import { resolveIntentStartedInline } from "./workflow-start-intent";
 import type { OrchestrationResult } from "./types";
 
 /**
@@ -69,12 +74,33 @@ export interface GenerationExecutionDeps {
   resolveOwner: () => GenerationOwner;
   startWorkflow: typeof startGenerationWorkflow;
   runDirect: typeof executeGeneration;
+  /**
+   * Retires the durable start intent this request just satisfied (M6).
+   *
+   * NOT the correctness mechanism — the relay is. If this never runs the row
+   * stays pending, the relay redelivers, and Temporal absorbs the duplicate
+   * through USE_EXISTING. It exists so the ordinary case does not leave the
+   * relay a queue of work that is already done.
+   */
+  resolveStartIntent: (generationId: string) => Promise<void>;
+}
+
+async function retireStartIntent(generationId: string): Promise<void> {
+  // Best effort by design: a failure here must never turn a successfully
+  // started generation into a failed request.
+  try {
+    if (!isSupabaseAdminConfigured()) return;
+    await resolveIntentStartedInline(getSupabaseAdminClient(), generationId);
+  } catch {
+    // Swallowed deliberately. The relay is the backstop.
+  }
 }
 
 const defaultDeps: GenerationExecutionDeps = {
   resolveOwner: resolveGenerationOwner,
   startWorkflow: startGenerationWorkflow,
   runDirect: executeGeneration,
+  resolveStartIntent: retireStartIntent,
 };
 
 function log(fields: Record<string, unknown>): void {
@@ -109,6 +135,10 @@ export async function executeGenerationRequest(
         generationId: params.generationId,
         clerkUserId: params.clerkUserId,
       });
+      // The workflow exists now, so the durable obligation to start one is
+      // satisfied. Retired AFTER the start, never before: the reverse order
+      // would clear the obligation for a start that then failed.
+      await deps.resolveStartIntent(params.generationId);
       log({
         generationId: params.generationId,
         owner,

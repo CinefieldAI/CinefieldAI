@@ -290,6 +290,37 @@ failing is the common case, and tripping every route through that provider
 would turn a narrow outage into a total one. `providerModelId` is hex-encoded
 into the key alphabet, so `a/b` and `a.b` cannot collide.
 
+### Redis configuration fails fast (M4)
+
+`getRedisConfig()` used to check only that `REDIS_URL` was non-empty. A
+malformed value therefore sailed past the boundary and became a raw
+`TypeError: Invalid URL` inside `new Redis(...)`, three layers down inside
+route resolution — which took down **every** generation request. Observed
+live on 2026-08-13, when a pasted block of prose ended up in the variable.
+
+Three states, kept distinct because they are different facts:
+
+| Configuration | Result |
+| --- | --- |
+| `REDIS_ENABLED` not `"true"` | `null` — Redis is off, a valid deployment shape |
+| enabled, URL missing / unparseable / wrong scheme | throws `REDIS_CONFIGURATION_INVALID` |
+| enabled, `redis://` or `rediss://` | resolved config |
+
+Enabled-but-broken is deliberately **not** reinterpreted as "disabled".
+Degrading silently would take rate limits, distributed locks and the Phase
+7-E runtime routing controls offline while everything looked healthy.
+
+The error carries only a `reason` from a fixed vocabulary — `missing_url`,
+`invalid_url`, `unsupported_scheme` — describing the shape of the mistake. No
+part of the value, its host, port, or credentials ever appears in an error or
+a log, asserted by test.
+
+Redis A / Redis B ownership is unchanged: Redis A reads `REDIS_URL`, BullMQ
+reads `BULLMQ_REDIS_URL`, and neither falls back to the other. Dedicated
+Redis B remains an external setup that is still deferred.
+
+Audit defect **M4 = CLOSED**.
+
 The breaker TTL is deliberately longer than the signals it derives from: an
 expired breaker key reads as CLOSED, so a TTL shorter than the cooldown would
 silently reopen a provider Cinefield had just decided to stop using.

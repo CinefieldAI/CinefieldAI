@@ -334,6 +334,7 @@ test("6R-B: Temporal unavailable fails closed - no provider call, no Trigger dis
 
     // A client that cannot reach the server, exactly as an outage looks.
     let directRuns = 0;
+    let intentRetirements = 0;
     const outcome = await executeGenerationRequest(
       { generationId, clerkUserId },
       {
@@ -347,7 +348,18 @@ test("6R-B: Temporal unavailable fails closed - no provider call, no Trigger dis
           directRuns += 1;
           throw new Error("the dev path must never be reached as a fallback");
         },
+        // A start that failed leaves the durable intent owed, so this must
+        // not run at all — asserted below.
+        resolveStartIntent: async () => {
+          intentRetirements += 1;
+        },
       }
+    );
+
+    assert.equal(
+      intentRetirements,
+      0,
+      "a failed start must leave the workflow-start intent pending for the relay"
     );
 
     assert.equal(outcome.outcome, "unavailable");

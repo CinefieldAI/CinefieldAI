@@ -19,6 +19,7 @@ export type OrchestrationErrorCode =
   | "REQUIRED_INPUT_MISSING"
   | "UNSUPPORTED_INPUT_TYPE"
   | "CAPABILITY_NOT_SUPPORTED"
+  | "REDIS_CONFIGURATION_INVALID"
   | "PROVIDER_NOT_CONFIGURED"
   | "PROVIDER_AUTH_ERROR"
   | "PROVIDER_RATE_LIMIT"
@@ -72,6 +73,15 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
   CAPABILITY_NOT_SUPPORTED: {
     message: "A selected setting is not supported by this model.",
     status: 400,
+    retryable: false,
+  },
+  // Enabled with a URL the client cannot use. Distinct from "not enabled",
+  // which is a valid deployment shape — this is an operator mistake, and
+  // reporting it as "Redis is off" would silently drop rate limits, locks
+  // and runtime routing controls.
+  REDIS_CONFIGURATION_INVALID: {
+    message: "A service is temporarily unavailable.",
+    status: 503,
     retryable: false,
   },
   PROVIDER_NOT_CONFIGURED: {
