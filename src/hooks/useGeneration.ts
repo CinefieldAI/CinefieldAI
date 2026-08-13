@@ -14,7 +14,13 @@ import {
   isOrchestrationModel,
   isMockOrchestrationModel,
   getOrchestrationGenerationType,
+  isProductionReadyModel,
 } from "@/lib/orchestration/orchestration-models";
+import {
+  canOfferForGeneration,
+  fetchModelAvailability,
+  resolveRuntimeAvailability,
+} from "@/lib/orchestration/model-availability-client";
 
 /**
  * Shared client-side generation workflow.
@@ -222,6 +228,35 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
 
       try {
         const effectiveModel = request.model;
+
+        // ---- PHASE 8: the preselected-model guard -------------------------
+        //
+        // Blocking the picker row is not enough. A model can already BE the
+        // selection — restored from state, carried by ?model=, or simply the
+        // default — long before anyone opens the list, and its availability
+        // can change while the page is open. Without this, Generate looks
+        // perfectly normal and dies at the server with NO_ELIGIBLE_ROUTE.
+        //
+        // Awaits the shared cache rather than reading it: on the very first
+        // click the fetch may still be in flight, and "not heard yet" must not
+        // resolve as permission.
+        //
+        // This is UX consistency, NOT enforcement. POST /api/generate
+        // re-derives eligibility itself, so a client that skipped this — or
+        // lied about it — still cannot run an unsafe provider.
+        if (isOrchestrationModel(effectiveModel)) {
+          const runtime = await fetchModelAvailability();
+          const availability = resolveRuntimeAvailability(effectiveModel, {
+            isServerModel: true,
+            staticProductionReady: isProductionReadyModel(effectiveModel),
+            runtime,
+          });
+          if (!canOfferForGeneration(availability)) {
+            setError("This model is currently unavailable. Please choose another model.");
+            return;
+          }
+        }
+
         const orchestrationType = getOrchestrationGenerationType(effectiveModel);
         const generationType =
           orchestrationType ?? mapCinemaModeToGenerationType(request.uiMode);

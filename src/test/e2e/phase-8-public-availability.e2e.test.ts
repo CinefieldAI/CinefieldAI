@@ -392,12 +392,18 @@ test("the model selector will not select a known production-unavailable model", 
   const selector = readSource("src/components/cinema-studio/ModelSelector.tsx");
   const selectorCode = readCode("src/components/cinema-studio/ModelSelector.tsx");
 
-  assert.match(selector, /function isKnownProductionUnavailable/);
-  // Selection is refused before onChange fires.
-  assert.match(selector, /if \(isKnownProductionUnavailable\(id\)\) return;/);
+  // Superseded by the runtime binding: the selector now resolves availability
+  // through the shared decision function rather than the build flag alone.
+  assert.match(selector, /function selectorAvailability/);
+  assert.match(selector, /useModelAvailability\(\)/);
+  // Selection is refused before onChange fires, on the RESOLVED answer.
+  assert.match(
+    selector,
+    /if \(!canOfferForGeneration\(selectorAvailability\(id, runtimeAvailability\)\)\) return;/
+  );
   // And the row shows it, in product language.
-  assert.match(selector, /\? "Unavailable" : model\.description/);
-  assert.match(selector, /aria-disabled=\{isKnownProductionUnavailable/);
+  assert.match(selector, /unavailableLabel \?\? model\.description/);
+  assert.match(selector, /aria-disabled=\{unavailableLabel \? true : undefined\}/);
 
   // No provider name and no internal enum reaches the component.
   for (const forbidden of ["gemini", "cloudflare", "not_proven", "restart_safe", "durability"]) {
@@ -414,9 +420,10 @@ test("the gate is narrow: catalog-only cards are untouched", () => {
   assert.equal(isOrchestrationModel("seedream-5.0-pro"), false);
   assert.equal(isOrchestrationModel("kling-3.0-omni"), false);
 
-  // The helper only fires for models the registry actually knows.
+  // The decision only engages for models the registry actually knows: an
+  // unknown model reports isServerModel false and is left alone.
   const selector = readSource("src/components/cinema-studio/ModelSelector.tsx");
-  assert.match(selector, /isOrchestrationModel\(modelId\) && !isProductionReadyModel\(modelId\)/);
+  assert.match(selector, /isServerModel: isOrchestrationModel\(modelId\)/);
 });
 
 test("capability validation is independent of routing availability", () => {

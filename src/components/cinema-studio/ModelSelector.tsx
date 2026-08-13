@@ -8,23 +8,35 @@ import {
   isOrchestrationModel,
   isProductionReadyModel,
 } from "@/lib/orchestration/orchestration-models";
+import {
+  availabilityLabel,
+  canOfferForGeneration,
+  resolveRuntimeAvailability,
+  type RuntimeAvailability,
+} from "@/lib/orchestration/model-availability-client";
+import { useModelAvailability } from "@/hooks/useModelAvailability";
 
 /**
- * PHASE 8: is this a model the server KNOWS and currently refuses?
+ * PHASE 8: may this model be offered as normally generatable?
  *
- * Narrow on purpose. It is true only for a model the orchestration registry
- * actually contains whose provider has no proven restart-safe execution —
- * today, the Gemini-backed cards. Every marketing card in this list has no
- * server-side model at all and is left exactly as it was; those never reached
- * the canonical generation path and this task is not about them.
+ * Reads RUNTIME availability, not the build artifact. The build catalog knows
+ * whether a provider is durable — a deploy-time fact — but it cannot know that
+ * an operator disabled the last safe route five minutes ago. Gating on it
+ * alone was the defect this replaces: a model could read "ready" in the picker
+ * while the server had already stopped accepting it.
  *
- * The flag is the STATIC half of availability, read from the build catalog.
- * It cannot see a route disabled in the database, and it is not a security
- * boundary — POST /api/generate enforces the truth. It exists so the UI stops
- * offering a model the server has already decided to refuse.
+ * The decision itself lives in model-availability-client so the picker and the
+ * Generate guard cannot drift apart. This component only asks.
  */
-function isKnownProductionUnavailable(modelId: string): boolean {
-  return isOrchestrationModel(modelId) && !isProductionReadyModel(modelId);
+function selectorAvailability(
+  modelId: string,
+  runtime: Map<string, boolean> | null
+): RuntimeAvailability {
+  return resolveRuntimeAvailability(modelId, {
+    isServerModel: isOrchestrationModel(modelId),
+    staticProductionReady: isProductionReadyModel(modelId),
+    runtime,
+  });
 }
 import {
   Check,
@@ -114,6 +126,7 @@ type RowSkin = "default" | "klingTurbo";
 
 function ImageRow({
   model,
+  unavailableLabel,
   value,
   onSelect,
   focused,
@@ -121,6 +134,8 @@ function ImageRow({
   isContinuation,
 }: {
   model: ModelInfo;
+  /** Product-level label when the model may not be offered; null when it may. */
+  unavailableLabel?: string | null;
   value: string;
   onSelect: (id: string) => void;
   focused?: boolean;
@@ -143,9 +158,9 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      aria-disabled={isKnownProductionUnavailable(model.id) || undefined}
+      aria-disabled={unavailableLabel ? true : undefined}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
-        isKnownProductionUnavailable(model.id) ? "opacity-40" : ""
+        unavailableLabel ? "opacity-40" : ""
       } ${
         marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
@@ -188,7 +203,7 @@ function ImageRow({
           {/* Product language only. "Unavailable" is a product fact; which
               provider it would have used, and why that provider is not
               trusted, are not the browser's business. */}
-          {isKnownProductionUnavailable(model.id) ? "Unavailable" : model.description}
+          {unavailableLabel ?? model.description}
         </p>
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
@@ -201,6 +216,7 @@ function ImageRow({
 /** Flat (directly-selectable) video row — Cinematic & Featured sections. */
 function VideoFlatRow({
   model,
+  unavailableLabel,
   value,
   onSelect,
   focused,
@@ -208,6 +224,8 @@ function VideoFlatRow({
   isContinuation,
 }: {
   model: ModelInfo;
+  /** Product-level label when the model may not be offered; null when it may. */
+  unavailableLabel?: string | null;
   value: string;
   onSelect: (id: string) => void;
   focused?: boolean;
@@ -230,9 +248,9 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
-      aria-disabled={isKnownProductionUnavailable(model.id) || undefined}
+      aria-disabled={unavailableLabel ? true : undefined}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
-        isKnownProductionUnavailable(model.id) ? "opacity-40" : ""
+        unavailableLabel ? "opacity-40" : ""
       } ${
         marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
@@ -540,10 +558,16 @@ export default function ModelSelector({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Runtime production availability, fetched once and shared with the Generate
+  // guard through the module cache. Null until it resolves, which reads as
+  // "checking" — never as available.
+  const runtimeAvailability = useModelAvailability();
+
   const select = (id: string) => {
     // A model the server will refuse must not become the active selection —
-    // otherwise Generate looks normal and fails at the boundary.
-    if (isKnownProductionUnavailable(id)) return;
+    // otherwise Generate looks normal and fails at the boundary. "checking"
+    // is not permission: unresolved runtime data means we have not heard yes.
+    if (!canOfferForGeneration(selectorAvailability(id, runtimeAvailability))) return;
     onChange(id);
     setOpen(false);
     setQuery("");
@@ -916,6 +940,9 @@ export default function ModelSelector({
                             <ImageRow
                               key={key}
                               model={m}
+                              unavailableLabel={availabilityLabel(
+                                selectorAvailability(m.id, runtimeAvailability)
+                              )}
                               value={value}
                               onSelect={select}
                               focused={focused}
@@ -941,6 +968,9 @@ export default function ModelSelector({
                           <VideoFlatRow
                             key={key}
                             model={m}
+                            unavailableLabel={availabilityLabel(
+                              selectorAvailability(m.id, runtimeAvailability)
+                            )}
                             value={value}
                             onSelect={select}
                             focused={focused}

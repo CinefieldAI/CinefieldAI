@@ -515,7 +515,11 @@ test("PUBLIC CATALOG AVAILABILITY GAP is real and recorded", async () => {
     "the only filter is the registry enabled flag"
   );
 
-  // The gap is documented, not silently carried.
+  // The gap this once recorded has since been CLOSED — the catalog now derives
+  // availability from the same eligibility the router uses, and the runtime
+  // API publishes it. What must stay documented is the architecture, not the
+  // old defect.
   const doc = readSource("docs/architecture/PROVIDER_NETWORK.md");
-  assert.match(doc, /PUBLIC CATALOG AVAILABILITY GAP/);
+  assert.match(doc, /Public production availability \(gap CLOSED\)/);
+  assert.match(doc, /Public capability != production availability/);
 });
