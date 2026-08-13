@@ -55,7 +55,8 @@ for f in \
   "$ROOT/supabase/migrations/20260815000000_fix_cancel_metadata_nesting.sql" \
   "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"   "$ROOT/supabase/migrations/20260817000000_model_routing.sql" \
   "$ROOT/supabase/migrations/20260818000000_workflow_start_outbox.sql" \
-  "$ROOT/supabase/migrations/20260818010000_retire_historical_start_intents.sql"
+  "$ROOT/supabase/migrations/20260818010000_retire_historical_start_intents.sql" \
+  "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"

@@ -292,3 +292,84 @@ BEGIN
 
   RAISE NOTICE 'PROOF W8 PASS: existing invariants intact and additive';
 END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- PROOF W9 — administrative retirement is auditable and idempotent
+-- ---------------------------------------------------------------------------
+-- Retiring a stale generation must (a) reach a state the schema already
+-- allows, (b) say WHY on the row, and (c) do nothing at all the second time.
+DO $$
+DECLARE
+  v_user text := 'user_retire_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_gen uuid;
+  v_first jsonb;
+  v_second jsonb;
+  v_reason text;
+  v_events integer;
+BEGIN
+  INSERT INTO profiles (clerk_user_id) VALUES (v_user);
+  INSERT INTO projects (clerk_user_id, title) VALUES (v_user, 'retire') RETURNING id INTO v_project;
+  v_gen := (create_generation_tx(v_user, v_project, 'image', 'mock', 'mock-image', 'p')
+            ->> 'generation_id')::uuid;
+
+  v_first := cancel_generation_tx(v_gen, 'stale_retired_never_submitted');
+  IF (v_first ->> 'applied')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'PROOF W9 FAILED: retirement did not apply';
+  END IF;
+
+  SELECT metadata -> 'orchestration' ->> 'cancelReason' INTO v_reason
+    FROM generations WHERE id = v_gen;
+  IF v_reason IS DISTINCT FROM 'stale_retired_never_submitted' THEN
+    RAISE EXCEPTION 'PROOF W9 FAILED: the reason was validated and then discarded (got %)', v_reason;
+  END IF;
+
+  PERFORM 1 FROM generations WHERE id = v_gen AND status = 'cancelled' AND completed_at IS NOT NULL;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PROOF W9 FAILED: row did not reach the existing terminal state';
+  END IF;
+
+  SELECT count(*) INTO v_events FROM outbox_events
+   WHERE aggregate_id = v_gen::text AND event_type = 'generation.cancelled';
+
+  -- Replay.
+  v_second := cancel_generation_tx(v_gen, 'stale_retired_never_submitted');
+  IF (v_second ->> 'applied')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'PROOF W9 FAILED: a terminal row was transitioned a second time';
+  END IF;
+
+  IF (SELECT count(*) FROM outbox_events
+       WHERE aggregate_id = v_gen::text AND event_type = 'generation.cancelled') <> v_events THEN
+    RAISE EXCEPTION 'PROOF W9 FAILED: replay emitted a second event';
+  END IF;
+
+  RAISE NOTICE 'PROOF W9 PASS: retirement is terminal, auditable, and idempotent on replay';
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- PROOF W10 — a reasonless cancellation is byte-identical to before
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_user text := 'user_noreason_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_gen uuid;
+  v_has_key boolean;
+BEGIN
+  INSERT INTO profiles (clerk_user_id) VALUES (v_user);
+  INSERT INTO projects (clerk_user_id, title) VALUES (v_user, 'noreason') RETURNING id INTO v_project;
+  v_gen := (create_generation_tx(v_user, v_project, 'image', 'mock', 'mock-image', 'p')
+            ->> 'generation_id')::uuid;
+
+  PERFORM cancel_generation_tx(v_gen);
+
+  SELECT (metadata -> 'orchestration') ? 'cancelReason' INTO v_has_key
+    FROM generations WHERE id = v_gen;
+  IF v_has_key THEN
+    RAISE EXCEPTION 'PROOF W10 FAILED: a NULL reason left a key behind';
+  END IF;
+
+  RAISE NOTICE 'PROOF W10 PASS: reasonless cancellation unchanged by the fix';
+END $$;
