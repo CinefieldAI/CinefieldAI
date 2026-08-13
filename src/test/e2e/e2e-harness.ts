@@ -136,6 +136,39 @@ export async function installFakeSupabase(db: FakeSupabaseClient): Promise<void>
   __setSupabaseAdminClientForTesting(db as never);
 
   seedRoutingTables(db);
+  await installFakeR2();
+}
+
+/**
+ * Phase 9-A. The finalization tail now writes the canonical original to R2
+ * before a generation may complete, so an offline run needs a storage double
+ * here too — otherwise every E2E would fail at a network call the harness
+ * exists to avoid.
+ *
+ * Deliberately a TRANSPORT double, in the same spirit as FakeSupabaseClient:
+ * the key derivation, the reserve→store→finalize ordering and the completion
+ * gate all run as production code. Only the socket is replaced.
+ */
+export async function installFakeR2(): Promise<void> {
+  // Well-formed and entirely fake. Validation runs for real against these.
+  process.env.CLOUDFLARE_R2_ACCESS_KEY_ID ??= "e2e-double-not-a-real-key";
+  process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY ??= "e2e-double-not-a-real-secret";
+  process.env.CLOUDFLARE_R2_ENDPOINT ??= "https://e2e-double.r2.cloudflarestorage.com";
+  process.env.CLOUDFLARE_R2_BUCKET ??= "cinefield-media-e2e";
+
+  const { __resetR2ClientForTesting } = await import("@/lib/media/r2-client");
+  __resetR2ClientForTesting({
+    // PutObjectCommand and HeadObjectCommand both land here. Head answers
+    // with a plausible size so a verification path has something to read.
+    send: async (command: { input?: { Body?: Uint8Array } }) => ({
+      ContentLength: command?.input?.Body?.byteLength ?? 0,
+    }),
+  } as never);
+}
+
+export async function uninstallFakeR2(): Promise<void> {
+  const { __resetR2ClientForTesting } = await import("@/lib/media/r2-client");
+  __resetR2ClientForTesting();
 }
 
 /**
@@ -200,6 +233,7 @@ export function seedRoutingTables(db: FakeSupabaseClient): void {
 export async function uninstallFakeSupabase(): Promise<void> {
   const { __setSupabaseAdminClientForTesting } = await import("@/lib/supabase/supabaseAdmin");
   __setSupabaseAdminClientForTesting(null);
+  await uninstallFakeR2();
 }
 
 /**

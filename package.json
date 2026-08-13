@@ -12,7 +12,9 @@
     "provider:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/provider-worker.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1110.0",
     "@aws-sdk/client-sqs": "^3.1106.0",
+    "@aws-sdk/s3-request-presigner": "^3.1110.0",
     "@clerk/nextjs": "^7.6.4",
     "@confluentinc/kafka-javascript": "^1.10.0",
     "@fal-ai/client": "^1.10.1",

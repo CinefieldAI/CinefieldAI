@@ -20,6 +20,9 @@ export type OrchestrationErrorCode =
   | "UNSUPPORTED_INPUT_TYPE"
   | "CAPABILITY_NOT_SUPPORTED"
   | "REDIS_CONFIGURATION_INVALID"
+  | "R2_CONFIGURATION_INVALID"
+  | "ASSET_STORAGE_FAILED"
+  | "ASSET_RECORD_FAILED"
   | "PROVIDER_NOT_CONFIGURED"
   | "PROVIDER_AUTH_ERROR"
   | "PROVIDER_RATE_LIMIT"
@@ -74,6 +77,28 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "A selected setting is not supported by this model.",
     status: 400,
     retryable: false,
+  },
+  // R2 is enabled-by-necessity from Phase 9-A: there is no "storage is off"
+  // deployment shape once media lives there, so a bad value is an operator
+  // mistake rather than a valid state.
+  R2_CONFIGURATION_INVALID: {
+    message: "A service is temporarily unavailable.",
+    status: 503,
+    retryable: false,
+  },
+  // The bytes could not be persisted to hot storage. Retryable: the provider
+  // result is still addressable, so another attempt can re-fetch and re-store.
+  ASSET_STORAGE_FAILED: {
+    message: "The generated media could not be stored.",
+    status: 502,
+    retryable: true,
+  },
+  // The object exists but its durable record does not. The generation MUST
+  // NOT complete on this — see the finalization boundary (M2).
+  ASSET_RECORD_FAILED: {
+    message: "The generated media could not be recorded.",
+    status: 500,
+    retryable: true,
   },
   // Enabled with a URL the client cannot use. Distinct from "not enabled",
   // which is a valid deployment shape — this is an operator mistake, and

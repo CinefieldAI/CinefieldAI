@@ -69,11 +69,42 @@ const NULLABLE_COLUMNS: Record<string, readonly string[]> = {
     "completed_at",
     "temporal_workflow_id",
   ],
+  // Phase 9-A. The verification columns matter here for the same reason the
+  // attempt NULLs did: code reads them to decide whether anything has been
+  // verified, and `undefined` is not `null`.
+  media_assets: [
+    "project_id",
+    "generation_id",
+    "generation_attempt_id",
+    "parent_asset_id",
+    "variant",
+    "declared_content_type",
+    "byte_size",
+    "original_filename",
+    "verified_mime",
+    "checksum_sha256",
+    "data_class",
+    "retention_policy",
+    "tombstoned_at",
+    "stored_at",
+    "finalized_at",
+  ],
 };
 
 /** Column defaults the real schema applies when an INSERT omits them. */
 const COLUMN_DEFAULTS: Record<string, Row> = {
   generation_attempts: { status: "pending", submission_evidence: "none" },
+  // Mirrors 20260820000000_media_assets.sql. The verification defaults are the
+  // point: nothing may start life looking approved.
+  media_assets: {
+    role: "original",
+    storage_backend: "r2",
+    status: "pending",
+    moderation_status: "not_evaluated",
+    quarantine_status: "quarantined",
+    backup_status: "not_backed_up",
+    legal_hold: false,
+  },
 };
 
 export interface FakeSupabaseState {
@@ -112,7 +143,12 @@ export class FakeSupabaseClient {
   storageSignedUrls: string[] = [];
 
   constructor(initial: Partial<FakeSupabaseState> = {}) {
-    this.state = { generations: [], generation_attempts: [], ...initial } as FakeSupabaseState;
+    this.state = {
+      generations: [],
+      generation_attempts: [],
+      media_assets: [],
+      ...initial,
+    } as FakeSupabaseState;
   }
 
   from(table: string) {
@@ -166,11 +202,39 @@ export class FakeSupabaseClient {
     if (fn === "create_generation_tx") {
       return this.createGenerationTx(args ?? {});
     }
+    if (fn === "finalize_media_asset") {
+      return { data: this.finalizeMediaAsset(args ?? {}), error: null };
+    }
     return { data: null, error: null };
   }
 
   /** Outbox rows the emulated RPCs wrote. Asserted on; never a real table. */
   outboxEvents: Row[] = [];
+
+  /**
+   * Mirrors finalize_media_asset(): guarded on pending/stored, and idempotent.
+   * A replay reports the existing terminal status rather than transitioning
+   * again — the same shape the SQL returns, so the caller's branch on
+   * `finalized === false && status === 'finalized'` is exercised for real.
+   */
+  private finalizeMediaAsset(args: Record<string, unknown>) {
+    const assetId = args.p_asset_id as string;
+    const row = (this.state.media_assets ?? []).find((a) => a.id === assetId);
+
+    if (!row || (row.status !== "pending" && row.status !== "stored")) {
+      return { finalized: false, asset_id: assetId, status: row?.status ?? null };
+    }
+
+    const now = new Date().toISOString();
+    row.status = "finalized";
+    row.byte_size = args.p_byte_size as number;
+    row.declared_content_type =
+      (args.p_declared_content_type as string | null) ?? row.declared_content_type ?? null;
+    row.stored_at = row.stored_at ?? now;
+    row.finalized_at = now;
+
+    return { finalized: true, asset_id: assetId, status: "finalized" };
+  }
 
   private cancelGenerationTx(args: Record<string, unknown>) {
     const generationId = args.p_generation_id as string;

@@ -101,13 +101,58 @@ Neither quarantine lane is implemented yet.
 
 ---
 
+## Gate 4 — Presigned upload bounds
+
+**Owning package:** 9-A · 9-B
+**Claim:** a presigned upload is limited to one object key, a short expiry, a
+maximum size, an accepted MIME declaration and an authenticated workspace; the
+user cannot choose the objectKey.
+
+### Status
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (33 tests)
+INGEST_VERIFICATION_PENDING YES  (Phase 9-B)
+GATE 4                     NOT CLOSED
+```
+
+### What is implemented
+
+`POST /api/media/upload-url` issues the only browser upload authorization.
+
+| Requirement | Implementation |
+| --- | --- |
+| Server-generated key | `buildAssetObjectKey()` from the verified Clerk `userId` and a server-minted asset id. The request body has **no** key, bucket or asset-id field — the shapes do not exist, which is stronger than validating them away. |
+| Workspace from session | `auth()` only. `workspace_id` is never read from body or query, as the roadmap requires. |
+| Short expiry | 300 s, and `Math.min` prevents a caller asking for more. |
+| Max size | 64 MiB, checked before signing. |
+| MIME declaration | narrow allowlist, bound into the signature. |
+| One key | the signature covers bucket + key + method + content type. |
+| No client key control | a hostile filename is reduced to an extension; `../`, absolute paths, NUL tricks and 500-character names all collapse to a safe key inside the caller's own prefix. |
+| No shared cache | `Cache-Control: private, no-store, max-age=0` on the presign response — the red note names presigned URL responses specifically. |
+| Bucket private | verified live: an unsigned request for a just-written object was refused (HTTP 400) rather than served. |
+
+### Residual risk
+
+- **A presign is not validation.** It authorizes bytes at a key; it says
+  nothing about what those bytes are. The asset row is created `pending` and
+  `quarantined`, and only the 9-B ingest gate (MIME, checksum, duplicate,
+  moderation) may advance it. That gate does not exist yet, so **no upload is
+  verified media today**.
+- **CORS is not configured.** Direct browser PUT to R2 needs a bucket CORS
+  rule for the app origin; see the manual action recorded in the Phase 9-A
+  report. Until it exists, browser upload works only from a server-side
+  caller.
+
+---
+
 ## Gates not yet addressed
 
 | Gate | Subject | Package | Status |
 | --- | --- | --- | --- |
 | 1 | Cross-workspace isolation incl. assets and presigned URLs | 12-B | NOT_STARTED |
 | 2 | Provider webhook signature, replay, event-id uniqueness | 6R-B · 8-FRAMEWORK | EXTERNAL_PENDING — fal publishes no verifiable signing scheme |
-| 4 | Presigned upload bounds; client cannot choose objectKey | 9-A · 9-B | NOT_STARTED |
 | 5 | Settlement uniqueness guaranteed at DB level | 10-B | Constraint exists (`PROOF S`/`PROOF T`); gate not formally claimed |
 | 6 | SQS IAM least privilege; worker distrusts queue messages | 6R-C · 18-A | NOT_STARTED |
 | 7–12 | — | — | NOT_STARTED |

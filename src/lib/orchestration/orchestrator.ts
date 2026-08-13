@@ -15,6 +15,13 @@ import {
 import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
+import {
+  hasFinalizedOriginal,
+  reserveGenerationAsset,
+  storeAndFinalizeAsset,
+  type MediaType,
+} from "@/lib/media/asset-service";
+import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
 import type { ProviderAdapter } from "./providers/provider-adapter";
 import { releaseGeminiResult } from "./providers/gemini-provider";
@@ -619,6 +626,45 @@ export async function executeGeneration(params: {
 }
 
 /**
+ * Persists the canonical original into R2 and records it (Phase 9-A).
+ *
+ * Reserve → store → finalize, in that order, all before the caller may
+ * complete the generation. Any failure throws, which is how the completion
+ * boundary is enforced: `markCompleted` is unreachable rather than guarded by
+ * a flag somebody could forget to check.
+ *
+ * The bytes handed to R2 are the SAME opaque bytes the outbound gateway
+ * downloaded. Nothing here decodes, sniffs or re-encodes them — the content
+ * type travels as the provider's declaration and is stored as such.
+ */
+async function persistCanonicalOriginal(
+  admin: SupabaseClient,
+  params: {
+    generationId: string;
+    clerkUserId: string;
+    projectId: string;
+    mediaType: MediaType;
+    output: ResolvedOutput;
+  }
+): Promise<{ assetId: string; objectKey: string }> {
+  const reserved = await reserveGenerationAsset(admin, {
+    generationId: params.generationId,
+    clerkUserId: params.clerkUserId,
+    projectId: params.projectId,
+    mediaType: params.mediaType,
+    fileExtension: params.output.fileExtension,
+    declaredContentType: params.output.mimeType,
+  });
+
+  const stored = await storeAndFinalizeAsset(admin, reserved, {
+    bytes: params.output.bytes,
+    declaredContentType: params.output.mimeType,
+  });
+
+  return { assetId: stored.assetId, objectKey: stored.objectKey };
+}
+
+/**
  * The shared tail of every successful generation, sync or async:
  * getResult → normalize → private Storage upload → completed row → signed
  * URLs in memory. Sync submissions arrive here directly from
@@ -671,10 +717,36 @@ async function collectAndFinalize(params: {
     generationId,
   });
 
+  // ---- R2 canonical original + asset record (Phase 9-A) --------------------
+  //
+  // THE COMPLETION BOUNDARY (M2). Provider success is not completion. Bytes
+  // must reach hot storage and be recorded before this generation may be
+  // called finished — the roadmap red note is explicit that COMPLETED
+  // requires "output güvenli ingest + canonical asset persisted".
+  //
+  // Every failure below throws, so `markCompleted` is simply never reached.
+  // That is the whole mechanism: there is no flag to get wrong, only an
+  // ordering that cannot be skipped.
+  const primary = uploaded[0];
+  const asset = await persistCanonicalOriginal(admin, {
+    generationId,
+    clerkUserId,
+    projectId,
+    mediaType: primary.type === "image" ? "image" : primary.type === "audio" ? "audio" : "video",
+    output: resolvedOutputs[0],
+  });
+
   // ---- Finalize -------------------------------------------------------------
   metadata = await setStage(admin, generationId, metadata, { stage: "finalizing" });
 
-  const primary = uploaded[0];
+  // Re-read rather than trusting the value just returned: the gate is a
+  // question asked of the database, so it cannot drift from what is stored.
+  if (!(await hasFinalizedOriginal(admin, generationId))) {
+    throw new OrchestrationError("ASSET_RECORD_FAILED", {
+      context: { operation: "completion_gate", generationId },
+    });
+  }
+
   await markCompleted(admin, generationId, metadata, {
     outputUrl: primary.storagePath,
     thumbnailUrl: primary.type === "image" ? primary.storagePath : null,

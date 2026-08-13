@@ -56,7 +56,8 @@ for f in \
   "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"   "$ROOT/supabase/migrations/20260817000000_model_routing.sql" \
   "$ROOT/supabase/migrations/20260818000000_workflow_start_outbox.sql" \
   "$ROOT/supabase/migrations/20260818010000_retire_historical_start_intents.sql" \
-  "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql"
+  "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
+  "$ROOT/supabase/migrations/20260820000000_media_assets.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -67,6 +68,9 @@ psql_run < "$ROOT/supabase/tests/test_transactional_outbox.sql" 2>&1 | grep -E "
 
 echo "==> workflow-start reliability proofs (M6)"
 psql_run < "$ROOT/supabase/tests/test_workflow_start_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> media asset proofs (Phase 9-A)"
+psql_run < "$ROOT/supabase/tests/test_media_assets.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> finalization proofs (completed + failed)"
 psql_run < "$ROOT/supabase/tests/test_finalization_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
