@@ -100,7 +100,18 @@
 -- and concurrency limits, so a self-granted 'enterprise' is also an exploit.
 REVOKE UPDATE ON TABLE "public"."profiles" FROM "authenticated";
 
-GRANT UPDATE ("username", "display_name", "avatar_url")
+-- `email` IS IN THIS LIST DELIBERATELY, AND IT IS NOT AN OVERSIGHT.
+-- ProfileSynchronizer (mounted in the root layout) upserts Clerk's contact
+-- metadata for every signed-in user, and PostgREST puts every supplied column
+-- into the ON CONFLICT SET list — so omitting `email` here would deny the
+-- UPDATE half of that upsert for every existing profile, silently, since the
+-- component swallows its errors. It is safe to allow because `email` carries
+-- no authority in this schema: identity, authorization, ownership and credits
+-- are all keyed on `clerk_user_id`, nothing reads profiles.email to make a
+-- decision, and profiles_update_own restricts the write to the caller's own
+-- row via USING + WITH CHECK. `credits` and `plan` stay off this list — those
+-- are the money-bearing columns this whole block exists to protect.
+GRANT UPDATE ("username", "display_name", "avatar_url", "email")
   ON TABLE "public"."profiles" TO "authenticated";
 
 -- INSERT is likewise narrowed. Self-provisioning a row with a starting
@@ -402,15 +413,29 @@ ON CONFLICT ("clerk_user_id") DO NOTHING;
 -- Note: an opening entry is written even for a zero balance, so that EVERY
 -- wallet has a complete history and the reconciliation invariant
 -- (SUM(ledger) = balance + reserved) holds for every row from day one.
+--
+-- THE external_ref CARRIES THE OWNER, AND IT HAS TO.
+-- credit_ledger_external_ref_type_uniq is GLOBAL over (external_ref,
+-- entry_type) — deliberately, because it backstops grant_credits() against
+-- a replayed Stripe event, and a Stripe event id is globally unique by
+-- nature. A backfill that wrote the same literal ref for every wallet would
+-- therefore succeed for the first row and fail for the second: the guard
+-- below filters per user, but the constraint does not. Suffixing the owner
+-- makes each opening entry its own globally-unique ref, which is what the
+-- constraint is asking for, and leaves the Stripe protection exactly as
+-- strong as it was. Widening the index to include clerk_user_id would have
+-- been the other way to make this insert pass — and it would have let the
+-- same webhook event be applied once per user, so it is not an option.
 INSERT INTO "public"."credit_ledger"
   ("clerk_user_id", "entry_type", "amount", "balance_after", "external_ref", "metadata")
-SELECT w."clerk_user_id", 'grant', w."balance", w."balance", 'migration:opening_balance',
+SELECT w."clerk_user_id", 'grant', w."balance", w."balance",
+       'migration:opening_balance:' || w."clerk_user_id",
        jsonb_build_object('source', 'profiles.credits')
 FROM "public"."credit_wallets" w
 WHERE NOT EXISTS (
     SELECT 1 FROM "public"."credit_ledger" l
     WHERE l."clerk_user_id" = w."clerk_user_id"
-      AND l."external_ref" = 'migration:opening_balance'
+      AND l."external_ref" = 'migration:opening_balance:' || w."clerk_user_id"
   );
 
 
