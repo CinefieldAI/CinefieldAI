@@ -73,6 +73,11 @@ const NULLABLE_COLUMNS: Record<string, readonly string[]> = {
   // attempt NULLs did: code reads them to decide whether anything has been
   // verified, and `undefined` is not `null`.
   media_assets: [
+    "ingest_failure_reason",
+    "duplicate_of_asset_id",
+    "moderation_engine",
+    "moderated_at",
+    "ingested_at",
     "project_id",
     "generation_id",
     "generation_attempt_id",
@@ -98,6 +103,7 @@ const COLUMN_DEFAULTS: Record<string, Row> = {
   // point: nothing may start life looking approved.
   media_assets: {
     role: "original",
+    ingest_status: "pending",
     storage_backend: "r2",
     status: "pending",
     moderation_status: "not_evaluated",
@@ -205,6 +211,9 @@ export class FakeSupabaseClient {
     if (fn === "finalize_media_asset") {
       return { data: this.finalizeMediaAsset(args ?? {}), error: null };
     }
+    if (fn === "record_media_ingest") {
+      return { data: this.recordMediaIngest(args ?? {}), error: null };
+    }
     return { data: null, error: null };
   }
 
@@ -234,6 +243,44 @@ export class FakeSupabaseClient {
     row.finalized_at = now;
 
     return { finalized: true, asset_id: assetId, status: "finalized" };
+  }
+
+  /**
+   * Mirrors record_media_ingest(): guarded on pending/inspecting, idempotent,
+   * and it refuses a verification that arrives without the facts. The refusal
+   * matters — the real SQL raises there, so a caller that forgot the checksum
+   * must fail here too rather than sail through the double.
+   */
+  private recordMediaIngest(args: Record<string, unknown>) {
+    const assetId = args.p_asset_id as string;
+    const ingestStatus = args.p_ingest_status as string;
+
+    if (ingestStatus === "verified" && (!args.p_verified_mime || !args.p_checksum_sha256)) {
+      throw new Error("verified_requires_mime_and_checksum");
+    }
+
+    const row = (this.state.media_assets ?? []).find((a) => a.id === assetId);
+    if (!row) return { recorded: false, reason: "not_found" };
+    if (row.ingest_status !== "pending" && row.ingest_status !== "inspecting") {
+      return { recorded: false, reason: "already_ingested", ingest_status: row.ingest_status };
+    }
+
+    row.ingest_status = ingestStatus;
+    row.verified_mime = (args.p_verified_mime as string | null) ?? row.verified_mime ?? null;
+    row.checksum_sha256 = (args.p_checksum_sha256 as string | null) ?? row.checksum_sha256 ?? null;
+    row.ingest_failure_reason = (args.p_failure_reason as string | null) ?? null;
+    row.duplicate_of_asset_id = (args.p_duplicate_of as string | null) ?? row.duplicate_of_asset_id ?? null;
+    row.moderation_status = (args.p_moderation_status as string | null) ?? row.moderation_status;
+    row.moderation_engine = (args.p_moderation_engine as string | null) ?? row.moderation_engine ?? null;
+    row.ingested_at = new Date().toISOString();
+
+    return {
+      recorded: true,
+      asset_id: assetId,
+      ingest_status: row.ingest_status,
+      moderation_status: row.moderation_status,
+      quarantine_status: row.quarantine_status,
+    };
   }
 
   private cancelGenerationTx(args: Record<string, unknown>) {

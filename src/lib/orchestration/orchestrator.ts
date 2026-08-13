@@ -16,11 +16,11 @@ import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
 import {
-  hasFinalizedOriginal,
   reserveGenerationAsset,
   storeAndFinalizeAsset,
   type MediaType,
 } from "@/lib/media/asset-service";
+import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
 import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
 import type { ProviderAdapter } from "./providers/provider-adapter";
@@ -661,6 +661,33 @@ async function persistCanonicalOriginal(
     declaredContentType: params.output.mimeType,
   });
 
+  // ---- Phase 9-B ingest gate ---------------------------------------------
+  // Runs AFTER the object exists, so a rejected asset still has its bytes for
+  // an operator to examine, and BEFORE completion, so nothing serves media
+  // nobody has read. The inspection happens in a disposable child process —
+  // see media-inspector.ts for what that does and does not contain.
+  const ingest = await ingestMediaAsset(admin, {
+    assetId: stored.assetId,
+    ownerId: params.clerkUserId,
+    bytes: params.output.bytes,
+    declaredContentType: params.output.mimeType,
+  });
+
+  if (ingest.status !== "verified") {
+    // The provider may have succeeded perfectly. This is a MEDIA SAFETY
+    // failure, deliberately not reported as a provider failure — conflating
+    // them would send a healthy provider to the circuit breaker and tell an
+    // operator to investigate the wrong system.
+    throw new OrchestrationError("MEDIA_INGEST_REJECTED", {
+      context: {
+        operation: "ingest_gate",
+        generationId: params.generationId,
+        outcome: ingest.status,
+        reason: ingest.reason,
+      },
+    });
+  }
+
   return { assetId: stored.assetId, objectKey: stored.objectKey };
 }
 
@@ -741,7 +768,10 @@ async function collectAndFinalize(params: {
 
   // Re-read rather than trusting the value just returned: the gate is a
   // question asked of the database, so it cannot drift from what is stored.
-  if (!(await hasFinalizedOriginal(admin, generationId))) {
+  // Phase 9-B widened this: finalized is no longer sufficient, because a
+  // finalized asset is only one whose bytes reached R2. Completion now also
+  // requires that the ingest gate read those bytes and allow them.
+  if (!(await hasVerifiedOriginal(admin, generationId))) {
     throw new OrchestrationError("ASSET_RECORD_FAILED", {
       context: { operation: "completion_gate", generationId },
     });

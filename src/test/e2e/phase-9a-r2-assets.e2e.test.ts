@@ -274,9 +274,14 @@ test("17b. the orchestrator gates markCompleted on the asset, in that order", ()
   const source = readFileSync(path.join(ROOT, "src/lib/orchestration/orchestrator.ts"), "utf8");
 
   const persist = source.indexOf("await persistCanonicalOriginal(");
-  const gate = source.indexOf("await hasFinalizedOriginal(");
+  // Phase 9-B widened this gate from hasFinalizedOriginal to
+  // hasVerifiedOriginal: storage alone is no longer sufficient, the bytes must
+  // also have been read and allowed. The ORDER is what this test protects, and
+  // it is unchanged.
+  const gate = source.indexOf("await hasVerifiedOriginal(");
   const complete = source.indexOf("await markCompleted(");
 
+  assert.ok(gate > 0, "the completion gate must still exist");
   assert.ok(persist > 0 && gate > persist && complete > gate,
     "persist -> gate -> complete; any other order reintroduces M2");
 });

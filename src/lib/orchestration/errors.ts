@@ -23,6 +23,7 @@ export type OrchestrationErrorCode =
   | "R2_CONFIGURATION_INVALID"
   | "ASSET_STORAGE_FAILED"
   | "ASSET_RECORD_FAILED"
+  | "MEDIA_INGEST_REJECTED"
   | "PROVIDER_NOT_CONFIGURED"
   | "PROVIDER_AUTH_ERROR"
   | "PROVIDER_RATE_LIMIT"
@@ -99,6 +100,15 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "The generated media could not be recorded.",
     status: 500,
     retryable: true,
+  },
+  // The provider may have succeeded perfectly and the bytes may be stored:
+  // this says the INGEST GATE refused them. Kept distinct from PROVIDER_FAILED
+  // so a media-safety refusal never sends a healthy provider to the circuit
+  // breaker. Not retryable — the same bytes will be refused again.
+  MEDIA_INGEST_REJECTED: {
+    message: "The generated media did not pass safety validation.",
+    status: 422,
+    retryable: false,
   },
   // Enabled with a URL the client cannot use. Distinct from "not enabled",
   // which is a valid deployment shape — this is an operator mistake, and

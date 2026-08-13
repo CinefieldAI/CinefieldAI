@@ -57,7 +57,8 @@ for f in \
   "$ROOT/supabase/migrations/20260818000000_workflow_start_outbox.sql" \
   "$ROOT/supabase/migrations/20260818010000_retire_historical_start_intents.sql" \
   "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
-  "$ROOT/supabase/migrations/20260820000000_media_assets.sql"
+  "$ROOT/supabase/migrations/20260820000000_media_assets.sql" \
+  "$ROOT/supabase/migrations/20260821000000_media_ingest_gate.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -71,6 +72,9 @@ psql_run < "$ROOT/supabase/tests/test_workflow_start_outbox.sql" 2>&1 | grep -E 
 
 echo "==> media asset proofs (Phase 9-A)"
 psql_run < "$ROOT/supabase/tests/test_media_assets.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> media ingest gate proofs (Phase 9-B)"
+psql_run < "$ROOT/supabase/tests/test_media_ingest_gate.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> finalization proofs (completed + failed)"
 psql_run < "$ROOT/supabase/tests/test_finalization_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"

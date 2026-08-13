@@ -87,17 +87,20 @@ Phase 8-A fal validation.
 network destination and the download bounds. Malicious media still reaches
 whatever eventually decodes it. The roadmap red note is explicit: "Outbound
 Fetch Gateway SSRF'yi sınırlar; ancak kötü niyetli medya
-FFmpeg/decoder/parser yüzeyine ulaşır." That containment is **Phase 9-B** and
-is `NOT_STARTED`.
+FFmpeg/decoder/parser yüzeyine ulaşır." That containment is **Phase 9-B**,
+implemented below — as process isolation, with container hardening still
+outstanding.
 
-Accordingly this batch adds no parser: no `sharp`, no `ffprobe`, no FFmpeg,
-no content sniffing. `Content-Type` is carried as `declaredContentType` — a
-provider claim — and deliberately not named `mimeType`. A separate
-`verifiedMime` belongs to 9-B.
+This batch itself added no parser: no `sharp`, no `ffprobe`, no FFmpeg, no
+content sniffing. `Content-Type` is carried as `declaredContentType` — a
+provider claim — and deliberately not named `mimeType`. The separate
+`verifiedMime` arrived with 9-B and is derived from the bytes inside the
+sandbox.
 
 The provider-output lane keeps its roadmap name, **QUARANTINE / OUTPUT
-(INGEST)**, distinct from the browser-upload **QUARANTINE / INPUT** lane.
-Neither quarantine lane is implemented yet.
+(INGEST)**, distinct from the browser-upload **QUARANTINE / INPUT** lane. Both
+exist as storage lanes and asset state from 9-A/9-B; the quarantine RELEASE
+workflow is 9-E and is not implemented.
 
 ---
 
@@ -132,6 +135,7 @@ GATE 4                     NOT CLOSED
 | No client key control | a hostile filename is reduced to an extension; `../`, absolute paths, NUL tricks and 500-character names all collapse to a safe key inside the caller's own prefix. |
 | No shared cache | `Cache-Control: private, no-store, max-age=0` on the presign response — the red note names presigned URL responses specifically. |
 | Bucket private | verified live: an unsigned request for a just-written object was refused (HTTP 400) rather than served. |
+| Ingest verification | Phase 9-B: bytes are identified and hashed in a sandbox before anything may treat them as media. |
 
 ### Residual risk
 
@@ -140,10 +144,72 @@ GATE 4                     NOT CLOSED
   `quarantined`, and only the 9-B ingest gate (MIME, checksum, duplicate,
   moderation) may advance it. That gate does not exist yet, so **no upload is
   verified media today**.
-- **CORS is not configured.** Direct browser PUT to R2 needs a bucket CORS
-  rule for the app origin; see the manual action recorded in the Phase 9-A
-  report. Until it exists, browser upload works only from a server-side
-  caller.
+- **CORS covers localhost only.** The bucket allows `http://localhost:3000`
+  for PUT/GET/HEAD with `Content-Type`. The deployed origin has no rule yet, so
+  browser upload from production would fail preflight.
+
+---
+
+## Untrusted media validation and parser sandbox (Phase 9-B)
+
+Not one of the twelve numbered gates, but the control the Gate 3 boundary
+explicitly does NOT cover, so its status is recorded here beside it.
+
+```
+SANDBOX_CODE_BOUNDARY           IMPLEMENTED
+SANDBOX_TEST_EVIDENCE           PASS   (38 tests, synthetic fixtures only)
+PRODUCTION_CONTAINER_HARDENING  PENDING
+MODERATION_ENGINE               NOT_CONFIGURED
+```
+
+### What is implemented
+
+**Verified MIME (M3).** `verified_mime` is derived from the bytes by a
+signature reader with no imports, no recursion and no allocation proportional
+to input. It is never taken from a response header, a browser Content-Type or
+a filename. Executables, scripts, archives, PDFs, Office documents, HTML and
+**SVG** are refused by name — SVG because it is active content, not because it
+is unsupported. A polyglot whose prefix satisfies both an image and an
+executable signature is refused: hostile detection runs first.
+
+**Checksum.** SHA-256 over the real stored bytes, computed inside the sandbox.
+Neither a provider-supplied nor a browser-supplied digest is trusted, and a
+changed checksum on replay raises `checksum_conflict` rather than overwriting
+the recorded one.
+
+**Duplicate detection.** Owner-scoped, evidence only. The lookup filters on
+`clerk_user_id` before the hash, the index leads with the tenant, and a
+cross-tenant `duplicate_of_asset_id` is refused by a database trigger. No
+endpoint accepts or returns a checksum, so there is no hash-existence oracle.
+
+**Sandbox.** A disposable child process, spawned as bare `node` with an
+ALLOWLISTED environment of exactly `PATH` and `NODE_ENV`. It receives bytes on
+stdin and returns one JSON line; it imports `node:crypto` and the pure
+detector and nothing else. No provider key, no Supabase service role, no R2
+credential, no Clerk or Temporal secret can reach it — not because they are
+deleted, but because the environment is built from nothing. A hard SIGKILL
+bounds wall-clock time and the child counts bytes as it reads them.
+
+### Residual risk, stated honestly
+
+- **This is process isolation, not a container.** There is no read-only root
+  filesystem, no cgroup CPU or RAM limit, and no network namespace. Those are
+  properties of a container runtime and remain production infrastructure work.
+  The roadmap's full requirement — "read-only filesystem, CPU/RAM/file-size/
+  execution-time limits, restricted egress, minimum IAM" — is therefore only
+  partly met.
+- **Network isolation is by construction, not by policy.** The child has no
+  client and no URL, so it cannot fetch. That argument stops holding the
+  moment 9-C introduces FFmpeg, which resolves URLs in playlists, concat lists
+  and protocol handlers. A network namespace becomes mandatory then, not
+  optional.
+- **No moderation engine exists.** The repository's only classifier is text-
+  only, behind a disabled flag, and never called by the pipeline. Moderation
+  is a contract here: `not_evaluated` is the truth, and the release constraint
+  demands `passed`, which nothing can currently produce. **Every asset stays
+  quarantined** — fail-closed by construction rather than by convention.
+- **Quarantine release is unimplemented.** Nothing in 9-B can release an
+  asset; that lane belongs to 9-E and is a Phase 16 admin high-risk action.
 
 ---
 
@@ -163,7 +229,7 @@ The roadmap names it: SSRF, IDOR/BOLA, webhook replay, billing race,
 duplicate SQS delivery, cross-tenant SSE.
 
 ```
-SSRF                     PASS  (this batch)
+SSRF                     PASS  (9-E minimum)
 IDOR / BOLA              NOT_STARTED
 webhook replay           NOT_STARTED
 billing race             PASS at DB level (PROOF R/S/T/U)
