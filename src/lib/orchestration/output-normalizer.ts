@@ -1,5 +1,9 @@
 import "server-only";
 import { OrchestrationError } from "./errors";
+import {
+  fetchUntrustedMedia,
+  OutboundFetchError,
+} from "@/lib/media/outbound-fetch-gateway";
 import type { NormalizedOutput } from "./types";
 
 /**
@@ -85,34 +89,30 @@ export async function normalizeOutputs(
   return resolved;
 }
 
+/**
+ * Downloads a provider result through the Outbound Fetch Security Gateway.
+ *
+ * This function used to call `fetch(url)` directly behind a lone `https:`
+ * check. A provider result URL is untrusted input, and that check let it
+ * address anything the process could reach — including cloud metadata. The
+ * gateway now owns scheme policy, DNS resolution, IP screening, redirect
+ * re-validation, byte bounds and timeouts; nothing here re-implements any of
+ * it, because a second copy is a second thing to get wrong.
+ *
+ * The refusal CLASS is carried into the orchestration error context. The URL
+ * is not: a signed provider URL is a credential, and an error string is
+ * exactly where it would leak.
+ */
 async function downloadOutput(sourceUrl: string, signal?: AbortSignal): Promise<Uint8Array> {
-  let parsed: URL;
   try {
-    parsed = new URL(sourceUrl);
-  } catch {
-    throw new OrchestrationError("OUTPUT_DOWNLOAD_FAILED", {
-      context: { reason: "invalid_url" },
-    });
-  }
-
-  // Only fetch over HTTPS — never file://, data:, or plaintext HTTP.
-  if (parsed.protocol !== "https:") {
-    throw new OrchestrationError("OUTPUT_DOWNLOAD_FAILED", {
-      context: { reason: "unsupported_protocol", protocol: parsed.protocol },
-    });
-  }
-
-  try {
-    const response = await fetch(parsed.toString(), { signal });
-    if (!response.ok) {
+    const result = await fetchUntrustedMedia(sourceUrl, { signal });
+    return result.bytes;
+  } catch (error) {
+    if (error instanceof OutboundFetchError) {
       throw new OrchestrationError("OUTPUT_DOWNLOAD_FAILED", {
-        context: { httpStatus: response.status },
+        context: { reason: error.failure, detail: error.detail },
       });
     }
-    const buffer = await response.arrayBuffer();
-    return new Uint8Array(buffer);
-  } catch (error) {
-    if (error instanceof OrchestrationError) throw error;
     throw new OrchestrationError("OUTPUT_DOWNLOAD_FAILED", {
       context: { reason: "fetch_failed" },
     });
