@@ -1,32 +1,18 @@
 "use client";
 
-import { Plus, ChevronDown, Settings } from "lucide-react";
+type ComposerMode = "image" | "video";
+
 import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
-import { HookItem } from "./HookPanel";
-import { SettingItem } from "./SettingPanel";
 
 interface ComposerBarProps {
   prompt: string;
   onPromptChange: (value: string) => void;
-  selectedTarget: "product" | "app";
-  onProductClick: () => void;
-  onAppClick: () => void;
-  selectedMode: "UGC" | "Mobile" | "Settings";
-  onUgcClick: () => void;
-  onHookClick: () => void;
-  onSettingClick: () => void;
-  onMediaAttachClick: () => void;
-  onOptionsClick: () => void;
-  selectedHook: HookItem | null;
-  selectedSetting: SettingItem | null;
-  activeFloatingPanel: string | null;
-  optionsButtonRef: React.RefObject<HTMLButtonElement | null>;
+  composerMode: ComposerMode;
+  onComposerModeChange: (mode: ComposerMode) => void;
   attachedProductMedia: UploadedMedia[];
-  onProductCardClick: () => void;
-  onAvatarCardClick: () => void;
   onGenerate: () => void;
   resizeWidth: number;
   resizeHeight: number;
@@ -39,25 +25,72 @@ export const MARKETING_COMPOSER_DEFAULT_HEIGHT = 116;
 export const MARKETING_COMPOSER_MAX_WIDTH = 1180;
 export const MARKETING_COMPOSER_MAX_HEIGHT = 420;
 
+function ImageModeIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`size-6 ${className}`} aria-hidden>
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M3 4.75C3 3.784 3.784 3 4.75 3h14.5c.966 0 1.75.784 1.75 1.75v14.5A1.75 1.75 0 0 1 19.25 21H4.75A1.75 1.75 0 0 1 3 19.25zm1.75-.25a.25.25 0 0 0-.25.25v9.69l2.263-2.263a1.75 1.75 0 0 1 2.474 0l7.324 7.323h2.689a.25.25 0 0 0 .25-.25V4.75a.25.25 0 0 0-.25-.25zm9.69 15-6.263-6.263a.25.25 0 0 0-.354 0L4.5 16.561v2.689c0 .138.112.25.25.25z"
+      />
+      <path
+        fill="currentColor"
+        d="M13.426 8.537a.25.25 0 0 0 .111-.112l.74-1.478a.25.25 0 0 1 .447 0l.739 1.478a.25.25 0 0 0 .112.112l1.478.74a.25.25 0 0 1 0 .447l-1.479.739a.25.25 0 0 0-.111.112l-.74 1.478a.25.25 0 0 1-.447 0l-.739-1.479a.25.25 0 0 0-.112-.111l-1.478-.74a.25.25 0 0 1 0-.447z"
+      />
+    </svg>
+  );
+}
+
+function VideoModeIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={`size-6 ${className}`} aria-hidden>
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+        d="m17.25 9 3.094-1.375a1 1 0 0 1 1.406.914v6.922a1 1 0 0 1-1.406.914L17.25 15M2.75 6.25a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1v11.5a1 1 0 0 1-1 1H3.75a1 1 0 0 1-1-1z"
+      />
+    </svg>
+  );
+}
+
+function ModeToggleButton({
+  active,
+  label,
+  onClick,
+  icon: Icon,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  icon: (props: { className?: string }) => React.ReactElement;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${label} mode`}
+      aria-pressed={active}
+      className={`flex w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[14px] border transition-all duration-200 active:scale-95 ${
+        active
+          ? "border-[#D97757] bg-[#101112] font-bold text-white"
+          : "border-transparent bg-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
+      }`}
+    >
+      <Icon className={active ? "size-5 text-[#D97757]" : "size-5 text-neutral-400"} />
+      <span className="text-[11px] font-extrabold tracking-wide">{label}</span>
+    </button>
+  );
+}
+
 export default function ComposerBar({
   prompt,
   onPromptChange,
-  selectedTarget,
-  onProductClick,
-  onAppClick,
-  selectedMode,
-  onUgcClick,
-  onHookClick,
-  onSettingClick,
-  onMediaAttachClick,
-  onOptionsClick,
-  selectedHook,
-  selectedSetting,
-  activeFloatingPanel,
-  optionsButtonRef,
+  composerMode,
+  onComposerModeChange,
   attachedProductMedia,
-  onProductCardClick,
-  onAvatarCardClick,
   onGenerate,
   resizeWidth,
   resizeHeight,
@@ -82,9 +115,9 @@ export default function ComposerBar({
         className="absolute inset-x-0 bottom-0 flex items-end gap-2"
         style={{ height: resizeHeight }}
       >
-      {/* LEFT PRODUCT/APP SELECTOR WITH MATCHING SYNCED LIGHTING */}
+      {/* LEFT IMAGE/VIDEO SELECTOR - MATCHES /GENERATE MODE TOGGLE SHAPE */}
       <div
-        className="gap-2 p-1 rounded-[20px] backdrop-blur-[12px] h-[116px] min-h-[116px] w-[70px] overflow-hidden border animate-pulse-orange-white"
+        className="relative z-50 flex h-[116px] min-h-[116px] w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white"
         style={{
           background:
             "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
@@ -95,90 +128,19 @@ export default function ComposerBar({
           WebkitBackdropFilter: "blur(12px)",
         }}
       >
-        <div
-          className="relative flex h-full min-h-0 flex-col justify-center gap-1 overflow-hidden rounded-[16px] p-0"
-          role="tablist"
-          aria-orientation="horizontal"
-          tabIndex={0}
-        >
-          {/* SLIDING HIGHLIGHT BACKDROP */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 z-0 rounded-[16px] bg-white/15 backdrop-blur-[12px]"
-            style={{
-              height: "calc(50% - 2px)",
-              transform: `translateY(${selectedTarget === "app" ? "100%" : "0px"})`,
-              transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
-              willChange: "transform",
-            }}
+        <div className="flex h-full w-full flex-col gap-1" role="tablist" aria-orientation="vertical">
+          <ModeToggleButton
+            active={composerMode === "image"}
+            label="Image"
+            icon={ImageModeIcon}
+            onClick={() => onComposerModeChange("image")}
           />
-
-          {/* PRODUCT BUTTON */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedTarget === "product"}
-            onClick={onProductClick}
-            className={`relative z-1 flex h-auto min-h-0 w-full min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-[16px] border-none px-3 py-1.5 cursor-pointer text-[10px] leading-[14px] font-semibold tracking-[0] transition-colors duration-200 ${
-              selectedTarget === "product"
-                ? "text-white"
-                : "text-white/50 hover:text-white/65"
-            }`}
-          >
-            <span className="flex flex-col items-center gap-1">
-              <svg
-                className="size-4 shrink-0 [&_path]:stroke-2"
-                aria-hidden="true"
-                width="24px"
-                height="24px"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12.0002 12V20.5M12.0002 12L4.5 7.78123M12.0002 12L19.2627 7.91473M20.25 7.94421V16.0558C20.25 16.417 20.0551 16.7502 19.7403 16.9273L12.4903 21.0055C12.1858 21.1767 11.8142 21.1767 11.5097 21.0055L4.25974 16.9273C3.94486 16.7502 3.75 16.417 3.75 16.0558V7.94421C3.75 7.58294 3.94486 7.24976 4.25974 7.07264L11.5097 2.99451C11.8142 2.82328 12.1858 2.82328 12.4903 2.99451L19.7403 7.07264C20.0551 7.24976 20.25 7.58294 20.25 7.94421Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span>Product</span>
-            </span>
-          </button>
-
-          {/* APP BUTTON */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedTarget === "app"}
-            onClick={onAppClick}
-            className={`relative z-1 flex h-auto min-h-0 w-full min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-[16px] border-none px-3 py-1.5 cursor-pointer text-[10px] leading-[14px] font-semibold tracking-[0] transition-colors duration-200 ${
-              selectedTarget === "app"
-                ? "text-white"
-                : "text-white/50 hover:text-white/65"
-            }`}
-          >
-            <span className="flex flex-col items-center gap-1">
-              <svg
-                className="size-4 shrink-0 [&_path]:stroke-2"
-                aria-hidden="true"
-                width="24px"
-                height="24px"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M4.59772 7.8189C3.8989 9.05344 3.5 10.4801 3.5 12C3.5 14.0772 4.24511 15.9804 5.48263 17.4569L8.77446 14.165C7.18407 12.4893 5.93655 10.7647 5.18607 9.26371C4.93786 8.76728 4.7369 8.28128 4.59772 7.8189ZM7.81933 4.59748C8.28167 4.73666 8.76762 4.9376 9.264 5.18579C10.765 5.93627 12.4895 7.18378 14.1653 8.77417L17.4569 5.48263C15.9804 4.24511 14.0772 3.5 12 3.5C10.4803 3.5 9.05377 3.89881 7.81933 4.59748ZM18.521 4.41847C16.7702 2.91117 14.4915 2 12 2C6.47715 2 2 6.47715 2 12C2 14.4915 2.91117 16.7702 4.41847 18.521L3.69164 19.2479C3.39875 19.5408 3.39875 20.0156 3.69164 20.3085C3.98453 20.6014 4.45941 20.6014 4.7523 20.3085L5.47914 19.5817C7.22995 21.0889 9.50857 22 12 22C17.5228 22 22 17.5228 22 12C22 9.50857 21.0889 7.22995 19.5817 5.47914L20.3087 4.75217C20.6015 4.45928 20.6015 3.9844 20.3087 3.69151C20.0158 3.39862 19.5409 3.39862 19.248 3.69151L18.521 4.41847ZM18.5175 6.54331L15.226 9.83483C16.8164 11.5106 18.064 13.2353 18.8145 14.7363C19.0626 15.2325 19.2635 15.7183 19.4026 16.1805C20.1012 14.9461 20.5 13.5196 20.5 12C20.5 9.92287 19.7549 8.01975 18.5175 6.54331ZM16.1809 19.4024C15.7186 19.2632 15.2328 19.0623 14.7366 18.8142C13.2356 18.0637 11.5109 16.8161 9.83511 15.2257L6.54331 18.5175C8.01975 19.7549 9.92287 20.5 12 20.5C13.5198 20.5 14.9464 20.1011 16.1809 19.4024ZM10.8962 14.1647C12.4812 15.6646 14.0757 16.8067 15.4074 17.4726C16.1523 17.845 16.7763 18.0488 17.2471 18.1046C17.7286 18.1617 17.9182 18.0535 17.986 17.9857C18.0537 17.918 18.162 17.7283 18.1049 17.2468C18.0491 16.776 17.8453 16.152 17.4728 15.4071C16.807 14.0754 15.6649 12.4809 14.165 10.8959L10.8962 14.1647ZM13.1043 9.83521C11.5193 8.33534 9.92486 7.19327 8.59318 6.52743C7.84824 6.15496 7.2243 5.95115 6.75348 5.89535C6.27197 5.83829 6.08232 5.94653 6.01457 6.01428C5.94682 6.08203 5.83858 6.27168 5.89564 6.75319C5.95144 7.22401 6.15525 7.84795 6.52772 8.59289C7.19356 9.92458 8.33563 11.519 9.83549 13.104L13.1043 9.83521Z"
-                  fill="currentColor"
-                />
-              </svg>
-              <span>App</span>
-            </span>
-          </button>
+          <ModeToggleButton
+            active={composerMode === "video"}
+            label="Video"
+            icon={VideoModeIcon}
+            onClick={() => onComposerModeChange("video")}
+          />
         </div>
       </div>
 
@@ -208,16 +170,9 @@ export default function ComposerBar({
           cornerLabel="Resize marketing prompt width and height"
         />
 
-        {/* LEFT: PLUS BUTTON + PROMPT INPUT */}
-        <div className="flex min-w-0 flex-1 flex-col justify-between pr-3">
-          {/* Top Row: Plus + Textarea */}
+        {/* LEFT: PROMPT INPUT */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center pr-3">
           <div className="flex items-start gap-3">
-            <button
-              onClick={onMediaAttachClick}
-              className="flex-shrink-0 size-8 rounded-xl bg-white/8 text-white/80 hover:bg-white/12 flex items-center justify-center transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
             <input
               type="text"
               value={prompt}
@@ -226,70 +181,10 @@ export default function ComposerBar({
               className="min-h-[32px] flex-1 resize-none bg-transparent pt-1 text-sm text-white outline-none placeholder:text-white/55"
             />
           </div>
-
-          {/* Bottom Row: Chips */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onUgcClick}
-              className={`h-8 rounded-lg px-3 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                selectedMode === "UGC"
-                  ? "bg-cyan-400/20 text-cyan-300"
-                  : "bg-white/7 text-white hover:bg-white/10"
-              }`}
-            >
-              <span className="text-[9px]">▼</span> UGC
-            </button>
-            <button
-              onClick={onHookClick}
-              className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <span className="text-[9px]">🎯</span> Hook {selectedHook ? `: ${selectedHook.title}` : ""}
-            </button>
-            <button
-              onClick={onSettingClick}
-              className="h-8 rounded-lg px-3 bg-white/7 text-white hover:bg-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <span className="text-[9px]">🌍</span> {selectedSetting ? selectedSetting.title : "Setting"}
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform ${
-                  activeFloatingPanel === "setting" ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-            <button
-              ref={optionsButtonRef}
-              onClick={onOptionsClick}
-              className="h-8 w-8 rounded-lg bg-white/7 text-white hover:bg-white/10 flex items-center justify-center transition-colors hover:scale-[1.03] active:scale-[0.97]"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          </div>
         </div>
 
-        {/* RIGHT: PRODUCT TILE + AVATAR TILE + ATTACHED MEDIA + GENERATE */}
+        {/* RIGHT: ATTACHED MEDIA + GENERATE */}
         <div className="flex shrink-0 items-end gap-2">
-          {/* PRODUCT TILE */}
-          <button
-            onClick={onProductCardClick}
-            className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
-          >
-            <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
-              <Plus className="h-3 w-3" />
-            </div>
-            <span>PRODUCT</span>
-          </button>
-
-          {/* AVATAR TILE */}
-          <button
-            onClick={onAvatarCardClick}
-            className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors cursor-pointer"
-          >
-            <div className="self-start size-6 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
-              <Plus className="h-3 w-3" />
-            </div>
-            <span>AVATAR</span>
-          </button>
-
           {/* ATTACHED MEDIA PREVIEW - Shows first attached image */}
           {attachedProductMedia.length > 0 && (
             <div className="relative h-20 w-[78px] rounded-xl bg-white/7 hover:bg-white/10 flex flex-col justify-between p-2 text-white text-[10px] font-bold transition-colors overflow-hidden group">

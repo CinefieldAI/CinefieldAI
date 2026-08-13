@@ -29,6 +29,7 @@ import { useGeneration } from "@/hooks/useGeneration";
 type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
 type TargetType = "product" | "app";
+type ComposerMode = "image" | "video";
 type FloatingPanelType = "mediaAttach" | "hook" | "setting" | "product" | "app" | "avatar" | "options" | null;
 
 interface StyleCard {
@@ -45,6 +46,7 @@ export default function MarketingStudioProductWorkspace() {
   const searchParams = useSearchParams();
   const [activeSidebarView, setActiveSidebarView] = useState<"home" | "allGenerations" | "favorites">("home");
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
+  const [composerMode, setComposerMode] = useState<ComposerMode>("image");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
   const searchQuery = "";
@@ -435,22 +437,9 @@ export default function MarketingStudioProductWorkspace() {
                     <ComposerBar
                       prompt={prompt}
                       onPromptChange={setPrompt}
-                      selectedTarget={selectedTarget}
-                      onProductClick={handleProductClick}
-                      onAppClick={handleAppClick}
-                      selectedMode={selectedMode}
-                      onUgcClick={handleUgcClick}
-                      onHookClick={handleHookClick}
-                      onSettingClick={handleSettingClick}
-                      onMediaAttachClick={handleMediaAttachClick}
-                      onOptionsClick={handleOptionsClick}
-                      selectedHook={selectedHook}
-                      selectedSetting={selectedSetting}
-                      activeFloatingPanel={activeFloatingPanel}
-                      optionsButtonRef={optionsButtonRef}
+                      composerMode={composerMode}
+                      onComposerModeChange={setComposerMode}
                       attachedProductMedia={attachedProductMedia}
-                      onProductCardClick={handleProductCardClick}
-                      onAvatarCardClick={handleAvatarCardClick}
                       onGenerate={handleGenerate}
                       resizeWidth={composerWidth}
                       resizeHeight={composerHeight}
@@ -514,22 +503,9 @@ export default function MarketingStudioProductWorkspace() {
                 <ComposerBar
                   prompt={prompt}
                   onPromptChange={setPrompt}
-                  selectedTarget={selectedTarget}
-                  onProductClick={handleProductClick}
-                  onAppClick={handleAppClick}
-                  selectedMode={selectedMode}
-                  onUgcClick={handleUgcClick}
-                  onHookClick={handleHookClick}
-                  onSettingClick={handleSettingClick}
-                  onMediaAttachClick={handleMediaAttachClick}
-                  onOptionsClick={handleOptionsClick}
-                  selectedHook={selectedHook}
-                  selectedSetting={selectedSetting}
-                  activeFloatingPanel={activeFloatingPanel}
-                  optionsButtonRef={optionsButtonRef}
+                  composerMode={composerMode}
+                  onComposerModeChange={setComposerMode}
                   attachedProductMedia={attachedProductMedia}
-                  onProductCardClick={handleProductCardClick}
-                  onAvatarCardClick={handleAvatarCardClick}
                   onGenerate={handleGenerate}
                   resizeWidth={composerWidth}
                   resizeHeight={composerHeight}
