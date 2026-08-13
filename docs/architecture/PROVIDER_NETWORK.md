@@ -287,22 +287,63 @@ adds a route back. Admin route policy and provider execution safety are
 separate concepts, and an operator cannot enable their way past a missing
 recovery path.
 
-### PUBLIC CATALOG AVAILABILITY GAP
+### Public production availability (gap CLOSED)
 
-The server is fail-closed: creating a generation for a Gemini model now raises
-`NO_ELIGIBLE_ROUTE` **before any row exists** — no generation, no attempt, no
-provider call, nothing to settle.
+The server has been fail-closed since the durability gate landed: creating a
+generation for a Gemini-backed model raises `NO_ELIGIBLE_ROUTE` before any row
+exists. The catalog did not know that, so /generate kept offering nano-banana
+while the server refused it — a product that looks broken rather than one that
+is honest.
 
-The catalog is not. `PublicModelDescriptor` has no availability or status
-field, and `projectCatalog()` filters only on the registry's `enabled` flag,
-which is still true for these models. So `GET /api/models` and the generated
-client catalog still advertise nano-banana while creation refuses it, and a
-user picking it on /generate gets a typed error rather than a disabled option.
+**Public capability != production availability.** What a model *can do* and
+whether it *can run* are different questions with different owners. The
+capability registry answers the first; the route table answers the second.
 
-Expressing this honestly needs a new projection field, a regenerated client
-catalog and UI treatment for an unavailable model — more than a provider batch
-should change on a frozen page. **Recorded here rather than faked**, and pinned
-by a test so it cannot be forgotten.
+**Build-time catalog != live route availability.** Two layers, split honestly:
+
+| Layer | Carries | Why it may |
+| --- | --- | --- |
+| `public-model-catalog.ts` (build) | capabilities + `productionReady` | execution durability is a property of the shipped adapter — it cannot change without a deploy |
+| `GET /api/models` (runtime) | the above + `productionAvailability` / `productionAvailable` | route enablement changes at runtime, and only a query can see it |
+
+A build artifact is never presented as knowing live route state. The static
+flag is named `productionReady`, not `available`, for exactly that reason.
+
+**One eligibility truth.** `resolveModelAvailability` calls
+`listRouteCandidates` and `rejectionFor` — the router's own functions. It
+re-implements no check and contains no scorer; a test asserts that
+`candidate.enabled`, `providerEnabled`, `providerModelEnabled`, `routeStatus`
+and the scoring functions appear nowhere in it. A second "is this usable"
+implementation is how a catalog eventually disagrees with the thing it
+describes.
+
+**Availability is EXISTENCE of a safe route, not "the winner is safe".** A
+model with a top-priority Gemini route and a low-priority fal route is
+`available` — the router will simply never pick the Gemini one.
+
+| States | Meaning |
+| --- | --- |
+| `available` | at least one route passes hard eligibility |
+| `temporarily_unavailable` | routes exist and are structurally fine; something that heals on its own is in the way |
+| `not_production_ready` | no routes, or every one blocked structurally — an operator must act |
+
+**Product language only.** The response carries a state and nothing else: no
+provider, no provider model, no route id, no priority, no score, no breaker
+state, no durability enum. `internalReasons` — including
+`provider_execution_not_restart_safe` — is computed for logs and never
+serialized. "This model is unavailable" is a product fact; "gemini has unproven
+execution durability" is not the browser's business.
+
+**UI, narrowly.** `ModelSelector` refuses to select a model the registry knows
+and the server will refuse, and its row reads `Unavailable`. The gate is
+`isOrchestrationModel(id) && !isProductionReadyModel(id)`, so it fires only for
+models with a real server-side entry — every marketing card in that list has no
+server model at all and is untouched. No Gemini model is silently remapped to
+fal, and no direct fallback exists.
+
+**The server is still the authority.** `POST /api/generate` re-derives
+eligibility itself and never consults availability — asserted by a test. A
+stale, cached or forged availability value grants nothing.
 
 ## Status
 
@@ -314,7 +355,8 @@ FAL LIVE VALIDATION:        PENDING — no paid call has been made from this rep
 FAL WEBHOOK SECURITY:       PROVIDER_MECHANISM_NOT_VERIFIED — gate open
 GEMINI ROUTABILITY:         BLOCKED_UNTIL_DURABLE — excluded by the hard gate
 CLOUDFLARE ROUTABILITY:     BLOCKED_UNTIL_DURABLE — excluded by the hard gate
-PUBLIC CATALOG:             AVAILABILITY GAP — server fail-closed, catalog optimistic
+PUBLIC AVAILABILITY:        CONSISTENT — catalog and server agree; runtime
+                            availability derived from the router's eligibility
 ADDITIONAL PROVIDERS:       NOT_CONFIGURED
 ```
 

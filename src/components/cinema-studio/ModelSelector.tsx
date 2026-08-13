@@ -5,6 +5,28 @@ import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 import {
+  isOrchestrationModel,
+  isProductionReadyModel,
+} from "@/lib/orchestration/orchestration-models";
+
+/**
+ * PHASE 8: is this a model the server KNOWS and currently refuses?
+ *
+ * Narrow on purpose. It is true only for a model the orchestration registry
+ * actually contains whose provider has no proven restart-safe execution —
+ * today, the Gemini-backed cards. Every marketing card in this list has no
+ * server-side model at all and is left exactly as it was; those never reached
+ * the canonical generation path and this task is not about them.
+ *
+ * The flag is the STATIC half of availability, read from the build catalog.
+ * It cannot see a route disabled in the database, and it is not a security
+ * boundary — POST /api/generate enforces the truth. It exists so the UI stops
+ * offering a model the server has already decided to refuse.
+ */
+function isKnownProductionUnavailable(modelId: string): boolean {
+  return isOrchestrationModel(modelId) && !isProductionReadyModel(modelId);
+}
+import {
   Check,
   ChevronDown,
   ChevronRight,
@@ -121,7 +143,10 @@ function ImageRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
+      aria-disabled={isKnownProductionUnavailable(model.id) || undefined}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
+        isKnownProductionUnavailable(model.id) ? "opacity-40" : ""
+      } ${
         marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : // Keyboard focus shows the same grey card as hover, so arrowing
@@ -160,7 +185,10 @@ function ImageRow({
           {model.name}
         </span>
         <p className="truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
-          {model.description}
+          {/* Product language only. "Unavailable" is a product fact; which
+              provider it would have used, and why that provider is not
+              trusted, are not the browser's business. */}
+          {isKnownProductionUnavailable(model.id) ? "Unavailable" : model.description}
         </p>
       </div>
       <div className="size-5 shrink-0 flex items-center justify-center ml-1">
@@ -202,7 +230,10 @@ function VideoFlatRow({
       aria-selected={active}
       tabIndex={focused ? 0 : -1}
       onClick={() => onSelect(model.id)}
+      aria-disabled={isKnownProductionUnavailable(model.id) || undefined}
       className={`group/model-row relative w-full h-[56px] min-h-[56px] flex items-center px-2.5 py-2 rounded-[12px] text-start transition-all duration-200 ease-out cursor-pointer hover:translate-x-[2px] outline-none focus-visible:outline-none ${
+        isKnownProductionUnavailable(model.id) ? "opacity-40" : ""
+      } ${
         marked
           ? "bg-[rgba(217,119,87,0.08)] border border-[rgba(217,119,87,0.25)] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : // Keyboard focus shows the same grey card as hover, so arrowing
@@ -510,6 +541,9 @@ export default function ModelSelector({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const select = (id: string) => {
+    // A model the server will refuse must not become the active selection —
+    // otherwise Generate looks normal and fails at the boundary.
+    if (isKnownProductionUnavailable(id)) return;
     onChange(id);
     setOpen(false);
     setQuery("");

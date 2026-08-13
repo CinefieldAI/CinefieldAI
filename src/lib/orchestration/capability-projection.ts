@@ -1,4 +1,5 @@
 import { listModels, type ModelRegistryEntry } from "./model-registry";
+import { isStaticallyProductionReady } from "./model-availability";
 import type { GenerationType, WorkflowType } from "./types";
 
 /**
@@ -67,6 +68,19 @@ export interface PublicModelDescriptor {
    * duplication this projection exists to end.
    */
   isMock: boolean;
+  /**
+   * The STATIC half of production availability (Phase 8).
+   *
+   * False when this model's provider has no proven restart-safe execution, or
+   * has no adapter in this deployment. That is a property of the code, fixed
+   * at deploy time, which is why a build artifact may honestly carry it.
+   *
+   * It is NOT the whole answer, and the naming says so: production-READY, not
+   * available. A statically ready model can still have every route disabled in
+   * the database. `GET /api/models` returns the live verdict; this flag is the
+   * part that cannot change without a deploy.
+   */
+  productionReady: boolean;
   capabilities: PublicModelCapabilities;
   defaults: {
     aspectRatio?: string;
@@ -91,6 +105,7 @@ export function projectModel(entry: ModelRegistryEntry): PublicModelDescriptor {
     acceptedInputMimeTypes: [...entry.acceptedInputMimeTypes],
     maxInputs: entry.maxInputs,
     isMock: entry.isMock,
+    productionReady: isStaticallyProductionReady(entry),
     capabilities: {
       aspectRatios: [...c.supportedAspectRatios],
       resolutions: [...c.supportedResolutions],

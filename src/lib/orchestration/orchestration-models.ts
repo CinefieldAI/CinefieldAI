@@ -61,6 +61,22 @@ export function getOrchestrationGenerationType(
 }
 
 /**
+ * Is this model production-ready as far as the SHIPPED CODE knows?
+ *
+ * The static half of availability: false when the model's provider has no
+ * proven restart-safe execution, or no adapter in this deployment. Fixed at
+ * deploy time, which is why a client may read it from the build artifact.
+ *
+ * NOT the whole answer, and never an authority. A statically ready model can
+ * still have every route disabled in the database — `GET /api/models` gives
+ * the live verdict — and `POST /api/generate` enforces the truth regardless of
+ * what any client believes.
+ */
+export function isProductionReadyModel(modelId: string): boolean {
+  return BY_ID.get(modelId)?.productionReady === true;
+}
+
+/**
  * True only for offline mock models — used to label a result honestly rather
  * than to decide anything.
  */

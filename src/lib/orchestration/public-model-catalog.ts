@@ -22,6 +22,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": false,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -114,6 +115,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": false,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -161,6 +163,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -202,6 +205,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -243,6 +247,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -289,6 +294,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "Auto",
@@ -329,6 +335,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -370,6 +377,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -411,6 +419,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": false,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -452,6 +461,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": true,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -503,6 +513,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     ],
     "maxInputs": 2,
     "isMock": true,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -552,6 +563,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     "acceptedInputMimeTypes": [],
     "maxInputs": 0,
     "isMock": true,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -609,6 +621,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     ],
     "maxInputs": 1,
     "isMock": true,
+    "productionReady": true,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -666,6 +679,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     ],
     "maxInputs": 1,
     "isMock": false,
+    "productionReady": false,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -718,6 +732,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     ],
     "maxInputs": 1,
     "isMock": false,
+    "productionReady": false,
     "capabilities": {
       "aspectRatios": [
         "1:1",
@@ -763,6 +778,7 @@ export const PUBLIC_MODEL_CATALOG: readonly PublicModelDescriptor[] = [
     ],
     "maxInputs": 1,
     "isMock": false,
+    "productionReady": false,
     "capabilities": {
       "aspectRatios": [
         "1:1",

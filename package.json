@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "catalog:generate": "tsx scripts/generate-public-catalog.ts",
+    "catalog:generate": "tsx --conditions=react-server scripts/generate-public-catalog.ts",
     "temporal:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/temporal-worker.ts",
     "provider:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/provider-worker.ts"
   },

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { projectCatalog } from "@/lib/orchestration/capability-projection";
+import { resolveCatalogAvailability } from "@/lib/orchestration/model-availability";
+import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 
 /**
  * GET /api/models — the server's answer to "what can this model do?"
@@ -20,10 +22,12 @@ import { projectCatalog } from "@/lib/orchestration/capability-projection";
  * enforces this by construction — it builds its output field by field instead
  * of spreading the registry entry.
  *
- * NOT WIRED INTO /generate. The frozen Cinema Studio UI still carries its own
- * hardcoded capability lists, and AGENTS.md freezes that page absent an
- * explicit unlock, which this phase does not grant. The endpoint exists and is
- * correct; consuming it is a separate, explicitly-authorized change.
+ * PRODUCTION AVAILABILITY IS RUNTIME (Phase 8). Capabilities change with a
+ * deploy; whether a model can actually run changes with the route table. So
+ * this endpoint answers both, and the build-time catalog answers only the
+ * first. `productionAvailable` is derived from the SAME hard eligibility the
+ * router applies — never from a second implementation — and it carries no
+ * provider, route, score or durability internals with it.
  *
  * Authenticated: the catalog is product surface, not public documentation, and
  * an unauthenticated caller has nothing to do with it.
@@ -36,7 +40,31 @@ export async function GET(): Promise<NextResponse> {
   }
 
   // Pure, in-process, no database and no secrets — the registry is code.
-  const models = projectCatalog();
+  const catalog = projectCatalog();
+
+  // Live availability, from the real route table. Without a configured admin
+  // client there is nothing to query, so every model falls back to its STATIC
+  // readiness — which understates availability rather than overstating it.
+  // Overstating is the direction that puts a user in front of a model that
+  // will refuse them.
+  const availability = isSupabaseAdminConfigured()
+    ? await resolveCatalogAvailability(getSupabaseAdminClient())
+    : null;
+
+  const models = catalog.map((model) => {
+    const resolved = availability?.get(model.id);
+    const productionAvailability =
+      resolved?.availability ?? (model.productionReady ? "available" : "not_production_ready");
+
+    return {
+      ...model,
+      // Product-level only. The internal rejection reasons stay server-side:
+      // "this model is not available" is a product fact, "gemini has unproven
+      // execution durability" is not the browser's business.
+      productionAvailability,
+      productionAvailable: productionAvailability === "available",
+    };
+  });
 
   return NextResponse.json(
     { models },
