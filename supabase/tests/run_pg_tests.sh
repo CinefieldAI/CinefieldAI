@@ -34,12 +34,15 @@ docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD="$PGPASS" -e POSTGRES_DB="$DB" \
   "$IMAGE" >/dev/null
 
-# -t 2 makes each probe WAIT up to two seconds rather than returning
-# instantly, so the loop is a real 120-second budget instead of sixty
-# immediate failures against a container that has not finished initdb.
+# Readiness is probed with a REAL QUERY against the target database, not with
+# pg_isready. pg_isready only asks whether the SERVER is accepting connections,
+# and postgres starts accepting them before initdb has finished creating
+# POSTGRES_DB — so it reports ready and the very next psql dies with
+# 'database "cinefield_test" does not exist'. Selecting 1 from the actual
+# database is the only probe that means what this loop needs it to mean.
 for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER" pg_isready -t 2 -U postgres -d "$DB" >/dev/null 2>&1; then break; fi
-  sleep 1
+  if docker exec "$CONTAINER" psql -U postgres -d "$DB" -c 'SELECT 1' >/dev/null 2>&1; then break; fi
+  sleep 2
 done
 docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null
 
