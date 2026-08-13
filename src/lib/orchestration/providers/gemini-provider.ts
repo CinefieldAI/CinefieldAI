@@ -144,6 +144,20 @@ export const GEMINI_CAPABILITIES: ProviderCapabilityMatrix = {
   reconcileAmbiguousSubmission: "unknown_provider_capability",
   nativeIdempotency: "unknown_provider_capability",
   executionShape: "synchronous",
+  // NOT PROVEN, and therefore BLOCKED from canonical production routing.
+  //
+  // interactions.create returns the image inline and hands back no job
+  // handle, so the adapter holds the bytes in a process-local map between
+  // submit() and getResult(). If that process dies in between, the output of
+  // a call Google has already billed is gone — and there is no fetch-by-id
+  // API to recover it, so the fal fix has no analogue here.
+  //
+  // The exposure is small (a couple of database writes inside one call
+  // stack), but "small" is not "proven", and the binding Phase 8 rule is that
+  // a provider which cannot prove restart-safe execution does not run
+  // production work. Closing this needs a durable output handoff, which is
+  // Phase 9's media plane — not something to invent in a provider batch.
+  productionExecutionDurability: "not_proven",
 };
 
 class GeminiProvider implements ProviderAdapter {

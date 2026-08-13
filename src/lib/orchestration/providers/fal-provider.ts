@@ -236,6 +236,13 @@ export const FAL_CAPABILITIES: ProviderCapabilityMatrix = {
   nativeIdempotency: "unknown_provider_capability",
   // submit() enqueues and returns; Temporal owns the observation.
   executionShape: "asynchronous",
+  // Restart-safe IN CODE, not in the field. Everything needed to finish a job
+  // after the submitting process dies is durable: fal names the request in the
+  // submit response, the orchestrator persists it before anything waits, and
+  // status/result/cancel are all addressed by (endpointId, requestId) from the
+  // attempt row. Proven with doubles across separate client instances; never
+  // once against the live API, which is why this is not "restart_safe".
+  productionExecutionDurability: "implemented_not_live_validated",
 };
 
 class FalProvider implements ProviderAdapter {

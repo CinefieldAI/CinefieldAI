@@ -44,6 +44,43 @@ export function isUsable(status: CapabilityStatus): boolean {
   return status === "proven" || status === "implemented_not_live_validated";
 }
 
+/**
+ * Can this integration survive a worker dying mid-generation?
+ *
+ * SEPARATE FROM EVERY OTHER CAPABILITY, because it is a different kind of
+ * claim. `cancel` asks what the provider's API offers; this asks whether
+ * Cinefield can still finish the job after the process that started it is
+ * gone. An adapter can have a complete, correct API surface and still fail
+ * this — which is exactly what Gemini and Cloudflare do.
+ *
+ * IT IS A HARD ROUTING GATE, not a score. A provider that cannot prove
+ * restart-safe execution is excluded from the canonical production path
+ * before anything is weighed, because the failure it produces is not "a
+ * slower generation" but "a job the user was charged for whose output no
+ * longer exists".
+ */
+export type ExecutionDurability =
+  /** Proven restart-safe against the real provider. Nothing claims this yet. */
+  | "restart_safe"
+  /**
+   * The recovery path is implemented against a verifiable provider surface
+   * and tested with doubles, but never exercised live. Eligible: the code is
+   * real, the live confirmation is a separate, honest debt.
+   */
+  | "implemented_not_live_validated"
+  /**
+   * No proven way to recover an accepted job after a process failure.
+   * INELIGIBLE for canonical production routing.
+   */
+  | "not_proven"
+  /** The provider cannot support durable execution at all. INELIGIBLE. */
+  | "unsupported";
+
+/** True only when a provider may be selected for canonical production work. */
+export function isProductionDurable(durability: ExecutionDurability): boolean {
+  return durability === "restart_safe" || durability === "implemented_not_live_validated";
+}
+
 export interface ProviderCapabilityMatrix {
   /** Send work to the provider. Every adapter must support this. */
   submit: CapabilityStatus;
@@ -83,6 +120,14 @@ export interface ProviderCapabilityMatrix {
    * differently depending on it.
    */
   executionShape: "synchronous" | "asynchronous";
+  /**
+   * Whether this integration may run canonical production generations.
+   *
+   * Deliberately NOT derived from the fields above. An adapter with a full
+   * capability matrix can still be undurable, and a minimal one can be
+   * perfectly safe — this has to be asserted per integration, with evidence.
+   */
+  productionExecutionDurability: ExecutionDurability;
 }
 
 /** Everything unknown. The starting point for a new integration. */
@@ -97,4 +142,6 @@ export const UNKNOWN_CAPABILITIES: ProviderCapabilityMatrix = {
   reconcileAmbiguousSubmission: "unknown_provider_capability",
   nativeIdempotency: "unknown_provider_capability",
   executionShape: "synchronous",
+  // A new integration is not production-safe until someone shows it is.
+  productionExecutionDurability: "not_proven",
 };

@@ -207,6 +207,11 @@ export const MOCK_CAPABILITIES: ProviderCapabilityMatrix = {
   reconcileAmbiguousSubmission: "unsupported_by_adapter",
   nativeIdempotency: "unsupported_by_adapter",
   executionShape: "synchronous",
+  // Restart-safe by having nothing to lose. The mock reaches no network and
+  // creates no billable job, so a crash costs a re-run rather than an output
+  // somebody paid for. That is a genuinely different situation from Gemini's,
+  // which looks similar in code and is not.
+  productionExecutionDurability: "restart_safe",
 };
 
 class MockProvider implements ProviderAdapter {

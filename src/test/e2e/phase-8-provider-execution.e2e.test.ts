@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   UNKNOWN_CAPABILITIES,
   isUsable,
+  isProductionDurable,
   type CapabilityStatus,
   type ProviderCapabilityMatrix,
 } from "@/lib/orchestration/providers/provider-capabilities";
@@ -86,10 +87,16 @@ test("capabilities distinguish 'we did not build it' from 'we do not know'", () 
 });
 
 test("a new integration starts from all-unknown, never from all-supported", () => {
+  // executionShape and productionExecutionDurability have their own
+  // vocabularies; every capability proper defaults to unknown.
   for (const [key, value] of Object.entries(UNKNOWN_CAPABILITIES)) {
-    if (key === "executionShape") continue;
+    if (key === "executionShape" || key === "productionExecutionDurability") continue;
     assert.equal(value, "unknown_provider_capability", `${key} must default to unknown`);
   }
+
+  // And a new adapter is production-INELIGIBLE until someone proves otherwise.
+  assert.equal(UNKNOWN_CAPABILITIES.productionExecutionDurability, "not_proven");
+  assert.equal(isProductionDurable(UNKNOWN_CAPABILITIES.productionExecutionDurability), false);
 });
 
 test("no adapter claims a capability as 'proven' without being the implementation", () => {

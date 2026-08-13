@@ -124,6 +124,11 @@ export const CLOUDFLARE_CAPABILITIES: ProviderCapabilityMatrix = {
   reconcileAmbiguousSubmission: "unknown_provider_capability",
   nativeIdempotency: "unknown_provider_capability",
   executionShape: "synchronous",
+  // NOT PROVEN, and therefore BLOCKED from canonical production routing, for
+  // the same reason as Gemini: the response is the only copy of the output,
+  // it lives in process memory until getResult() reads it, and no verifiable
+  // fetch-by-id API exists to recover it after a crash.
+  productionExecutionDurability: "not_proven",
 };
 
 class CloudflareWorkersAiProvider implements ProviderAdapter {

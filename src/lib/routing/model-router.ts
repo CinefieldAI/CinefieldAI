@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isProviderRegistered } from "@/lib/orchestration/provider-registry";
+import { getProviderAdapter, isProviderRegistered } from "@/lib/orchestration/provider-registry";
+import { isProductionDurable } from "@/lib/orchestration/providers/provider-capabilities";
 import { compareRoutes, listRouteCandidates } from "./route-repository";
 import type {
   RouteCandidate,
@@ -56,6 +57,27 @@ export function rejectionFor(candidate: RouteCandidate): RouteRejectionReason | 
   if (!candidate.providerEnabled) return "provider_disabled";
   if (!candidate.providerModelEnabled) return "provider_model_disabled";
   if (!isProviderRegistered(candidate.providerId)) return "provider_not_registered";
+
+  // PHASE 8 PRODUCTION REACHABILITY GATE.
+  //
+  // An adapter that cannot prove it survives a worker dying mid-generation
+  // does not run canonical production work — however enabled, healthy, cheap,
+  // well-rated or high-priority its route is. This sits inside hard
+  // eligibility rather than in the scorer precisely so none of those can
+  // outvote it: a route rejected here never reaches the code that weighs
+  // anything.
+  //
+  // The failure it prevents is not a slow generation. It is a job the user was
+  // charged for whose output no longer exists, with no provider API to fetch
+  // it back.
+  //
+  // ENABLED ROUTE != PRODUCTION-SAFE ROUTE. Route configuration is an
+  // operator's intent; durability is a property of the integration, and an
+  // operator cannot enable their way past a missing recovery path.
+  if (!isProductionDurable(getProviderAdapter(candidate.providerId).capabilities.productionExecutionDurability)) {
+    return "provider_execution_not_restart_safe";
+  }
+
   return null;
 }
 

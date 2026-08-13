@@ -227,43 +227,82 @@ reconciliation block and let Cinefield submit a job fal is already running. The
 synthetic `fal-<generationId>` fallback id is rejected before any call for the
 same reason — fal has never seen it, so a "not found" would prove nothing.
 
-## Gemini and Cloudflare — production-routable, and still in-memory
+## Production reachability gate
 
-An earlier report implied this was a deferred, non-production concern. It is
-not, and the correction matters:
+**Enabled route != production-safe route.**
 
-| Provider | Routable? | Evidence |
-| --- | --- | --- |
-| gemini | **PRODUCTION_ROUTABLE** | seeded routes, enabled, priority 100; the nano-banana models are the executable cards on /generate |
-| cloudflare-workers-ai | **PRODUCTION_ROUTABLE** | seeded routes, enabled, priority 100 |
+A provider that cannot prove it survives a worker dying mid-generation does
+not run canonical production work. This is a **hard eligibility condition**
+inside `rejectionFor()` — the one function both routers share — so it is
+evaluated before runtime controls, before the circuit breaker, and before any
+health, cost, quality or priority is weighed. A route rejected here never
+reaches the code that scores anything, and its evaluation carries no score at
+all.
 
-Both still hold their output in a process-local map between `submit()` and
-`getResult()`.
+The rejection reason is `provider_execution_not_restart_safe`, deliberately
+distinct from `provider_disabled`: nobody turned this off, and turning
+anything on will not change it.
 
-**Why this is not the same defect fal had, and why the difference is real.**
-Both complete *inside* `submit()` and the orchestrator calls `getResult()` in
-the same call stack, so the exposed window is a couple of database writes — not
-a provider's runtime. fal's was a minute-long wait on a job running elsewhere.
-The magnitudes differ by orders of magnitude.
+### Durability matrix
 
-**Why it cannot be fixed the same way.** Neither provider returns a job handle
-and neither offers a verifiable fetch-result-by-id API. There is nothing
-durable to read back, so the fal solution has no analogue here. Closing it
-properly needs a durable output handoff, and Phase 9 owns the media plane —
-inventing a blob store in a provider batch would be the wrong fix in the wrong
-phase.
+| Provider | Execution durability | Canonical production routing | Reason |
+| --- | --- | --- | --- |
+| **fal.ai** | `implemented_not_live_validated` | **code-eligible** | durable request id, cross-process status/result/cancel; never run live |
+| **mock** | `restart_safe` | eligible | reaches no network, creates no billable job — a crash costs a re-run |
+| **Gemini** | `not_proven` | **BLOCKED** | process-local result dependency; no fetch-by-id recovery exists |
+| **Cloudflare Workers AI** | `not_proven` | **BLOCKED** | same |
 
-**What was done instead.** The state is pinned by regression guards in
-`phase-8-provider-reachability.e2e.test.ts`: the adapters may not be declared
-asynchronous while they depend on process memory (an async declaration would
-turn a millisecond window into guaranteed loss), and any asynchronous adapter
-must declare real status and result capabilities.
+`fal.ai` is **eligible but not live-validated**, and those are different
+claims. The recovery code is real and tested against doubles across separate
+client instances; it has never been run against the live API. That debt is
+tracked, not hidden behind eligibility.
 
-**What is NOT done, and needs a decision.** The residual window is not closed.
-The options are a durable output handoff (Phase 9 scope) or removing these
-providers from production route eligibility — which would take /generate's only
-working image models offline. That trade is a product call, not one to make
-silently inside a provider batch.
+### Why exclusion rather than a fix
+
+Gemini and Cloudflare both complete inside `submit()` and return no job
+handle, and neither offers a verifiable fetch-result-by-id API. There is
+nothing durable to read back, so the fal solution has no analogue. Closing the
+gap needs a durable output handoff — which is **Phase 9's media plane**, and
+inventing a blob store, a Redis result cache or a temp file inside a provider
+batch would be the wrong fix in the wrong phase. A test asserts none of those
+appeared.
+
+So the choice was between shipping a provider that can lose a billed job's
+output and not routing production traffic to it. The rule that settles it: a
+provider that cannot prove restart-safe execution is not eligible.
+
+### What nothing can override
+
+| Attempt | Result |
+| --- | --- |
+| priority 10 000 | still excluded |
+| every DB flag enabled | still excluded |
+| perfect health, zero errors, 1 ms latency | still excluded |
+| zero cost, top trusted quality | still excluded |
+| runtime flags clear | still excluded |
+| failover candidate | still excluded — same resolver, no weaker path |
+
+Runtime controls can only ever **subtract**; there is no control shape that
+adds a route back. Admin route policy and provider execution safety are
+separate concepts, and an operator cannot enable their way past a missing
+recovery path.
+
+### PUBLIC CATALOG AVAILABILITY GAP
+
+The server is fail-closed: creating a generation for a Gemini model now raises
+`NO_ELIGIBLE_ROUTE` **before any row exists** — no generation, no attempt, no
+provider call, nothing to settle.
+
+The catalog is not. `PublicModelDescriptor` has no availability or status
+field, and `projectCatalog()` filters only on the registry's `enabled` flag,
+which is still true for these models. So `GET /api/models` and the generated
+client catalog still advertise nano-banana while creation refuses it, and a
+user picking it on /generate gets a typed error rather than a disabled option.
+
+Expressing this honestly needs a new projection field, a regenerated client
+catalog and UI treatment for an unavailable model — more than a provider batch
+should change on a frozen page. **Recorded here rather than faked**, and pinned
+by a test so it cannot be forgotten.
 
 ## Status
 
@@ -273,8 +312,9 @@ FAL SUBMISSION DURABILITY:  PASS — request id persisted before any wait
 FAL ASYNC EXECUTION:        PASS — enqueue-and-return, Temporal observes
 FAL LIVE VALIDATION:        PENDING — no paid call has been made from this repo
 FAL WEBHOOK SECURITY:       PROVIDER_MECHANISM_NOT_VERIFIED — gate open
-GEMINI DURABILITY:          PARTIAL — routable, in-memory, no provider fix available
-CLOUDFLARE DURABILITY:      PARTIAL — same
+GEMINI ROUTABILITY:         BLOCKED_UNTIL_DURABLE — excluded by the hard gate
+CLOUDFLARE ROUTABILITY:     BLOCKED_UNTIL_DURABLE — excluded by the hard gate
+PUBLIC CATALOG:             AVAILABILITY GAP — server fail-closed, catalog optimistic
 ADDITIONAL PROVIDERS:       NOT_CONFIGURED
 ```
 

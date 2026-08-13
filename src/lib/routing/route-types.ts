@@ -77,7 +77,14 @@ export type RouteRejectionReason =
   | "provider_model_disabled"
   | "model_version_not_usable"
   | "model_lifecycle_disabled"
-  | "provider_not_registered";
+  | "provider_not_registered"
+  /**
+   * Phase 8. The provider cannot prove it survives a worker restart, so it is
+   * excluded from canonical production routing. Distinct from
+   * `provider_disabled`: nobody turned this off, and turning anything on will
+   * not change it — the integration has no proven recovery path.
+   */
+  | "provider_execution_not_restart_safe";
 
 /**
  * What the router is allowed to know about the request.
