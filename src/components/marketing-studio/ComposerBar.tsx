@@ -73,14 +73,14 @@ function ModeToggleButton({
       onClick={onClick}
       aria-label={`${label} mode`}
       aria-pressed={active}
-      className={`flex w-full flex-1 flex-col items-center justify-center gap-1 rounded-[16px] border transition-all duration-200 active:scale-95 ${
+      className={`flex w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[14px] border transition-all duration-200 active:scale-95 ${
         active
           ? "border-[#D97757] bg-[#101112] font-bold text-white"
           : "border-transparent bg-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
       }`}
     >
-      <Icon className={active ? "size-6 text-[#D97757]" : "size-6 text-neutral-400"} />
-      <span className="text-xs font-extrabold tracking-wide">{label}</span>
+      <Icon className={active ? "size-5 text-[#D97757]" : "size-5 text-neutral-400"} />
+      <span className="text-[11px] font-extrabold tracking-wide">{label}</span>
     </button>
   );
 }
@@ -117,7 +117,7 @@ export default function ComposerBar({
       >
       {/* LEFT IMAGE/VIDEO SELECTOR - MATCHES /GENERATE MODE TOGGLE SHAPE */}
       <div
-        className="relative z-50 flex h-[128px] min-h-[128px] w-[73px] min-w-[73px] shrink-0 rounded-[22px] border-2 p-1.5 animate-pulse-orange-white"
+        className="relative z-50 flex h-[116px] min-h-[116px] w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white"
         style={{
           background:
             "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
