@@ -24,6 +24,8 @@ export type OrchestrationErrorCode =
   | "ASSET_STORAGE_FAILED"
   | "ASSET_RECORD_FAILED"
   | "MEDIA_INGEST_REJECTED"
+  | "DR_CONFIGURATION_INVALID"
+  | "DR_BACKUP_FAILED"
   | "PROVIDER_NOT_CONFIGURED"
   | "PROVIDER_AUTH_ERROR"
   | "PROVIDER_RATE_LIMIT"
@@ -109,6 +111,22 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
     message: "The generated media did not pass safety validation.",
     status: 422,
     retryable: false,
+  },
+  // DR is optional: a deployment without it stores and serves media correctly.
+  // This means an operator ASKED for DR and got the details wrong, which is
+  // worth failing loudly rather than silently skipping every backup.
+  DR_CONFIGURATION_INVALID: {
+    message: "A service is temporarily unavailable.",
+    status: 503,
+    retryable: false,
+  },
+  // A DURABILITY problem, never a media problem. The canonical R2 object is
+  // untouched, the generation is unaffected, and no provider is implicated —
+  // this must never reach a circuit breaker or trigger a re-generation.
+  DR_BACKUP_FAILED: {
+    message: "A background task did not complete.",
+    status: 502,
+    retryable: true,
   },
   // Enabled with a URL the client cannot use. Distinct from "not enabled",
   // which is a valid deployment shape — this is an operator mistake, and

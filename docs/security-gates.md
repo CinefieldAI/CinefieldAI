@@ -213,6 +213,42 @@ bounds wall-clock time and the child counts bytes as it reads them.
 
 ---
 
+## Disaster recovery storage (Phase 9-D)
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (27 tests + 7 PostgreSQL proofs)
+LIVE_PROOF                 YES   (R2 -> S3 verified end to end, synthetic asset)
+PRODUCTION_IAM_PENDING     YES
+```
+
+The DR bucket is private with Block Public Access on, encrypted with SSE-S3,
+and versioned. The backup identity (`cinefield-dr-backup`) holds only
+`PutObject`, `GetObject`, `ListBucket` and `GetBucketLocation` on that one
+bucket — **no `DeleteObject`**, so a backup worker cannot destroy backup
+history.
+
+No AWS access key exists in this repository or its environment. Credentials
+come from the SDK default provider chain: a named profile locally, the ECS
+task role in production. What `.env.local` holds is the profile NAME, the
+bucket name and the region — identifiers, not secrets.
+
+### Residual risk
+
+- **KMS is Phase 25.** SSE-S3 is server-side encryption with AWS-managed
+  keys. Customer-managed key ownership and a least-privilege key policy are a
+  later phase; writing a KMS policy now would be a fiction, since no key
+  exists and `infra/modules/kms` has never been applied.
+- **Production IAM is not provisioned.** The dev identity is a long-lived IAM
+  user with static keys. Production must use the ECS task role instead, and
+  `infra/modules/iam` has no DR role yet.
+- **DR is dev-scoped.** `cinefield-media-dr-dev` only. A production bucket,
+  cross-region placement and a lifecycle policy are outstanding.
+- **Restore is a contract, not code.** Nothing can currently restore from S3;
+  see the architecture doc for the shape it must take.
+
+---
+
 ## Gates not yet addressed
 
 | Gate | Subject | Package | Status |
