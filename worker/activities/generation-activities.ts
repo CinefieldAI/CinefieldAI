@@ -44,6 +44,7 @@ import { isSqsCommandBusEnabled } from "@/lib/aws/sqs-config";
 import type { Generation, GenerationAttempt } from "@/types/database";
 import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
 import { decideFailover, DEFAULT_MAX_ATTEMPTS } from "@/lib/routing/failover-policy";
+import { createFieldLogger } from "../../src/lib/observability/logger";
 
 /**
  * Reads the route the Phase 7-B router chose when the generation was created.
@@ -104,8 +105,17 @@ export interface StatusOutcome {
   errorCode?: string;
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("activity");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:activity]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

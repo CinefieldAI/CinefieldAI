@@ -7,10 +7,19 @@ import { validateCapabilities } from "./capability-validator";
 import { mapMetadataToInputs, mapMetadataToSettings } from "./generation-settings-mapper";
 import { resolveWorkflow } from "./workflow-router";
 import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
+import { createFieldLogger } from "@/lib/observability/logger";
+
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("generation-create");
 
 function log(fields: Record<string, unknown>): void {
-  // Identifiers and codes only — never a prompt, a credential or a payload.
-  console.info("[cinefield:generation-create]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

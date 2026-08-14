@@ -1,5 +1,6 @@
 import { getRedisClient } from "./redis-client";
 import { circuitBreakerKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 import {
   initialBreakerRecord,
   type CircuitBreakerRecord,
@@ -35,9 +36,17 @@ export type BreakerReadOutcome =
   /** Redis is disabled, unreachable, or returned something unusable. */
   | { outcome: "unavailable" };
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("circuit-breaker-store");
+
 function log(fields: Record<string, unknown>): void {
-  // Identifiers and state names only. Never a prompt, a payload, a key value.
-  console.info("[cinefield:circuit-breaker-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 let testClient: CircuitBreakerRedisClient | null | undefined;

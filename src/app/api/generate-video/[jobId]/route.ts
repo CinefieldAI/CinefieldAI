@@ -1,6 +1,10 @@
 import { getJob } from "@/lib/jobs";
 
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { createLogger } from "@/lib/observability/logger";
+import { errorFields } from "@/lib/observability/error-projection";
+
+const log = createLogger("generate-video");
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ jobId: string }> }
@@ -36,7 +40,8 @@ export async function GET(
       result: job.result,
     });
   } catch (error) {
-    console.error("Get job status error:", error);
+    // Phase 13-E — see the sibling route. Bounded class and code only.
+    log.error("job_status_failed", errorFields(error));
     return privateJson(
       { error: "Failed to retrieve job status" },
       { status: 500 }

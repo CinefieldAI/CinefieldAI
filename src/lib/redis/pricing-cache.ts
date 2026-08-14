@@ -2,6 +2,7 @@ import "server-only";
 import { getRedisClient } from "./redis-client";
 import { pricingCacheKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
 import type { PricingRecord, ProviderBillingUnit, PricingSourceType } from "@/lib/pricing/pricing-types";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield pricing cache (Phase 6R.7).
@@ -84,8 +85,17 @@ export interface PricingCacheRedisClient {
   del(key: string): Promise<void>;
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("pricing-cache");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:pricing-cache]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function isValidPricingRecord(value: unknown): value is PricingRecord {

@@ -1,6 +1,7 @@
 import "server-only";
 import { getRedisClient } from "./redis-client";
 import { providerErrorRateKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield provider-error-rate aggregate state (Phase 6R.7).
@@ -106,8 +107,17 @@ local failureCount = redis.call('HGET', KEYS[1], 'failureCount')
 return { totalCount, successCount, failureCount }
 `;
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-error-rate-store");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:provider-error-rate-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function validateOutcome(outcome: ProviderOutcome): void {

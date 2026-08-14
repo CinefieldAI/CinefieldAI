@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getRedisClient } from "./redis-client";
 import { lockKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield Redis distributed lock foundation (Phase 6R.7 — final
@@ -137,9 +138,17 @@ redis.call('DEL', KEYS[1])
 return 1
 `;
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("distributed-lock");
+
 function log(fields: Record<string, unknown>): void {
-  // Never includes ownerToken or any Redis value.
-  console.info("[cinefield:distributed-lock]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function resolveTtlSeconds(ttlSeconds?: number): number {

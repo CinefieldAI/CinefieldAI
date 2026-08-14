@@ -5,6 +5,7 @@ import {
   type DistributedLockRedisClient,
 } from "@/lib/redis/distributed-lock";
 import { encodeKeySegment } from "@/lib/redis/redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Single-flight admission for a HALF_OPEN circuit breaker (Phase 7-C fix).
@@ -61,8 +62,17 @@ export type ProbeAdmission =
   /** Another caller holds it, or Redis could not answer. Do not send traffic. */
   | { granted: false; reason: "busy" | "unavailable" };
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("half-open-probe");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:half-open-probe]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function resourceIdFor(providerId: string, providerModelId: string): string {

@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import type { DomainEventEnvelope } from "./domain-event";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield outbox repository (Phase 6R.9).
@@ -46,9 +47,17 @@ export type EnqueueOutcome = { outcome: "enqueued"; eventId: string } | { outcom
 export type ClaimOutcome = { outcome: "claimed"; events: ClaimedOutboxEvent[] } | { outcome: "failed"; errorCode: string };
 export type ResolveOutcome = { outcome: "resolved" } | { outcome: "not_owner" } | { outcome: "failed"; errorCode: string };
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("outbox");
+
 function log(fields: Record<string, unknown>): void {
-  // Never includes claimToken, payload contents, or a raw error message.
-  console.info("[cinefield:outbox]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

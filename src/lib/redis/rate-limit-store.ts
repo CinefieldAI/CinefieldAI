@@ -1,6 +1,7 @@
 import "server-only";
 import { getRedisClient } from "./redis-client";
 import { rateLimitKey, type RateLimitSubject } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield Redis rate-limit state foundation (Phase 6R.7).
@@ -113,8 +114,17 @@ local ttl = redis.call('TTL', KEYS[1])
 return { count, ttl }
 `;
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("rate-limit-store");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:rate-limit-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function validatePositiveInteger(label: string, value: number, max: number): void {

@@ -40,6 +40,7 @@ import {
   setStage,
 } from "./status-manager";
 import { resolveWorkflow } from "./workflow-router";
+import { createFieldLogger } from "@/lib/observability/logger";
 import type {
   GenerationSettings,
   NormalizedGenerationInput,
@@ -75,9 +76,17 @@ interface LogFields {
   errorCode?: string;
 }
 
-/** Minimal sanitized server log. Never includes prompts, tokens, or payloads. */
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("orchestration");
+
 function log(fields: LogFields): void {
-  console.info("[cinefield:orchestration]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function readString(source: Record<string, unknown>, key: string): string | undefined {

@@ -1,5 +1,6 @@
 import "server-only";
 import { publishDomainEvent, type KafkaProducerLike, type PublishOutcome } from "@/lib/kafka/kafka-producer";
+import { createFieldLogger } from "@/lib/observability/logger";
 import {
   claimPendingEvents,
   markFailed,
@@ -39,8 +40,17 @@ export interface DrainResult {
   kafkaUnavailable: boolean;
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("outbox-publisher");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:outbox-publisher]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

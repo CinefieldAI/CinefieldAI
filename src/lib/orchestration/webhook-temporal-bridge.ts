@@ -10,6 +10,7 @@ import {
 } from "@/lib/temporal/provider-event-signal";
 import type { VerifiedWebhookEvent } from "./webhook-continuation";
 import type { GenerationAttempt } from "@/types/database";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield verified-webhook → Temporal bridge (Phase 6R.10).
@@ -96,9 +97,17 @@ export type WebhookBridgeOutcome =
   /** Server-side prerequisite missing (e.g. admin client unconfigured). Nothing was mutated. */
   | { outcome: "unavailable"; reason: string };
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("webhook-temporal-bridge");
+
 function log(fields: Record<string, unknown>): void {
-  // Codes and ids only — never a raw payload, header, signature, or secret.
-  console.info("[cinefield:webhook-temporal-bridge]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /** Attempt states in which an inbound provider observation is still meaningful. */

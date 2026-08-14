@@ -1,6 +1,7 @@
 import "server-only";
 import { getRedisClient } from "./redis-client";
 import { providerLatencyKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield provider-latency aggregate state (Phase 6R.7).
@@ -119,8 +120,17 @@ local maxLatencyMs = redis.call('HGET', KEYS[1], 'maxLatencyMs')
 return { sampleCount, totalLatencyMs, maxLatencyMs }
 `;
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-latency-store");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:provider-latency-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function validateLatencyMs(latencyMs: number): void {

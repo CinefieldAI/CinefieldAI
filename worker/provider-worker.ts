@@ -35,9 +35,19 @@ import { parseCommand } from "../src/lib/contracts/command-wire";
 import { SQS_QUEUES } from "../src/lib/aws/sqs-topology";
 import { handleProviderCommand } from "./provider-command-handler";
 import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
+import { createFieldLogger } from "../src/lib/observability/logger";
+
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-worker");
 
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:provider-worker]", JSON.stringify(fields));
+  emit(fields);
 }
 
 function readConfig() {

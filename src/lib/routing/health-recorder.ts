@@ -4,6 +4,7 @@ import { recordProviderLatency } from "@/lib/redis/provider-latency-store";
 import { transitionBreaker } from "@/lib/redis/circuit-breaker-store";
 import { recordFailure, recordSuccess } from "./circuit-breaker";
 import { classifyFailure, countsAgainstProvider, type FailureClass } from "./failure-classification";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Turns one execution outcome into provider health signal (Phase 7-C).
@@ -22,8 +23,17 @@ import { classifyFailure, countsAgainstProvider, type FailureClass } from "./fai
  * No prompt, no output, no provider payload, no credential.
  */
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("health-recorder");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:health-recorder]", JSON.stringify(fields));
+  emit(fields);
 }
 
 export interface ExecutionObservation {

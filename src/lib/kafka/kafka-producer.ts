@@ -3,6 +3,7 @@ import { getKafkaConfig } from "./kafka-config";
 import { topicForEventType } from "@/lib/events/event-topics";
 import { validateDomainEvent } from "@/lib/events/schema-registry";
 import type { DomainEventEnvelope } from "@/lib/events/domain-event";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield Kafka producer foundation (Phase 6R.9).
@@ -38,9 +39,17 @@ export type PublishOutcome =
   | { outcome: "unavailable" }
   | { outcome: "failed"; errorCode: string };
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("kafka-producer");
+
 function log(fields: Record<string, unknown>): void {
-  // Never includes broker addresses, credentials, or a raw error message.
-  console.info("[cinefield:kafka-producer]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

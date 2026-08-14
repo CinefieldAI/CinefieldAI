@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getRedisClient } from "./redis-client";
 import { idempotencyKey, REDIS_KEY_TTL_SECONDS, type IdempotencyScope } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield Redis idempotency claim store (Phase 6R.7, E1 -> E3A).
@@ -239,9 +240,17 @@ end
 return 1
 `;
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("idempotency-store");
+
 function log(fields: Record<string, unknown>): void {
-  // Never includes ownerToken, the raw stored value, or any content field.
-  console.info("[cinefield:idempotency-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /** Short, safe reason codes only — bounded length, restricted charset. Never raw error text. */

@@ -1,0 +1,13 @@
+{
+  "_note": "Phase 13-E test fixture. Synthetic values shaped like the data ¶1722 forbids. None is a real credential; the hosts are unroutable and the keys are invented. They live here, in the dedicated fixture directory, so no source file has to contain a credential shape.",
+  "prompt": "a cinematic shot of a person walking through a rainy street at night",
+  "signedUrl": "https://media.example-cdn.net/o/abc?X-Amz-Signature=deadbeefdeadbeef",
+  "apiKey": "sk-liveKeyMaterial0123456789",
+  "authorization": "Bearer eyJabcdefghijkl.eyJmnopqrstuvwx.sig0123456789",
+  "cookie": "__session=abcdef; Path=/; HttpOnly",
+  "redisUrl": "rediss://default:hunter2hunter2@prod-cache.internal:6379",
+  "email": "someone@example.org",
+  "stack": "Error: boom\n    at handler (/app/src/route.ts:12:3)\n    at run (/app/src/main.ts:4:1)",
+  "requestBody": "{\"prompt\":\"secret user text\"}",
+  "clerkUserId": "user_2abcdefghijklmnop"
+}

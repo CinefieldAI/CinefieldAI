@@ -33,6 +33,7 @@ import {
   type RouteCost,
 } from "./routing-cost";
 import { costKeyFor, readActiveRouteCosts } from "./routing-cost-repository";
+import { createFieldLogger } from "@/lib/observability/logger";
 import {
   NO_TRUSTED_QUALITY_SOURCE,
   normalizeQuality,
@@ -524,10 +525,17 @@ export async function loadOptimizationInputs(
   return { cost, quality };
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("health-router");
+
 function log(fields: Record<string, unknown>): void {
-  // Identifiers, states and numbers. Never a prompt, a payload, a secret —
-  // and never a provider unit cost, which is internal commercial detail.
-  console.info("[cinefield:health-router]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

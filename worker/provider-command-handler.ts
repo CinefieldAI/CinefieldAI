@@ -35,6 +35,7 @@ import {
 import { ATTEMPT_STALE_AFTER_MS } from "@/lib/aws/sqs-topology";
 import { parseCommand, serializeCommand, type CommandWireV1 } from "@/lib/contracts/command-wire";
 import type { Generation } from "@/types/database";
+import { createFieldLogger } from "../src/lib/observability/logger";
 
 /**
  * How often the handler refreshes an attempt's liveness clock while it owns
@@ -83,8 +84,17 @@ export interface HandlerOutcome {
   reason: string;
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-worker");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:provider-worker]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

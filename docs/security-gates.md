@@ -365,6 +365,173 @@ Replay is inert in both directions.
 
 ---
 
+## Sensitive Data Guard — telemetry allow-list (Phase 13-E)
+
+```
+TELEMETRY ALLOW-LIST         ENFORCED — 47 fields, each justified
+UNKNOWN FIELDS               DROP
+REDACTION BOUNDARY           ONE — every sink must call it
+STRUCTURED LOGGER            25 modules migrated
+RAW ERROR LOGGING            BLOCKED
+CI TELEMETRY SCAN            CLEAN on production sources
+EXTERNAL TELEMETRY SINK      NONE
+SENTRY / OTEL / DATADOG      NOT CONFIGURED
+```
+
+### The binding rule
+
+¶1753: *"Telemetry = İkinci Veri Kopyası: Daha fazla observability daha fazla
+sensitive veri kopyası demektir. … Yaklaşım deny-list değil ALLOW-LIST
+olmalıdır."* ¶1722 names the forbidden data; ¶1723 is the acceptance test —
+forbidden fields provably absent from Sentry/OTel/CloudWatch/Better Stack,
+with `trace_id`, `generation_id` and `provider_attempt_id` preserved.
+
+**This landed before any sink exists, and that ordering is the whole point.**
+¶1723 can only be *tested* if the guard predates the sinks, and telemetry
+already sent to a third party cannot be recalled.
+
+### Allow-list, not deny-list
+
+A deny-list has to predict every field anyone will ever add. It fails the
+first time someone logs a helpfully-named object, and it fails silently. An
+allow-list fails the other way: a useful field goes missing until someone adds
+it, which is a code review rather than an incident.
+
+The list was **built from what the code actually logs** — the keys passed to
+the 24 existing `log({...})` helpers were extracted (37 distinct names, zero
+object spreads) and classified one at a time. Nothing speculative, and every
+entry carries a written justification that a test requires.
+
+| Category | Fields |
+| --- | --- |
+| correlation (¶1753) | `traceId` `correlationId` `generationId` `providerAttemptId` `attemptId` `workflowId` `eventId` `workspaceId` |
+| what happened | `op` `result` `status` `stage` `action` `decision` `classification` `eventType` `workflow` `kind` `subject` `from` `to` … |
+| why | `reason` `reasonCode` `errorCode` `error` `errorClass` `severity` `retryable` |
+| where | `subsystem` `routeId` `routeClass` `queue` `region` `provider` `modelId` `targetId` `policyVersion` |
+| numbers | `durationMs` `count` `attempts` `claimed` `rejected` `riskScore` `sizeBytes` … |
+
+**Forbidden**, by name AND by value shape: prompt text, generated/reference
+media, raw bytes, signed and private media URLs, Authorization headers,
+cookies, Clerk tokens, Supabase service key, Redis URLs, R2/AWS credentials,
+provider API keys, Temporal API key, Stripe secrets, card data, raw provider
+responses, request bodies, headers, unrestricted metadata, environment dumps,
+stacks and cause chains, email, full IP, user agent, filenames.
+
+**Reduced-only**: a client IP may travel *only* as the sha256 `subjectHash`
+bucket 11-D and 12-C already compute — never reversibly, never a raw
+`X-Forwarded-For`. Filenames reduce to an extension or MIME class. User agent
+and email are not carried in any form.
+
+### The tenant field, stated plainly
+
+¶1753 approves `workspace_id`. Workspaces do not exist yet, so
+`resolveEffectiveTenant` sets the tenant to the Clerk principal id — **logging
+`workspaceId` today therefore logs a Clerk user id under a different name**.
+It is allowed because it is the identifier the roadmap approves and it is a
+pseudonymous account handle rather than PII, and because the field name stays
+correct once Phase 12-B lands real workspaces, at which point the value
+diverges with no call site changing. A field literally named `clerkUserId` is
+**dropped**, so the acting principal cannot be logged outside a tenant scope.
+
+### One boundary, and no way round it
+
+`sanitizeTelemetry()` runs before anything is written. Sentry, OTel,
+CloudWatch and Better Stack will each register a sink and receive an
+**already-sanitized envelope** — they never see the caller's original fields,
+so ¶1723 is enforced once rather than four times. There is exactly one call to
+the sanitizer in the logger, no `raw` variant and no bypass flag; a test
+asserts all three.
+
+Order inside the sanitizer matters and is fixed: secret shape → free-text
+length → prose → **truncate** → pattern. A secret-looking value is dropped
+WHOLE, never shortened — half a token is still a token's worth, and a
+truncated presigned URL still names the bucket and the object.
+
+### Errors never travel as objects
+
+`projectError()` yields at most `errorClass`, `errorCode` and `retryable`.
+`error.message` is deliberately absent — a message is authored by whoever
+threw, which for a provider is a third party, and no length limit makes
+arbitrary third-party text safe. Stacks and cause chains are never
+serialized.
+
+### What the live proof caught
+
+Running a realistic error through the real logger showed `errorCode` being
+silently DROPPED: every `OrchestrationError` code in this codebase is
+SCREAMING_SNAKE (`OUTPUT_DOWNLOAD_FAILED`) and every `error` field carries a
+PascalCase `caught.name`, both of which the lowercase code pattern rejected.
+That would have blinded error observability across 33 call sites with every
+test still green. Both fields now use the `name` shape — same bounds, same
+secret and prose checks.
+
+### Migration and the CI scan
+
+25 module helpers now delegate to the guarded logger; their call sites are
+unchanged. The two `generate-video` routes that logged a raw `error` object
+are fixed — a dev stub over an in-memory Map, so nothing secret was in scope,
+but Sentry's console integration captures `console.error` by default and those
+would have been the first unredacted stacks shipped to a third party.
+
+`npm run telemetry:scan` inspects log CALL SITES — a different job from
+`secrets:scan`, which looks for committed VALUES. It extracts each call's
+argument text depth-aware and flags raw errors, `process.env`, requests,
+bodies, headers, prompts, provider responses, spreads and stacks. Seven
+synthetic positive controls plus one negative control live in
+`src/test/fixtures/telemetry/`.
+
+Two flaws in its first version are worth recording, because they are how a
+scanner becomes useless: it blanked block comments without preserving
+newlines, corrupting every line number after a doc comment; and it matched a
+bare `e` as an error variable inside a six-line window. Together those
+produced 45 findings, 44 of them false. A scanner that cries wolf is worse
+than none.
+
+Process-lifecycle console output (started / stopped / refusing to start /
+fatal) is exempt in five **named files** — never a directory — and only from
+the raw-error rule. Those lines must survive a broken logger: "the logger
+threw" is exactly when you need to know why a process died.
+
+### Known and pinned, not fixed here
+
+Two **client** components log the user's raw prompt to the browser console:
+`ImageGenerationForm.tsx` and `MarketingStudioProductWorkspace.tsx`. They are
+genuine ¶1722 findings and they are NOT fixed in this batch:
+
+- `MarketingStudioProductWorkspace` is rendered by `/marketing-studio/product`,
+  a **LOCKED route**. A lock is not waived by the change being small.
+- Client telemetry is a separate contract that Phase 13 has not written. A
+  browser console write copies nothing to a third party.
+
+Both are pinned by test, so a **third cannot appear unnoticed**, and the day
+the lock lifts the test names exactly what to fix.
+
+### Failure semantics
+
+Telemetry failure is not business authority: nothing throws, nothing is
+awaited, a broken sink is swallowed. A logging failure must never fail a
+generation, retry a provider, mutate billing, drop a durable security event or
+crash a worker.
+
+The guard fails the **opposite** way, deliberately: an unsafe field is
+DROPPED, never emitted. Losing observability is recoverable; a prompt in a
+third-party system is not.
+
+### Residual risk
+
+- **No sink exists, and none is written.** An exporter with no service behind
+  it is the built-but-unwired defect this repository has closed four times.
+  13-A/13-B/13-C register sinks against the interface that now exists.
+- **A call-site scan cannot prove a runtime value is safe** — the tool says so
+  in its own output. It complements the sanitizer; it does not replace it.
+- **Client telemetry has no contract.** Nothing browser-side may carry
+  secret-bearing telemetry, and the two pinned prompt logs are the open item.
+- **`correlationId` and `traceId` are two names for one concept**, and no
+  trace is minted at the HTTP edge yet. Converging them and minting at the
+  edge is 13-A's core deliverable.
+
+---
+
 ## Secret manager, environment separation, least privilege (Phase 12-D)
 
 ```

@@ -1,6 +1,7 @@
 import "server-only";
 import { getTemporalClient } from "./client";
 import { generationWorkflowId } from "./workflow-ids";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield provider-event → Temporal signal transport (Phase 6R.10).
@@ -34,9 +35,17 @@ export interface ProviderEventSignalPayload {
   status: "processing" | "completed" | "failed";
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-event-signal");
+
 function log(fields: Record<string, unknown>): void {
-  // Never includes Temporal credentials, raw provider payloads, or headers.
-  console.info("[cinefield:provider-event-signal]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /**

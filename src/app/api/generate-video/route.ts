@@ -1,6 +1,10 @@
 import { createJob, type GenerateVideoRequest } from "@/lib/jobs";
 
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { createLogger } from "@/lib/observability/logger";
+import { errorFields } from "@/lib/observability/error-projection";
+
+const log = createLogger("generate-video");
 export async function POST(request: Request) {
   // Phase 12-A (application half): anonymous, so the bucket is a hashed
   // platform-trusted address. Never the first x-forwarded-for hop.
@@ -76,7 +80,13 @@ export async function POST(request: Request) {
       estimatedTime: job.estimatedTime,
     });
   } catch (error) {
-    console.error("Generate video error:", error);
+    // Phase 13-E. Was `console.error("Generate video error:", error)`, which
+    // serializes the message, the stack and any custom property the thrower
+    // attached. This is a dev stub over an in-memory Map so nothing secret is
+    // in scope TODAY — but Sentry's console integration captures
+    // console.error by default, so these two lines would have been the first
+    // unredacted stacks shipped to a third party the moment 13-A lands.
+    log.error("generate_video_failed", errorFields(error));
     return privateJson(
       { error: "Failed to process request" },
       { status: 500 }

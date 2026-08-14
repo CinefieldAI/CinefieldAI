@@ -40,6 +40,10 @@
 import { dispatchRealtimeOnce, readRealtimeDebt } from "../src/lib/realtime/outbox-dispatcher";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "../src/lib/supabase/supabaseAdmin";
 import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
+import { createLogger } from "../src/lib/observability/logger";
+import { errorFields } from "../src/lib/observability/error-projection";
+
+const log = createLogger("realtime-dispatcher");
 
 /**
  * CADENCE. Realtime means the gap between a committed fact and a browser
@@ -113,23 +117,25 @@ async function main(): Promise<void> {
       if (result.claimed > 0) {
         // Counts only. No event id, no tenant, no payload — a log line that
         // carries a user's content is a data leak with a timestamp on it.
-        console.log(
-          `[realtime-dispatcher] claimed=${result.claimed} published=${result.published} ` +
-            `notUserFacing=${result.notUserFacing} unroutable=${result.unroutable} ` +
-            `invalid=${result.invalid} transportFailed=${result.transportFailed} ` +
-            `lostLease=${result.lostLease}`
-        );
+        log.info("dispatch_pass", {
+          claimed: result.claimed,
+          count: result.published,
+          rejected: result.invalid + result.unroutable,
+          attempts: result.transportFailed,
+        });
       }
 
       if (Date.now() - lastDebtLog >= DEBT_LOG_EVERY_MS) {
         lastDebtLog = Date.now();
         const debt = await readRealtimeDebt(admin);
         if (debt && (debt.pending > 0 || debt.dispatching > 0)) {
-          console.log(
-            `[realtime-dispatcher] debt pending=${debt.pending} dispatching=${debt.dispatching} ` +
-              `oldestSec=${debt.oldestPendingSeconds} maxAttempts=${debt.maxAttempts} ` +
-              `unroutable=${debt.unroutable} invalid=${debt.invalid}`
-          );
+          log.warn("realtime_debt", {
+            count: debt.pending,
+            claimed: debt.dispatching,
+            durationMs: debt.oldestPendingSeconds * 1000,
+            attempts: debt.maxAttempts,
+            rejected: debt.unroutable + debt.invalid,
+          });
         }
       }
 
@@ -146,10 +152,7 @@ async function main(): Promise<void> {
       const ceiling = Math.min(ERROR_MAX_MS, ERROR_BASE_MS * 2 ** (errorStreak - 1));
       const delay = Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
       // Class only — never a driver message, which can echo row content.
-      console.error(
-        `[realtime-dispatcher] pass failed (${error instanceof Error ? error.name : "unknown"}); ` +
-          `retry in ${delay}ms`
-      );
+      log.error("dispatch_pass_failed", { ...errorFields(error), durationMs: delay });
       await sleep(delay, controller.signal);
     }
   }

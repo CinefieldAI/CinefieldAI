@@ -1,6 +1,7 @@
 import "server-only";
 import { getRedisClient } from "./redis-client";
 import { providerHealthKey, REDIS_KEY_TTL_SECONDS } from "./redis-keys";
+import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
  * Cinefield provider-health state store (Phase 6R.7 — first Redis
@@ -71,8 +72,17 @@ export interface ProviderHealthRedisClient {
   del(key: string): Promise<unknown>;
 }
 
+/**
+ * Phase 13-E: delegates to the Sensitive Data Guard.
+ *
+ * The call sites below are unchanged — the difference is that every field
+ * now passes the telemetry allow-list before it reaches console or any
+ * future sink. An unknown or unsafe field is dropped, not printed.
+ */
+const emit = createFieldLogger("provider-health-store");
+
 function log(fields: Record<string, unknown>): void {
-  console.info("[cinefield:provider-health-store]", JSON.stringify(fields));
+  emit(fields);
 }
 
 /** Narrow, defensive parse — malformed/foreign data is treated as absent, never thrown. */
