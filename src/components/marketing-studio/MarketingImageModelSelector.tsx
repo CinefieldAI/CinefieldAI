@@ -21,12 +21,12 @@ const FEATURED_MODELS: MarketingImageModel[] = [
   },
   {
     id: "higgsfield-soul-2",
-    name: "Higgsfield Soul 2.0",
+    name: "Cinefield Soul 2.0",
     description: "Next generation ultra-realistic fashion visuals",
   },
   {
     id: "higgsfield-soul-cinema",
-    name: "Higgsfield Soul Cinema",
+    name: "Cinefield Soul Cinema",
     description: "Cinema-grade visual creation",
   },
   {
@@ -80,17 +80,17 @@ const ALL_MODELS: MarketingImageModel[] = [
   },
   {
     id: "higgsfield-soul",
-    name: "Higgsfield Soul",
+    name: "Cinefield Soul",
     description: "Ultra-realistic fashion visuals",
   },
   {
     id: "higgsfield-soul-2",
-    name: "Higgsfield Soul 2.0",
+    name: "Cinefield Soul 2.0",
     description: "Next generation ultra-realistic fashion visuals",
   },
   {
     id: "higgsfield-soul-cinema",
-    name: "Higgsfield Soul Cinema",
+    name: "Cinefield Soul Cinema",
     description: "Cinema-grade visual creation",
   },
   {
@@ -222,20 +222,6 @@ const CATEGORY_SOURCES = [
   { label: "All models", models: ALL_MODELS },
 ];
 
-function HiggsfieldGlyph({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <path
-        d="M7.5 14.5c2.2 0 2.2-5 4.5-5s2.3 5 4.5 5M6.5 9.5c2.9 0 2.9 5 5.5 5s2.6-5 5.5-5"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
 function MarketingGlyph({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
@@ -253,7 +239,6 @@ function MarketingGlyph({ className = "" }: { className?: string }) {
 }
 
 function getMarketingModelIcon(name: string) {
-  if (name.startsWith("Higgsfield Soul")) return HiggsfieldGlyph;
   if (name === "Marketing Studio Image") return MarketingGlyph;
   if (name === "Grok Imagine 2.0") return getSharedModelIcon("Grok Imagine");
   if (name === "FLUX.2 MAX") return getSharedModelIcon("FLUX.2 Max");
@@ -329,13 +314,20 @@ function MarketingModelRow({
         <span aria-hidden className="mr-2 h-7 w-[3px] shrink-0 rounded-full bg-[#D97757]" />
       )}
       <div
-        className="mr-3 flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-white/[0.04] bg-[#232529] text-white/65"
+        className={`relative size-10 shrink-0 rounded-[12px] p-[1.5px] transition-all duration-180 ease-out ${
+          marked ? "mr-2.5" : "mr-3 group-hover/model-row:scale-[1.02]"
+        }`}
+        style={{
+          background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)",
+        }}
       >
-        {Icon ? (
-          <Icon className="size-4.5 text-white/80 group-hover/model-row:text-white" />
-        ) : (
-          <Sparkles className="size-4.5 text-white/70" />
-        )}
+        <div className="flex size-full items-center justify-center rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)]">
+          {Icon ? (
+            <Icon className="size-4.5 text-white" />
+          ) : (
+            <Sparkles className="size-4.5 text-white" />
+          )}
+        </div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className={`truncate text-xs font-semibold ${marked ? "text-white" : "text-white/90"}`}>
