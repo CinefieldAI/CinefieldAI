@@ -116,9 +116,16 @@ user cannot choose the objectKey.
 ```
 CODE_CONTROL_IMPLEMENTED   YES
 TEST_EVIDENCE_PASS         YES   (33 tests)
-INGEST_VERIFICATION_PENDING YES  (Phase 9-B)
-GATE 4                     NOT CLOSED
+INGEST_VERIFICATION        SATISFIED  (Phase 9-B landed in 015c3e6)
+GATE 4                     CLOSED
 ```
+
+Every clause of the claim is implemented, tested and — for bucket privacy —
+verified live. The one row that held this gate open was the ingest
+verification a presign cannot provide; Phase 9-B supplies it, so the gate is
+closed here rather than left stale. The CORS gap below is a deployment task,
+not an unproven control: it fails closed, since a browser upload from the
+production origin is refused at preflight rather than accepted unchecked.
 
 ### What is implemented
 
@@ -142,8 +149,8 @@ GATE 4                     NOT CLOSED
 - **A presign is not validation.** It authorizes bytes at a key; it says
   nothing about what those bytes are. The asset row is created `pending` and
   `quarantined`, and only the 9-B ingest gate (MIME, checksum, duplicate,
-  moderation) may advance it. That gate does not exist yet, so **no upload is
-  verified media today**.
+  moderation) may advance it. That gate now exists; what a presign alone
+  proves is still nothing, which is why the two are separate controls.
 - **CORS covers localhost only.** The bucket allows `http://localhost:3000`
   for PUT/GET/HEAD with `Content-Type`. The deployed origin has no rule yet, so
   browser upload from production would fail preflight.
@@ -208,8 +215,10 @@ bounds wall-clock time and the child counts bytes as it reads them.
   is a contract here: `not_evaluated` is the truth, and the release constraint
   demands `passed`, which nothing can currently produce. **Every asset stays
   quarantined** — fail-closed by construction rather than by convention.
-- **Quarantine release is unimplemented.** Nothing in 9-B can release an
-  asset; that lane belongs to 9-E and is a Phase 16 admin high-risk action.
+- **Quarantine release does not live here.** Nothing in 9-B can release an
+  asset. That lane arrived with 9-E (see below) and needs two administrators
+  plus a moderation verdict; the admin surface for it is a Phase 16
+  high-risk action and does not exist yet.
 
 ---
 
@@ -246,6 +255,15 @@ bucket name and the region — identifiers, not secrets.
   cross-region placement and a lifecycle policy are outstanding.
 - **Restore is a contract, not code.** Nothing can currently restore from S3;
   see the architecture doc for the shape it must take.
+- **Nothing schedules the backup pass.** `runDrBackupPass` has no production
+  caller: the repository deliberately enables no recurring schedule without
+  review (`operational-tasks.ts` uses `task()`, never `schedules.task()`), and
+  9-C — which owns the background-job lane — is deferred. The roadmap's
+  criterion for 9-D is that *a sample asset's S3 DR copy is verified*, which
+  the live proof satisfies; continuous drain is an operations task, not part
+  of that criterion. It fails closed: unbacked assets keep
+  `backup_status = 'not_backed_up'` and stay counted as debt
+  (`countBackupDebt`, `PROOF D4`) rather than being recorded as safe.
 
 ---
 
@@ -282,7 +300,34 @@ return one — the only thing it can return is `null`, which is not a verdict.
 An unknown engine name resolves to `null` rather than to a permissive
 fallback. The consequence is visible and intended: **no asset can currently
 leave quarantine**, and the delivery gate in `attachSignedUrls` therefore
-mints no signed URL for generated media.
+mints no signed URL for any `media_assets` object.
+
+**But that is not the only way a user sees their output today, and the
+distinction matters.** The Supabase Storage mirror described in the
+architecture contract is still live: `uploadOutputs` writes the
+`generation-outputs` bucket, `generations.output_url` still points at it, and
+`src/hooks/useGeneration.ts` mints a signed URL for that path **in the
+browser**, which never passes through the 9-E gate. So generated media does
+reach its owner without a moderation verdict.
+
+What bounds it:
+
+- the bucket is **private** (`public = false`, verified live) and carries one
+  policy, `generation_outputs_select_own` for `authenticated` — owner-scoped
+  read, no INSERT for a browser role, no cross-tenant read;
+- the URL is short-lived and per-object, not a CDN path.
+
+The roadmap's 9-E criterion is *"moderation tamamlanmadan hiçbir obje public
+CDN yoluna çıkmıyor"* — no object reaches a **public CDN** path before
+moderation. A private, owner-scoped, expiring URL is not that, so the
+criterion holds. The gate claim above is nonetheless scoped precisely to
+`media_assets` rather than to "generated media" in general, because the
+looser reading would be false.
+
+This mirror is time-boxed by the architecture contract: it goes away when a
+read path serves media from `media_assets` (9-C delivery, or the generations
+gallery). **That removal is the point at which the delivery gate becomes the
+only delivery path**, and it must not be treated as cosmetic cleanup.
 
 **The delivery gate is fail-closed.** It lives inside `attachSignedUrls`
 rather than at its call sites, so a future caller cannot obtain a URL by
@@ -319,6 +364,23 @@ Replay is inert in both directions.
   retention/legal operation (Phase 23), not a moderation reject.
 
 ---
+
+## Phase 9 closure — what is deferred, and how each fails closed
+
+Phase 9 closes with 9-A, 9-B, 9-D and 9-E implemented and proven. The
+roadmap's phase criterion is that the *active/mandatory* packages are done
+and each "bitti sayılma kriteri" is verified. These remain open, and each one
+is listed with the reason it cannot become an unsafe default.
+
+| Deferred | Owner | Fails closed because |
+| --- | --- | --- |
+| **9-C** — SQS→FFmpeg critical finalization + BullMQ/Redis B derived media | Phase 9-C (Redis B unprovisioned) | No FFmpeg dependency exists, no derived variant is ever written, and no media job is enqueued — the only `queue.add` in the tree is a synthetic foundation test. There is therefore no derived-media job that could fail, and nothing that could re-trigger a generation, a provider call or a credit movement. |
+| Real moderation engine | product/cost decision | The registry is empty and `null` is not a verdict, so `moderation_status` stays `not_evaluated` and both the SQL constraint and `approve_media_release` refuse a release. **No engine means no release.** |
+| Admin surface for release/reject | Phase 16 | No HTTP route reaches the release functions, and `ROUTE_ADMIN_CLERK_USER_IDS` is unset, so `assertRouteAdmin` denies everyone. Absent configuration denies rather than permits. |
+| Production egress hardening (Gate 3) | Phase 12/18 infra | The application-level gateway blocks private, link-local, loopback and metadata addresses and re-validates every redirect hop; the missing piece is network-level enforcement, which can only widen defence, not narrow it. |
+| Production IAM task role, KMS | 12-D · 25-A | The DR identity holds no `DeleteObject`, so the worst a compromised backup path can do is write. |
+| DR restore | later phase | Absent — and no read path consults `backup_key`, so S3 cannot silently become canonical. |
+| Takedown / appeal / reopen | Phase 23 | Rejection is terminal and no reopen path exists; a released asset cannot be "un-released" by the moderation lane, which is the safe direction to be missing. |
 
 ## Gates not yet addressed
 
