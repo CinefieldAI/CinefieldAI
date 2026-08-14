@@ -200,3 +200,128 @@ resource "aws_iam_role_policy" "temporal_worker" {
   role   = aws_iam_role.temporal_worker.id
   policy = data.aws_iam_policy_document.temporal_worker.json
 }
+
+# ---------------------------------------------------------------------------
+# Realtime dispatcher task role — Phase 12-D.
+# ---------------------------------------------------------------------------
+# IT GETS NO AWS PERMISSIONS, AND THAT IS THE FINDING.
+#
+# The dispatcher claims outbox rows from PostgreSQL and writes them to Redis
+# Streams. Neither is an AWS service: Supabase authenticates with a service
+# key and Redis with a URL, both injected as secrets by the execution role.
+# It sends no SQS message, touches no bucket, produces to no topic.
+#
+# So the role exists with an assume-role trust and no inline policy at all.
+# Creating it anyway rather than reusing another worker's role is the whole
+# point of one-role-per-boundary: the day the dispatcher genuinely needs an
+# AWS action, granting it is a reviewed one-line change instead of something
+# it already had because it was sharing a role with the Temporal worker.
+resource "aws_iam_role" "realtime_dispatcher" {
+  name               = "${var.name_prefix}-realtime-dispatcher"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
+  tags               = var.tags
+}
+
+# ---------------------------------------------------------------------------
+# DR backup worker task role — Phase 12-D (Phase 9-D's runtime).
+# ---------------------------------------------------------------------------
+# Writes R2 objects into the S3 disaster-recovery bucket. WRITE AND READ, NO
+# DELETE: the operator's own note on 9-D is that DeleteObject authority was
+# never granted, so programmatic deletion is impossible rather than merely
+# unimplemented. Retention on that bucket is a lifecycle policy's job, which
+# is an account-level control an application credential cannot reach.
+#
+# It also gets no SQS and no Kafka. A backup job that could enqueue a
+# generation command would be a backup job that could start paid work.
+resource "aws_iam_role" "dr_backup" {
+  name               = "${var.name_prefix}-dr-backup"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "dr_backup" {
+  count = var.dr_bucket_arn == null ? 0 : 1
+
+  statement {
+    sid    = "WriteBackupObjects"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      # Read-back is how a backup is verified. `stored != verified` is a
+      # standing rule in this codebase, and it needs GetObject to hold.
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    # Bucket ARN for ListBucket, object ARN for the object actions. The `/*`
+    # is the key path inside THIS bucket, never a wildcard resource.
+    resources = [var.dr_bucket_arn, "${var.dr_bucket_arn}/*"]
+  }
+
+  dynamic "statement" {
+    for_each = var.dr_kms_key_arn == null ? [] : [1]
+    content {
+      sid       = "UseBackupEncryptionKey"
+      effect    = "Allow"
+      actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+      resources = [var.dr_kms_key_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["s3.${var.region}.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "dr_backup" {
+  count  = var.dr_bucket_arn == null ? 0 : 1
+  name   = "${var.name_prefix}-dr-backup"
+  role   = aws_iam_role.dr_backup.id
+  policy = data.aws_iam_policy_document.dr_backup[0].json
+}
+
+# ---------------------------------------------------------------------------
+# Media worker task role — Phase 12-D, enforcing a red note.
+# ---------------------------------------------------------------------------
+# Roadmap ¶327 and ¶1458 (both red): "Media Worker disposable sandbox'ta
+# çalışmalı: provider/DB secret YOK, read-only filesystem,
+# CPU/RAM/file-size/execution-time limitleri, restricted egress ve minimum
+# IAM." The Outbound Fetch Gateway bounds where a download may GO; it cannot
+# make the bytes safe, and those bytes reach FFmpeg and image parsers.
+#
+# The IAM half of that sandbox is this role, and its content is almost
+# nothing. The secret half is enforced by the injection matrix in
+# docs/security/least-privilege.md and by test: this task definition
+# references NO provider secret and NO database credential, so a parser
+# exploit lands in a process that holds neither.
+#
+# 6R.22 (¶1219) adds the queue half: "media worker'ın generation command
+# kuyruğuna SendMessage hakkı olmaz." There is no SQS statement here at all,
+# so that holds by construction rather than by a deny rule someone could
+# reorder.
+resource "aws_iam_role" "media_worker" {
+  name               = "${var.name_prefix}-media-worker"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "media_worker" {
+  count = var.media_scratch_bucket_arn == null ? 0 : 1
+
+  statement {
+    sid    = "WriteProcessedMediaOnly"
+    effect = "Allow"
+    # No ListBucket: a compromised parser must not be able to enumerate other
+    # users' objects. It writes what it was told to write and reads back the
+    # single key it just wrote.
+    actions   = ["s3:PutObject", "s3:GetObject"]
+    resources = ["${var.media_scratch_bucket_arn}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "media_worker" {
+  count  = var.media_scratch_bucket_arn == null ? 0 : 1
+  name   = "${var.name_prefix}-media-worker"
+  role   = aws_iam_role.media_worker.id
+  policy = data.aws_iam_policy_document.media_worker[0].json
+}

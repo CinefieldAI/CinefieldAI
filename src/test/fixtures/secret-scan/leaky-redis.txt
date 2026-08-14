@@ -1,0 +1,1 @@
+REDIS_URL=rediss://default:hunter2hunter2@prod-cache-01.aws.internal:6379

@@ -73,3 +73,42 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# ---------------------------------------------------------------------------
+# Phase 12-D boundaries
+# ---------------------------------------------------------------------------
+
+variable "dr_bucket_arn" {
+  description = "S3 disaster-recovery bucket ARN. Null omits the DR policy entirely — the role still exists, with nothing granted."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.dr_bucket_arn == null || !strcontains(var.dr_bucket_arn, "*")
+    error_message = "A wildcard bucket resource is never acceptable here."
+  }
+}
+
+variable "dr_kms_key_arn" {
+  description = "Customer-managed key encrypting the DR bucket. Null omits the KMS statement."
+  type        = string
+  default     = null
+}
+
+variable "media_scratch_bucket_arn" {
+  description = <<-EOT
+    Bucket the media worker may write processed output to. Null omits the
+    policy, leaving the role with no permission at all.
+
+    Deliberately NOT the DR bucket and NOT a bucket the worker may list: the
+    media worker runs untrusted bytes through FFmpeg and parsers (roadmap
+    red notes 327 / 1458), so its blast radius is one write path.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.media_scratch_bucket_arn == null || !strcontains(var.media_scratch_bucket_arn, "*")
+    error_message = "A wildcard bucket resource is never acceptable here."
+  }
+}

@@ -46,7 +46,10 @@ test("3. pasted prose is rejected BEFORE any client is constructed", () => {
 
 test("3b. a pasted CLI command is rejected", () => {
   // Also seen live: the whole `redis-cli -u redis://…` line.
-  assert.equal(validateRedisUrl("redis-cli -u redis://default:pw@host:6379"), "invalid_url");
+  // The host is a reserved RFC 2606 name so the Phase 12-D secret scan can
+  // tell this fixture from a real leaked URL. The assertion is unaffected —
+  // what is being rejected is the `redis-cli -u` prefix, not the host.
+  assert.equal(validateRedisUrl("redis-cli -u redis://default:pw@host.example:6379"), "invalid_url");
 });
 
 test("4. a missing URL is rejected when Redis is enabled", () => {

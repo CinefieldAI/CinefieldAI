@@ -365,6 +365,253 @@ Replay is inert in both directions.
 
 ---
 
+## Secret manager, environment separation, least privilege (Phase 12-D)
+
+```
+ENVIRONMENT SEPARATION       ENFORCED — declared, validated, fail-closed
+SERVER SECRET BOUNDARY       ENFORCED — server-only + structural tests
+PROVIDER SECRET ISOLATION    ENFORCED — one name per provider, generic forbidden
+LEAST PRIVILEGE CONTRACT     6 runtime roles, no wildcards
+SECRET MANAGER RUNTIME       CODE_READY (interface + env backend)
+LIVE SECRET MANAGER          DEFERRED_EXTERNAL_INFRA
+KMS RUNTIME                  DEFERRED_TO_PHASE_25
+ROTATION RUNBOOK             WRITTEN — no credential rotated
+LEAK RUNBOOK                 WRITTEN
+SECRET SCAN                  CLEAN on tracked files
+PAID INFRA CREATED           NO
+```
+
+### What 12-D owns, and what Phase 25 does
+
+The two overlap heavily and the roadmap resolves it: ¶2688 states Phase 25's
+connection is "Phase 12 Secret Management + Phase 15 DR + IaC foundation" —
+Phase 25 BUILDS ON this. So:
+
+| | 12-D (here) | Phase 25 |
+| --- | --- | --- |
+| Environment separation | contract + validation | live per-env key namespaces |
+| Secret backend | interface + env provider | live Secrets Manager (¶2692) |
+| KMS | ownership boundary only | key hierarchy, aliases, policies (¶2690–91) |
+| Rotation | written procedure | managed schedules + reload verification (¶2680) |
+| Leak response | written runbook | automated revoke→reload→verify (¶2694) |
+| Monitoring | — | CloudTrail → `security.events` (¶2683) |
+
+¶1686 is why the contract half lands now rather than with the infrastructure:
+"Secrets Manager/KMS + dev/staging/prod ayrımı, ileri bir Phase değil PROVIDER
+AĞI BÜYÜMEDEN ÖNCE (Phase 8 ön koşulu) tamamlanır." ¶1118 gives the reason —
+per-provider isolation "provider sayısı 2–3 iken kolay, 10 iken zahmetlidir".
+
+### The inventory is code, not a document
+
+`src/lib/config/secret-registry.ts` holds 63 variables, each with a class, a
+production requirement, an owning group and a rotation procedure. It contains
+**no values and reads nothing** — safe to import from a test or paste into a
+report (¶2087: "yalnız boolean/presence kontrolü").
+
+`.env.example` is generated from it, and tests assert both directions: every
+`process.env` read in shipped code is registered, and every registered name is
+documented. A new variable that skips the registry fails the build rather than
+becoming an undocumented production dependency.
+
+| Class | Meaning |
+| --- | --- |
+| `PUBLIC` | shipped to the browser on purpose |
+| `IDENTIFIER_NON_SECRET` | server-side but not a credential |
+| `SERVER_SECRET` | Cinefield's own data or identity plane |
+| `INFRA_SECRET` | infrastructure we pay for and store state in |
+| `PROVIDER_SECRET` | spend at a third party — a leak costs money silently |
+| `LOCAL_ONLY` | must never exist in production |
+
+### The accident this actually prevents
+
+Not a typo. A production deployment that inherits a development resource and
+**works**: a staging worker writing into production Redis, a preview
+environment holding a real provider key and spending real money, a production
+build pointed at localhost that degrades and reads as a dependency outage.
+Each passes a health check, so the checks are explicit.
+
+The environment is **declared**, not inferred. `CINEFIELD_ENV` wins over
+`VERCEL_ENV` because a Vercel "preview" may be a real staging deployment with
+real staging resources, and treating it as development would exempt it from
+every check. An unrecognised value resolves DOWN to `development` — the
+environment with the fewest permissions — so a typo can never grant anything.
+
+`validateConfiguration()` refuses, in production:
+
+- a missing `PRODUCTION_REQUIRED` variable
+- a `LOCAL_ONLY` variable being present (one of them bypasses Temporal)
+- localhost / 127.0.0.1 / host.docker.internal in Redis, Temporal, Supabase or R2
+- `http://` or `redis://` where TLS is required (6R.25 / ¶1225)
+- a `pk_test_` / `sk_test_` Clerk or Stripe credential
+- a Temporal namespace naming a different environment than the one running
+
+and in **every** environment:
+
+- a forbidden generic credential name
+- `REDIS_URL` equal to `BULLMQ_REDIS_URL` — red note ¶244 and 6R.25 keep Redis
+  A (application state) and Redis B (BullMQ only) on separate credentials;
+  sharing one means a queue flush wipes rate-limit counters, connection leases
+  and idempotency records, which presents as an unrelated outage
+
+Development is deliberately unconstrained. localhost and a test Clerk key are
+what development IS, and a validator developers have to disable protects
+nothing.
+
+**Not called at import time.** A throw during module load in a Next.js server
+component takes down the routes that would tell an operator what is wrong, and
+it fires during a build as readily as a request. It is an explicit startup
+check for long-lived workers, plus a health report.
+
+### Nothing leaks through an error
+
+`ConfigFinding` has three fields — variable NAME, reason CODE, environment.
+There is no field a value could travel in, which is the enforcement rather
+than a convention. A test plants a canary value in four variables and asserts
+it appears in no finding, no report, and no thrown error or stack — not even a
+fragment, because a prefix or a length is still information.
+
+### The server-only boundary
+
+`getServerSecret(name)` is `server-only` and refuses an unregistered name.
+That refusal is the load-bearing part: a new credential cannot be introduced
+by writing a call, because the registry entry — class, requirement, rotation
+procedure, `.env.example` line — has to exist first. The gate sits where
+someone is motivated to skip it.
+
+It also refuses a NON-sensitive name, so it does not become a general
+`process.env` wrapper: a region or bucket name is read directly, keeping "was
+this a secret?" answerable by reading the call site.
+
+Tests scan every `"use client"` module and fail if one imports the boundary or
+reads anything but `NEXT_PUBLIC_*` / `NODE_ENV`; and every `NEXT_PUBLIC_`
+variable the code reads must be registered `PUBLIC`. An unregistered name is
+treated as sensitive — failing safe costs a refused read, failing the other
+way copies a secret somewhere.
+
+**This is a boundary, not a refactor.** The nine existing `*-config.ts`
+modules already validate shape and report presence as a boolean without ever
+returning a value. Rewriting them would be a large diff across the provider,
+storage, queue and workflow paths for an aesthetic gain and a real risk of
+breaking a working credential path.
+
+### Provider isolation
+
+¶1686: "Her provider ayrı secret ve ayrı scope kullanır; tek compromised CI
+logunun blast radius'u sınırlanır." Twelve providers, twelve distinct variable
+names, ten of them deferred contract-only for Phase 8.
+
+A generic `PROVIDER_API_KEY` is **forbidden**: absent from the registry,
+rejected by `validateConfiguration()` in every environment, and asserted
+missing from source and `.env.example` by test. It is not a mistake anyone
+makes deliberately — it is what happens when a fourth provider is added in a
+hurry and an existing variable looks reusable.
+
+### Least privilege — six runtimes, no wildcards
+
+Full matrix in [least-privilege.md](./security/least-privilege.md). Terraform
+in `infra/modules/iam/`; **nothing is applied**.
+
+| Runtime | AWS grant |
+| --- | --- |
+| Task execution | ECR + logs + only the named secret ARNs |
+| Provider worker | named SQS queues; consume and produce granted separately |
+| Temporal worker | named queues; this cluster's MSK topic prefix |
+| **Realtime dispatcher** | **none** — it uses PostgreSQL and Redis, neither of which is an AWS service |
+| **DR backup** | S3 put + read-back on one bucket. **No DeleteObject**, no queues |
+| **Media worker** | one write path. No ListBucket, no SQS |
+
+The dispatcher having an empty role is the point of one-role-per-boundary: the
+day it needs an action, granting it is a reviewed one-line change instead of
+something it already had by sharing.
+
+The media worker enforces red notes ¶327 and ¶1458 — "provider/DB secret YOK …
+minimum IAM". The IAM half is one write path; the **secret** half is the
+injection matrix, and it is the half that matters: a parser exploit in a
+process holding a Supabase service key is a database compromise, while the
+same exploit in a process holding nothing is a wasted container. 6R.22 (¶1219)
+adds that the media worker has no `SendMessage` to the generation command
+queue — there is no SQS statement in that role at all, so it holds by
+construction rather than by a deny rule someone could reorder.
+
+No long-lived AWS access key is expected anywhere: production uses task roles,
+and a stored key would be a finding rather than a credential to schedule.
+
+### Rotation and leak response
+
+[secret-rotation.md](./runbooks/secret-rotation.md) — six steps for every
+credential: create → deploy → validate → revoke → **verify dead** → record.
+Step 5 is the one that gets skipped and the one that matters; ¶2684 requires
+it explicitly.
+
+Zero-downtime overlap is claimed **only where the issuer supports it**.
+Where support was not confirmed against the current dashboard the entry is
+`CUT_OVER`, because planning for an overlap that turns out not to exist fails
+during an incident.
+
+[secret-leak.md](./runbooks/secret-leak.md) — CONTAIN → ROTATE → REVOKE →
+AUDIT → REDEPLOY → VERIFY (¶2694), with a procedure per leak type. Two things
+it insists on: check provider usage BEFORE rotating, because after rotation
+you lose attribution; and removing a commit does not undo the exposure —
+rotation is what fixes it.
+
+**No credential was rotated.** Secret operations are on the two-person list
+(¶2284) and are registered in the 12-E policy gate as `secret.rotate`,
+currently denying.
+
+### Secret scanning
+
+`npm run secrets:scan` — shape matching over tracked files, clean today.
+It reports the rule and the location, never the matched text, because printing
+a match copies the secret into CI output.
+
+Two honest limits, both stated by the tool itself: it cannot detect a secret
+with no recognisable shape, and **a green scan is not proof of absence**. A
+scanner that oversells itself is worse than none, because a green result is
+what people trust instead of reading the diff. GitHub Secret Scanning
+(Phase 17, ¶1781/¶1806) covers the provider-verified half.
+
+Credential-shaped strings in existing tests were handled by narrowing the rule
+to skip RFC 2606 / RFC 6761 reserved hosts (`example.com`, `.test`,
+`.invalid`) rather than by exempting the files. Skipping a path hides a real
+secret committed there forever; skipping an unroutable host loses nothing,
+because a leaked credential worth having points at a host that exists.
+
+### Local development is unchanged
+
+`.env.local` stays the local mechanism: gitignored, untracked, never printed,
+never copied into docs — all four asserted by test. Development requires no
+production-only secret, and `validateConfiguration()` returns `ok` with every
+production credential absent.
+
+### Production contract (target, not claimed live)
+
+- **Vercel web** — production-scoped environment variables, then the approved
+  secret mechanism.
+- **ECS workers** — task role plus secret ARNs resolved by the execution role,
+  scoped to exactly the secrets each task definition references.
+- **No production plaintext secret file**, anywhere.
+
+### Residual risk
+
+- **`LIVE_SECRET_MANAGER: DEFERRED_EXTERNAL_INFRA.** No AWS Secrets Manager
+  secret exists, no KMS key was created, no IAM was applied. Everything above
+  is code, contract and documentation.
+- **No `AwsSecretsManagerProvider` class exists**, deliberately. Writing an
+  implementation nobody can run against a real backend would be the
+  built-but-unwired defect this project has closed three times. Phase 25 adds
+  one class and one line in `resolveSecretProvider`; no consumer changes.
+- **The nine existing config modules still read `process.env` directly.** They
+  already never return a value, so the security property holds; adopting the
+  boundary is mechanical work for Phase 25 to do alongside the backend.
+- **Rotation is untested against real issuers.** ¶1646 says "rotation testli";
+  the procedure is written and the dual-key claims are marked as claims, but
+  no credential has been rotated. That requires production infrastructure and
+  the two-person approval the roadmap already demands.
+- **The overlap table is partly conservative.** Several `CUT_OVER` entries may
+  in fact support dual keys; confirming one is a five-minute registry change.
+
+---
+
 ## OPA/Rego policy gate + critical action guardrails (Phase 12-E)
 
 ```
