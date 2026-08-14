@@ -185,8 +185,54 @@ const CREDIT_REFUNDED: JsonSchema = {
   },
 };
 
+/**
+ * The queued -> processing transition (Phase 11-A). Emitted by
+ * `claim_generation_tx`, whose `AND status = 'queued'` predicate means exactly
+ * one concurrent claimer can win — so exactly one of these can exist per
+ * generation. Carries no stage string: a stage is an internal orchestration
+ * label, and the browser state it drives is simply "processing".
+ */
+const GENERATION_PROCESSING: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["generationId"],
+  properties: {
+    generationId: UUID,
+    provider: SHORT_ID,
+  },
+};
+
+/**
+ * Asset safety outcomes (Phase 9-E, renamed into the canonical family here).
+ *
+ * The ID AND NOTHING ELSE. A release or a rejection is a security decision,
+ * and the interesting parts of it — which administrators approved, the reason
+ * code, the moderation status it turned on — are exactly the parts that must
+ * not travel. `media_safety_audit` holds them, behind service_role, for
+ * operators. An event that carried them would put an approver's identity into
+ * every consumer, every replay window and every log line downstream.
+ */
+const ASSET_RELEASED: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["assetId"],
+  properties: {
+    assetId: UUID,
+  },
+};
+
+const ASSET_REJECTED: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["assetId"],
+  properties: {
+    assetId: UUID,
+  },
+};
+
 const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.generation.created", eventType: "generation.created", eventVersion: 1, payload: GENERATION_CREATED },
+  { schemaName: "cinefield.generation.processing", eventType: "generation.processing", eventVersion: 1, payload: GENERATION_PROCESSING },
   { schemaName: "cinefield.generation.completed", eventType: "generation.completed", eventVersion: 1, payload: GENERATION_COMPLETED },
   { schemaName: "cinefield.generation.failed", eventType: "generation.failed", eventVersion: 1, payload: GENERATION_FAILED },
   { schemaName: "cinefield.generation.cancelled", eventType: "generation.cancelled", eventVersion: 1, payload: GENERATION_CANCELLED },
@@ -195,6 +241,8 @@ const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.credit.reserved", eventType: "credit.reserved", eventVersion: 1, payload: CREDIT_RESERVED },
   { schemaName: "cinefield.credit.settled", eventType: "credit.settled", eventVersion: 1, payload: CREDIT_SETTLED },
   { schemaName: "cinefield.credit.refunded", eventType: "credit.refunded", eventVersion: 1, payload: CREDIT_REFUNDED },
+  { schemaName: "cinefield.asset.released", eventType: "asset.released", eventVersion: 1, payload: ASSET_RELEASED },
+  { schemaName: "cinefield.asset.rejected", eventType: "asset.rejected", eventVersion: 1, payload: ASSET_REJECTED },
 ];
 
 export function schemaKey(eventType: string, eventVersion: number): SchemaKey {

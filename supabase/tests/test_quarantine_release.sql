@@ -110,7 +110,7 @@ BEGIN
   -- The event agrees with the final state, and shares the release's
   -- transaction: it exists because the UPDATE committed.
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.released' AND aggregate_id = v_id::text;
+   WHERE event_type = 'asset.released' AND aggregate_id = v_id::text;
   ASSERT v_events = 1, 'E3: expected exactly one released event, got ' || v_events;
   ASSERT (v_r->>'event_id') IS NOT NULL, 'E3: no event id returned';
 
@@ -121,7 +121,7 @@ BEGIN
   ASSERT v_replay->>'reason' = 'already_released', 'E3: replay reason ' || (v_replay->>'reason');
 
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.released' AND aggregate_id = v_id::text;
+   WHERE event_type = 'asset.released' AND aggregate_id = v_id::text;
   ASSERT v_events = 1, 'E3: replay emitted a second event, total ' || v_events;
 
   RAISE NOTICE 'PROOF E3 PASS: one release, one event, replay inert';
@@ -152,7 +152,7 @@ BEGIN
     'E4: approvals survived the rejection';
 
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.rejected' AND aggregate_id = v_id::text;
+   WHERE event_type = 'asset.rejected' AND aggregate_id = v_id::text;
   ASSERT v_events = 1, 'E4: expected one rejected event, got ' || v_events;
 
   v_replay := reject_media_asset(v_id, 'admin_beta', 'policy_violation');
@@ -160,7 +160,7 @@ BEGIN
   ASSERT v_replay->>'reason' = 'already_rejected', 'E4: replay reason ' || (v_replay->>'reason');
 
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.rejected' AND aggregate_id = v_id::text;
+   WHERE event_type = 'asset.rejected' AND aggregate_id = v_id::text;
   ASSERT v_events = 1, 'E4: replay emitted a second event';
 
   -- And a rejected asset cannot then be released, even by two admins.

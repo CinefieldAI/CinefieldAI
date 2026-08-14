@@ -43,7 +43,7 @@ BEGIN
 
   -- THE EVENT AGREES WITH THE FINAL STATE, exactly once.
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.released' AND aggregate_id = v_asset::text;
+   WHERE event_type = 'asset.released' AND aggregate_id = v_asset::text;
   ASSERT v_events = 1, 'R1: expected one released event, got ' || v_events;
 
   RAISE NOTICE 'PROOF R1 PASS: six simultaneous approvals produce one release and one event';
@@ -73,7 +73,7 @@ BEGIN
   ASSERT v_mod = 'rejected', 'R2: final moderation_status is ' || v_mod;
 
   SELECT count(*) INTO v_events FROM outbox_events
-   WHERE event_type = 'media.asset.rejected' AND aggregate_id = v_asset::text;
+   WHERE event_type = 'asset.rejected' AND aggregate_id = v_asset::text;
   ASSERT v_events = 1, 'R2: expected one rejected event, got ' || v_events;
 
   RAISE NOTICE 'PROOF R2 PASS: six simultaneous rejects produce one reject and one event';
@@ -110,9 +110,9 @@ BEGIN
   SELECT quarantine_status, moderation_status INTO v_q, v_mod
     FROM media_assets WHERE id = v_asset;
   SELECT count(*) INTO v_rel_events FROM outbox_events
-   WHERE event_type = 'media.asset.released' AND aggregate_id = v_asset::text;
+   WHERE event_type = 'asset.released' AND aggregate_id = v_asset::text;
   SELECT count(*) INTO v_rej_events FROM outbox_events
-   WHERE event_type = 'media.asset.rejected' AND aggregate_id = v_asset::text;
+   WHERE event_type = 'asset.rejected' AND aggregate_id = v_asset::text;
 
   -- THE EVENTS AGREE WITH THE FINAL STATE, whichever intent won.
   IF v_released = 1 THEN

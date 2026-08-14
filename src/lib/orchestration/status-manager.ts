@@ -77,26 +77,35 @@ function mergeOrchestrationMetadata(
 /**
  * Atomically claims a queued generation for execution.
  *
- * The `.eq("status", "queued")` predicate makes this a compare-and-set:
- * whichever concurrent request updates the row first wins, and every other
- * request sees zero matched rows and receives DUPLICATE_EXECUTION. This is
- * the strongest guard available without adding a schema column.
+ * The compare-and-set is unchanged in meaning: whichever concurrent request
+ * moves the row out of "queued" first wins, and every other request receives
+ * DUPLICATE_EXECUTION. What changed in Phase 11-A is WHERE it runs.
+ *
+ * It used to be a Supabase update issued from here. That made the claim and
+ * its `generation.processing` event a dual write: the claim could commit and
+ * the process die before the event existed, or — worse — an event could be
+ * written for a claim that lost. Neither is recoverable from the outside,
+ * because nothing durable records that the pair was ever meant to be atomic.
+ *
+ * `claim_generation_tx` performs the same `AND status = 'queued'` predicate
+ * and emits the event inside one transaction, so the state change and the
+ * fact about it commit together or not at all — matching every other
+ * lifecycle producer in the system.
  */
 export async function claimGeneration(
   admin: SupabaseClient,
   generationId: string,
   existingMetadata: Record<string, unknown> | null
 ): Promise<void> {
-  const { data, error } = await admin
-    .from("generations")
-    .update({
-      status: "processing",
-      metadata: mergeOrchestrationMetadata(existingMetadata, { stage: "validating" }),
-    })
-    .eq("id", generationId)
-    .eq("status", "queued")
-    .select("id")
-    .maybeSingle();
+  // The stage label is all this call still contributes to metadata; the SQL
+  // function merges it under `orchestration` exactly as the update did.
+  void existingMetadata;
+
+  const { data, error } = await admin.rpc("claim_generation_tx", {
+    p_generation_id: generationId,
+    p_stage: "validating",
+    p_trace_id: null,
+  });
 
   if (error) {
     throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
@@ -104,8 +113,11 @@ export async function claimGeneration(
     });
   }
 
-  if (!data) {
-    // Row exists but was not in "queued" — already processing/completed/failed.
+  const result = data as { claimed?: boolean; reason?: string } | null;
+
+  if (!result?.claimed) {
+    // Not queued: already processing, already terminal, or gone. Same outcome
+    // the compare-and-set produced, for the same reason.
     throw new OrchestrationError("DUPLICATE_EXECUTION", { context: { generationId } });
   }
 }

@@ -208,6 +208,9 @@ export class FakeSupabaseClient {
     if (fn === "create_generation_tx") {
       return this.createGenerationTx(args ?? {});
     }
+    if (fn === "claim_generation_tx") {
+      return { data: this.claimGenerationTx(args ?? {}), error: null };
+    }
     if (fn === "finalize_media_asset") {
       return { data: this.finalizeMediaAsset(args ?? {}), error: null };
     }
@@ -281,6 +284,51 @@ export class FakeSupabaseClient {
       moderation_status: row.moderation_status,
       quarantine_status: row.quarantine_status,
     };
+  }
+
+  /**
+   * Mirrors claim_generation_tx(): the queued -> processing compare-and-set
+   * with its `generation.processing` event.
+   *
+   * The predicate is the whole point and is reproduced exactly — only a row
+   * still in "queued" may be claimed, so a second caller gets `not_queued`
+   * and no second event. A fake that claimed unconditionally would let a
+   * duplicate-execution test pass while production duplicated work.
+   */
+  private claimGenerationTx(args: Record<string, unknown>) {
+    const generationId = args.p_generation_id as string;
+    const row = this.state.generations.find((g) => g.id === generationId);
+
+    if (!row) return { claimed: false, reason: "not_found" };
+    if (row.status !== "queued") return { claimed: false, reason: "not_queued", status: row.status };
+
+    row.status = "processing";
+    const stage = args.p_stage as string | null;
+    if (stage) {
+      const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+      const orchestration = { ...((metadata.orchestration ?? {}) as Record<string, unknown>) };
+      orchestration.stage = stage;
+      row.metadata = { ...metadata, orchestration };
+    }
+    row.updated_at = new Date().toISOString();
+
+    const eventId = randomUUID();
+    this.outboxEvents.push({
+      event_id: eventId,
+      event_type: "generation.processing",
+      event_version: 1,
+      aggregate_type: "generation",
+      aggregate_id: generationId,
+      trace_id: (args.p_trace_id as string) ?? null,
+      payload: { generationId, provider: row.provider },
+      // Captured by emit_outbox_event in SQL; captured here so tenant
+      // assertions see the same shape.
+      tenant_id: row.clerk_user_id ?? null,
+      status: "pending",
+      published_at: null,
+    });
+
+    return { claimed: true, status: "processing", event_id: eventId };
   }
 
   private cancelGenerationTx(args: Record<string, unknown>) {

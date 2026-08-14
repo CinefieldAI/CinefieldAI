@@ -365,6 +365,97 @@ Replay is inert in both directions.
 
 ---
 
+## Notification routing (Phase 11-A)
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (29 tests + 9 PostgreSQL proofs + 4 race proofs)
+LIVE_SCHEMA_APPLIED        YES   (20260824000000, verified on the linked project)
+REDIS_STREAMS              NOT_STARTED   (11-B)
+SSE_GATEWAY                NOT_STARTED   (11-B / 11-C / 11-D)
+```
+
+The canonical Phase 11 path, from the roadmap's binding diagram correction:
+
+```
+Postgres Outbox -> Notification Service -> Redis Streams -> SSE Gateway -> Browser
+                          ^
+                   11-A ends here
+```
+
+**Only the first arrow exists.** Redis Streams and SSE are 11-B and later; no
+module in this batch imports a Redis client or emits an event stream, and the
+tests assert that absence rather than trusting it.
+
+**The event contract had drifted, and now cannot again.** Phase 9-E emitted
+`media.asset.released` / `media.asset.rejected`. `emit_outbox_event` checks
+only that a type is non-empty; the real rules — two dotted segments, a known
+family, a registered schema — live in TypeScript, so both events were
+unroutable (`familyOf()` returned null, and a producer that cannot resolve a
+topic must refuse to publish). They are renamed to the canonical `asset.*`
+family. `phase-11a-event-contract-guard.e2e.test.ts` now reads every
+`emit_outbox_event` literal out of the migrations and resolves it through the
+same three checks a consumer performs, so SQL and TypeScript can no longer
+drift apart silently. The guard resolves each function's **effective**
+definition the way PostgreSQL does — last `CREATE OR REPLACE` wins — and
+proves that resolver works rather than assuming it.
+
+Zero historical rows were affected: the live outbox held 91
+`generation.cancelled` and 1 `generation.completed` and no `media.*` at all,
+so there was nothing to translate and nothing that could double-deliver.
+
+**The channel is derived, never supplied.** The roadmap forbids
+`/events?workspace=...` outright, so no function accepts a channel from a
+request. `ChannelId` is a branded type whose only constructor takes a tenant
+the database captured; a user id read from a request body cannot be passed
+where a channel is expected, and the compiler enforces it.
+
+**Tenant capture, not tenant lookup.** `outbox_events.tenant_id` is written
+inside the emitting transaction by `emit_outbox_event`, from the row the
+caller has just written or locked. Resolving it later by joining the aggregate
+was rejected: routing would then depend on mutable state, and
+`generations.clerk_user_id` cascades from `profiles`, so a deleted profile
+would make every historical event permanently unresolvable. The signature is
+unchanged, so the six existing producers gained capture without being
+rewritten — `PROOF N8` verifies that actually happened.
+
+**NULL refuses; it never broadcasts.** The column is nullable and NULL means
+"not captured". The Notification Service returns `unroutable` and publishes
+nowhere — there is no fallback, global or admin channel, and a test asserts
+none exists anywhere in the three modules. The 92 pre-existing rows carry NULL
+and are therefore refused rather than misrouted.
+
+**Payloads are copied field by name, never spread.** `outbox_events.payload`
+is unrestricted jsonb written by SQL. A spread would publish every field a
+future emitter adds, unreviewed. Each projector names its two or three fields;
+a test asserts no spread exists and that no object key, signed URL, secret,
+prompt, stack trace or approver identity can appear in an envelope.
+
+**Asset safety events are deliberately not user-facing.** `asset.released` and
+`asset.rejected` validate and route but project to nothing: approver
+identities and reason codes are security data, `media_safety_audit` is
+service_role only, and Phase 12 owns the user-facing security taxonomy.
+
+**`credit.updated` is a registered state with no producer.** Phase 10 owns the
+ledger. This batch adds no credit emitter and a test asserts the migration
+contains none.
+
+### Residual risk
+
+- **11-C's ordering decision is deliberately open.** The envelope carries
+  `eventId` (already the at-least-once dedupe identity) and no `seq`. A Redis
+  Stream entry id is monotonic per stream and channel maps to stream, so it is
+  a strong CANDIDATE for the roadmap's `event_seq` — recorded as a candidate
+  only. Declaring it here would lock the architecture before 11-C weighs it
+  against replay-window trimming.
+- **Nothing drains the outbox yet.** `drainOutboxOnce` still has no scheduler,
+  by the same no-silent-cadence rule as the DR pass. The Notification Service
+  is a pure function awaiting a caller.
+- **No connection limits exist** because no connection exists. 11-D owns them,
+  and `cross-tenant SSE` remains in the release-blocking set.
+
+---
+
 ## Phase 9 closure — what is deferred, and how each fails closed
 
 Phase 9 closes with 9-A, 9-B, 9-D and 9-E implemented and proven. The
