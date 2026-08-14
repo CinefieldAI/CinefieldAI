@@ -22,13 +22,20 @@
       "@/*": ["./src/*"]
     }
   },
+  "_include_note": "Scoped to the project's real source roots. It used to be **/*.ts + **/*.tsx from the repo root with only node_modules excluded, which meant ANY stray .tsx anywhere in the working tree entered compilation — an incomplete scratch copy of src/ was enough to fail `tsc --noEmit` for the whole repository, on files that compile cleanly in their real location. This is a scope correction, not a suppression: nothing under a real source root is excluded, and the sandbox .mjs entry point is now checked as well.",
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "next.config.ts",
+    "trigger.config.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.mts",
+    "src/**/*.mjs",
+    "worker/**/*.ts",
+    "scripts/**/*.ts",
+    "data/**/*.ts",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
