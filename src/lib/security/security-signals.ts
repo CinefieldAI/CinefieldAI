@@ -298,3 +298,66 @@ export function reportMediaSafetyDecision(params: {
 // AUTH_SECURITY_SIGNAL: PARTIAL_UNTIL_CLERK_PRODUCTION — Clerk production
 // configuration plus its webhook is what makes it observable. Recording the
 // gap is better than deleting the category and rediscovering it later.
+
+// ---------------------------------------------------------------------------
+// 6. Policy decisions (Phase 12-E)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records one policy decision on a critical action.
+ *
+ * BOTH OUTCOMES, not only refusals. Roadmap ¶2284 wants two-person decisions
+ * written to a decision log, and a log holding only denials cannot answer the
+ * question an incident actually asks — who released that asset, and under
+ * which policy version. For the actions this gate covers, the allow side is
+ * the more valuable half.
+ *
+ * WHAT TRAVELS: the action name, the decision, a short reason code, the policy
+ * version, and opaque ids. WHAT DOES NOT: the policy input, the risk state
+ * behind it, the rule that fired, or any approver identity. A decision log is
+ * read during incidents and screenshotted; it must not double as a description
+ * of how to get past the gate.
+ *
+ * Detached like every other signal here, and for the ordinary reason — but
+ * note the asymmetry with the gate itself: `requirePolicy` fails CLOSED
+ * because it decides whether something happens, while this records what
+ * already was decided and so must never be able to change it.
+ */
+export function reportPolicyDecision(params: {
+  action: string;
+  decision: string;
+  reason: string;
+  policyVersion: string;
+  actorId: string;
+  actorKind: string;
+  tenantId?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  correlationId?: string | null;
+}): void {
+  const allowed = params.decision === "ALLOW";
+
+  emit({
+    kind: allowed ? "policy_decision_allowed" : "policy_decision_denied",
+    source: "policy_gate",
+    // decision + reason in one short code, so a single column answers "what
+    // happened and why" without a join. Normalized rather than trusted: this
+    // is the boundary between a policy vocabulary and an evidence column.
+    //
+    // An agent-initiated decision is prefixed `ai_`. Roadmap ¶1852 wants
+    // AI-initiated action provenance in the audit trail alongside the policy
+    // version, and a distinguishable reason code is the cheapest form of it
+    // that survives into every query someone will actually run.
+    reasonCode: normalizeCode(
+      `${params.actorKind === "ai_agent" ? "ai_" : ""}${params.decision}_${params.reason}`
+    ),
+    actorClerkUserId: params.actorId,
+    tenantId: params.tenantId ?? null,
+    // The ACTION is the resource type here — it is the thing a reader of the
+    // log filters by, and it is a bounded name from the registry.
+    resourceType: params.action.slice(0, 64),
+    resourceId: params.resourceId ?? null,
+    traceId: params.correlationId ?? null,
+    policyVersion: params.policyVersion,
+  });
+}

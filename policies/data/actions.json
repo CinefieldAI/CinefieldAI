@@ -1,0 +1,128 @@
+{
+  "policyVersion": "2026-08-14.1",
+  "environments": ["development", "preview", "production"],
+  "roles": ["service", "route_admin", "member", "anonymous", "ai_agent"],
+  "aiWriteAllowlist": [],
+  "actions": {
+    "media.quarantine.request": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-9e"
+    },
+    "media.quarantine.release": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-9e"
+    },
+    "media.quarantine.reject": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-9e"
+    },
+    "routing.control.set": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-7e"
+    },
+    "routing.control.clear": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-7e"
+    },
+    "security.temporary_block.apply": {
+      "critical": true,
+      "requiredRoles": ["service"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-12c"
+    },
+    "data.export": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-23"
+    },
+    "data.delete": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-23"
+    },
+    "retention.override": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-23"
+    },
+    "legal_hold.set": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-23"
+    },
+    "legal_hold.clear": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-23"
+    },
+    "admin.review.resolve": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-16"
+    },
+    "secret.rotate": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-12d"
+    },
+    "account.suspend": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-16"
+    },
+    "ai.tool.invoke": {
+      "critical": true,
+      "requiredRoles": ["ai_agent"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": true,
+      "implemented": false,
+      "owner": "phase-14"
+    }
+  }
+}

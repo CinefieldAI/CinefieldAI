@@ -11,6 +11,7 @@ import {
 } from "./security-event-contract";
 import { assessRisk, enforceability, TEMPORARY_BLOCK_TTL_SECONDS } from "./risk-engine";
 import { getRedisClient } from "@/lib/redis/redis-client";
+import { evaluatePolicy } from "@/lib/policy/policy-engine";
 
 /**
  * The Security Event Logger (Phase 12-C).
@@ -123,6 +124,8 @@ export async function recordSecurityEvent(
       p_risk_score: decision.score,
       p_recommended_action: decision.action,
       p_emit_warning: emitWarning,
+      // Phase 12-E. Null for every kind except the two policy decisions.
+      p_policy_version: input.policyVersion ?? null,
     });
 
     if (error) return { recorded: false, reason: "unavailable" };
@@ -141,7 +144,7 @@ export async function recordSecurityEvent(
     // operator action now would be implementing Phase 16 under another name,
     // and an operator surface nobody has reviewed is worse than none.
     if (effective === "temporary_block") {
-      await applyTemporaryBlock(input.actorClerkUserId ?? input.subjectHash ?? null);
+      await applyTemporaryBlock(admin, input.actorClerkUserId ?? input.subjectHash ?? null, input.traceId ?? null);
     }
 
     return {
@@ -172,14 +175,88 @@ const BLOCK_KEY_PREFIX = "cinefield:v1:security:block";
  * signal will try again. A security control that throws into its caller would
  * be worse than one that occasionally misses.
  */
-async function applyTemporaryBlock(subject: string | null): Promise<void> {
+async function applyTemporaryBlock(
+  admin: SupabaseClient,
+  subject: string | null,
+  traceId: string | null
+): Promise<void> {
   if (!subject) return;
+
+  // ---- PHASE 12-E POLICY GATE ---------------------------------------------
+  // A temporary block is an automatic enforcement action taken against a
+  // person, so it does not run without a policy result (roadmap ¶1649).
+  //
+  // `evaluatePolicy` is imported rather than `requirePolicy`: the gate reads
+  // block state through this module, so calling it here would be a cycle. The
+  // engine is pure and imports only the registry, which makes the direct call
+  // safe — and the risk fields are all false because the question "is this
+  // subject blocked?" is the one being answered, not an input to it.
+  //
+  // FAIL-CLOSED HERE MEANS DO NOT ENFORCE. That is the opposite direction
+  // from the quarantine gate, and correct for the same reason: refusing to
+  // release media leaves media unreleased, while refusing to block leaves a
+  // subject unblocked. For a discretionary automatic action against a user,
+  // not acting is the conservative outcome — and the evidence row recording
+  // the recommendation was already written, so nothing is lost.
+  const decision = evaluatePolicy({
+    action: "security.temporary_block.apply",
+    actor: { id: "cinefield-security-logger", role: "service", kind: "service" },
+    tenantId: null,
+    resource: { type: "security_subject", id: null },
+    risk: { temporarilyBlocked: false, adminReviewRequired: false, challengeRequired: false },
+    approvalEvidence: { humanApproved: false },
+    environment: policyEnvironment(),
+    originClass: "server",
+    correlationId: traceId,
+  });
+
+  // Written through the same RPC this module already holds, rather than
+  // through `security-signals` — importing that would close the cycle the
+  // direct engine call was avoiding.
+  await recordPolicyDecisionRow(admin, decision.decision, decision.reason, decision.policyVersion, traceId);
+
+  if (decision.decision !== "ALLOW") return;
+
   const redis = getRedisClient();
   if (!redis) return;
   try {
     await redis.set(`${BLOCK_KEY_PREFIX}:${subject}`, "1", "EX", TEMPORARY_BLOCK_TTL_SECONDS);
   } catch {
     /* evidence is already durable */
+  }
+}
+
+function policyEnvironment(): "development" | "preview" | "production" {
+  const raw = process.env.VERCEL_ENV ?? process.env.NODE_ENV;
+  if (raw === "production") return "production";
+  if (raw === "preview") return "preview";
+  return "development";
+}
+
+/** Best effort, like every other write here. A lost log line changes nothing. */
+async function recordPolicyDecisionRow(
+  admin: SupabaseClient,
+  decision: string,
+  reason: string,
+  policyVersion: string,
+  traceId: string | null
+): Promise<void> {
+  const allowed = decision === "ALLOW";
+  try {
+    await admin.rpc("record_security_event", {
+      p_kind: allowed ? "policy_decision_allowed" : "policy_decision_denied",
+      p_severity: "medium",
+      p_source: "policy_gate",
+      p_reason_code: `${decision}_${reason}`.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 65),
+      p_dedupe_key: `policy:security.temporary_block.apply:${decision}:${reason}`,
+      p_window_seconds: 1,
+      p_actor: "cinefield-security-logger",
+      p_resource_type: "security.temporary_block.apply",
+      p_trace_id: traceId,
+      p_policy_version: policyVersion,
+    });
+  } catch {
+    /* the block decision stands either way */
   }
 }
 

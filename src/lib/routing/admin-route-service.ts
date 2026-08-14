@@ -1,4 +1,5 @@
 import "server-only";
+import { requirePolicy } from "@/lib/policy/policy-gate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { clearRoutingControl, setRoutingControl } from "@/lib/redis/routing-control-store";
@@ -224,6 +225,15 @@ export async function setRuntimeRoutingControl(
   }
 ): Promise<boolean> {
   assertRouteAdmin(clerkUserId);
+  // Phase 12-E. Roadmap ¶1676 names provider disable among the decisions that
+  // move to policy-as-code, and ¶2284 puts provider enable/disable on the
+  // two-person list. The gate lands here first; the two-person requirement is
+  // Phase 16's to add, and the registry says so rather than implying it.
+  await requirePolicy({
+    action: "routing.control.set",
+    actor: { id: clerkUserId, role: "route_admin", kind: "human" },
+    resource: { type: "routing_control", id: `${input.kind}:${input.targetId}`.slice(0, 200) },
+  });
 
   if (typeof input.targetId !== "string" || input.targetId.length === 0) {
     throw new OrchestrationError("INVALID_INPUT", {
@@ -252,5 +262,13 @@ export async function clearRuntimeRoutingControl(
   targetId: string
 ): Promise<boolean> {
   assertRouteAdmin(clerkUserId);
+  // Lifting a kill switch is gated too. A gate on the "off" direction only
+  // would mean the riskier half — restoring traffic to a provider somebody
+  // disabled during an incident — is the ungated one.
+  await requirePolicy({
+    action: "routing.control.clear",
+    actor: { id: clerkUserId, role: "route_admin", kind: "human" },
+    resource: { type: "routing_control", id: `${kind}:${targetId}`.slice(0, 200) },
+  });
   return clearRoutingControl(kind, targetId);
 }

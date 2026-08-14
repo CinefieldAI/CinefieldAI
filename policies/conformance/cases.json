@@ -1,0 +1,241 @@
+{
+  "note": "The single conformance suite. policy_test.rego iterates it and so does src/lib/policy/policy-engine.test.ts, so the Rego specification and the TypeScript runtime cannot drift apart without one of the two runs going red. Add a case here, never to only one side.",
+  "baseInput": {
+    "action": "media.quarantine.reject",
+    "actor": { "id": "user_admin_1", "role": "route_admin", "kind": "human" },
+    "tenantId": "user_owner_1",
+    "resource": { "type": "media_asset", "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    "risk": { "temporarilyBlocked": false, "adminReviewRequired": false, "challengeRequired": false },
+    "approvalEvidence": { "humanApproved": false },
+    "environment": "production",
+    "originClass": "server",
+    "correlationId": "corr-1"
+  },
+  "cases": [
+    {
+      "name": "an unknown action is denied rather than passed through",
+      "patch": { "action": "media.quarantine.obliterate" },
+      "expect": { "decision": "DENY", "reason": "unknown_action" }
+    },
+    {
+      "name": "an empty action is denied",
+      "patch": { "action": "" },
+      "expect": { "decision": "DENY", "reason": "unknown_action" }
+    },
+    {
+      "name": "a registered but unbuilt action is denied - data.export is Phase 23",
+      "patch": { "action": "data.export" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "data.delete is denied - Phase 23 owns erasure workflows",
+      "patch": { "action": "data.delete" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "retention.override is denied",
+      "patch": { "action": "retention.override" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "legal_hold.set is denied",
+      "patch": { "action": "legal_hold.set" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "legal_hold.clear is denied",
+      "patch": { "action": "legal_hold.clear" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "admin.review.resolve is denied - Phase 16 is not implemented",
+      "patch": { "action": "admin.review.resolve" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "secret.rotate is denied - Phase 12-D is not started",
+      "patch": { "action": "secret.rotate" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "account.suspend is denied - there is no ban mechanism to authorise",
+      "patch": { "action": "account.suspend" },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "an actor with no id is denied, never treated as anonymous",
+      "patch": { "actor": { "id": "", "role": "route_admin", "kind": "human" } },
+      "expect": { "decision": "DENY", "reason": "unknown_subject" }
+    },
+    {
+      "name": "an unknown role is denied by the subject check, not by authorization",
+      "patch": { "actor": { "id": "user_admin_1", "role": "superuser", "kind": "human" } },
+      "expect": { "decision": "DENY", "reason": "unknown_subject" }
+    },
+    {
+      "name": "an unknown environment is denied",
+      "patch": { "environment": "staging-2" },
+      "expect": { "decision": "DENY", "reason": "unsupported_environment" }
+    },
+    {
+      "name": "a browser-origin request cannot drive a critical action",
+      "patch": { "originClass": "browser" },
+      "expect": { "decision": "DENY", "reason": "untrusted_origin" }
+    },
+    {
+      "name": "an AI agent write is denied by default",
+      "patch": { "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" } },
+      "expect": { "decision": "DENY", "reason": "ai_write_authority_off" }
+    },
+    {
+      "name": "an AI agent is denied even with human approval attached, while the allowlist is empty",
+      "patch": {
+        "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" },
+        "approvalEvidence": { "humanApproved": true }
+      },
+      "expect": { "decision": "DENY", "reason": "ai_write_authority_off" }
+    },
+    {
+      "name": "an AI agent is denied before the role check can help it",
+      "patch": {
+        "action": "routing.control.set",
+        "actor": { "id": "agent_seer", "role": "route_admin", "kind": "ai_agent" }
+      },
+      "expect": { "decision": "DENY", "reason": "ai_write_authority_off" }
+    },
+    {
+      "name": "ai.tool.invoke is denied - the action itself is unimplemented",
+      "patch": {
+        "action": "ai.tool.invoke",
+        "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" }
+      },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "a member may not release quarantine",
+      "patch": { "action": "media.quarantine.release", "actor": { "id": "user_2", "role": "member", "kind": "human" } },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "an anonymous actor may not reject an asset",
+      "patch": { "actor": { "id": "anon-bucket", "role": "anonymous", "kind": "human" } },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "an admin may not apply a temporary block - that action belongs to the service",
+      "patch": { "action": "security.temporary_block.apply" },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "the service may apply a temporary block",
+      "patch": {
+        "action": "security.temporary_block.apply",
+        "actor": { "id": "cinefield-service", "role": "service", "kind": "service" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "a temporarily blocked subject is denied even with the right role",
+      "patch": { "risk": { "temporarilyBlocked": true, "adminReviewRequired": false, "challengeRequired": false } },
+      "expect": { "decision": "DENY", "reason": "subject_temporarily_blocked" }
+    },
+    {
+      "name": "a subject flagged for admin review gets REQUIRE_ADMIN_REVIEW, not an execution",
+      "patch": { "risk": { "temporarilyBlocked": false, "adminReviewRequired": true, "challengeRequired": false } },
+      "expect": { "decision": "REQUIRE_ADMIN_REVIEW", "reason": "risk_admin_review_required" }
+    },
+    {
+      "name": "a subject flagged for challenge gets REQUIRE_CHALLENGE, and nothing pretends to serve one",
+      "patch": { "risk": { "temporarilyBlocked": false, "adminReviewRequired": false, "challengeRequired": true } },
+      "expect": { "decision": "REQUIRE_CHALLENGE", "reason": "risk_challenge_required" }
+    },
+    {
+      "name": "a block outranks a review flag",
+      "patch": { "risk": { "temporarilyBlocked": true, "adminReviewRequired": true, "challengeRequired": true } },
+      "expect": { "decision": "DENY", "reason": "subject_temporarily_blocked" }
+    },
+    {
+      "name": "a review flag outranks a challenge flag",
+      "patch": { "risk": { "temporarilyBlocked": false, "adminReviewRequired": true, "challengeRequired": true } },
+      "expect": { "decision": "REQUIRE_ADMIN_REVIEW", "reason": "risk_admin_review_required" }
+    },
+    {
+      "name": "a clean reject is allowed",
+      "patch": {},
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "a release is allowed by policy but says two-person is enforced elsewhere",
+      "patch": { "action": "media.quarantine.release" },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "a release request is allowed",
+      "patch": { "action": "media.quarantine.request" },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "setting a routing control is allowed for an admin",
+      "patch": { "action": "routing.control.set", "resource": { "type": "route", "id": "provider:mock" } },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "clearing a routing control is allowed for an admin",
+      "patch": { "action": "routing.control.clear", "resource": { "type": "route", "id": "provider:mock" } },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "development is a supported environment",
+      "patch": { "environment": "development" },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "a worker origin is not a server origin",
+      "patch": { "originClass": "worker" },
+      "expect": { "decision": "DENY", "reason": "untrusted_origin" }
+    },
+    {
+      "name": "an unknown action outranks every other refusal - the vocabulary is checked first",
+      "patch": {
+        "action": "nonsense",
+        "actor": { "id": "", "role": "superuser", "kind": "ai_agent" },
+        "environment": "nowhere",
+        "originClass": "browser"
+      },
+      "expect": { "decision": "DENY", "reason": "unknown_action" }
+    },
+    {
+      "name": "an unimplemented action outranks a bad subject",
+      "patch": { "action": "data.delete", "actor": { "id": "", "role": "superuser", "kind": "human" } },
+      "expect": { "decision": "DENY", "reason": "not_implemented" }
+    },
+    {
+      "name": "a bad subject outranks a bad environment",
+      "patch": { "actor": { "id": "", "role": "route_admin", "kind": "human" }, "environment": "nowhere" },
+      "expect": { "decision": "DENY", "reason": "unknown_subject" }
+    },
+    {
+      "name": "a bad environment outranks an untrusted origin",
+      "patch": { "environment": "nowhere", "originClass": "browser" },
+      "expect": { "decision": "DENY", "reason": "unsupported_environment" }
+    },
+    {
+      "name": "an untrusted origin outranks the AI check - a browser-driven agent is refused as a browser",
+      "patch": { "originClass": "browser", "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" } },
+      "expect": { "decision": "DENY", "reason": "untrusted_origin" }
+    },
+    {
+      "name": "the AI check outranks the role check",
+      "patch": { "actor": { "id": "agent_seer", "role": "member", "kind": "ai_agent" } },
+      "expect": { "decision": "DENY", "reason": "ai_write_authority_off" }
+    },
+    {
+      "name": "the role check outranks risk state - an unauthorised subject is refused for the honest reason",
+      "patch": {
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "risk": { "temporarilyBlocked": true, "adminReviewRequired": false, "challengeRequired": false }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    }
+  ]
+}

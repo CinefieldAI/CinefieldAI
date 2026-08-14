@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertRouteAdmin } from "@/lib/routing/admin-route-service";
 import { reportMediaSafetyDecision } from "@/lib/security/security-signals";
+import { requirePolicy } from "@/lib/policy/policy-gate";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 
 /**
@@ -27,6 +28,14 @@ import { OrchestrationError } from "@/lib/orchestration/errors";
  * Clerk user ids from the environment and denies everyone when it is unset —
  * which is its state today. A browser cannot reach these functions at all:
  * there is no route, and the SQL is `service_role` only.
+ *
+ * POLICY GATE (Phase 12-E). Each of the three now evaluates policy before it
+ * touches anything, and a non-ALLOW throws. The gate is an ADDITIONAL
+ * condition — `assertRouteAdmin` stays, the SQL predicates stay, the
+ * two-person primary key stays, the moderation gate stays. An ALLOW means
+ * policy raises no objection; it grants nothing on its own, and the release
+ * path returns `allowed_two_person_enforced_downstream` precisely so a reader
+ * of the decision log cannot mistake it for a satisfied approval.
  */
 
 export type ReleaseRefusal =
@@ -78,6 +87,12 @@ export async function requestMediaRelease(
 ): Promise<{ recorded: boolean; approvals?: number; required?: number; reason?: string }> {
   // Throws FORBIDDEN (surfaced as 404) for anyone not on the allowlist.
   assertRouteAdmin(params.actorClerkUserId);
+  // BEFORE any mutation: a refusal cannot have banked an approval.
+  await requirePolicy({
+    action: "media.quarantine.request",
+    actor: { id: params.actorClerkUserId, role: "route_admin", kind: "human" },
+    resource: { type: "media_asset", id: params.assetId },
+  });
   validateReason(params.reasonCode);
 
   const { data, error } = await admin.rpc("request_media_release", {
@@ -114,6 +129,14 @@ export async function approveMediaRelease(
   }
 ): Promise<ReleaseOutcome> {
   assertRouteAdmin(params.actorClerkUserId);
+  // BEFORE any mutation. Policy allowing a release does not release it: the
+  // second approval and the moderation check are still ahead, in SQL.
+  await requirePolicy({
+    action: "media.quarantine.release",
+    actor: { id: params.actorClerkUserId, role: "route_admin", kind: "human" },
+    resource: { type: "media_asset", id: params.assetId },
+    correlationId: params.traceId ?? null,
+  });
   validateReason(params.reasonCode);
 
   const { data, error } = await admin.rpc("approve_media_release", {
@@ -179,6 +202,15 @@ export async function rejectMediaAsset(
   }
 ): Promise<RejectOutcome> {
   assertRouteAdmin(params.actorClerkUserId);
+  // Gated too, although rejection is the safe direction: an action that can
+  // permanently close off an asset belongs in the decision log, and a gate
+  // applied only to the permissive path is a gate someone will route around.
+  await requirePolicy({
+    action: "media.quarantine.reject",
+    actor: { id: params.actorClerkUserId, role: "route_admin", kind: "human" },
+    resource: { type: "media_asset", id: params.assetId },
+    correlationId: params.traceId ?? null,
+  });
   validateReason(params.reasonCode);
 
   const { data, error } = await admin.rpc("reject_media_asset", {

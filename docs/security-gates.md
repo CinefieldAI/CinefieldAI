@@ -365,6 +365,235 @@ Replay is inert in both directions.
 
 ---
 
+## OPA/Rego policy gate + critical action guardrails (Phase 12-E)
+
+```
+POLICY GATE                  BUILT AND ENFORCING
+CRITICAL ACTIONS GATED       6 real actions, 15 registered
+DEFAULT DENY                 YES — including malformed input and engine failure
+AI/MCP WRITE AUTHORITY       DENY (allowlist empty, asserted by test)
+HUMAN APPROVAL               REQUESTED, never performed — Phase 16 owns it
+TWO-PERSON APPROVAL          PRESERVED — policy composes, never substitutes
+PRIVACY ACTIONS              REGISTERED AND DENIED — Phase 23 owns the workflows
+OPA RUNTIME EVALUATION       DEFERRED TO PHASE 19 (roadmap ¶2272) — see below
+PG PROOFS                    S12E-1 .. S12E-10 PASS
+LIVE VALIDATION              11 / 11 PASS (synthetic inputs, zero cost)
+```
+
+### The acceptance test
+
+Roadmap ¶1648 asks for "OPA/Rego policy gate + privacy/data-lifecycle güvenlik
+bağlantıları". ¶1649 is the criterion: **"Kritik action policy sonucu olmadan
+çalışmıyor"** — a critical action does not run without a policy result.
+
+Six real actions now evaluate policy before they mutate anything, and each
+gated function's next statement after its existing authorization check is
+`await requirePolicy(...)`, which returns an ALLOW or throws:
+
+| Action | Owner | Gated at |
+| --- | --- | --- |
+| `media.quarantine.request` | 9-E | `quarantine-release.ts` |
+| `media.quarantine.release` | 9-E | `quarantine-release.ts` |
+| `media.quarantine.reject` | 9-E | `quarantine-release.ts` |
+| `routing.control.set` | 7-E | `admin-route-service.ts` |
+| `routing.control.clear` | 7-E | `admin-route-service.ts` |
+| `security.temporary_block.apply` | 12-C | `security-event-logger.ts` |
+
+A structural test locates each function, finds the gate, and fails if any
+mutation (`.rpc(`, `setRoutingControl`, `redis.set`) appears before it. Another
+proves each SQL function has exactly one caller, so no second ad-hoc path
+exists.
+
+**Low-risk routes are deliberately NOT gated.** Generation creation, provider
+submission, model listing and media upload keep the PRE-12 rate limiter and
+their own authorization. Pulling ordinary operations behind a fail-closed
+boundary would trade a real availability risk for no security gain, and a Rego
+test fails if a non-critical action is added to the registry.
+
+### Rego is the specification; the runtime implements it
+
+`policies/cinefield/policy.rego` is normative.
+`src/lib/policy/policy-engine.ts` implements exactly its rules, in exactly its
+order, over exactly its data document — `policies/data/actions.json` has ONE
+definition, loaded by OPA as `data.cinefield.actions` and imported directly by
+the engine.
+
+The two are bound by `policies/conformance/cases.json`: `policy_test.rego`
+iterates it under `opa test`, and the TypeScript suite iterates the same file
+under `npm test`. A rule that drifts fails one of the two runs. Adding a case
+extends both suites at once.
+
+**OPA is not a runtime dependency and policy availability never depends on a
+network call, a sidecar, or a paid service.** Two reasons, in order: the
+roadmap places full OPA among the scale-triggered layers (¶416, ¶3734, ¶3766)
+and gives Phase 19 the explicit task of standing up the service (¶2272); and a
+policy sidecar would make every critical action depend on a second process
+being alive, which for a fail-closed gate means an outage there stops
+quarantine handling entirely.
+
+`PolicyDecision.engine` records `"embedded"` on every decision so that when
+Phase 19 swaps in a compiled bundle the change is visible in the decision log
+rather than inferred from deploy dates. Install and build commands are in
+`policies/README.md` and `npm run policy:test` / `policy:build`.
+
+### Default deny, at every way in
+
+| Condition | Result |
+| --- | --- |
+| unknown action | `DENY unknown_action` |
+| registered but unbuilt action | `DENY not_implemented` |
+| malformed or missing input | `DENY malformed_input` |
+| missing risk flag | `DENY malformed_input` — **not** defaulted to false |
+| unknown actor or role | `DENY unknown_subject` |
+| unknown environment | `DENY unsupported_environment` |
+| non-server origin | `DENY untrusted_origin` |
+| evaluator threw | `DENY policy_evaluation_failed` |
+| unrecognised decision from any engine | `DENY malformed_decision` |
+| registry entry not fully specified | **process fails at load** |
+
+A missing risk flag being refused rather than defaulted is the load-bearing
+one: defaulting would treat a caller who forgot to resolve block state as
+unblocked, which is the exact fail-open the gate exists to prevent.
+
+Note the deliberate asymmetry with Phase 12-C. The security logger fails OPEN
+because it records something that already happened, so its failure must not
+change the outcome. This decides whether something happens at all, so its
+failure must. The one exception is stated where it lives: an automatic
+temporary block fails closed by **not enforcing**, because refusing to block
+leaves a subject unblocked while refusing to release leaves media unreleased —
+for a discretionary automatic action against a person, not acting is the
+conservative direction.
+
+### Ordering is part of the contract
+
+Several conformance cases exist only to pin precedence. Two are load-bearing:
+
+- `untrusted_origin` is checked **before** the AI rule, so a browser-driven
+  agent is refused as a browser.
+- the AI rule is checked **before** the role check, so an agent operating
+  under a borrowed admin role cannot satisfy its way past the guardrail.
+
+### AI / MCP write authority is OFF
+
+Roadmap ¶1856: "MCP bağlantıları varsayılan olarak READ-ONLY başlar. Write
+işlemi yalnız AI suggestion → policy (OPA) → human approval → protected
+workflow sırasıyla mümkündür. Bu sıra hiçbir incident aciliyetiyle atlanmaz."
+¶1854 adds that a tool-level allowlist is mandatory and no general authority is
+ever granted.
+
+`aiWriteAllowlist` is **empty**, so every agent write denies with
+`ai_write_authority_off` — and a Rego test fails if an entry appears, which
+forces the change to be deliberate. Even an allowlisted tool would only reach
+`REQUIRE_APPROVAL`: policy is never the last step for an agent.
+
+`requireAiWritePolicy` is a separate entry point rather than a flag, so "an
+agent is asking" is a call site a reviewer can grep for and no human path can
+acquire agent semantics by passing the wrong argument. **Nothing calls it
+yet** — no MCP write surface exists. That is the correct order: the guardrail
+lands before the capability.
+
+Agent-initiated decisions are recorded with an `ai_`-prefixed reason code
+(¶1852 — AI provenance alongside the policy version).
+
+### The gate grants nothing
+
+An ALLOW means policy raises no objection. It is an ADDITIONAL condition,
+never a replacement for one, and four tests exist because a policy engine that
+quietly became an authorization source would be a worse posture than none:
+
+- **Two-person approval is preserved.** `media.quarantine.release` returns
+  `ALLOW allowed_two_person_enforced_downstream` — a distinct reason code so a
+  decision log cannot be misread as a satisfied approval. The threshold is
+  still a `PRIMARY KEY (asset_id, approver_clerk_user_id)` inside the SQL
+  transaction, which is the only place it can be enforced correctly.
+- **Moderation is untouched.** The word does not appear in the policy layer's
+  code. An admin may release a cleared asset, never declare one cleared.
+- **Credits and billing are unreachable.** Phase 10 is not touched.
+- **The generation lifecycle is unreachable.** The engine's entire import list
+  is the registry and its own contract.
+
+### Bounded in, bounded out
+
+The input is an allowlist, not a context bag: no `metadata`, no `payload`, no
+`request`, no index signature — so a caller cannot pass the raw body "in case
+the policy needs it". Tests fail on any prompt-, secret- or URL-shaped field.
+That matters because a policy input travels into a decision log, and a decision
+log is read during incidents.
+
+Output is five decisions, a short reason code matching
+`^[a-z][a-z0-9_]{1,64}$`, the policy version, and the engine. No free text is
+ever used as authority.
+
+Everything the gate reads is server-derived: `originClass` is a literal
+`"server"`, the actor comes from an already-verified id, block state is fetched
+from Redis/PostgreSQL rather than accepted, and absent approval evidence means
+not approved.
+
+### Decision evidence — no second audit platform
+
+The decision log is `security_events`, extended with two kinds
+(`policy_decision_allowed`, `policy_decision_denied`), one source
+(`policy_gate`) and one column (`policy_version`). Everything 12-C built
+applies unchanged: append-only trigger, bounded columns, short-code reasons,
+storm control, service_role-only grants.
+
+**Both outcomes are recorded.** A log holding only refusals cannot answer "who
+released that asset, under which policy version" — the question an incident
+actually asks.
+
+The migration is strictly additive, and S12E-7 re-asserts the entire
+pre-12-E vocabulary because a widened CHECK written as DROP + ADD is exactly
+where a value gets lost.
+
+### A wrong assumption the proofs caught
+
+The first draft appended `p_policy_version` with a DEFAULT and relied on
+`CREATE OR REPLACE` to replace `record_security_event` in place. PostgreSQL
+identifies a function by its **full** argument type list, so it created an
+OVERLOAD and the catalog held two definitions — which would have made every
+existing 8-argument call ambiguous the first time a security signal was
+recorded in production. S12E-1 caught it before the migration was ever applied;
+the migration now drops the old signature explicitly. This is the identical
+failure `20260824000000` records for `emit_outbox_event`, which is why the
+assertion existed in advance.
+
+### Privacy / data-lifecycle seam
+
+Five actions are registered, all `DENY not_implemented`, each naming
+`phase-23` as owner and each marked two-person + human-approval so a future
+implementation inherits a reviewed rule rather than inventing one:
+`data.export`, `data.delete`, `retention.override`, `legal_hold.set`,
+`legal_hold.clear`. An unregistered privacy action denies as
+`unknown_action`. **No Phase 23 workflow is implemented.**
+
+### Residual risk
+
+- **`REQUIRE_APPROVAL` is currently unreachable in practice.** The rule exists
+  in both evaluators and is exercised by test, but every action that would
+  trigger it is registered as not-implemented and therefore denies earlier,
+  and the AI allowlist is empty. That precedence is correct — deny outranks
+  hold — but it means the approval path has no live producer until Phase 14 or
+  Phase 16 lands one.
+- **`risk.adminReviewRequired` and `risk.challengeRequired` are hard-coded
+  false in the gate.** Phase 12-C records those as RECOMMENDATIONS on evidence
+  rows; no durable per-subject flag exists, and deriving one from a
+  recommendation would be inventing state. `temporarilyBlocked` IS wired to a
+  real Redis read. The rules are implemented and tested through
+  `evaluatePolicy` directly; Phase 16 owns the review state that makes them
+  reachable through the gate.
+- **OPA does not evaluate at runtime.** The Rego is normative and
+  conformance-bound, but the shipped evaluator is the embedded one. Phase 19
+  owns the swap, and the engine name in every decision is what will make it
+  visible.
+- **No admin UI, no operator surface.** `admin_review` requests and denied
+  decisions accumulate as queryable rows; nothing displays or actions them
+  until Phase 16.
+- **The registry is a file, not a governed artifact.** Changing a rule is a
+  code change and a version bump, reviewed like any other. Phase 19 owns
+  policy lifecycle and governance.
+
+---
+
 ## Security Event Logger + Risk Engine (Phase 12-C)
 
 ```

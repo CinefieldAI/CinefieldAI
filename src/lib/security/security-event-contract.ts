@@ -33,7 +33,12 @@ export type SecurityEventKind =
   | "media_release_approved"
   | "media_rejected"
   | "realtime_event_unroutable"
-  | "auth_failure";
+  | "auth_failure"
+  // Phase 12-E. The policy decision log lives here rather than in a table of
+  // its own: two append-only stores would mean two retention policies, two
+  // sets of grants, and a second place nobody remembers to check.
+  | "policy_decision_allowed"
+  | "policy_decision_denied";
 
 /** Which subsystem observed it. */
 export type SecuritySource =
@@ -42,7 +47,8 @@ export type SecuritySource =
   | "realtime_gateway"
   | "media_safety"
   | "realtime_dispatcher"
-  | "auth";
+  | "auth"
+  | "policy_gate";
 
 export type SecuritySeverity = "info" | "low" | "medium" | "high";
 
@@ -89,6 +95,15 @@ export const KIND_SEVERITY: Readonly<Record<SecurityEventKind, SecuritySeverity>
   media_release_approved: "medium",
   media_rejected: "info",
   auth_failure: "low",
+  //   policy_decision_allowed   medium  a critical action was permitted. Not
+  //                                     suspicious — but a quarantine release
+  //                                     or a routing kill switch is exactly
+  //                                     what an incident asks about later.
+  //   policy_decision_denied    medium  someone reached a critical action and
+  //                                     was refused. One is a misconfigured
+  //                                     script; a pattern is worth a look.
+  policy_decision_allowed: "medium",
+  policy_decision_denied: "medium",
 };
 
 /**
@@ -125,6 +140,14 @@ export const KIND_SUBJECT_IS_ACTOR: Readonly<Record<SecurityEventKind, boolean>>
   media_release_approved: false,
   media_rejected: false,
   auth_failure: true,
+  // A permitted critical action is a legitimate operator action. Enforcing
+  // anything against an administrator for doing their job would be absurd.
+  policy_decision_allowed: false,
+  // A refusal IS attributable to whoever attempted it. At `medium` severity
+  // the arithmetic tops out below the block threshold, so repeated policy
+  // refusals warn and escalate to review — they never lock an operator out of
+  // the system they are trying to operate.
+  policy_decision_denied: true,
 };
 
 /**
@@ -143,6 +166,10 @@ export const KIND_WINDOW_SECONDS: Readonly<Record<SecurityEventKind, number>> = 
   media_release_approved: 1,
   media_rejected: 1,
   auth_failure: 60,
+  // One second, for the same reason as the media decisions: these are rare,
+  // deliberate actions and every one of them is its own audit record.
+  policy_decision_allowed: 1,
+  policy_decision_denied: 1,
 };
 
 /**
@@ -201,6 +228,11 @@ export const KIND_DEDUPE_INCLUDES_RESOURCE: Readonly<Record<SecurityEventKind, b
   media_release_approved: true,
   media_rejected: true,
   auth_failure: false,
+  // Every policy decision is its own log entry. Two releases decided in the
+  // same second must be two rows, or the decision log has a hole in it exactly
+  // where the interesting actions are.
+  policy_decision_allowed: true,
+  policy_decision_denied: true,
 };
 
 export interface SecurityEventInput {
@@ -215,6 +247,12 @@ export interface SecurityEventInput {
   resourceType?: string | null;
   resourceId?: string | null;
   traceId?: string | null;
+  /**
+   * Phase 12-E. Which policy version produced a decision. Only meaningful on
+   * the two `policy_decision_*` kinds; without it a log entry records that
+   * something was allowed but not what allowed it, and drift becomes silent.
+   */
+  policyVersion?: string | null;
 }
 
 export type ValidationResult =
@@ -244,6 +282,7 @@ export function validateSecurityEvent(input: SecurityEventInput): ValidationResu
     [input.resourceType, 64],
     [input.resourceId, 200],
     [input.traceId, 200],
+    [input.policyVersion, 64],
   ] as [string | null | undefined, number][]) {
     if (typeof value === "string" && value.length > max) return { ok: false, reason: "unbounded_field" };
   }
@@ -258,6 +297,7 @@ const SOURCES: ReadonlySet<string> = new Set<SecuritySource>([
   "media_safety",
   "realtime_dispatcher",
   "auth",
+  "policy_gate",
 ]);
 
 /**
