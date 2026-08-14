@@ -365,6 +365,132 @@ Replay is inert in both directions.
 
 ---
 
+## Realtime delivery (Phase 11-B)
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (32 tests)
+LIVE_REDIS_VALIDATION      YES   (adapter -> Redis A -> XREAD round trip, isolated stream)
+REDIS_STREAMS_OWNER        REDIS_A
+REDIS_B_USED               NO
+REDIS_A_NOEVICTION         NO    -- volatile-lru; see MANUAL ACTION below
+SSE_REPLAY (11-C)          NOT_STARTED
+CONNECTION_LIMITS (11-D)   NOT_STARTED
+```
+
+```
+Postgres Outbox -> Notification Service -> Redis Streams (Redis A) -> SSE Gateway -> Browser
+                                                                          ^
+                                                                   11-B ends here
+```
+
+**Streams, never Pub/Sub.** The roadmap closed the option because Pub/Sub
+provides neither cursor nor replay. A test asserts no `PUBLISH`/`SUBSCRIBE`
+appears anywhere in the realtime package.
+
+**Redis A owns realtime; Redis B is untouched.** `BULLMQ_REDIS_URL` is not read
+by any file in the package, and a test asserts it.
+
+**The stream key cannot come from a request.** `streamKeyFor` accepts only the
+branded `ChannelId` from 11-A, whose sole constructor takes a database-captured
+tenant, so a query string cannot reach a Redis key even if a route forgot to
+check. The gateway reads no `searchParams`, no body and no identity header —
+`?user=`, `?workspace=`, `?channel=` and `?stream=` are not validated away,
+they are never read. Verified live: an unauthenticated request is refused in
+~20 ms with 401, before any Redis work.
+
+### Retention — two limits, two mechanisms, stated precisely
+
+| Limit | Mechanism | Strength |
+| --- | --- | --- |
+| ~200 events | `XADD ... MAXLEN ~ 200` on every publish | **APPROXIMATE.** The `~` lets Redis trim only at macro-node boundaries. Verified live: 12 entries written with `MAXLEN ~ 5` left all 12. It bounds growth cheaply; it is **not** a hard cap and is not described as one. |
+| 15 minutes | `XTRIM ... MINID <now-15m>-0` on every publish | **EXACT.** Stream ids are `<ms>-<seq>`, so a time-derived MINID is a real boundary. Verified live in both directions: `MINID(now-15m)` retained recent entries, `MINID(now+1s)` removed all of them. |
+
+A key TTL was rejected and gives neither: `EXPIRE` deletes the whole stream at
+once, so a quiet channel would lose its entire history rather than its oldest
+slice, and an active channel's TTL would keep being pushed out. Redis streams
+have no per-entry TTL.
+
+### Publication idempotency — the honest version
+
+`XADD` is not idempotent and cannot be made so: Redis assigns a new stream id
+on every append, so an at-least-once outbox retry produces a **second entry**.
+This is not disguised. What is guaranteed is the property downstream needs —
+**the logical event identity is stable**: both entries carry the same
+`eventId`, which is the outbox row's own id and the dedupe identity the event
+contract already defines. Verified live: a retried publish produced 2 entries
+and 1 distinct `eventId`. No second domain event is created. Entry-level
+suppression is 11-C's to decide; stable identity is the part it cannot add
+afterwards.
+
+### Connection budget
+
+`SSE_CONNECTION_MAX_AGE_MS = 50_000`, ±10% jitter. No `vercel.json` exists and
+no route sets `maxDuration`, so the deployed ceiling **cannot be proven from
+this repository**; the budget is set against the most restrictive documented
+Vercel default rather than an assumed plan. The gateway ends its own stream and
+sends a `reconnect` event first, so the close is deliberate rather than a
+platform kill mid-frame. Jitter prevents a deploy's connections from all
+returning in the same second. Raising this is one line once the plan's real
+ceiling is confirmed.
+
+Heartbeat is a 15 s SSE comment, with a 5 s `XREAD BLOCK` so abort and budget
+checks stay responsive.
+
+### Backpressure and resource release
+
+Reads are batched (`COUNT 50`); a slow consumer is closed once queued bytes
+exceed 256 KiB rather than buffered indefinitely; the Redis reader is released
+from the abort signal, from the stream's `cancel()`, and from the loop's
+`finally`. A **dedicated** reader connection is used because ioredis runs
+commands in order on one socket — a blocking `XREAD` on the shared application
+client would stall idempotency reads, lock acquisition and rate-limit checks
+behind a subscriber that is doing nothing.
+
+### Redis failure semantics
+
+A publish failure returns `transport_unavailable` or `transport_failed` and
+**nothing else happens**: the adapter never marks an outbox row published, so
+the row stays recoverable debt. It imports nothing that could mutate a
+generation, retry a provider, settle credits or start a workflow, and a test
+asserts those imports are absent. A realtime failure is a delivery failure,
+never a generation failure.
+
+### 🔴 MANUAL ACTION REQUIRED — Redis A eviction policy
+
+Live probe of Redis A reports `maxmemory_policy = volatile-lru`, and
+`CONFIG GET` is blocked by the provider. Under memory pressure `volatile-lru`
+evicts keys **that carry a TTL**, choosing least-recently-used — and Redis A's
+TTL-bearing keys are exactly the idempotency records, distributed locks,
+rate-limit windows and provider health state that `redis-isolation.ts` exists
+to protect. Worse, a busy stream is *recently used*, so an idle lock would be
+evicted before it.
+
+This predates Phase 11-B and was not introduced by it, but realtime streams add
+memory pressure to the same instance, so it must be resolved before this is
+called production-safe.
+
+**Change required (dashboard, by a human — not applied automatically):** set
+Redis A's `maxmemory-policy` to **`noeviction`**. Cinefield's Redis A holds
+correctness state, not a cache: refusing a write under pressure is recoverable,
+silently dropping a lock is not. No configuration was changed by this batch.
+
+### Residual risk
+
+- **Lossless resume does not exist yet.** Events occurring between connections
+  are missed. Every consumer must treat realtime as a signal and keep its own
+  fetch. `Last-Event-ID` is emitted on the wire but deliberately **not read** —
+  honouring it halfway would let a client believe it had resumed. 11-C owns it.
+- **No connection ceiling.** One tenant can open as many streams as it likes.
+  11-D owns the limit and idle eviction; `cross-tenant SSE` stays in the
+  release-blocking set until then.
+- **The authenticated browser round trip was not exercised end to end.** It
+  requires an interactive Clerk sign-in. What is proven: the 401 refusal live,
+  the adapter -> Redis A -> XREAD round trip live with envelope integrity, and
+  the framing, headers, mapping and boundaries by test.
+
+---
+
 ## Notification routing (Phase 11-A)
 
 ```
