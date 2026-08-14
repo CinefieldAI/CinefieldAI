@@ -517,13 +517,32 @@ DISPATCHER_PRODUCTION_DEPLOYMENT: INFRA_PENDING
 - **Nothing runs the dispatcher yet in any deployed environment.** The code,
   the entry point and the proof exist; the container does not. Until it runs,
   the chain is proven but idle — which is a deployment task, not a design gap.
-- **A local credential blocker was found.** `SUPABASE_SERVICE_ROLE_KEY` in
-  `.env.local` decodes to `role: service_role` and is unexpired, yet the
-  project rejects it (`permission denied for table projects`). The project has
-  migrated to the `sb_publishable_*` / `sb_secret_*` key system, which
-  disables legacy JWT keys. **Every server-side admin path is affected
-  locally**, not just the dispatcher. No key was created or changed. This must
-  be resolved before any local run of the dispatcher against Supabase.
+
+  The canonical runtime path IS proven, not merely the harness: the production
+  admin client and the real dispatcher were run against the LIVE project and
+  LIVE Redis A on a synthetic tenant, publishing `generation.created` to a real
+  stream, mapping to browser state `queued`, with the second pass inert and the
+  synthetic data removed afterwards. What remains is a container that calls it
+  on a loop.
+- **A credential blocker was reported here and was WRONG. Corrected.** The
+  closure batch recorded that `SUPABASE_SERVICE_ROLE_KEY` was rejected and
+  that the project had disabled legacy JWT keys. Neither is true, and the
+  claim came from over-reading a single 403.
+
+  What actually happened: the throwaway harness tried
+  `INSERT INTO projects` as `service_role`, and on this schema `service_role`
+  holds only `SELECT, REFERENCES, TRIGGER, TRUNCATE` on `projects` — DML there
+  belongs to `authenticated`, because projects are created by the browser
+  under RLS and the server only ever reads them for ownership checks. No
+  server-side code inserts a project, so the grant layout is correct by design.
+
+  The key is valid and is service_role. Proven directly: an admin read of
+  `outbox_events` succeeds, and `anon`/`authenticated` have no `SELECT` on
+  that table at all, so only `service_role` could have returned it. The
+  dispatcher's own RPCs — `claim_realtime_outbox_events` and
+  `realtime_outbox_debt` — both execute against the live project.
+
+  No key was created, rotated or changed at any point.
 - **Redis A is still `volatile-lru`.** See the sections above; unchanged.
 
 ---
