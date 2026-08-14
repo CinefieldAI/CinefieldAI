@@ -18,7 +18,6 @@ const FEATURED_MODELS: MarketingImageModel[] = [
     id: "marketing-studio-image",
     name: "Marketing Studio Image",
     description: "Model built for marketing usecase",
-    badges: ["NEW"],
   },
   {
     id: "higgsfield-soul-2",
@@ -34,13 +33,11 @@ const FEATURED_MODELS: MarketingImageModel[] = [
     id: "gpt-image-2",
     name: "GPT Image 2",
     description: "4K images with near-perfect text rendering",
-    badges: ["NEW"],
   },
   {
     id: "seedream-5-pro",
     name: "Seedream 5.0 Pro",
     description: "Logically consistent images with intelligent visual reasoning",
-    badges: ["NEW"],
   },
   {
     id: "seedream-5-lite",
@@ -62,19 +59,16 @@ const FEATURED_MODELS: MarketingImageModel[] = [
     id: "nano-banana-2",
     name: "Nano Banana 2",
     description: "Pro quality at Flash speed",
-    badges: ["NEW"],
   },
   {
     id: "nano-banana-2-lite",
     name: "Nano Banana 2 Lite",
     description: "Lightweight image generation at speed",
-    badges: ["NEW"],
   },
   {
     id: "recraft-v4-1",
     name: "Recraft V4.1",
     description: "Photorealistic and expressive image generation",
-    badges: ["NEW"],
   },
 ];
 
@@ -103,7 +97,6 @@ const ALL_MODELS: MarketingImageModel[] = [
     id: "gpt-image-2",
     name: "GPT Image 2",
     description: "4K images with near-perfect text rendering",
-    badges: ["NEW"],
   },
   {
     id: "gpt-image-1-5",
@@ -119,7 +112,6 @@ const ALL_MODELS: MarketingImageModel[] = [
     id: "marketing-studio-image",
     name: "Marketing Studio Image",
     description: "Model built for marketing usecase",
-    badges: ["NEW"],
   },
   {
     id: "nano-banana-pro",
@@ -130,13 +122,11 @@ const ALL_MODELS: MarketingImageModel[] = [
     id: "nano-banana-2",
     name: "Nano Banana 2",
     description: "Pro quality at Flash speed",
-    badges: ["NEW"],
   },
   {
     id: "nano-banana-2-lite",
     name: "Nano Banana 2 Lite",
     description: "Lightweight image generation at speed",
-    badges: ["NEW"],
   },
   {
     id: "nano-banana",
@@ -147,7 +137,6 @@ const ALL_MODELS: MarketingImageModel[] = [
     id: "seedream-5-pro",
     name: "Seedream 5.0 Pro",
     description: "Logically consistent images with intelligent visual reasoning",
-    badges: ["NEW"],
   },
   {
     id: "seedream-5-lite",
@@ -179,13 +168,11 @@ const ALL_MODELS: MarketingImageModel[] = [
     id: "recraft-v4-1",
     name: "Recraft V4.1",
     description: "Photorealistic and expressive image generation",
-    badges: ["NEW"],
   },
   {
     id: "recraft-v4-1-utility",
     name: "Recraft V4.1 Utility",
     description: "Simple scenes with flat, even lighting",
-    badges: ["NEW"],
   },
   {
     id: "z-image",
