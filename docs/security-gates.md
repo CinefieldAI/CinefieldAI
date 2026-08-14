@@ -365,6 +365,169 @@ Replay is inert in both directions.
 
 ---
 
+## Realtime dispatcher — the arrow that was missing (Phase 11 closure)
+
+```
+D-11-1 OUTBOX -> NOTIFICATION GAP   CLOSED
+DISPATCHER OWNER                    long-running worker (worker/realtime-dispatcher-worker.ts)
+MULTI-SINK DELIVERY                 separate lanes, proven independent
+END-TO-END PROOF                    PASS (real Postgres + real dispatcher + real Redis A)
+PRODUCTION DEPLOYMENT               INFRA_PENDING (no ECS provisioned)
+REDIS_A_NOEVICTION                  DEFERRED_PRODUCTION_HARDENING
+```
+
+### What was actually wrong
+
+Every link of `Outbox -> Notification Service -> Redis Streams -> SSE ->
+Browser` was built and proven, and **nothing joined the first two**. Two
+distinct gaps: no production code called `drainOutboxOnce`, and
+`drainOutboxOnce` targets Kafka anyway — so no code path existed from a
+committed fact to a browser. Measured before the fix: **92 events pending,
+`ever_published = 0`, oldest 22 hours**. Phase 11 was component-complete and
+end-to-end dead.
+
+Every component test still passed, because no test asked whether anything
+called the components. That guard now exists
+(`phase-11-closure-dispatcher.e2e.test.ts`): it walks the source tree and
+fails if the Notification Service or the stream adapter has no production
+caller, and if that caller is not in `worker/`.
+
+### Multi-sink: the blocker found before implementing
+
+`outbox_events` was built for exactly one delivery — one `status`, one
+`published_at`, one `claim_token`, and an index on `status <> 'published'`.
+Overloading it would have produced a silent correctness bug in whichever
+direction ran first: Kafka marking a row published makes it **invisible to the
+realtime claim forever**, and the user never receives the notification.
+
+So the lanes are separated. The existing columns keep their exact meaning and
+are now explicitly the **Kafka lane**; a parallel `realtime_*` set carries the
+realtime lane with its own claim, attempts, error and completion. Additive
+only: no column dropped, no constraint relaxed, and `claim_outbox_events` /
+`mark_outbox_event_published` untouched, so every earlier proof still
+describes them accurately.
+
+A generic `outbox_deliveries(event_id, sink, ...)` table was rejected as the
+wrong amount of machinery: two sinks exist, both known by name, and a join on
+the hottest path buys nothing a second partial index does not. When email/push
+genuinely arrives there will be a third case to design against instead of an
+imagined one.
+
+`PROOF RD1`/`RD2` prove independence in both directions, and the live schema
+confirms it: after the closure the realtime lane reads `92 done/retired` while
+the Kafka lane still reads `92 pending`.
+
+### Publication order is the correctness argument
+
+```
+claim -> validate/project -> XADD -> resolve('published')
+```
+
+and never claim -> resolve -> publish. A crash between the XADD and the
+resolve leaves the row owed, so the next pass republishes it — a second
+transport entry carrying the SAME `eventId`, which 11-C's client dedupe
+absorbs. At-least-once is chosen deliberately: exactly-once would need a
+distributed transaction across PostgreSQL and Redis, while the stable identity
+11-A/11-B preserve makes the duplicate harmless. The alternative — mark first,
+publish second — loses the event silently and forever, with the database
+confidently reporting success.
+
+### Four dispositions, never collapsed
+
+| Disposition | Terminal | Why |
+| --- | --- | --- |
+| `published` | yes | Redis accepted it |
+| `not_user_facing` | **yes** | a valid event with no browser projection (asset safety, provider internals). Retrying a correct decision forever is a busy loop wearing the costume of reliability. |
+| `unroutable` | **yes**, and visible | no provable tenant. Never broadcast, never a fallback channel, never guessed. Terminal because the condition is structural: a tenant is captured at emit time or not at all. Counted so an emitter that forgot is visible rather than retried into silence. |
+| `invalid` | **yes** | redelivering a malformed event reproduces it identically forever. Evidence preserved in the row. |
+| transport failure | **no** | released back to pending with the attempt already counted. Never marked delivered — Redis being unreachable leaves recoverable debt, which is the entire reason the outbox exists. |
+
+### Historical debt
+
+92 rows predating tenant capture were retired with disposition `retired` and
+reason `pre_realtime_untenanted` — **not deleted**. All were untenanted, so
+the Notification Service would have refused them as `unroutable` anyway and
+nothing would have been broadcast. This was an *observability* fix, not a
+safety one: a debt metric that opens at 92 unroutable rows makes the first
+genuine unroutable event one line in a hundred that everybody has learned to
+ignore. A signal that starts at ninety-two is not a signal.
+
+The retirement is narrow (untenanted AND older than the migration) and refuses
+to have touched the Kafka lane.
+
+### Ownership
+
+The dispatcher owns delivery and nothing else. It cannot create a generation,
+start a workflow, submit or retry a provider, move credits, release quarantine
+or mint a URL — it imports nothing that could, and a test asserts those imports
+stay absent. It does not re-derive projection or tenant logic; it calls the
+canonical Notification Service and stream adapter.
+
+It runs as a **separate process** rather than inside the Temporal or provider
+worker. Hosting it there would couple three unrelated ownerships to one
+lifecycle: a Redis outage crashing the dispatcher would take down provider
+submission, which is the money path. Losing realtime is a degraded UI; losing
+provider submission is a failed paid generation. Different blast radii deserve
+different processes.
+
+### Crash and recovery, proven
+
+`PROOF RD3`–`RD6` on real PostgreSQL: a live lease is not re-claimable; an
+expired lease recovers and counts the attempt; a stale dispatcher cannot
+resolve or release a row a new owner holds; a transport failure returns the
+row without ever marking it delivered. `PROOF DR1`/`DR2`: 16 events claimed
+exactly once across concurrent dispatchers, with the Kafka lane untouched.
+
+### End-to-end proof
+
+Real Postgres (all 19 migrations) + the real dispatcher + real Redis A:
+
+```
+business transaction -> outbox row (tenant captured) -> dispatcher
+  -> Notification Service -> Redis Stream -> gateway resume logic -> browser state "queued"
+```
+
+`eventId` stable, channel correct, cursor well-formed, no prompt/objectKey/
+signedUrl/secret on the wire, realtime lane `done/published`, **Kafka lane
+still `pending`**, second pass inert, debt clean.
+
+### Observable debt
+
+`realtime_outbox_debt()` returns counts and ages only — pending, dispatching,
+oldest age, max attempts, and a count per disposition. No payload, no tenant,
+no event id: an operational metric that carries a user's content is a data
+leak with a dashboard in front of it. Phase 13 owns observability; this is the
+shape it can read.
+
+### Deployment
+
+`npm run realtime:dispatcher` runs it. Production target is long-running
+ECS/Fargate compute alongside the existing Temporal and provider workers.
+**No ECS was provisioned and no AWS infrastructure was created.** Contract:
+SIGTERM/SIGINT drain the in-flight pass then exit; restart is safe because
+recovery is lease-expiry based, not heartbeat based; the only environment it
+needs is the Supabase service role and `REDIS_URL`.
+
+```
+DISPATCHER_PRODUCTION_DEPLOYMENT: INFRA_PENDING
+```
+
+### Residual risk
+
+- **Nothing runs the dispatcher yet in any deployed environment.** The code,
+  the entry point and the proof exist; the container does not. Until it runs,
+  the chain is proven but idle — which is a deployment task, not a design gap.
+- **A local credential blocker was found.** `SUPABASE_SERVICE_ROLE_KEY` in
+  `.env.local` decodes to `role: service_role` and is unexpired, yet the
+  project rejects it (`permission denied for table projects`). The project has
+  migrated to the `sb_publishable_*` / `sb_secret_*` key system, which
+  disables legacy JWT keys. **Every server-side admin path is affected
+  locally**, not just the dispatcher. No key was created or changed. This must
+  be resolved before any local run of the dispatcher against Supabase.
+- **Redis A is still `volatile-lru`.** See the sections above; unchanged.
+
+---
+
 ## Gate 1 — Cross-workspace isolation, realtime portion (Phase 11-D)
 
 **Owning package:** 11-D (the SSE portion of Gate 1; 12-B owns the rest)
@@ -849,7 +1012,7 @@ contains none.
   a strong CANDIDATE for the roadmap's `event_seq` — recorded as a candidate
   only. Declaring it here would lock the architecture before 11-C weighs it
   against replay-window trimming.
-- **Nothing drains the outbox yet.** `drainOutboxOnce` still has no scheduler,
+- **The outbox realtime drain now has an owner** (see the dispatcher section above). `drainOutboxOnce` — the KAFKA drain — still has no scheduler,
   by the same no-silent-cadence rule as the DR pass. The Notification Service
   is a pure function awaiting a caller.
 - **No connection limits exist** because no connection exists. 11-D owns them,

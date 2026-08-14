@@ -59,7 +59,7 @@ for f in \
   "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
   "$ROOT/supabase/migrations/20260820000000_media_assets.sql" \
   "$ROOT/supabase/migrations/20260821000000_media_ingest_gate.sql" \
-  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"   "$ROOT/supabase/migrations/20260824000000_event_contract_and_tenant_routing.sql"
+  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"   "$ROOT/supabase/migrations/20260824000000_event_contract_and_tenant_routing.sql"   "$ROOT/supabase/migrations/20260825000000_outbox_realtime_delivery_lane.sql"   "$ROOT/supabase/migrations/20260825000100_retire_pre_realtime_outbox_debt.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -76,6 +76,9 @@ psql_run < "$ROOT/supabase/tests/test_media_assets.sql" 2>&1 | grep -E "NOTICE|E
 
 echo "==> media ingest gate proofs (Phase 9-B)"
 psql_run < "$ROOT/supabase/tests/test_media_ingest_gate.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> realtime dispatch lane proofs (Phase 11 closure)"
+psql_run < "$ROOT/supabase/tests/test_realtime_dispatch_lane.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> notification routing proofs (Phase 11-A)"
 psql_run < "$ROOT/supabase/tests/test_notification_routing.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
@@ -295,6 +298,16 @@ NR2_USER=$(psql_run -qtA -c "SELECT o_user FROM mk_tenant_project('nr2');" | tr 
 NR2_PROJ=$(psql_run -qtA -c "SELECT id FROM projects WHERE clerk_user_id='${NR2_USER}' LIMIT 1;" | tr -d '[:space:]')
 psql_run -q -c "INSERT INTO notification_race_fixtures VALUES ('nr2',NULL,'${NR2_USER}') ON CONFLICT (tag) DO UPDATE SET clerk_user_id=EXCLUDED.clerk_user_id;" >/dev/null
 race 6 "SELECT create_event_race(__W__, '${NR2_USER}', '${NR2_PROJ}'::uuid, 'idem-nr2-shared');"
+
+echo "==> race: concurrent realtime dispatchers (6 connections)"
+# Seed several owed events, then let six dispatchers claim at once.
+for i in 1 2 3 4 5 6 7 8; do
+  psql_run -q -c "SELECT mk_realtime_event('drace' || $i);" >/dev/null
+done
+race 6 "SELECT dispatch_claim_race(__W__);"
+
+echo "==> dispatcher race invariants"
+psql_run < "$ROOT/supabase/tests/assert_dispatch_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> Phase 11-A race invariants"
 psql_run < "$ROOT/supabase/tests/assert_notification_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"

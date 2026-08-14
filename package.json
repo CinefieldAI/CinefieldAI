@@ -9,7 +9,8 @@
     "lint": "eslint",
     "catalog:generate": "tsx --conditions=react-server scripts/generate-public-catalog.ts",
     "temporal:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/temporal-worker.ts",
-    "provider:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/provider-worker.ts"
+    "provider:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/provider-worker.ts",
+    "realtime:dispatcher": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/realtime-dispatcher-worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",
