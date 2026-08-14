@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 
 export interface ExplorePreset {
@@ -296,7 +296,6 @@ interface MarketingFormatExploreProps {
 }
 
 export default function MarketingFormatExplore({ onSelectPreset }: MarketingFormatExploreProps) {
-  const [activeTab, setActiveTab] = useState<"All" | "TikTok" | "UGC" | "Commercial">("All");
   const [unmutedMap, setUnmutedMap] = useState<Record<string, boolean>>({});
 
   const toggleMute = (videoKey: string, e: React.MouseEvent) => {
@@ -304,130 +303,11 @@ export default function MarketingFormatExplore({ onSelectPreset }: MarketingForm
     setUnmutedMap((prev) => ({ ...prev, [videoKey]: !prev[videoKey] }));
   };
 
-  const filteredPresets = EXPLORE_PRESETS.filter((item) => {
-    if (activeTab === "All") return true;
-    return item.category === activeTab;
-  });
-
   return (
     <section className="mx-auto flex w-full max-w-[75rem] flex-col items-center gap-5 md:px-8 md:pb-20 md:pt-5 select-none">
-      {/* CATEGORY TABS */}
-      <div
-        role="tablist"
-        aria-label="Explore format categories"
-        className="flex max-w-full items-center gap-2 overflow-x-auto p-1 no-scrollbar"
-      >
-        {/* ALL TAB */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "All"}
-          onClick={() => setActiveTab("All")}
-          className={`relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-medium leading-4 transition-all ${
-            activeTab === "All"
-              ? "bg-white text-black font-semibold shadow-md"
-              : "bg-white/5 text-white/80 shadow-[0_2px_2px_rgba(0,0,0,0.12),inset_0_2px_3px_rgba(255,255,255,0.05)] backdrop-blur-xl hover:bg-white/10"
-          }`}
-        >
-          <span className="whitespace-nowrap">All</span>
-        </button>
-
-        {/* TIKTOK TAB */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "TikTok"}
-          onClick={() => setActiveTab("TikTok")}
-          className={`relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl pl-3 pr-4 text-xs font-medium leading-4 transition-all ${
-            activeTab === "TikTok"
-              ? "bg-white text-black font-semibold shadow-md"
-              : "bg-white/5 text-white/80 shadow-[0_2px_2px_rgba(0,0,0,0.12),inset_0_2px_3px_rgba(255,255,255,0.05)] backdrop-blur-xl hover:bg-white/10"
-          }`}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            aria-hidden="true"
-            className={`size-3.5 shrink-0 ${activeTab === "TikTok" ? "text-black" : "text-white/45"}`}
-          >
-            <path
-              d="M17.2618 8.51118C15.7788 8.51118 14.4057 8.03996 13.2845 7.23914V13.0605C13.2845 15.9726 10.9226 18.3333 8.00903 18.3333C6.92195 18.3333 5.91156 18.0048 5.07222 17.4415C3.66193 16.495 2.7334 14.8858 2.7334 13.0605C2.7334 10.1486 5.09536 7.78785 8.00912 7.78791C8.25126 7.78779 8.4931 7.80423 8.73298 7.837V8.48335L8.73284 10.7533C8.50196 10.6801 8.25582 10.6404 8.00045 10.6404C6.6676 10.6404 5.58731 11.7203 5.58731 13.0522C5.58731 13.994 6.12731 14.8095 6.91475 15.2067C7.24125 15.3714 7.60999 15.4641 8.00048 15.4641C9.33059 15.4641 10.409 14.3886 10.4136 13.0605V1.66666H13.2844V2.03356C13.2945 2.14326 13.3091 2.25253 13.3281 2.36109C13.5274 3.49697 14.2069 4.46744 15.1501 5.0557C15.7835 5.45085 16.5153 5.65974 17.2618 5.65861L17.2618 8.51118Z"
-              fill="currentColor"
-            />
-          </svg>
-          <span className="whitespace-nowrap">TikTok</span>
-          <span className="flex h-[15px] items-center rounded-[2px] bg-[#d97757] px-1.5 font-sans text-[10px] font-bold uppercase leading-none text-black -skew-x-[10deg]">
-            <span className="skew-x-[10deg]">New</span>
-          </span>
-        </button>
-
-        {/* UGC TAB */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "UGC"}
-          onClick={() => setActiveTab("UGC")}
-          className={`relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl pl-3 pr-4 text-xs font-medium leading-4 transition-all ${
-            activeTab === "UGC"
-              ? "bg-white text-black font-semibold shadow-md"
-              : "bg-white/5 text-white/80 shadow-[0_2px_2px_rgba(0,0,0,0.12),inset_0_2px_3px_rgba(255,255,255,0.05)] backdrop-blur-xl hover:bg-white/10"
-          }`}
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            className={`size-3.5 shrink-0 ${activeTab === "UGC" ? "text-black" : "text-white/45"}`}
-          >
-            <path
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-              d="M5.75 6.75v-1a3 3 0 0 1 3-3h6.5a3 3 0 0 1 3 3v1m-12.5 0h12.5m-12.5 0v4h-1.5v3h1.5v7.5m12.5-14.5v9.5a3 3 0 0 1-3 3h-4v2m7-14.5h3M10.719 9.944h.01m4.115 0h.01m-.604 5.306c-1.75.25-3.52 0-4.25-1.25"
-            />
-          </svg>
-          <span className="whitespace-nowrap">UGC</span>
-        </button>
-
-        {/* COMMERCIAL TAB */}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "Commercial"}
-          onClick={() => setActiveTab("Commercial")}
-          className={`relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl pl-3 pr-4 text-xs font-medium leading-4 transition-all ${
-            activeTab === "Commercial"
-              ? "bg-white text-black font-semibold shadow-md"
-              : "bg-white/5 text-white/80 shadow-[0_2px_2px_rgba(0,0,0,0.12),inset_0_2px_3px_rgba(255,255,255,0.05)] backdrop-blur-xl hover:bg-white/10"
-          }`}
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            className={`size-3.5 shrink-0 ${activeTab === "Commercial" ? "text-black" : "text-white/45"}`}
-          >
-            <path
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-              d="M12 7.375V6.347m0 10.278v1.028m2.226-8.736C13.78 8.302 12.95 7.889 12 7.889h-.286c-1.26 0-2.283.818-2.283 1.827v.078c0 .722.51 1.382 1.316 1.705l2.506 1.002c.807.323 1.316.983 1.316 1.705 0 1.052-1.066 1.905-2.382 1.905H12c-.951 0-1.781-.413-2.226-1.028M21.25 12a9.25 9.25 0 1 1-18.5 0 9.25 9.25 0 0 1 18.5 0"
-            />
-          </svg>
-          <span className="whitespace-nowrap">Commercial</span>
-        </button>
-      </div>
-
       {/* EXPLORE GRID CARDS */}
       <div className="grid w-full grid-cols-1 gap-5 lg:grid-cols-2">
-        {filteredPresets.map((preset) => (
+        {EXPLORE_PRESETS.map((preset) => (
           <article
             key={preset.id}
             onClick={() => onSelectPreset?.(preset)}

@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { AtSign, Check, ChevronDown, Minus, Monitor, Plus } from "lucide-react";
+import { AtSign, Check, ChevronDown, Clock, Minus, Monitor, Plus } from "lucide-react";
 import { useListboxNav } from "@/hooks/useListboxNav";
 import MarketingImageModelSelector from "./MarketingImageModelSelector";
+import MarketingVideoModelSelector from "./MarketingVideoModelSelector";
 
 const ASPECT_RATIO_OPTIONS = ["9:16", "3:4", "2:3", "1:1", "4:3", "16:9", "3:2", "5:4", "4:5", "21:9"];
-const RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
+const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
+const VIDEO_RESOLUTION_OPTIONS = ["720p", "1080p", "4K"];
+const DURATION_OPTIONS = ["5s", "10s", "15s"];
 const COUNT_OPTIONS = ["1/1", "1/2", "1/3", "1/4"];
 
 function AspectIcon({ className = "" }: { className?: string }) {
@@ -152,16 +155,25 @@ function OptionPopover({
 }
 
 export default function MarketingPromptControls({
+  mode,
   selectedImageModel,
+  selectedVideoModel,
   onImageModelChange,
+  onVideoModelChange,
 }: {
+  mode: "image" | "video";
   selectedImageModel: string;
+  selectedVideoModel: string;
   onImageModelChange: (name: string) => void;
+  onVideoModelChange: (name: string) => void;
 }) {
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [resolution, setResolution] = useState("2K");
+  const [imageResolution, setImageResolution] = useState("2K");
+  const [videoResolution, setVideoResolution] = useState("1080p");
+  const [duration, setDuration] = useState("10s");
   const [count, setCount] = useState("1/1");
   const countIndex = useMemo(() => COUNT_OPTIONS.indexOf(count), [count]);
+  const resolution = mode === "image" ? imageResolution : videoResolution;
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
@@ -179,10 +191,17 @@ export default function MarketingPromptControls({
       >
         <AtSign className="size-4" />
       </button>
-      <MarketingImageModelSelector
-        selected={selectedImageModel}
-        onSelect={onImageModelChange}
-      />
+      {mode === "image" ? (
+        <MarketingImageModelSelector
+          selected={selectedImageModel}
+          onSelect={onImageModelChange}
+        />
+      ) : (
+        <MarketingVideoModelSelector
+          selected={selectedVideoModel}
+          onSelect={onVideoModelChange}
+        />
+      )}
       <OptionPopover
         label="Aspect Ratio"
         value={aspectRatio}
@@ -194,10 +213,19 @@ export default function MarketingPromptControls({
       <OptionPopover
         label="Resolution"
         value={resolution}
-        options={RESOLUTION_OPTIONS}
-        onChange={setResolution}
+        options={mode === "image" ? IMAGE_RESOLUTION_OPTIONS : VIDEO_RESOLUTION_OPTIONS}
+        onChange={mode === "image" ? setImageResolution : setVideoResolution}
         icon={<Monitor className="size-4" />}
       />
+      {mode === "video" && (
+        <OptionPopover
+          label="Duration"
+          value={duration}
+          options={DURATION_OPTIONS}
+          onChange={setDuration}
+          icon={<Clock className="size-4" />}
+        />
+      )}
       <div className="flex h-8 shrink-0 items-center rounded-lg border border-white/[0.08] bg-[#101112] text-xs font-semibold text-white">
         <button
           type="button"

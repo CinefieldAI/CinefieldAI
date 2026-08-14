@@ -2,7 +2,6 @@
 
 type ComposerMode = "image" | "video";
 
-import { PROMPT_BAR_SURFACE } from "@/lib/promptBarChassis";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
@@ -14,7 +13,9 @@ interface ComposerBarProps {
   composerMode: ComposerMode;
   onComposerModeChange: (mode: ComposerMode) => void;
   selectedImageModel: string;
+  selectedVideoModel: string;
   onImageModelChange: (name: string) => void;
+  onVideoModelChange: (name: string) => void;
   attachedProductMedia: UploadedMedia[];
   onGenerate: () => void;
   resizeWidth: number;
@@ -94,7 +95,9 @@ export default function ComposerBar({
   composerMode,
   onComposerModeChange,
   selectedImageModel,
+  selectedVideoModel,
   onImageModelChange,
+  onVideoModelChange,
   attachedProductMedia,
   onGenerate,
   resizeWidth,
@@ -186,12 +189,13 @@ export default function ComposerBar({
               className="min-h-[32px] flex-1 resize-none bg-transparent pt-1 text-sm text-white outline-none placeholder:text-white/55"
             />
           </div>
-          {composerMode === "image" && (
-            <MarketingPromptControls
-              selectedImageModel={selectedImageModel}
-              onImageModelChange={onImageModelChange}
-            />
-          )}
+          <MarketingPromptControls
+            mode={composerMode}
+            selectedImageModel={selectedImageModel}
+            selectedVideoModel={selectedVideoModel}
+            onImageModelChange={onImageModelChange}
+            onVideoModelChange={onVideoModelChange}
+          />
         </div>
 
         {/* RIGHT: ATTACHED MEDIA + GENERATE */}

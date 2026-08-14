@@ -26,7 +26,6 @@ import { usePromptSurfaceResize } from "@/hooks/usePromptSurfaceResize";
 import { isOrchestrationModel } from "@/lib/orchestration/orchestration-models";
 import { useGeneration } from "@/hooks/useGeneration";
 
-type Category = "All" | "TikTok" | "UGC" | "Commercial";
 type ModeType = "UGC" | "Mobile" | "Settings";
 type TargetType = "product" | "app";
 type ComposerMode = "image" | "video";
@@ -48,10 +47,9 @@ export default function MarketingStudioProductWorkspace() {
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [composerMode, setComposerMode] = useState<ComposerMode>("image");
   const [selectedImageModel, setSelectedImageModel] = useState("Nano Banana Pro");
+  const [selectedVideoModel, setSelectedVideoModel] = useState("Cinema Studio 3.5");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
-  const searchQuery = "";
-  const [filterCategory, setFilterCategory] = useState<Category>("All");
   const [prompt, setPrompt] = useState("");
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [panelSearchQuery, setPanelSearchQuery] = useState("");
@@ -157,17 +155,6 @@ export default function MarketingStudioProductWorkspace() {
     setHeight: setComposerHeight,
     storageKey: "marketingPromptDimensions",
   });
-
-  // Filter and search
-  const filteredCards = useMemo(() => {
-    return (marketingStyleCards as unknown as StyleCard[]).filter((card) => {
-      const matchesFilter = filterCategory === "All" || card.category === filterCategory;
-      const matchesSearch =
-        card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        card.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesFilter && matchesSearch;
-    });
-  }, [filterCategory, searchQuery]);
 
   // Panel filtered cards
   const panelFilteredCards = useMemo(() => {
@@ -441,7 +428,9 @@ export default function MarketingStudioProductWorkspace() {
                       composerMode={composerMode}
                       onComposerModeChange={setComposerMode}
                       selectedImageModel={selectedImageModel}
+                      selectedVideoModel={selectedVideoModel}
                       onImageModelChange={setSelectedImageModel}
+                      onVideoModelChange={setSelectedVideoModel}
                       attachedProductMedia={attachedProductMedia}
                       onGenerate={handleGenerate}
                       resizeWidth={composerWidth}
@@ -509,7 +498,9 @@ export default function MarketingStudioProductWorkspace() {
                   composerMode={composerMode}
                   onComposerModeChange={setComposerMode}
                   selectedImageModel={selectedImageModel}
+                  selectedVideoModel={selectedVideoModel}
                   onImageModelChange={setSelectedImageModel}
+                  onVideoModelChange={setSelectedVideoModel}
                   attachedProductMedia={attachedProductMedia}
                   onGenerate={handleGenerate}
                   resizeWidth={composerWidth}
