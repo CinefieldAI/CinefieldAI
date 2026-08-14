@@ -4,6 +4,7 @@ import { projectCatalog } from "@/lib/orchestration/capability-projection";
 import { resolveCatalogAvailability } from "@/lib/orchestration/model-availability";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * GET /api/models — the server's answer to "what can this model do?"
  * (Phase 7-F).
@@ -36,8 +37,14 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabas
 export async function GET(): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    return privateJson({ error: "Authentication required." }, { status: 401 });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: the handler
+  // has not begun, so a refusal cannot have called a provider or written
+  // anything durable.
+  const limited = await guardRoute({ routeClass: "authenticated_read", userId });
+  if (limited) return limited;
 
   // Pure, in-process, no database and no secrets — the registry is code.
   const catalog = projectCatalog();
@@ -66,7 +73,7 @@ export async function GET(): Promise<NextResponse> {
     };
   });
 
-  return NextResponse.json(
+  return privateJson(
     { models },
     {
       // Capabilities change on deploy, not per request, but this must never be

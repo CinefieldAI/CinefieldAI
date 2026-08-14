@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { OrchestrationError } from "@/lib/orchestration/errors";
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 import {
   readGenerationId,
   respondToGenerationRequest,
@@ -28,8 +29,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: on a paid
+  // path the handler has not begun, so a refusal cannot have created a
+  // generation, reserved a credit, started a workflow or called a provider.
+  const limited = await guardRoute({ routeClass: "paid_compute", userId });
+  if (limited) return limited;
 
   let generationId: string;
   try {
@@ -39,7 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       caught instanceof OrchestrationError
         ? caught
         : new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   return respondToGenerationRequest(generationId, userId);

@@ -12,6 +12,7 @@ import {
 } from "@/lib/orchestration/generation-create-service";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/generate — THE canonical production generation entry point.
  *
@@ -47,8 +48,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: on a paid
+  // path the handler has not begun, so a refusal cannot have created a
+  // generation, reserved a credit, started a workflow or called a provider.
+  const limited = await guardRoute({ routeClass: "paid_compute", userId });
+  if (limited) return limited;
 
   let body: unknown;
   try {
@@ -57,7 +64,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const error = new OrchestrationError("INVALID_INPUT", {
       userMessage: "Invalid request body.",
     });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   // ---- Compatibility shape: execute an existing row ----------------------
@@ -66,7 +73,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       return respondToGenerationRequest(readGenerationId(body), userId);
     } catch (caught) {
       const error = toOrchestrationError(caught);
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return privateJson(error.toResponseBody(), { status: error.status });
     }
   }
 
@@ -75,7 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const error = new OrchestrationError("PROVIDER_NOT_CONFIGURED", {
       userMessage: "The server is not fully configured.",
     });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   let generationId: string;
@@ -93,7 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         userMessage:
           "This idempotency key was already used for a different request.",
       });
-      return NextResponse.json(
+      return privateJson(
         { ...error.toResponseBody(), reason: "idempotency_key_reused_with_different_request" },
         { status: error.status }
       );
@@ -102,7 +109,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     generationId = created.generationId;
   } catch (caught) {
     const error = toOrchestrationError(caught);
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   // The row is durable from here. Starting Temporal is a separate step, so a

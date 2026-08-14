@@ -365,6 +365,142 @@ Replay is inert in both directions.
 
 ---
 
+## Application rate limits and private cache defaults (PRE-12 / Phase 12-A, application half)
+
+```
+D-12-1 RATE LIMIT GAP        CLOSED
+D-12-2 PRIVATE CACHE GAP     CLOSED
+ROUTES GUARDED               14 / 14
+LIVE REDIS PROOF             PASS (Redis A, isolated synthetic namespace)
+PHASE 12-A EDGE HALF         BLOCKED_UNTIL_DOMAIN
+PHASE 12-A                   NOT COMPLETE — this is the application half only
+```
+
+### What was wrong
+
+`consumeRateLimit` had existed, complete and tested, since Phase 6R.7 with
+**zero production callers**. Fourteen API routes had no rate limiting at all,
+including `generate` and `orchestration/execute`, which trigger paid provider
+work. Until an edge WAF exists the only thing between a signed-in account and
+unbounded spend was the Clerk session.
+
+Twelve of fourteen routes also emitted no cache header, relying on a framework
+default that is safe only because every route is dynamic — precisely the
+assumption 12-A's edge half breaks by putting a CDN in front of the origin.
+
+Both are the shape Phase 11 closed twice: a control built, proven, never wired.
+
+### Route classes and policy
+
+Limits live in one table keyed by route CLASS, so a new endpoint inherits a
+reviewed policy by declaring what kind of thing it is rather than by copying a
+number.
+
+| Class | Limit | Window | On Redis outage | Routes |
+| --- | --- | --- | --- | --- |
+| `paid_compute` | 12 | 60s | **closed** | `generate`, `orchestration/execute`, `generations/[id]/execute`, and the five `orchestration/*` AI endpoints |
+| `durable_write` | 30 | 60s | **closed** | `media/upload-url`, `generations/[id]/cancel` |
+| `authenticated_read` | 120 | 60s | open | `models` |
+| `realtime_connect` | 20 | 300s | **closed** | `realtime/events` |
+| `public_dev_stub` | 30 | 60s | open | `generate-video`, `generate-video/[jobId]` |
+
+Rationale is recorded beside the table in `route-rate-limit.ts`. In short: a
+person iterating on a prompt submits every few seconds, so twelve a minute
+leaves room for impatience while capping a scripted loop two orders of
+magnitude below what it would otherwise reach; the SSE gateway ends every
+connection at ~50s so a healthy client reconnects about six times in five
+minutes, and twenty absorbs several tabs plus a deploy-driven reconnect storm.
+
+### Fail-closed is per class, and argued
+
+**Closed** wherever a request can spend money or create durable work. An
+outage is exactly when an unlimited paid path is most dangerous, and a refusal
+is recoverable while an unbilled provider run is not.
+
+**Open** only for `authenticated_read` (a catalog query; worst case is a wasted
+read) and `public_dev_stub` (in-memory, no cost, no database). Both are named
+explicitly in the table and asserted by test, so a future class inherits
+nothing by accident. There is no universal behaviour and no in-memory
+fallback — a process-local counter on serverless is not a limit.
+
+### Identity is server-derived
+
+Authenticated routes count against the Clerk user id from `auth()`. Anonymous
+routes count against a hashed, platform-trusted address: `x-vercel-forwarded-for`,
+then `x-real-ip`, then the **last** hop of `x-forwarded-for` — never the first,
+because the first entry is whatever the client claimed. Proven live: two
+requests rotating a spoofed first hop share one bucket.
+
+An authenticated route with no user id does **not** fall back to an address.
+That would let a caller who dropped their session share a bucket with everyone
+behind their NAT, or escape their own; it is refused instead.
+
+### The 429 says one useful thing
+
+A fixed body of `{error, message}` plus `Retry-After`. Not included: the count,
+the ceiling, the window, the bucket, the Redis key, the subject kind, the user
+id, the address hash. A caller who learns it hit an IP ceiling rather than a
+user ceiling has learned something about the other people behind its NAT; a
+caller who learns the limit has learned how to sit just under it. A test
+asserts the body contains **no digit at all**.
+
+### The limit precedes every side effect
+
+`guardRoute` returns a `Response` and the route's next statement is
+`return limited`, so on a paid path the handler has not begun. A refusal
+therefore cannot have created a generation, reserved a credit, started a
+workflow or called a provider. A structural test scans every route and fails
+if any of those symbols appears before the guard.
+
+### Private cache
+
+`privateJson` replaces `NextResponse.json` in every route, emitting
+`private, no-store, no-cache, must-revalidate, max-age=0` plus `Pragma` and
+`Expires` for intermediaries old enough to ignore `Cache-Control`. A test fails
+if any route returns a raw `NextResponse.json`.
+
+Public immutable assets are untouched: the helper is applied per route, and
+neither `next.config.ts` nor `proxy.ts` blanket-privatises anything, so hashed
+static bundles keep their CDN caching.
+
+### Relation to Phase 11-D, and to the future edge
+
+11-D counts **concurrent SSE connections** a tenant holds. This counts
+**requests over a window**. A client can be inside one and outside the other,
+which is why both exist; the limiter may not touch a connection lease and a
+test asserts it does not. The one thing they deliberately share is the IP
+derivation, because two controls disagreeing about a caller's address would be
+worse than either.
+
+Cloudflare and Vercel Firewall will sit in front of this and stop crude floods
+before a function runs. They cannot replace it: an edge rule counts by IP and
+knows nothing about which user is spending, which endpoint costs money, or
+whether a request creates durable work. This layer survives an attacker already
+past the edge.
+
+### The 12-C seam
+
+`setRateLimitObserver` exists so Phase 12-C can normalize `rate_limit.denied`
+into `security.events` without reopening fourteen routes. **Nothing observes by
+default and nothing is emitted** — no fake security producer was added. The
+seam's payload carries the route class and the subject KIND, never a user id or
+an address.
+
+### Residual risk
+
+- **This is the application half only.** Cloudflare DNS/CDN/WAF/DDoS,
+  Turnstile, Vercel Firewall and the origin-bypass test are 12-A's edge half
+  and remain `BLOCKED_UNTIL_DOMAIN`. **12-A is not complete.**
+- **Fixed-window, not sliding.** A caller can send the limit at the end of one
+  window and again at the start of the next. That is the store's existing
+  design and is adequate against runaway loops and accidental retries; a
+  determined attacker shaping traffic to window edges is the edge layer's
+  problem, and the doubling is bounded at 2x.
+- **No admin routes exist yet to protect.** When Phase 16 adds them they must
+  declare a class; the structural guard will fail if they do not.
+
+---
+
 ## Realtime dispatcher — the arrow that was missing (Phase 11 closure)
 
 ```

@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { rerankTexts } from "@/lib/orchestration/text-reranking";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/orchestration/rerank-text
  *
@@ -18,8 +19,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: the handler
+  // has not begun, so a refusal cannot have called a provider or written
+  // anything durable.
+  const limited = await guardRoute({ routeClass: "paid_compute", userId });
+  if (limited) return limited;
 
   let query: string;
   let contexts: string[];
@@ -64,9 +71,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       caught instanceof OrchestrationError
         ? caught
         : new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   const result = await rerankTexts({ query, contexts, topK });
-  return NextResponse.json(result, { status: 200 });
+  return privateJson(result, { status: 200 });
 }

@@ -28,6 +28,7 @@ import {
 } from "@/lib/realtime/stream-contract";
 import { decideResume, exclusiveStart } from "@/lib/realtime/stream-cursor";
 
+import { guardRoute } from "@/lib/security/response-headers";
 /**
  * GET /api/realtime/events — the SSE Gateway (Phase 11-B).
  *
@@ -82,6 +83,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: on a paid
+  // path the handler has not begun, so a refusal cannot have created a
+  // generation, reserved a credit, started a workflow or called a provider.
+  const limited = await guardRoute({ routeClass: "realtime_connect", userId });
+  if (limited) return limited;
 
   // PRINCIPAL -> MEMBERSHIP -> EFFECTIVE TENANT, once.
   const binding = resolveEffectiveTenant(userId);

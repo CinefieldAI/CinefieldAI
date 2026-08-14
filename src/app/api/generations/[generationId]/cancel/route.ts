@@ -7,6 +7,7 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabas
 import { requestGenerationCancellation } from "@/lib/temporal/generation-starter";
 import { isTemporalGenerationEnabled } from "@/lib/temporal/config";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/generations/[generationId]/cancel — the authenticated cancel
  * entry point (Phase 6R-H closure).
@@ -43,22 +44,28 @@ export async function POST(
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: on a paid
+  // path the handler has not begun, so a refusal cannot have created a
+  // generation, reserved a credit, started a workflow or called a provider.
+  const limited = await guardRoute({ routeClass: "durable_write", userId });
+  if (limited) return limited;
 
   const { generationId } = await params;
   if (typeof generationId !== "string" || !GENERATION_ID_PATTERN.test(generationId)) {
     const error = new OrchestrationError("INVALID_INPUT", {
       userMessage: "generationId must be a valid UUID.",
     });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   if (!isSupabaseAdminConfigured()) {
     const error = new OrchestrationError("PROVIDER_NOT_CONFIGURED", {
       userMessage: "The server is not fully configured.",
     });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   try {
@@ -68,7 +75,7 @@ export async function POST(
     if (intent.outcome === "already_terminal") {
       // Not an error: the race simply resolved the other way. The caller is
       // told which state won so the UI can settle on the truth.
-      return NextResponse.json(
+      return privateJson(
         { generationId, status: intent.status, cancelRequested: false, owner: "temporal" },
         { status: 200 }
       );
@@ -83,7 +90,7 @@ export async function POST(
       signalled = await requestGenerationCancellation(generationId);
     }
 
-    return NextResponse.json(
+    return privateJson(
       {
         generationId,
         // The generation is not cancelled yet — Temporal decides when that is
@@ -99,6 +106,6 @@ export async function POST(
     );
   } catch (caught) {
     const error = toOrchestrationError(caught);
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 }

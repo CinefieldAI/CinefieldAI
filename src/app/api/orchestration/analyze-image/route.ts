@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { OrchestrationError, toOrchestrationError } from "@/lib/orchestration/errors";
 import { analyzeImage } from "@/lib/orchestration/vision-analysis";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/orchestration/analyze-image
  *
@@ -19,8 +20,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: the handler
+  // has not begun, so a refusal cannot have called a provider or written
+  // anything durable.
+  const limited = await guardRoute({ routeClass: "paid_compute", userId });
+  if (limited) return limited;
 
   let imageBytes: Uint8Array;
   let question: string | undefined;
@@ -44,14 +51,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       caught instanceof OrchestrationError
         ? caught
         : new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   try {
     const result = await analyzeImage({ imageBytes, question });
-    return NextResponse.json(result, { status: 200 });
+    return privateJson(result, { status: 200 });
   } catch (caught) {
     const error = toOrchestrationError(caught);
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 }

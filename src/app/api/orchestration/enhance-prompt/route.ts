@@ -4,6 +4,7 @@ import { OrchestrationError, toOrchestrationError } from "@/lib/orchestration/er
 import { classifyAndEnhancePrompt } from "@/lib/orchestration/prompt-intelligence";
 import type { GenerationType } from "@/lib/orchestration/types";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/orchestration/enhance-prompt
  *
@@ -32,8 +33,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: the handler
+  // has not begun, so a refusal cannot have called a provider or written
+  // anything durable.
+  const limited = await guardRoute({ routeClass: "paid_compute", userId });
+  if (limited) return limited;
 
   let prompt: string;
   let generationType: GenerationType;
@@ -58,17 +65,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       caught instanceof OrchestrationError
         ? caught
         : new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   try {
     const result = await classifyAndEnhancePrompt({ prompt, generationType });
-    return NextResponse.json(result, { status: 200 });
+    return privateJson(result, { status: 200 });
   } catch (caught) {
     // classifyAndEnhancePrompt itself never throws, but this stays as a
     // safety net so a future change to it can never turn into a raw 500
     // leaking internals to the browser.
     const error = toOrchestrationError(caught);
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 }

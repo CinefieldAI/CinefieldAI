@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
 import { createJob, type GenerateVideoRequest } from "@/lib/jobs";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 export async function POST(request: Request) {
+  // Phase 12-A (application half): anonymous, so the bucket is a hashed
+  // platform-trusted address. Never the first x-forwarded-for hop.
+  const limited = await guardRoute({ routeClass: "public_dev_stub", headers: request.headers });
+  if (limited) return limited;
+
   try {
     const body = (await request.json()) as Partial<GenerateVideoRequest>;
 
@@ -23,7 +28,7 @@ export async function POST(request: Request) {
 
     // Validate model
     if (!model || typeof model !== "string") {
-      return NextResponse.json(
+      return privateJson(
         { error: "Model is required" },
         { status: 400 }
       );
@@ -32,7 +37,7 @@ export async function POST(request: Request) {
     // Validate effective prompt
     const effectivePrompt = prompt || advancedPrompt;
     if (!effectivePrompt || typeof effectivePrompt !== "string") {
-      return NextResponse.json(
+      return privateJson(
         { error: "Prompt or Advanced Prompt is required" },
         { status: 400 }
       );
@@ -42,7 +47,7 @@ export async function POST(request: Request) {
     if (batchSize !== undefined) {
       const batchNum = Number(batchSize);
       if (!Number.isInteger(batchNum) || batchNum < 1 || batchNum > 4) {
-        return NextResponse.json(
+        return privateJson(
           { error: "Batch size must be a number between 1 and 4" },
           { status: 400 }
         );
@@ -65,14 +70,14 @@ export async function POST(request: Request) {
       quality: quality || undefined,
     });
 
-    return NextResponse.json({
+    return privateJson({
       jobId: job.jobId,
       status: job.status,
       estimatedTime: job.estimatedTime,
     });
   } catch (error) {
     console.error("Generate video error:", error);
-    return NextResponse.json(
+    return privateJson(
       { error: "Failed to process request" },
       { status: 500 }
     );

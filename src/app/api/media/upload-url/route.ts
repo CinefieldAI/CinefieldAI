@@ -6,6 +6,7 @@ import { buildAssetObjectKey, safeExtension } from "@/lib/media/asset-keys";
 import { createPresignedUpload, MAX_UPLOAD_BYTES, UPLOAD_URL_TTL_SECONDS } from "@/lib/media/r2-client";
 import { getR2Config } from "@/lib/media/r2-config";
 
+import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/media/upload-url — server-authorized browser upload (Phase 9-A).
  *
@@ -67,31 +68,37 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
+
+  // Phase 12-A (application half). BEFORE any side effect: on a paid
+  // path the handler has not begun, so a refusal cannot have created a
+  // generation, reserved a credit, started a workflow or called a provider.
+  const limited = await guardRoute({ routeClass: "durable_write", userId });
+  if (limited) return limited;
 
   let body: UploadUrlRequest;
   try {
     body = (await request.json()) as UploadUrlRequest;
   } catch {
     const error = new OrchestrationError("INVALID_INPUT", { userMessage: "Invalid request body." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   const contentType = typeof body.contentType === "string" ? body.contentType.toLowerCase() : "";
   if (!ALLOWED_DECLARED_TYPES.has(contentType)) {
     const error = new OrchestrationError("UNSUPPORTED_INPUT_TYPE");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   if (typeof body.byteSize === "number" && body.byteSize > MAX_UPLOAD_BYTES) {
     const error = new OrchestrationError("INVALID_INPUT", { userMessage: "File is too large." });
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   if (!isSupabaseAdminConfigured()) {
     const error = new OrchestrationError("INTERNAL_ERROR");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 
   try {
@@ -129,7 +136,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     if (inserted.error) {
       const error = new OrchestrationError("ASSET_RECORD_FAILED");
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return privateJson(error.toResponseBody(), { status: error.status });
     }
 
     const presigned = await createPresignedUpload({
@@ -138,7 +145,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
     });
 
-    return NextResponse.json(
+    return privateJson(
       {
         assetId,
         uploadUrl: presigned.uploadUrl,
@@ -162,9 +169,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   } catch (caught) {
     if (caught instanceof OrchestrationError) {
-      return NextResponse.json(caught.toResponseBody(), { status: caught.status });
+      return privateJson(caught.toResponseBody(), { status: caught.status });
     }
     const error = new OrchestrationError("INTERNAL_ERROR");
-    return NextResponse.json(error.toResponseBody(), { status: error.status });
+    return privateJson(error.toResponseBody(), { status: error.status });
   }
 }
