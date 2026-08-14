@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { AtSign, Check, ChevronDown, Minus, Monitor, Plus } from "lucide-react";
@@ -13,6 +13,27 @@ const COUNT_OPTIONS = ["1/1", "1/2", "1/3", "1/4"];
 
 function AspectIcon({ className = "" }: { className?: string }) {
   return <span className={`block h-3 w-4 rounded-[3px] border border-current ${className}`} />;
+}
+
+function usePopoverWheelLock(
+  open: boolean,
+  contentRef: React.RefObject<HTMLElement | null>,
+) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      const target = event.target;
+      if (target instanceof Node && contentRef.current?.contains(target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+    return () => window.removeEventListener("wheel", handleWheel, { capture: true });
+  }, [contentRef, open]);
 }
 
 function OptionPopover({
@@ -31,7 +52,9 @@ function OptionPopover({
   columns?: 1 | 2;
 }) {
   const [open, setOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const selectedIndex = Math.max(0, options.indexOf(value));
+  usePopoverWheelLock(open, contentRef);
 
   const nav = useListboxNav({
     count: options.length,
@@ -73,6 +96,7 @@ function OptionPopover({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
+          ref={contentRef}
           side="bottom"
           align="start"
           sideOffset={8}
@@ -85,7 +109,12 @@ function OptionPopover({
           <div className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wide text-white/45">
             {label}
           </div>
-          <div className={gridClass} role="listbox" aria-label={label}>
+          <div
+            className={`${gridClass} overscroll-contain`}
+            role="listbox"
+            aria-label={label}
+            onWheel={(event) => event.stopPropagation()}
+          >
             {options.map((option, index) => {
               const optionProps = nav.getOptionProps(index);
               const marked = nav.activeIndex === index;
