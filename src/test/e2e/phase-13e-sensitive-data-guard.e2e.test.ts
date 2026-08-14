@@ -469,8 +469,11 @@ test("29. the module log helpers were migrated to the guarded logger", () => {
     "worker/provider-worker.ts",
     "worker/realtime-dispatcher-worker.ts",
   ]);
+  // The logger itself is the ONE module that writes to console — that is its
+  // job, and it does so only with an envelope the guard has already returned.
+  const consoleOwner = "src/lib/observability/logger.ts";
   for (const file of migrated) {
-    if (lifecycle.has(file)) continue;
+    if (lifecycle.has(file) || file === consoleOwner) continue;
     const code = read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     assert.ok(!/console\.(log|info|warn|error|debug)\(/.test(code), `${file} still calls console directly`);
   }

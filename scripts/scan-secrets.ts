@@ -120,7 +120,19 @@ const SKIP_PATHS = new Set([
   "docs/runbooks/secret-rotation.md",
 ]);
 
-const SKIP_DIRS = ["node_modules/", ".next/", "CinefieldAI/", "src/test/fixtures/secret-scan/"];
+const SKIP_DIRS = [
+  "node_modules/",
+  ".next/",
+  "CinefieldAI/",
+  "src/test/fixtures/secret-scan/",
+  // Phase 13-E's fixtures, added for exactly the reason the secret-scan
+  // directory exists: they hold synthetic credential SHAPES on purpose, so
+  // the sanitizer can be proven to drop them. Adding the directory was
+  // forgotten when they were committed and this scan went red immediately —
+  // the same D12-D1 failure mode, and the reason both scans now run after
+  // every commit rather than only before one.
+  "src/test/fixtures/telemetry/",
+];
 
 const BINARY_EXTENSIONS = new Set([
   ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2",

@@ -624,16 +624,20 @@ test("21b. no credential-shaped fixture lives outside the excluded directory", (
   const skipDirs = /const SKIP_DIRS = \[([^\]]*)\]/.exec(scanner)?.[1] ?? "";
   const dirs = [...skipDirs.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(
-    dirs.filter((d) => d.startsWith("src/")),
-    ["src/test/fixtures/secret-scan/"],
-    "exactly one src/ path may be excluded, and it must be the fixture directory"
+    dirs.filter((d) => d.startsWith("src/")).sort(),
+    ["src/test/fixtures/secret-scan/", "src/test/fixtures/telemetry/"],
+    "only dedicated FIXTURE directories may be excluded — never a source path"
   );
-  // node_modules/.next/CinefieldAI are not repository source.
+  // Both are directories whose entire purpose is to hold synthetic credential
+  // shapes so a scanner can be proven to catch them. Phase 13-E's was added
+  // when its fixtures landed; the pin is updated deliberately, which is what
+  // this assertion exists to force.
   assert.deepEqual(dirs.sort(), [
     ".next/",
     "CinefieldAI/",
     "node_modules/",
     "src/test/fixtures/secret-scan/",
+    "src/test/fixtures/telemetry/",
   ]);
 });
 
