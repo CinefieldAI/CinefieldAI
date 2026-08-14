@@ -479,14 +479,18 @@ test("32. secrets, storage keys and signed URLs cannot reach the wire", async ()
 // Boundary: 11-C and 11-D are not started
 // ---------------------------------------------------------------------------
 
-test("11-C's replay contract is not half-implemented", () => {
+test("the cursor 11-B put on the wire is what 11-C resumes from", () => {
+  // 11-B emitted the stream id as the SSE `id:` and deliberately did not read
+  // it back, because honouring resume halfway would let a client believe it
+  // had resumed when it had not. 11-C landed, so this now asserts the pair is
+  // COMPLETE rather than absent: the id is still written, the header is read,
+  // and completeness is decided rather than assumed.
+  assert.match(stripComments(FRAME), /id: \$\{id\}/, "the cursor must still be written");
+
   const code = stripComments(ROUTE);
-  // The id IS emitted, so 11-C inherits a cursor on the wire. It is not READ,
-  // because honouring Last-Event-ID halfway would let a client believe it had
-  // resumed when it had not.
-  assert.match(stripComments(FRAME), /id: \$\{id\}/);
-  assert.ok(!/last-event-id/i.test(code), "11-C owns resume");
-  assert.ok(!/event_seq|eventSeq/.test(code), "11-C owns the sequence");
+  assert.match(code, /request\.headers\.get\("last-event-id"\)/, "resume must read the header");
+  assert.match(code, /decideResume\(/, "completeness must be decided, not assumed");
+  assert.match(code, /event: "reconcile"/, "an unprovable replay must instruct a refetch");
 });
 
 test("11-D's connection limits are not claimed", () => {

@@ -120,6 +120,23 @@ export const SSE_READ_BATCH = 50;
 export const SSE_BLOCK_MS = 5_000;
 export const SSE_MAX_BUFFERED_BYTES = 256 * 1024;
 
+/**
+ * REPLAY (Phase 11-C).
+ *
+ * The window itself is already bounded by retention: at most ~200 entries and
+ * at most fifteen minutes. These bound the WORK a single resume may do, which
+ * is a different question — a client could otherwise ask the gateway to read
+ * and frame the entire window on every reconnect, and a reconnect storm would
+ * multiply that by however many clients returned at once.
+ *
+ * REPLAY_BATCH is one XRANGE read; REPLAY_MAX_EVENTS caps the whole resume.
+ * Hitting the cap is not silently truncated — the client is told to reconcile,
+ * because a partial replay it believes is complete is the failure this whole
+ * package exists to avoid.
+ */
+export const REPLAY_BATCH = 100;
+export const REPLAY_MAX_EVENTS = STREAM_MAXLEN_APPROX;
+
 /** Applies the jitter. Separated so tests can assert the bounds. */
 export function jitteredMaxAgeMs(random: number): number {
   const spread = SSE_CONNECTION_MAX_AGE_MS * SSE_MAX_AGE_JITTER_RATIO;

@@ -48,7 +48,14 @@ export interface RealtimeUpdate {
   state: RealtimeGenerationState;
   /** Allowlisted, already minimized server-side. Display only. */
   detail: Record<string, string | number>;
+  /** Stable LOGICAL identity. The dedupe key — see client-apply.ts. */
   eventId: string;
+  /**
+   * The per-channel cursor this arrived on (Phase 11-C): the Redis stream id,
+   * server-assigned. Used for ordering and staleness, never for dedupe, and
+   * absent when a caller constructs an update outside the stream.
+   */
+  seq?: string;
   occurredAt: string;
 }
 
@@ -71,7 +78,7 @@ const GENERATION_STATES: ReadonlySet<string> = new Set<RealtimeGenerationState>(
  * `security.warning` likewise: Phase 12 owns the taxonomy and the Risk Engine.
  * Nothing emits it and nothing here consumes it.
  */
-export function toRealtimeUpdate(envelope: unknown): RealtimeUpdate | null {
+export function toRealtimeUpdate(envelope: unknown, seq?: string): RealtimeUpdate | null {
   if (typeof envelope !== "object" || envelope === null) return null;
   const e = envelope as Partial<RealtimeEnvelope>;
 
@@ -96,6 +103,10 @@ export function toRealtimeUpdate(envelope: unknown): RealtimeUpdate | null {
     // spread from an arbitrary object.
     detail: isPlainDetail(detail) ? detail : {},
     eventId: e.eventId,
+    // The cursor comes from the SSE frame's `id:`, not from the envelope
+    // body: it is a transport fact, and a payload that claimed one could
+    // reorder another payload.
+    ...(typeof seq === "string" && seq.length > 0 ? { seq } : {}),
     occurredAt: e.occurredAt,
   };
 }

@@ -4,12 +4,15 @@ import { createRealtimeReader } from "@/lib/realtime/realtime-redis";
 import { encodeSseComment, encodeSseFrame, SSE_HEADERS } from "@/lib/realtime/sse-frame";
 import {
   jitteredMaxAgeMs,
+  REPLAY_BATCH,
+  REPLAY_MAX_EVENTS,
   SSE_BLOCK_MS,
   SSE_HEARTBEAT_MS,
   SSE_MAX_BUFFERED_BYTES,
   SSE_READ_BATCH,
   streamKeyFor,
 } from "@/lib/realtime/stream-contract";
+import { decideResume, exclusiveStart } from "@/lib/realtime/stream-cursor";
 
 /**
  * GET /api/realtime/events — the SSE Gateway (Phase 11-B).
@@ -29,6 +32,12 @@ import {
  * captured in a const for the connection's life. 11-D adds membership and
  * effective-workspace rules on top of this and the per-tenant connection
  * ceiling; the boundary it strengthens already exists here.
+ *
+ * RESUME IS A CURSOR, NOT AN AUTHORITY (Phase 11-C). `Last-Event-ID` can move
+ * a reader forwards or backwards WITHIN the one stream the session already
+ * resolved. It is parsed by shape, it never selects a key, and a value that
+ * cannot be trusted to produce a complete replay is answered with a
+ * reconciliation instruction rather than a partial one.
  *
  * IT ENDS ITSELF. No `vercel.json` exists and no route in this repository sets
  * `maxDuration`, so the deployed ceiling cannot be proven from the source. The
@@ -108,19 +117,108 @@ export async function GET(request: Request): Promise<Response> {
         }
       };
 
+      /**
+       * Frames one stream entry. Shared by replay and live delivery so both
+       * paths carry the SAME `id:` cursor and the same parse rules — a
+       * replayed event that framed differently from a live one would make the
+       * client's ordering comparison meaningless.
+       *
+       * Returns false when the consumer can take no more.
+       */
+      const forwardEntry = (streamId: string, fields: string[]): boolean => {
+        // Entries are written by exactly one adapter with exactly one field.
+        // Anything else is not ours to interpret.
+        const at = fields.indexOf("envelope");
+        if (at === -1) return true;
+        const raw = fields[at + 1];
+        if (typeof raw !== "string") return true;
+
+        let envelope: unknown;
+        try {
+          envelope = JSON.parse(raw);
+        } catch {
+          // Skipped, never forwarded. The cursor still advances past it.
+          return true;
+        }
+
+        return send(encodeSseFrame({ event: "notification", data: envelope, id: streamId }));
+      };
+
       // Open immediately so the browser's `onopen` fires and any proxy sees
       // bytes before its idle timer starts.
       send(encodeSseComment("open"));
       send(encodeSseFrame({ event: "ready", data: { channel: channel.channelId } }));
 
-      // `$` = only entries added after this moment. 11-B is live delivery;
-      // reading history belongs to 11-C's replay window, and starting from
-      // the beginning here would replay up to fifteen minutes of state on
-      // every reconnect with no dedupe to absorb it.
+      // ---- RESUME (11-C) ---------------------------------------------------
+      // The oldest retained entry is what decides whether a replay can be
+      // PROVEN complete. Reading one entry is cheap and is the only way to
+      // distinguish "your cursor is still in the window" from "everything you
+      // missed has been trimmed".
       let cursor = "$";
       let lastHeartbeat = Date.now();
 
       try {
+        let oldestRetained: string | null = null;
+        try {
+          const head = (await reader.xrange(streamKey, "-", "+", "COUNT", 1)) as
+            | [string, string[]][]
+            | null;
+          oldestRetained = head?.[0]?.[0] ?? null;
+        } catch {
+          // Treated as "window unknown" below, which reconciles rather than
+          // silently promising a complete replay.
+          oldestRetained = null;
+        }
+
+        const resume = decideResume(request.headers.get("last-event-id"), oldestRetained);
+
+        if (resume.mode === "reconcile") {
+          // REALTIME IS NOT THE SOURCE OF TRUTH. The client refetches
+          // authoritative state; no business event is synthesized to paper
+          // over the gap, and live delivery continues from here.
+          send(encodeSseFrame({ event: "reconcile", data: { reason: resume.reason } }));
+        } else if (resume.mode === "replay") {
+          let start = exclusiveStart(resume.from);
+          let replayed = 0;
+          let truncated = false;
+
+          while (replayed < REPLAY_MAX_EVENTS) {
+            const batch = (await reader.xrange(streamKey, start, "+", "COUNT", REPLAY_BATCH)) as
+              | [string, string[]][]
+              | null;
+            if (!batch || batch.length === 0) break;
+
+            for (const [streamId, fields] of batch) {
+              if (replayed >= REPLAY_MAX_EVENTS) {
+                truncated = true;
+                break;
+              }
+              // Replayed entries come from the SAME key the session resolved,
+              // so they pass the same tenant filter by construction — roadmap
+              // 11.10. Nothing here re-reads a channel from the cursor.
+              if (!forwardEntry(streamId, fields)) {
+                closed = true;
+                break;
+              }
+              cursor = streamId;
+              replayed += 1;
+            }
+
+            if (closed) break;
+            if (batch.length < REPLAY_BATCH) break;
+            start = `(${batch[batch.length - 1][0]}`;
+          }
+
+          if (truncated) {
+            // The cap was reached. A partial replay the client believes is
+            // complete is exactly the failure this package exists to avoid.
+            send(encodeSseFrame({ event: "reconcile", data: { reason: "replay_truncated" } }));
+          }
+          send(encodeSseFrame({ event: "resumed", data: { replayed } }));
+        }
+
+        if (closed) throw new Error("client_gone");
+
         while (!closed) {
           if (Date.now() - startedAt >= maxAgeMs) {
             // Deliberate, announced end-of-life. The client treats this as a
@@ -154,24 +252,7 @@ export async function GET(request: Request): Promise<Response> {
           for (const [, entries] of result) {
             for (const [streamId, fields] of entries) {
               cursor = streamId;
-
-              // Entries are written by exactly one adapter with exactly one
-              // field. Anything else is not ours to interpret.
-              const envelopeIndex = fields.indexOf("envelope");
-              if (envelopeIndex === -1) continue;
-              const raw = fields[envelopeIndex + 1];
-              if (typeof raw !== "string") continue;
-
-              let envelope: unknown;
-              try {
-                envelope = JSON.parse(raw);
-              } catch {
-                // A malformed entry is skipped, never forwarded. The cursor
-                // has already advanced past it.
-                continue;
-              }
-
-              if (!send(encodeSseFrame({ event: "notification", data: envelope, id: streamId }))) {
+              if (!forwardEntry(streamId, fields)) {
                 closed = true;
                 break;
               }

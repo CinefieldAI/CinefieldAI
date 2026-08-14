@@ -365,6 +365,135 @@ Replay is inert in both directions.
 
 ---
 
+## Replay and resume (Phase 11-C)
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (31 tests; 93 across 11-A/B/C)
+LIVE_REPLAY_VALIDATION     YES   (resume-after-cursor, dedupe, gap, real trim)
+REDIS_A_NOEVICTION         DEFERRED_PRODUCTION_HARDENING
+PRODUCTION_REPLAY_DURABILITY  DEFERRED  -- see below
+CONNECTION_LIMITS (11-D)   NOT_STARTED
+```
+
+### The two identities, and why there are two
+
+| Value | What it is | What it is for |
+| --- | --- | --- |
+| `eventId` | the outbox row's id, stable across at-least-once retries (11-A/11-B) | **dedupe** |
+| Redis stream id | `<ms>-<n>`, assigned by `XADD`, per-channel monotonic | **`event_seq`**: order, resume cursor, staleness |
+
+Roadmap 11.6 asks for a per-channel monotonic `event_seq` echoed back as
+`Last-Event-ID`. The **Redis stream id was chosen to be that sequence**, and
+the reasoning is recorded in `stream-cursor.ts`: it is already monotonic per
+stream, assignment is atomic inside `XADD`, `XRANGE (cursor +` answers "after"
+natively, and the retention boundary is itself a stream id so "is this cursor
+still in the window" is one comparison. A separate counter would need a Lua
+script to stay atomic with the append, its own index to support resume, and
+its own mapping to answer the window question — and it could desynchronise
+from the stream, producing a phantom gap.
+
+What the decision does **not** do is conflate the sequence with identity. A
+duplicate publication produces two stream ids for one `eventId`. Roadmap 11.8
+says the client "event_seq ile dedupe eder"; deduping by seq alone would miss
+exactly that case, so dedupe is by `eventId` and ordering is by seq. Both are
+used, for the two jobs they are each good at.
+
+### Replay completeness is proven or refused — there is no third answer
+
+`decideResume` returns `replay` **only** when the client's cursor is still
+inside the retained window. If the oldest retained entry is newer than the
+cursor, whatever sat between them has been trimmed and completeness cannot be
+established, so the answer is `reconcile` and the client refetches
+authoritative state. Roadmap 11.7 asks for exactly this: *"Pencere dışında
+reconnect olan client replay yerine tam state resync yapar."*
+
+Reconcile reasons: `invalid_cursor` (malformed header), `cursor_too_old`
+(trimmed), `window_unknown` (empty or unreadable stream), `replay_truncated`
+(the per-resume cap was reached). **No business event is ever synthesized to
+fill a gap.**
+
+Replay is bounded twice: `COUNT 100` per `XRANGE`, and `REPLAY_MAX_EVENTS`
+across the whole resume. Reaching the cap emits `reconcile` rather than
+silently truncating.
+
+### The cursor is a position, never an authority
+
+`Last-Event-ID` arrives in a browser-controlled header. It is length-bounded
+before it meets a regex, parsed to `<ms>-<n>`, and can only move a reader
+within the ONE stream the session already resolved — the key is computed from
+`channelForTenant(userId)` **before** the header is read, and no code path
+concatenates a cursor into a key. Replayed entries therefore pass the same
+tenant filter as live ones by construction, which is roadmap 11.10.
+
+### Idempotent apply — three defences, because they catch different things
+
+1. **`eventId` dedupe** — the same logical event twice. Bounded to the 500 most
+   recent ids in an insertion-ordered set; an unbounded `Set` in a tab left
+   open for a day is a leak.
+2. **seq staleness** — an older cursor arriving after a newer one, the
+   "geriye dönük event yok sayılır" rule.
+3. **rank floor** — `completed`/`failed`/`cancelled` never regress to
+   `processing`. This is the one that still works after a reconcile, because
+   authoritative refetched state deliberately carries **no** seq: it answered
+   "what is true now", not "what happened at cursor X".
+
+Terminals are mutually exclusive in the database, so the first terminal to
+arrive stands even if a later cursor disagrees.
+
+### Reconnect
+
+The client is `fetch` + a stream reader rather than `EventSource`. `EventSource`
+sends `Last-Event-ID` only on its own internal reconnects, and 11-B's hook
+closed the source and built a new one on every planned max-age close — so a
+fresh instance had no cursor and every reconnect silently resumed live.
+**That was a real defect and 11-C fixes it.** `fetch` also allows what
+`EventSource` cannot: bounded exponential backoff with full jitter (500 ms
+base, 30 s cap), reset after a connection survives 10 s, and a 45 s idle abort
+for silently dropped paths.
+
+Heartbeats are comment frames: no `id:`, no `data:`, so they advance no cursor
+and enter no dedupe set. `ready`, `resumed`, `reconcile` and `reconnect` carry
+no `id:` either — only `notification` frames do.
+
+### 🟠 DEFERRED PRODUCTION HARDENING — Redis A eviction policy
+
+Redis A still reports `maxmemory-policy = volatile-lru`. The user has
+**deliberately deferred** this change to a later production-hardening pass; no
+configuration was touched by this batch and none should be.
+
+The consequence must not be understated. Under memory pressure `volatile-lru`
+evicts TTL-bearing keys by least-recent-use, and a replay window that is
+evicted mid-flight becomes a gap. The gap will be **detected** — `decideResume`
+returns `cursor_too_old` or `window_unknown` and the client reconciles, so
+correctness holds — but the window's *durability* does not, and reconnects
+would silently degrade into refetches.
+
+Therefore:
+
+```
+11-C CODE / REPLAY CONTRACT      PASS
+PRODUCTION REPLAY DURABILITY     DEFERRED
+```
+
+Required later, by a human, in the Redis dashboard: set `maxmemory-policy` to
+**`noeviction`**, then re-run the live replay validation. Until then Phase 11
+is not production-ready, and this document does not claim otherwise.
+
+### Residual risk
+
+- **No connection ceiling.** 11-D owns per-user/workspace/IP limits and idle
+  eviction; `cross-tenant SSE` stays in the release-blocking set.
+- **Multi-tab is per-connection.** Each tab holds its own connection, cursor
+  and dedupe set, so their semantics are independent and correct. Nothing is
+  shared across tabs — deliberately, since a shared cursor would weaken the
+  per-connection tenant binding for no benefit. The cost is N connections per
+  user, which is exactly what 11-D bounds.
+- **The authenticated browser round trip is still not exercised end to end.**
+  It needs an interactive Clerk sign-in.
+
+---
+
 ## Realtime delivery (Phase 11-B)
 
 ```
@@ -374,7 +503,7 @@ LIVE_REDIS_VALIDATION      YES   (adapter -> Redis A -> XREAD round trip, isolat
 REDIS_STREAMS_OWNER        REDIS_A
 REDIS_B_USED               NO
 REDIS_A_NOEVICTION         NO    -- volatile-lru; see MANUAL ACTION below
-SSE_REPLAY (11-C)          NOT_STARTED
+SSE_REPLAY (11-C)          IMPLEMENTED (see above)
 CONNECTION_LIMITS (11-D)   NOT_STARTED
 ```
 

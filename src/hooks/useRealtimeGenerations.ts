@@ -1,71 +1,103 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toRealtimeUpdate, type RealtimeUpdate } from "@/lib/realtime/browser-state";
+import { toRealtimeUpdate } from "@/lib/realtime/browser-state";
+import {
+  applyUpdate,
+  fromAuthoritativeFetch,
+  SeenEvents,
+  type AppliedState,
+} from "@/lib/realtime/client-apply";
+import type { RealtimeGenerationState } from "@/lib/realtime/browser-state";
 
 /**
- * The browser realtime client (Phase 11-B).
+ * The browser realtime client (Phase 11-B, resume added in 11-C).
  *
- * THE SMALLEST THING THAT WORKS. It opens the SSE connection, maps envelopes
- * into generation state updates, and reconnects when the server ends the
- * stream. It does not own UI, does not fetch, and does not decide what a
- * generation IS — a caller reads `updates` and applies them to whatever state
- * it already holds, falling back to its own fetch whenever it wants truth.
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS `fetch` AND NOT `EventSource`
+ * ---------------------------------------------------------------------------
+ * `EventSource` sends `Last-Event-ID` automatically — but only on ITS OWN
+ * reconnects, from state private to that instance. Phase 11-B's gateway
+ * deliberately ends every connection at ~50 s, and 11-B's hook responded by
+ * closing the source and constructing a NEW one. A fresh `EventSource` has no
+ * `lastEventId`, so every planned reconnect silently resumed from live and
+ * dropped whatever happened in between. That was a real defect, and it is
+ * exactly the loss 11-C exists to close.
  *
- * NO SUBSCRIPTION TARGET. The URL is a constant. There is no user, workspace
- * or channel parameter to pass, because the server derives the channel from
- * the session — a client that could name a channel would be the vulnerability
- * the roadmap forbids, and the absence of the argument is what prevents it.
+ * The two requirements are also in tension: 11-C needs `Last-Event-ID`, and
+ * §12 needs bounded exponential backoff with jitter. `EventSource` offers no
+ * API for either — it cannot set a header, and its only backoff control is the
+ * server's `retry:` field. `fetch` + a stream reader gives both: the cursor
+ * travels in the header the roadmap names, and reconnect timing is ours.
  *
- * RECONNECT IS EXPECTED, NOT EXCEPTIONAL. The gateway deliberately ends every
- * connection before the platform's ceiling, so a close is the normal case and
- * not an error. `EventSource` already reconnects on its own; the backoff here
- * exists for the case it cannot recover from — a 401 or a 503 — where retrying
- * immediately in a tight loop would be the actual harm.
+ * The cost is parsing SSE frames by hand, which is about thirty lines and is
+ * the same format `sse-frame.ts` writes.
  *
- * LOSSLESS RESUME IS 11-C. Events that occur between connections are missed
- * today. That is why every consumer must treat this as a signal and keep its
- * own fetch: `Last-Event-ID`, `event_seq`, the replay window and client dedupe
- * are 11-C's contract, and pretending they exist now would let a UI depend on
- * a guarantee nothing provides.
+ * ---------------------------------------------------------------------------
+ * REALTIME IS A SIGNAL, NOT TRUTH
+ * ---------------------------------------------------------------------------
+ * The server sends `reconcile` when it cannot PROVE a replay was complete. The
+ * hook then reports which generations need an authoritative refetch; it never
+ * invents the missing events, never guesses a state, and never calls a
+ * provider or mutates anything. A caller applies `updates` to what it already
+ * holds and refetches when told to.
  */
 
 const ENDPOINT = "/api/realtime/events";
-const BASE_BACKOFF_MS = 1_000;
+const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
+/** After this long connected, the connection counts as healthy. */
+const HEALTHY_AFTER_MS = 10_000;
+/** No frame and no heartbeat for this long means the path died silently. */
+const IDLE_TIMEOUT_MS = 45_000;
 
 export type RealtimeStatus = "idle" | "connecting" | "open" | "reconnecting" | "unavailable";
 
 export interface UseRealtimeGenerations {
   status: RealtimeStatus;
-  /** The most recent update per generation id. */
-  updates: Readonly<Record<string, RealtimeUpdate>>;
-  /** Clears one generation's entry once a caller has applied it. */
-  acknowledge: (generationId: string) => void;
+  /** Latest applied state per generation id. */
+  states: Readonly<Record<string, AppliedState>>;
+  /**
+   * Set when the server could not prove replay completeness. A caller must
+   * refetch authoritative generation state and call `reconciled`.
+   */
+  needsReconcile: { reason: string; at: number } | null;
+  /** Records authoritative state a caller fetched, and clears the flag. */
+  reconciled: (fetched: Record<string, RealtimeGenerationState>) => void;
 }
 
 export function useRealtimeGenerations(enabled = true): UseRealtimeGenerations {
   const [status, setStatus] = useState<RealtimeStatus>("idle");
-  const [updates, setUpdates] = useState<Record<string, RealtimeUpdate>>({});
+  const [states, setStates] = useState<Record<string, AppliedState>>({});
+  const [needsReconcile, setNeedsReconcile] = useState<{ reason: string; at: number } | null>(null);
 
-  const sourceRef = useRef<EventSource | null>(null);
+  // Refs, not state: these must survive a reconnect without re-running the
+  // effect that owns the connection.
+  const cursorRef = useRef<string | null>(null);
+  const seenRef = useRef(new SeenEvents());
+  const statesRef = useRef<Record<string, AppliedState>>({});
   const retryRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const acknowledge = useCallback((generationId: string) => {
-    setUpdates((prev) => {
-      if (!(generationId in prev)) return prev;
+  const reconciled = useCallback((fetched: Record<string, RealtimeGenerationState>) => {
+    const now = new Date().toISOString();
+    setStates((prev) => {
       const next = { ...prev };
-      delete next[generationId];
+      for (const [generationId, state] of Object.entries(fetched)) {
+        // No seq: this came from a query, not from the stream. The rank floor
+        // in client-apply.ts is what protects it from a stale replay.
+        next[generationId] = fromAuthoritativeFetch(state, now);
+      }
+      statesRef.current = next;
       return next;
     });
+    setNeedsReconcile(null);
   }, []);
 
   useEffect(() => {
-    if (!enabled || typeof window === "undefined" || typeof EventSource === "undefined") {
-      return;
-    }
+    if (!enabled || typeof window === "undefined" || typeof fetch === "undefined") return;
 
     stoppedRef.current = false;
 
@@ -76,77 +108,157 @@ export function useRealtimeGenerations(enabled = true): UseRealtimeGenerations {
       }
     };
 
-    const connect = () => {
+    const scheduleReconnect = () => {
+      if (stoppedRef.current) return;
+      retryRef.current += 1;
+      // Full jitter over a capped exponential ceiling. A deploy that dropped
+      // every connection at once must not have them all return together, and
+      // an unreachable server must not be hammered.
+      const ceiling = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** (retryRef.current - 1));
+      const delay = Math.round(Math.random() * ceiling);
+      setStatus(retryRef.current > 6 ? "unavailable" : "reconnecting");
+      clearTimer();
+      timerRef.current = setTimeout(run, delay);
+    };
+
+    const handleFrame = (event: string, data: string, id: string | null) => {
+      if (event === "notification") {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          return; // Unreadable frame: dropped, never guessed at.
+        }
+        // The cursor comes from the FRAME, not the payload.
+        const update = toRealtimeUpdate(parsed, id ?? undefined);
+        if (!update) return; // Unsupported type or a shape we will not invent.
+
+        const outcome = applyUpdate(statesRef.current[update.generationId], update, seenRef.current);
+        if (!outcome.applied) return;
+
+        statesRef.current = { ...statesRef.current, [update.generationId]: outcome.next };
+        setStates(statesRef.current);
+        return;
+      }
+
+      if (event === "reconcile") {
+        let reason = "unknown";
+        try {
+          reason = String((JSON.parse(data) as { reason?: unknown }).reason ?? "unknown");
+        } catch {
+          /* keep "unknown" */
+        }
+        setNeedsReconcile({ reason, at: Date.now() });
+        return;
+      }
+
+      // "ready", "resumed" and "reconnect" are transport control. They carry
+      // no business meaning, advance no cursor, and enter no dedupe set —
+      // only `notification` frames do, and only they have an `id:`.
+    };
+
+    async function run() {
       if (stoppedRef.current) return;
       setStatus(retryRef.current === 0 ? "connecting" : "reconnecting");
 
-      // No query string. The server knows who is asking.
-      const source = new EventSource(ENDPOINT);
-      sourceRef.current = source;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const openedAt = Date.now();
 
-      source.addEventListener("open", () => {
-        retryRef.current = 0;
-        setStatus("open");
-      });
+      // A silent proxy drop leaves the read hanging forever. The gateway
+      // heartbeats every 15 s, so nothing for 45 s means the path is gone.
+      let idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+      const bumpIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+      };
 
-      source.addEventListener("notification", (event) => {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse((event as MessageEvent<string>).data);
-        } catch {
-          return; // A frame we cannot read is dropped, never guessed at.
+      try {
+        const response = await fetch(ENDPOINT, {
+          signal: controller.signal,
+          headers: {
+            Accept: "text/event-stream",
+            // THE RESUME CURSOR. A header, never a query parameter: the
+            // roadmap forbids a client-controlled subscription target, and a
+            // cursor in the URL reads like one. The server treats it as a
+            // position within the stream it already resolved, never as
+            // authority over which stream that is.
+            ...(cursorRef.current ? { "Last-Event-ID": cursorRef.current } : {}),
+          },
+          cache: "no-store",
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`sse_${response.status}`);
         }
 
-        const update = toRealtimeUpdate(parsed);
-        if (!update) return; // Unsupported type, or a shape we will not invent.
+        setStatus("open");
 
-        setUpdates((prev) => {
-          const existing = prev[update.generationId];
-          // Same event twice changes nothing — the identity 11-A preserves is
-          // what makes this cheap check correct even before 11-C's dedupe.
-          if (existing && existing.eventId === update.eventId) return prev;
-          return { ...prev, [update.generationId]: update };
-        });
-      });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-      // The gateway's deliberate end-of-life. Close cleanly and reopen at
-      // once rather than waiting out a backoff for a healthy server.
-      source.addEventListener("reconnect", () => {
-        source.close();
-        sourceRef.current = null;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bumpIdle();
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Frames are separated by a blank line. Anything after the last one
+          // is a partial frame and stays buffered.
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const raw = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            boundary = buffer.indexOf("\n\n");
+
+            let event = "message";
+            let id: string | null = null;
+            const dataLines: string[] = [];
+
+            for (const line of raw.split("\n")) {
+              // A comment — the heartbeat. Kept the connection alive and
+              // nothing more.
+              if (line.startsWith(":")) continue;
+              if (line.startsWith("event: ")) event = line.slice(7);
+              else if (line.startsWith("id: ")) id = line.slice(4);
+              else if (line.startsWith("data: ")) dataLines.push(line.slice(6));
+            }
+
+            // Advance the cursor ONLY for frames that carry one. Control
+            // frames and heartbeats must not move a resume position.
+            if (id) cursorRef.current = id;
+            if (dataLines.length > 0) handleFrame(event, dataLines.join("\n"), id);
+          }
+        }
+
+        // The server closed: either its deliberate max-age, or the path died.
+        // Both mean reconnect, and the cursor is already held.
+        if (Date.now() - openedAt >= HEALTHY_AFTER_MS) retryRef.current = 0;
+        clearTimeout(idleTimer);
+        scheduleReconnect();
+      } catch {
+        clearTimeout(idleTimer);
         if (stoppedRef.current) return;
-        setStatus("reconnecting");
-        clearTimer();
-        timerRef.current = setTimeout(connect, 50);
-      });
+        // A connection that lived long enough to be healthy resets the
+        // backoff, so one long-lived stream followed by a blip does not
+        // inherit an hour of accumulated delay.
+        if (Date.now() - openedAt >= HEALTHY_AFTER_MS) retryRef.current = 0;
+        scheduleReconnect();
+      }
+    }
 
-      source.addEventListener("error", () => {
-        source.close();
-        sourceRef.current = null;
-        if (stoppedRef.current) return;
-
-        retryRef.current += 1;
-        // Full jitter: a deploy that dropped every connection at once must not
-        // have them all return in the same instant.
-        const ceiling = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** (retryRef.current - 1));
-        const delay = Math.round(Math.random() * ceiling);
-
-        setStatus(retryRef.current > 5 ? "unavailable" : "reconnecting");
-        clearTimer();
-        timerRef.current = setTimeout(connect, delay);
-      });
-    };
-
-    connect();
+    void run();
 
     return () => {
       stoppedRef.current = true;
       clearTimer();
-      sourceRef.current?.close();
-      sourceRef.current = null;
+      abortRef.current?.abort();
+      abortRef.current = null;
       setStatus("idle");
     };
   }, [enabled]);
 
-  return { status, updates, acknowledge };
+  return { status, states, needsReconcile, reconciled };
 }
