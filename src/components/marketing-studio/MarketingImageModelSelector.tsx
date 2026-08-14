@@ -358,6 +358,7 @@ export default function MarketingImageModelSelector({
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const popoverContentRef = useRef<HTMLDivElement | null>(null);
 
   const selectedModel =
     [...FEATURED_MODELS, ...ALL_MODELS].find((model) => model.name === selected) ??
@@ -402,6 +403,22 @@ export default function MarketingImageModelSelector({
     if (open && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      const target = event.target;
+      if (target instanceof Node && popoverContentRef.current?.contains(target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("wheel", handleWheel, { capture: true, passive: false });
+    return () => window.removeEventListener("wheel", handleWheel, { capture: true });
   }, [open]);
 
   const handlePanelKeyDown = (event: React.KeyboardEvent) => {
@@ -459,6 +476,7 @@ export default function MarketingImageModelSelector({
 
       <Popover.Portal>
         <Popover.Content
+          ref={popoverContentRef}
           side="bottom"
           align="start"
           sideOffset={8}
@@ -493,7 +511,7 @@ export default function MarketingImageModelSelector({
 
             <div
               ref={scrollContainerRef}
-              className="hide-scrollbar relative z-10 min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 pb-2.5"
+              className="hide-scrollbar relative z-10 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2.5 pb-2.5"
               role="listbox"
               aria-label="Marketing Studio image models"
               onWheel={(event) => event.stopPropagation()}
