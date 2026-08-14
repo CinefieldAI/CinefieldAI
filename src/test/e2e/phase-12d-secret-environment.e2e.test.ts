@@ -27,7 +27,7 @@ import {
   resetSecretProvider,
   secretProviderKind,
 } from "@/lib/config/secret-access";
-import { scanFile, scanText } from "../../../scripts/scan-secrets";
+import { scanFile, scanText, trackedFiles } from "../../../scripts/scan-secrets";
 
 /**
  * Phase 12-D — secret and environment security contracts.
@@ -565,19 +565,76 @@ test("21. the secret scanner detects real shapes and clears a synthetic control"
   }
   assert.deepEqual(scanFile(path.join(ROOT, dir, "clean.txt")), []);
 
-  // RFC 2606 reserved names cannot be real hosts, so a credential aimed at
-  // one is a fixture by definition. Narrowing the rule this way keeps real
-  // leaks in test files visible — a path exemption would not.
-  assert.equal(scanText("t", "redis://u:pw@shared.example.com:6379").length, 0);
-  assert.equal(scanText("t", "redis://u:pw@prod-cache.internal:6379").length, 1);
+  // ---- the two controls, as FILES rather than inline strings --------------
+  //
+  // They used to be string literals in this test. That was a real defect
+  // (D12-D1): the positive control is a credential-shaped URL pointing at a
+  // routable-looking host — exactly what the scanner is built to catch — so
+  // once this file was committed the tracked-tree scan flagged it and the
+  // assertion three lines below started failing. It passed while the file was
+  // untracked and broke at commit, which is the worst way for a test to fail.
+  //
+  // The fixture directory is the one narrowly-scoped exclusion in the
+  // scanner, so a credential-shaped string belongs there and nowhere else.
+  const positive = scanFile(path.join(ROOT, dir, "positive-control-routable-host.txt"));
+  assert.equal(positive.length, 1, "the scanner must flag a credential aimed at a routable host");
+  assert.equal(positive[0].rule, "redis_url_with_credentials");
 
-  // And the whole tracked tree is clean today.
+  // RFC 2606 / RFC 6761 reserved names can never resolve to anyone's
+  // infrastructure, so a credential aimed at one is a fixture by definition.
+  // Narrowing the RULE this way — rather than exempting the source files that
+  // tripped it — keeps a real leak in a test file visible.
+  assert.deepEqual(scanFile(path.join(ROOT, dir, "negative-control-reserved-host.txt")), []);
+
+  // ---- and the exclusion really is scoped to that one directory -----------
+  //
+  // The same content, scanned under a path OUTSIDE the fixture directory,
+  // must still be flagged. Without this, "the tree is clean" could mean the
+  // exclusion had quietly widened.
+  const positiveText = readFileSync(path.join(ROOT, dir, "positive-control-routable-host.txt"), "utf8");
+  assert.equal(
+    scanText("src/lib/some-production-module.ts", positiveText).length,
+    1,
+    "the same secret outside the fixture directory must still fail"
+  );
+  assert.ok(
+    trackedFiles(ROOT).every((f) => !f.startsWith(`${dir}/`)),
+    "the fixture directory must be the excluded scope"
+  );
+  assert.ok(
+    trackedFiles(ROOT).some((f) => f.startsWith("src/lib/")),
+    "and production source must still be IN scope"
+  );
+
+  // The whole tracked tree is clean.
   const repo = execFileSync("npx", ["tsx", "scripts/scan-secrets.ts"], {
     cwd: ROOT, encoding: "utf8", shell: true,
   });
   assert.match(repo, /no matches in tracked files/);
   // It must not oversell itself.
   assert.match(repo, /not proof of absence/);
+});
+
+test("21b. no credential-shaped fixture lives outside the excluded directory", () => {
+  // The complement of test 21: the scan being green must not be achievable by
+  // moving a fixture somewhere the scanner ignores. Every tracked file is
+  // scanned except the one fixture directory, and this asserts nothing else
+  // has acquired an exemption.
+  const scanner = read("scripts/scan-secrets.ts");
+  const skipDirs = /const SKIP_DIRS = \[([^\]]*)\]/.exec(scanner)?.[1] ?? "";
+  const dirs = [...skipDirs.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(
+    dirs.filter((d) => d.startsWith("src/")),
+    ["src/test/fixtures/secret-scan/"],
+    "exactly one src/ path may be excluded, and it must be the fixture directory"
+  );
+  // node_modules/.next/CinefieldAI are not repository source.
+  assert.deepEqual(dirs.sort(), [
+    ".next/",
+    "CinefieldAI/",
+    "node_modules/",
+    "src/test/fixtures/secret-scan/",
+  ]);
 });
 
 // ---------------------------------------------------------------------------

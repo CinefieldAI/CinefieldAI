@@ -368,7 +368,7 @@ Replay is inert in both directions.
 ## Secret manager, environment separation, least privilege (Phase 12-D)
 
 ```
-ENVIRONMENT SEPARATION       ENFORCED — declared, validated, fail-closed
+ENVIRONMENT SEPARATION       RUNTIME-ENFORCED — 3 worker entrypoints, fail-closed
 SERVER SECRET BOUNDARY       ENFORCED — server-only + structural tests
 PROVIDER SECRET ISOLATION    ENFORCED — one name per provider, generic forbidden
 LEAST PRIVILEGE CONTRACT     6 runtime roles, no wildcards
@@ -378,6 +378,7 @@ KMS RUNTIME                  DEFERRED_TO_PHASE_25
 ROTATION RUNBOOK             WRITTEN — no credential rotated
 LEAK RUNBOOK                 WRITTEN
 SECRET SCAN                  CLEAN on tracked files
+CONFIG HEALTH REPORT         presence-only, no HTTP endpoint
 PAID INFRA CREATED           NO
 ```
 
@@ -457,10 +458,72 @@ Development is deliberately unconstrained. localhost and a test Clerk key are
 what development IS, and a validator developers have to disable protects
 nothing.
 
-**Not called at import time.** A throw during module load in a Next.js server
-component takes down the routes that would tell an operator what is wrong, and
-it fires during a build as readily as a request. It is an explicit startup
-check for long-lived workers, plus a health report.
+### Runtime enforcement — the defect this originally shipped with
+
+The first version of 12-D shipped `assertValidConfiguration()` complete,
+tested, and **called by nothing**. Environment separation was enforced by no
+code that runs: a production worker pointed at a development Redis would have
+been caught by no check. The Phase 12 final gap audit found it as D12-D2 —
+the fourth time this repository produced a complete, tested, unreachable
+control (after D-11-1, D-12-1, and the 12-C logger near-miss).
+
+It is now wired. `src/lib/config/startup-validation.ts` is called as the
+**first statement** of `main()` in all three long-lived workers:
+
+| Worker | Guard runs before |
+| --- | --- |
+| `temporal-worker` | `readConfig`, `NativeConnection.connect`, `Worker.create` |
+| `provider-worker` | `readConfig`, `new SQSClient`, `ReceiveMessageCommand` |
+| `realtime-dispatcher` | `isSupabaseAdminConfigured`, `getSupabaseAdminClient`, `dispatchRealtimeOnce` |
+
+**Not at module load.** A throw during import in a Next.js server component
+takes down the routes that would tell an operator what is wrong, and fires
+during a build as readily as a request. The guard belongs at the top of a
+worker's `main()`, where the process can refuse cleanly.
+
+**Fail-closed, with no bypass.** An invalid production configuration exits
+non-zero before the worker polls, connects, claims or submits. There is no
+flag, no environment variable and no "warn and continue" — a guard with an
+escape hatch is one that gets used during the incident it exists for, and a
+test asserts none exists. It never downgrades production to development.
+
+Development and staging pass through untouched: the production rules only
+apply in production, and a guard developers must disable locally protects
+nothing.
+
+**Proven by spawning, not only by reading.** Structural tests assert the call
+is written and ordered first; runtime tests actually spawn each worker with an
+invalid production configuration and assert the exit code, the sanitized
+refusal, the reason codes, and the ABSENCE of every post-startup log line —
+no poll, no claim, no publish, no connection. A canary planted inside a
+credential-shaped value appears nowhere in any worker's output, not even as a
+fragment.
+
+A real refusal looks like this, and this is the whole of it:
+
+```
+[cinefield:startup] refusing to start {"runtime":"temporal-worker",
+  "environment":"production","findingCount":16,
+  "reasons":["development_instance_in_production","insecure_scheme_in_production",
+             "localhost_in_production","missing_required"]}
+```
+
+Counts and codes. No variable values, no lengths, no hashes, no prefixes.
+
+### The configuration health report
+
+`configurationHealth()` reports environment, valid/invalid, a
+missing-required COUNT, distinct reason codes, and which subsystems are
+deferred on purpose (so "missing" is never read as "broken" — `live-secret-manager`
+and `live-kms` are always listed). It carries no per-variable presence map;
+`configurationReport()` has that for tooling inside the process.
+
+**It is deliberately not behind an HTTP route,** and a test asserts it stays
+that way. The roadmap asks for no such endpoint, and an unauthenticated health
+endpoint enumerating which secrets are missing tells an attacker exactly which
+subsystem is half-configured. It has no automatic caller — which is correct
+for a pull interface, and is a different thing from the enforcement mechanism
+that had none.
 
 ### Nothing leaks through an error
 
@@ -576,6 +639,16 @@ to skip RFC 2606 / RFC 6761 reserved hosts (`example.com`, `.test`,
 secret committed there forever; skipping an unroutable host loses nothing,
 because a leaked credential worth having points at a host that exists.
 
+The scanner's own **positive control** — a credential aimed at a
+routable-looking host, which must be flagged — lives in
+`src/test/fixtures/secret-scan/`, the single narrowly-scoped exclusion. It
+began as a string literal inside the 12-D test file, which was defect D12-D1:
+the assertion passed while that file was untracked and started failing the
+moment it was committed, because the scanner correctly flagged its own
+control. Test-only, never importable by runtime code, and a test proves the
+same content OUTSIDE that directory still fails — so a green tree cannot be
+achieved by widening the exemption.
+
 ### Local development is unchanged
 
 `.env.local` stays the local mechanism: gitignored, untracked, never printed,
@@ -603,6 +676,12 @@ production credential absent.
 - **The nine existing config modules still read `process.env` directly.** They
   already never return a value, so the security property holds; adopting the
   boundary is mechanical work for Phase 25 to do alongside the backend.
+- **The Vercel web tier has no startup guard.** The three long-lived workers
+  enforce configuration at startup; a serverless function has no startup to
+  hook, and throwing at module load would take down the routes that report the
+  problem. `configurationHealth()` is callable there, but nothing calls it —
+  wiring an operator surface for it belongs with Phase 13's observability
+  work, not here.
 - **Rotation is untested against real issuers.** ¶1646 says "rotation testli";
   the procedure is written and the dual-key claims are marked as claims, but
   no credential has been rotated. That requires production infrastructure and

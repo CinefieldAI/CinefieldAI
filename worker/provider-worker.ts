@@ -34,6 +34,7 @@ import {
 import { parseCommand } from "../src/lib/contracts/command-wire";
 import { SQS_QUEUES } from "../src/lib/aws/sqs-topology";
 import { handleProviderCommand } from "./provider-command-handler";
+import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
 
 function log(fields: Record<string, unknown>): void {
   console.info("[cinefield:provider-worker]", JSON.stringify(fields));
@@ -55,6 +56,13 @@ function readConfig() {
 let shuttingDown = false;
 
 async function main(): Promise<void> {
+  // ---- PHASE 12-D STARTUP GUARD (D12-D2) --------------------------------
+  // FIRST statement, ahead of every connection, client and loop. An invalid
+  // production configuration refuses startup rather than degrading: a worker
+  // that quietly ran against a development resource is the failure this
+  // exists to prevent, and it is one that passes a health check.
+  assertStartupConfiguration("provider-worker");
+
   const config = readConfig();
   if (!config) {
     console.error(

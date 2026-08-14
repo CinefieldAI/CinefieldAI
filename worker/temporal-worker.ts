@@ -34,15 +34,24 @@ import { TASK_QUEUES } from "../src/lib/temporal/task-queues";
 import { setCommandBus } from "../src/lib/contracts/command-bus";
 import { createSqsCommandBus } from "../src/lib/aws/sqs-command-bus";
 import { describeSqsConfig, isSqsCommandBusEnabled } from "../src/lib/aws/sqs-config";
+import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
 
 /**
  * Read directly from the process environment. On ECS these values are
  * injected by the task definition from AWS Secrets Manager — never copied
  * from .env.local, and never written into a Temporal payload or log.
  *
- * `src/lib/temporal/config.ts` is intentionally NOT imported: it is marked
- * `server-only`, a Next.js construct that throws outside the Next runtime.
- * The validation rules below mirror it exactly.
+ * `src/lib/temporal/config.ts` is intentionally NOT imported: the validation
+ * rules below mirror it exactly, and keeping the worker's Temporal
+ * configuration self-contained means a change to the Next-side module cannot
+ * silently alter what this process connects to.
+ *
+ * (An earlier version of this note claimed `server-only` throws outside the
+ * Next runtime. That is not true under this worker's runtime — `npm run
+ * temporal:worker` passes `--conditions=react-server`, which resolves
+ * `server-only` to its no-op server build. The Phase 12-D startup guard below
+ * imports a `server-only` module for exactly that reason, and the dispatcher
+ * has always imported two.)
  */
 function readConfig() {
   const value = (name: string): string | undefined => {
@@ -67,6 +76,13 @@ function readConfig() {
 }
 
 async function main(): Promise<void> {
+  // ---- PHASE 12-D STARTUP GUARD (D12-D2) --------------------------------
+  // FIRST statement, ahead of every connection, client and loop. An invalid
+  // production configuration refuses startup rather than degrading: a worker
+  // that quietly ran against a development resource is the failure this
+  // exists to prevent, and it is one that passes a health check.
+  assertStartupConfiguration("temporal-worker");
+
   const config = readConfig();
   if (!config) {
     // Exit non-zero so ECS restarts and the failure is visible in CloudWatch,

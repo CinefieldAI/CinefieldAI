@@ -39,6 +39,7 @@
 
 import { dispatchRealtimeOnce, readRealtimeDebt } from "../src/lib/realtime/outbox-dispatcher";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "../src/lib/supabase/supabaseAdmin";
+import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
 
 /**
  * CADENCE. Realtime means the gap between a committed fact and a browser
@@ -69,6 +70,13 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // ---- PHASE 12-D STARTUP GUARD (D12-D2) --------------------------------
+  // FIRST statement, ahead of every connection, client and loop. An invalid
+  // production configuration refuses startup rather than degrading: a worker
+  // that quietly ran against a development resource is the failure this
+  // exists to prevent, and it is one that passes a health check.
+  assertStartupConfiguration("realtime-dispatcher");
+
   if (!isSupabaseAdminConfigured()) {
     // Fail loudly at startup rather than looping forever against nothing.
     console.error("[realtime-dispatcher] Supabase admin is not configured; refusing to start");
@@ -149,4 +157,15 @@ async function main(): Promise<void> {
   console.log("[realtime-dispatcher] stopped");
 }
 
-void main();
+main().catch((error: unknown) => {
+  // Was a bare `void main()`. An unhandled rejection does exit non-zero on
+  // Node 22, but it prints a raw stack — and the Phase 12-D startup guard
+  // throws through here, so the one thing an operator sees on a refused start
+  // must be the sanitized summary rather than a trace. Class only: never a
+  // driver message, a URL, or a credential.
+  console.error(
+    "[realtime-dispatcher]",
+    JSON.stringify({ result: "fatal", error: error instanceof Error ? error.name : "UnknownError" })
+  );
+  process.exit(1);
+});

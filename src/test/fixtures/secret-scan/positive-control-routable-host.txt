@@ -1,0 +1,6 @@
+# Positive control for the Phase 12-D secret scanner.
+# A credential-shaped URL pointing at a host that COULD be real. The
+# scanner must flag this, which is what proves the RFC 2606 narrowing
+# below does not over-suppress. Synthetic: this host does not exist and
+# the password is not a credential anywhere.
+REDIS_URL=redis://u:pw@prod-cache.internal:6379

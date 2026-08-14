@@ -1,0 +1,5 @@
+# Negative control. RFC 2606 / RFC 6761 reserve these names, so they can
+# never resolve to anyone's infrastructure and a credential aimed at one
+# is a fixture by definition. The scanner must NOT flag these.
+REDIS_URL=redis://u:pw@shared.example.com:6379
+DATABASE_URL=postgres://u:hunter2hunter2@db.test:5432/app
