@@ -1,5 +1,6 @@
 import "server-only";
 import { OrchestrationError } from "./errors";
+import { reportOutboundFetchBlocked } from "@/lib/security/security-signals";
 import {
   fetchUntrustedMedia,
   OutboundFetchError,
@@ -48,9 +49,22 @@ export interface ResolvedOutput extends NormalizedOutput {
  * Ensures every output carries bytes. Outputs that supply only a sourceUrl
  * are downloaded here; outputs with neither are rejected.
  */
+/**
+ * Who the download belonged to, for the Phase 12-C security signal.
+ *
+ * Opaque server-side ids only. There is no field a URL, a host or a prompt
+ * could travel in, which is the point: an SSRF refusal must be attributable
+ * without the thing that was refused being written down.
+ */
+export interface OutputDownloadContext {
+  generationId?: string;
+  /** The generation's owner — the CONTEXT of the event, not its actor. */
+  clerkUserId?: string;
+}
+
 export async function normalizeOutputs(
   outputs: NormalizedOutput[],
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; context?: OutputDownloadContext }
 ): Promise<ResolvedOutput[]> {
   if (outputs.length === 0) {
     throw new OrchestrationError("OUTPUT_MISSING");
@@ -70,7 +84,7 @@ export async function normalizeOutputs(
     if (output.bytes && output.bytes.byteLength > 0) {
       bytes = output.bytes;
     } else if (output.sourceUrl) {
-      bytes = await downloadOutput(output.sourceUrl, options?.signal);
+      bytes = await downloadOutput(output.sourceUrl, options?.signal, options?.context);
     } else {
       throw new OrchestrationError("OUTPUT_MISSING", {
         context: { reason: "no_bytes_and_no_source_url" },
@@ -103,12 +117,31 @@ export async function normalizeOutputs(
  * is not: a signed provider URL is a credential, and an error string is
  * exactly where it would leak.
  */
-async function downloadOutput(sourceUrl: string, signal?: AbortSignal): Promise<Uint8Array> {
+async function downloadOutput(
+  sourceUrl: string,
+  signal?: AbortSignal,
+  context?: OutputDownloadContext
+): Promise<Uint8Array> {
   try {
     const result = await fetchUntrustedMedia(sourceUrl, { signal });
     return result.bytes;
   } catch (error) {
     if (error instanceof OutboundFetchError) {
+      // Phase 12-C. A destination-policy refusal — a provider result aimed at
+      // a private or metadata address — is a security event, and this is the
+      // only place in the system that observes one. Detached and non-throwing
+      // by contract: the download has already failed, and a logging outage
+      // must not change that into something else.
+      //
+      // The failure CLASS travels. The URL does not, and cannot: the reporter
+      // has no parameter for one.
+      reportOutboundFetchBlocked({
+        failure: error.failure,
+        detail: error.detail,
+        generationId: context?.generationId ?? null,
+        tenantId: context?.clerkUserId ?? null,
+      });
+
       throw new OrchestrationError("OUTPUT_DOWNLOAD_FAILED", {
         context: { reason: error.failure, detail: error.detail },
       });

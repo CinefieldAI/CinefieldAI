@@ -75,8 +75,13 @@ const GENERATION_STATES: ReadonlySet<string> = new Set<RealtimeGenerationState>(
  * would be UI for a state that cannot occur — the kind of code that later
  * gets wired to a fabricated value because it already exists.
  *
- * `security.warning` likewise: Phase 12 owns the taxonomy and the Risk Engine.
- * Nothing emits it and nothing here consumes it.
+ * `security.warning` is DIFFERENT as of Phase 12-C. It has a producer now, and
+ * it does travel this stream — but it is not a generation state, so it still
+ * maps to null here. That is a refusal, not a gap: a security warning is about
+ * the ACCOUNT, and its subject is the evidence row rather than a generation.
+ * Returning an update would attach a security banner to whichever unrelated
+ * render happened to be on screen. The projected notification carries it; a
+ * consumer that wants it reads `subject.kind === "security"`.
  */
 export function toRealtimeUpdate(envelope: unknown, seq?: string): RealtimeUpdate | null {
   if (typeof envelope !== "object" || envelope === null) return null;
@@ -91,7 +96,8 @@ export function toRealtimeUpdate(envelope: unknown, seq?: string): RealtimeUpdat
 
   if (typeof projection.uiState !== "string" || !GENERATION_STATES.has(projection.uiState)) {
     // credit.updated, security.warning, or anything a later phase adds:
-    // ignored rather than guessed at.
+    // ignored rather than guessed at. (In practice security.warning has
+    // already been rejected by the subject.kind check above.)
     return null;
   }
 

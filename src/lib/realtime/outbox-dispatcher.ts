@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { publishNotification, type RealtimeStreamPublisher } from "./notification-stream-adapter";
 import type { OutboxRow } from "@/lib/notification/notification-service";
+import { reportRealtimeEventUnroutable } from "@/lib/security/security-signals";
 
 /**
  * The realtime outbox dispatcher (Phase 11 closure).
@@ -160,6 +161,15 @@ export async function dispatchRealtimeOnce(deps: DispatchDeps): Promise<Dispatch
       // conclusion. The debt view counts these so an emitter that forgot to
       // capture a tenant is visible rather than retried into silence.
       case "unroutable":
+        // Phase 12-C. The debt view already counts these; this makes each one
+        // an individually inspectable row, because "twelve events went
+        // nowhere" and "twelve events belonging to this event type went
+        // nowhere over three hours" are different facts and only the second
+        // finds the emitter that forgot to capture a tenant.
+        //
+        // No tenant exists by definition, so no user is told and none could
+        // be — the row is operator evidence and nothing else.
+        reportRealtimeEventUnroutable({ eventType: row.event_type, eventId: row.event_id });
         if (await resolve(admin, row, "unroutable", "tenant_unprovable")) result.unroutable += 1;
         else result.lostLease += 1;
         break;

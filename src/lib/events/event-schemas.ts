@@ -230,6 +230,34 @@ const ASSET_REJECTED: JsonSchema = {
   },
 };
 
+/**
+ * A security warning the OWNER of the affected tenant is told about (12-C).
+ *
+ * TWO FIELDS, AND THEY ARE THE TWO A PERSON CAN ACT ON: what class of thing
+ * was refused, and how seriously we took it. Everything an attacker would
+ * want is absent by construction — no score, no threshold, no recurrence
+ * count, no limit, no route, no address, no rule name. Learning "you are at
+ * 68 and the block is at 75" is learning how to stay at 74.
+ *
+ * `reasonCode` is a short code, never a message, so it cannot echo a prompt
+ * or a signed URL back through a notification channel.
+ *
+ * The detailed taxonomy stays in `security_events.kind` for operators. The
+ * event type is `security.warning` and nothing narrower, because the envelope
+ * contract admits exactly two dotted segments — widening that to fit a
+ * logging vocabulary is the tail wagging the dog, and PRE-11 repaired exactly
+ * that class of drift.
+ */
+const SECURITY_WARNING: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reasonCode", "severity"],
+  properties: {
+    reasonCode: { type: "string", pattern: "^[a-z][a-z0-9_]{1,64}$" },
+    severity: { type: "string", enum: ["info", "low", "medium", "high"] },
+  },
+};
+
 const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.generation.created", eventType: "generation.created", eventVersion: 1, payload: GENERATION_CREATED },
   { schemaName: "cinefield.generation.processing", eventType: "generation.processing", eventVersion: 1, payload: GENERATION_PROCESSING },
@@ -243,6 +271,7 @@ const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.credit.refunded", eventType: "credit.refunded", eventVersion: 1, payload: CREDIT_REFUNDED },
   { schemaName: "cinefield.asset.released", eventType: "asset.released", eventVersion: 1, payload: ASSET_RELEASED },
   { schemaName: "cinefield.asset.rejected", eventType: "asset.rejected", eventVersion: 1, payload: ASSET_REJECTED },
+  { schemaName: "cinefield.security.warning", eventType: "security.warning", eventVersion: 1, payload: SECURITY_WARNING },
 ];
 
 export function schemaKey(eventType: string, eventVersion: number): SchemaKey {

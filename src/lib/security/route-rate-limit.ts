@@ -114,24 +114,49 @@ export type LimitDecision =
   | { allowed: false; reason: "rate_limited" | "unidentified" | "backend_unavailable"; retryAfterSeconds: number };
 
 /**
- * A seam, not an implementation.
+ * The seam PRE-12 left, now filled by Phase 12-C.
  *
- * Phase 12-C will normalize `rate_limit.denied` into `security.events`. It
- * needs a place to attach that does not require reopening fourteen routes,
- * and it must not be pre-empted by a fake producer emitting invented security
- * facts today. So this is a nullable observer with no default: nothing
- * observes, nothing is emitted, and 12-C sets one.
+ * It exists so security logging attaches in ONE place instead of in fourteen
+ * route handlers. `security-signals.ts` installs the observer; nothing here
+ * imports it, so the limiter still has no dependency on the security stack
+ * and remains testable without a database.
  *
- * The payload carries the route class and the subject KIND — never the user
- * id, never the address, never a Redis key.
+ * ---------------------------------------------------------------------------
+ * THE PAYLOAD GREW ONE FIELD, AND WHY
+ * ---------------------------------------------------------------------------
+ * PRE-12 wrote: "never the user id, never the address." That was right for a
+ * seam with no consumer — but a security event that cannot say WHO is not
+ * evidence, and recurrence per subject is the entire input to the Risk
+ * Engine. Without it every denied user coalesces into one row per window and
+ * a single account hammering a paid endpoint is indistinguishable from a
+ * thousand people being mildly impatient.
+ *
+ * So `subjectRef` is added, and the promise is narrowed to the part that was
+ * actually load-bearing:
+ *
+ *   subject: "user"  ->  the Clerk user id. Server-verified, already the
+ *                        primary key of the account, and `security_events`
+ *                        has a column for exactly it.
+ *   subject: "ip"    ->  the sha256 BUCKET, never the address. `ipBucket` has
+ *                        already hashed it before the limiter ever saw it,
+ *                        and no raw address exists at this point to leak.
+ *
+ * Still absent, deliberately: the Redis key, the count, the limit, the
+ * window, and the raw address.
  */
 export interface RateLimitObserver {
-  onDenied(event: { routeClass: RouteClass; subject: "user" | "ip"; action: string }): void;
+  onDenied(event: {
+    routeClass: RouteClass;
+    subject: "user" | "ip";
+    action: string;
+    /** Clerk user id, or a hashed address bucket. Never a raw address. */
+    subjectRef: string;
+  }): void;
 }
 
 let observer: RateLimitObserver | null = null;
 
-/** Phase 12-C installs one. Until then denials are counted by nobody. */
+/** Installed by `security-signals.ts`. Null in unit tests, and harmless. */
 export function setRateLimitObserver(next: RateLimitObserver | null): void {
   observer = next;
 }
@@ -203,7 +228,10 @@ export async function enforceRouteRateLimit(params: EnforceParams): Promise<Limi
   if (outcome.outcome === "allowed") return { allowed: true };
 
   if (outcome.outcome === "limited") {
-    observer?.onDenied({ routeClass: params.routeClass, subject, action: policy.action });
+    // Fire-and-forget by contract: the observer returns void and swallows its
+    // own failures, so a security-logging outage cannot delay — let alone
+    // reopen — a refusal that has already been decided.
+    observer?.onDenied({ routeClass: params.routeClass, subject, action: policy.action, subjectRef: subjectId });
     return {
       allowed: false,
       reason: "rate_limited",

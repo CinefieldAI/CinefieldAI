@@ -1,6 +1,19 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { enforceRouteRateLimit, type LimitDecision, type RouteClass } from "./route-rate-limit";
+import { installSecuritySignals } from "./security-signals";
+
+/**
+ * Phase 12-C. Connected HERE, at module load, because this is the module
+ * every guarded route already imports — so the security logger cannot be
+ * left with no producers by someone forgetting a wiring step.
+ *
+ * An explicit call rather than a bare side-effect import: a side-effect
+ * import is exactly the line a tidy-up removes, and removing it would empty
+ * the evidence table silently instead of breaking a build. A structural test
+ * asserts this call still exists.
+ */
+installSecuritySignals();
 
 /**
  * Private response defaults and the guarded route helper (Phase 12-A,

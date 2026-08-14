@@ -365,6 +365,183 @@ Replay is inert in both directions.
 
 ---
 
+## Security Event Logger + Risk Engine (Phase 12-C)
+
+```
+SECURITY EVENT LOGGER        BUILT AND WIRED
+PRODUCERS CONNECTED          5 / 6 kinds
+AUTH_SECURITY_SIGNAL         PARTIAL_UNTIL_CLERK_PRODUCTION
+CHALLENGE_ENFORCEMENT        BLOCKED_UNTIL_12A_EDGE
+PG PROOFS                    S12C-1 .. S12C-10 PASS
+LIVE VALIDATION              10 / 10 PASS (synthetic subject, zero cost)
+PHASE 16 ADMIN ACTIONS       NOT IMPLEMENTED — review is REQUESTED, not performed
+```
+
+### What this is, and what it deliberately is not
+
+The roadmap (¶1642, ¶1643, ¶1670) asks for a chain: a signal becomes evidence,
+evidence becomes a score, a score becomes a controlled action. All three exist
+now. What does **not** exist is a classifier: the score is a small sum a reader
+can compute by hand, because an opaque number cannot be justified to the person
+it was applied to, and a model trained on user behaviour is profiling nobody
+agreed to.
+
+The engine reads exactly four things — the kind's fixed severity, how many
+windows this subject produced the signal in, whether the subject is
+authenticated, and whether the subject actually CAUSED the event. It reads
+nothing about prompt content and nothing about the person.
+
+### Two tables, on purpose
+
+| | |
+| --- | --- |
+| `security_events.kind` | the detailed operator taxonomy, bounded by CHECK |
+| `security.warning` | the ONE user-facing event type |
+
+The domain event contract admits exactly two dotted segments, so
+`security.rate_limit.denied` is not expressible — and widening a domain
+contract to fit a logging vocabulary is the tail wagging the dog, which is
+the drift PRE-11 already repaired once. A user learns that something was
+refused. An operator learns what.
+
+`media_safety_audit` is **not** reused. It is domain evidence for one decision;
+widening it into a global security log would put rate-limit noise beside a
+two-person moderation approval and make both harder to reason about.
+
+### Storm control is the schema
+
+An attacker generating ten thousand rejected requests must not turn the
+security logger into a database amplifier that finishes the job for them. A
+signal is written at most once per `(dedupe_key, window_started_at)`, enforced
+by a unique index, and a repeat is an `ON CONFLICT DO NOTHING`.
+
+**What that trades.** The exact count WITHIN a window is not stored. Escalation
+does not need "4,812 denials this minute"; it needs "this subject tripped the
+limit in twelve of the last fifteen minutes", which is a row count and is
+exactly what survives. A mutable `occurrence_count` would have preserved
+magnitude at the cost of making the evidence rewritable — and evidence that can
+be rewritten is not evidence.
+
+Coalescing is per SUBJECT, never global (S12C-3): one noisy account cannot
+suppress everybody else's evidence for the rest of the window. It bounds the
+NOTIFICATION rate too (S12C-8) — a user told once per window is informed; told
+per request they are being attacked through the notification channel.
+
+The two rare, privileged kinds (`media_release_approved`, `media_rejected`)
+widen the key with the resource id so two releases in one second are two audit
+rows. Nothing attacker-controllable does: if the generation id widened the key
+for SSRF signals, minting generations would mint evidence rows.
+
+### The attribution cap — the rule that stops the wrong person being punished
+
+Every row carries a subject, but a subject is not always an actor. When a
+provider returns a result URL pointing at cloud metadata, the gateway refuses
+it and the only identity in scope is the owner of the generation, who did
+nothing except ask for a video. Scoring that `high` is right; blocking that
+account for it would be a bug with a person on the other end.
+
+So `KIND_SUBJECT_IS_ACTOR` is explicit, and a subject who did not cause the
+event can never be challenged or temporarily blocked — the strongest available
+response is `admin_review`. The score is **not** lowered, so the row still
+records both how alarming the signal was and why the response was limited.
+Without the cap the arithmetic reaches `temporary_block` after five windows.
+
+### What each action means today
+
+| Action | Status |
+| --- | --- |
+| `warning` | enforced — travels the Phase 11 outbox path to the browser |
+| `challenge` | **recommended only.** Turnstile is 12-A's edge half. Degrades to `warning` and says so; nothing pretends a challenge was served |
+| `temporary_block` | enforced — Redis A key with a 900s TTL Redis expires itself. No unblock call, no ban list, no permanent form (S12C-4 proves `permanent_ban` is unrepresentable) |
+| `admin_review` | **requested only.** The request IS the row: `recommended_action = 'admin_review'` is queryable the moment Phase 16 exists. Building a queue now would be implementing Phase 16 under another name |
+
+Rate limiting alone can never reach challenge or block, at any volume. That is
+asserted, not merely intended.
+
+### Connected — which is the part that usually fails
+
+This project has shipped a complete, tested, unreachable control twice
+(D-11-1, D-12-1). A Security Event Logger with no producers would be the worst
+instance of it, because an empty security table reads as "no incidents".
+
+Every producer lives in one file, `security-signals.ts`, and a test fails if
+any is disconnected:
+
+| Signal | Wired at |
+| --- | --- |
+| `rate_limit_denied` | the PRE-12 observer seam, installed by `response-headers.ts` |
+| `outbound_fetch_blocked` | `output-normalizer.ts`, the SSRF gateway's only caller |
+| `realtime_connection_denied` | the 11-D ceiling in the SSE route |
+| `realtime_event_unroutable` | the 11-A dispatcher |
+| `media_release_approved` / `media_rejected` | the 9-E TypeScript wrappers |
+
+`auth_failure` has **no producer**, and that is declared rather than
+accidental. Clerk owns authentication; its failed sign-ins happen at Clerk, not
+in this process. Inventing a producer that fires on a missing session would
+record "not signed in yet" as an incident several thousand times a day. The
+honest state is `AUTH_SECURITY_SIGNAL: PARTIAL_UNTIL_CLERK_PRODUCTION`.
+
+### A warning had to be ROUTABLE, not merely emitted
+
+`emit_outbox_event` resolves the tenant itself and knew two aggregate types.
+Emitting `security.warning` against a third would have written
+`tenant_id = NULL` — which 11-D refuses to route and 11-A counts as
+`realtime_event_unroutable`. The warning would have committed, looked correct
+in the outbox, and reached nobody: D-11-1 exactly. The resolver learned the new
+aggregate rather than the emitter learning a parameter, so
+`emit_outbox_event`'s signature stays byte-identical and there is still exactly
+ONE place a tenant can come from.
+
+An untenanted signal emits no warning at all (S12C-9), so anonymous refusals
+never become permanent outbox debt.
+
+### Logging failure never reopens a closed door
+
+Every reporter returns `void` and every write is detached. The refusal each one
+describes has already been decided and returned by the time it is called. If
+Supabase is unreachable the signal is lost — the correct trade, because the
+alternative is a security control whose failure mode is admitting the request
+it just refused.
+
+### What cannot appear in a row
+
+Bounded columns and short-code reasons throughout. `reason_code` matches
+`^[a-z][a-z0-9_]{1,64}$`, so a signed URL, a provider message and a path are
+all refused by the database (S12C-5), not merely by convention. The SSRF
+reporter's SIGNATURE has no parameter a URL could arrive in — the guarantee is
+in the type, not in everyone remembering. Approver identities stay in
+`media_safety_audit`; copying one into a second table doubles the places it can
+leak from and adds no capability.
+
+The user-facing payload carries `reasonCode` and `severity` and nothing else.
+Absent by design: the score, the thresholds, the recurrence count, the limit,
+the route, the address hash, the rule that fired. A user who learns they are
+eight points below a block has learned how to sit at seven.
+
+### Timekeeping
+
+`clock_timestamp()`, not `now()`. Inside a long transaction `now()` is the
+transaction's start time, so three refusals seconds apart would floor to one
+window and the recurrence count would stay at 1 while an attack escalated. The
+proofs caught exactly that.
+
+### Residual risk
+
+- **`auth_failure` is unobservable** until Clerk production configuration and
+  its webhook exist. The category is kept rather than deleted so the gap is
+  visible.
+- **`challenge` cannot be enforced.** It is recorded as a recommendation and
+  degraded to a warning. 12-A's edge half remains `BLOCKED_UNTIL_DOMAIN`.
+- **No operator surface exists.** `admin_review` rows accumulate and are
+  queryable; nothing displays or actions them until Phase 16.
+- **Magnitude within a window is not stored.** Deliberate — see storm control.
+- **Retention is not implemented.** The table is strictly append-only, DELETE
+  included; Phase 23 will lift that specific ability deliberately. The
+  `occurred_at` index exists so retention is a policy decision, not a
+  migration.
+
+---
+
 ## Application rate limits and private cache defaults (PRE-12 / Phase 12-A, application half)
 
 ```

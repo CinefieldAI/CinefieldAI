@@ -733,7 +733,11 @@ async function collectAndFinalize(params: {
   metadata = await setStage(admin, generationId, metadata, { stage: "downloading" });
 
   const rawOutputs = await adapter.getResult(submission, context);
-  const resolvedOutputs = await normalizeOutputs(rawOutputs);
+  // The context exists only so an SSRF refusal is attributable (Phase 12-C).
+  // Ids, never the URL.
+  const resolvedOutputs = await normalizeOutputs(rawOutputs, {
+    context: { generationId, clerkUserId },
+  });
 
   // ---- Upload ---------------------------------------------------------------
   metadata = await setStage(admin, generationId, metadata, { stage: "uploading" });

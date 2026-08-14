@@ -28,6 +28,7 @@ import {
 } from "@/lib/realtime/stream-contract";
 import { decideResume, exclusiveStart } from "@/lib/realtime/stream-cursor";
 
+import { reportRealtimeConnectionDenied } from "@/lib/security/security-signals";
 import { guardRoute } from "@/lib/security/response-headers";
 /**
  * GET /api/realtime/events — the SSE Gateway (Phase 11-B).
@@ -106,6 +107,22 @@ export async function GET(request: Request): Promise<Response> {
   const acquired = await acquireConnectionLease(scopes);
 
   if (!acquired.granted) {
+    // Phase 12-C. Only a CEILING refusal is a security signal; the counter
+    // being unreachable is infrastructure, and the contract's
+    // OPERATIONAL_NOT_SECURITY rule keeps it out of the evidence table.
+    // Detached, so the refusal below is already decided and cannot be
+    // delayed or reversed by a logging failure.
+    if (acquired.reason === "limit_exceeded") {
+      reportRealtimeConnectionDenied({
+        // WHICH ceiling fired. Never the count, never the limit, never the
+        // lease key — the same three facts the client is not told, and for
+        // the same reason.
+        scope: acquired.scope,
+        userId,
+        tenantId: tenant.tenantId,
+      });
+    }
+
     // A product-safe refusal. No count, no limit, no scope, no other
     // tenant's usage — only how long to wait, so the client backs off
     // instead of reconnecting into the same answer every 500 ms.

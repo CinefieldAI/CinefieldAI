@@ -15,6 +15,7 @@ import {
   rateLimitedResponse,
   withPrivateCache,
 } from "@/lib/security/response-headers";
+import { ipBucket } from "@/lib/realtime/connection-limits";
 import type { RateLimitRedisClient } from "@/lib/redis/rate-limit-store";
 
 /**
@@ -376,17 +377,28 @@ test("23. Phase 11-D connection limits are untouched and not duplicated", () => 
 });
 
 // ---------------------------------------------------------------------------
-// 24. The 12-C seam is a seam, not an implementation
+// 24. The seam, now that 12-C has filled it
+// ---------------------------------------------------------------------------
+// PRE-12 asserted the opposite of this test: that nothing observed and
+// nothing was emitted. That was correct then and would be a lie now — 12-C
+// installs an observer, and an assertion kept green by describing a state the
+// system has left is worse than no assertion. What SURVIVES from the original
+// is the part that was really being protected: the limiter itself still emits
+// nothing, still touches no database, and still carries no raw address.
 // ---------------------------------------------------------------------------
 
-test("24. no security event is produced yet — only an observer seam exists", async () => {
+test("24. the limiter reports a denial and still writes nothing itself", async () => {
   const code = stripComments(LIMITER);
   assert.match(code, /export function setRateLimitObserver/);
-  // No producer: nothing emits, writes or publishes a security event.
-  assert.ok(!/emit_outbox_event|publishNotification|security\.events|insert\(/i.test(code));
-  assert.match(code, /let observer: RateLimitObserver \| null = null;/, "nothing observes by default");
 
-  // The seam fires, and carries no identity.
+  // The limiter is still not a security producer. It hands a fact to an
+  // observer and does nothing else — no outbox, no publish, no insert, and
+  // no import of the security stack, so it stays unit-testable with no
+  // database and cannot grow a second write path by accident.
+  assert.ok(!/emit_outbox_event|publishNotification|recordSecurityEvent|insert\(/i.test(code));
+  assert.ok(!/security-event-logger|security-signals/.test(code),
+    "the limiter must not depend on the logger it feeds");
+
   const seen: unknown[] = [];
   setRateLimitObserver({ onDenied: (e) => seen.push(e) });
   try {
@@ -394,8 +406,35 @@ test("24. no security event is produced yet — only an observer seam exists", a
     await consumeN("paid_compute", USER_A, ROUTE_POLICIES.paid_compute.limit + 1, redis);
     assert.equal(seen.length, 1, "exactly one denial observed");
     const event = seen[0] as Record<string, unknown>;
-    assert.deepEqual(Object.keys(event).sort(), ["action", "routeClass", "subject"]);
-    assert.ok(!JSON.stringify(event).includes(USER_A), "no identity in the seam payload");
+    assert.deepEqual(Object.keys(event).sort(), ["action", "routeClass", "subject", "subjectRef"]);
+
+    // `subjectRef` is the deliberate 12-C addition. A security event that
+    // cannot say WHO is not evidence, and per-subject recurrence is the whole
+    // input to the Risk Engine — without it every denied user coalesces into
+    // one row per window.
+    assert.equal(event.subjectRef, USER_A, "an authenticated denial is attributable");
+    assert.equal(event.subject, "user");
+  } finally {
+    setRateLimitObserver(null);
+  }
+});
+
+test("24b. an anonymous denial carries the hashed bucket, never the address", async () => {
+  const seen: Record<string, unknown>[] = [];
+  setRateLimitObserver({ onDenied: (e) => seen.push(e as Record<string, unknown>) });
+  try {
+    const redis = fakeRedis();
+    const headers = new Headers({ "x-real-ip": "203.0.113.7" });
+    const policy = ROUTE_POLICIES.public_dev_stub;
+    for (let i = 0; i <= policy.limit; i += 1) {
+      await enforceRouteRateLimit({ routeClass: "public_dev_stub", headers, redisOverride: redis });
+    }
+
+    assert.equal(seen.length, 1);
+    const event = seen[0];
+    assert.equal(event.subject, "ip");
+    assert.equal(event.subjectRef, ipBucket("203.0.113.7"), "the bucket, already hashed");
+    assert.ok(!JSON.stringify(event).includes("203.0.113.7"), "the address itself never appears");
   } finally {
     setRateLimitObserver(null);
   }

@@ -59,7 +59,7 @@ for f in \
   "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
   "$ROOT/supabase/migrations/20260820000000_media_assets.sql" \
   "$ROOT/supabase/migrations/20260821000000_media_ingest_gate.sql" \
-  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"   "$ROOT/supabase/migrations/20260824000000_event_contract_and_tenant_routing.sql"   "$ROOT/supabase/migrations/20260825000000_outbox_realtime_delivery_lane.sql"   "$ROOT/supabase/migrations/20260825000100_retire_pre_realtime_outbox_debt.sql"
+  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"   "$ROOT/supabase/migrations/20260824000000_event_contract_and_tenant_routing.sql"   "$ROOT/supabase/migrations/20260825000000_outbox_realtime_delivery_lane.sql"   "$ROOT/supabase/migrations/20260825000100_retire_pre_realtime_outbox_debt.sql"   "$ROOT/supabase/migrations/20260826000000_security_events.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -88,6 +88,9 @@ psql_run < "$ROOT/supabase/tests/test_quarantine_release.sql" 2>&1 | grep -E "NO
 
 echo "==> DR backup proofs (Phase 9-D)"
 psql_run < "$ROOT/supabase/tests/test_dr_backup.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> security event proofs (Phase 12-C)"
+psql_run < "$ROOT/supabase/tests/test_security_events.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> finalization proofs (completed + failed)"
 psql_run < "$ROOT/supabase/tests/test_finalization_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"

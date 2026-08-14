@@ -377,11 +377,29 @@ test("17. a refusal reveals nothing about anyone", () => {
   assert.match(code, new RegExp(`status: ${CONNECTION_LIMIT_STATUS}|CONNECTION_LIMIT_STATUS`));
   assert.match(code, /"Retry-After": String\(CONNECTION_LIMIT_RETRY_SECONDS\)/);
 
-  // The refusal body is a fixed string. No count, no limit, no scope, no id.
-  const refusal = code.slice(code.indexOf("if (!acquired.granted)"), code.indexOf("const lease:"));
-  assert.match(refusal, /"Too many realtime connections"/);
-  assert.ok(!/acquired\.scope|\.limit|ZCARD|userId|tenantId/.test(refusal),
+  const denialBlock = code.slice(code.indexOf("if (!acquired.granted)"), code.indexOf("const lease:"));
+
+  // THE RESPONSE is a fixed string. No count, no limit, no scope, no id.
+  // Sliced from the status line rather than from the whole denial block:
+  // Phase 12-C records the refusal as security evidence inside that block,
+  // and the distinction this test exists to protect is what reaches the
+  // CLIENT — not what reaches an operator-only table behind service_role.
+  const response = denialBlock.slice(denialBlock.indexOf("const status ="));
+  assert.match(response, /"Too many realtime connections"/);
+  assert.ok(!/acquired\.scope|\.limit|ZCARD|userId|tenantId/.test(response),
     "no internal detail may reach the client");
+
+  // And the scope really does stop at the logger. If `acquired.scope` ever
+  // appears outside the security report, this fails — which is the assertion
+  // the coarser slice used to be standing in for.
+  const scopeUses = denialBlock.split("acquired.scope").length - 1;
+  const report = denialBlock.slice(
+    denialBlock.indexOf("reportRealtimeConnectionDenied("),
+    denialBlock.indexOf("const status =")
+  );
+  assert.equal(scopeUses, 1, "the scope is read exactly once");
+  assert.ok(report.includes("acquired.scope"), "and that once is the security signal, not the response");
+
   assert.ok(CONNECTION_LIMIT_RETRY_SECONDS >= 10);
 });
 

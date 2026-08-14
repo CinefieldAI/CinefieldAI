@@ -45,8 +45,13 @@ export type BrowserState =
 export interface NotificationProjection {
   /** UI state label. Presentation only — see the header. */
   uiState: BrowserState;
-  /** Which durable thing this is about. */
-  subject: { kind: "generation" | "asset"; id: string };
+  /**
+   * Which durable thing this is about. `security` was added in 12-C and is
+   * NOT a generation: a warning is about the account, and the id identifies
+   * the evidence row, so a browser that keys UI by generation id must ignore
+   * it rather than attach it to whatever ran last.
+   */
+  subject: { kind: "generation" | "asset" | "security"; id: string };
   /** Allowlisted, per event type. Never a spread. */
   detail: Readonly<Record<string, string | number>>;
 }
@@ -134,6 +139,24 @@ export function projectEvent(event: DomainEventEnvelope): ProjectionResult {
         reservationId: str(p, "reservationId"),
       }));
 
+    // ---- security (Phase 12-C) --------------------------------------------
+    // The one security signal a USER sees. It tells them a class of request
+    // was refused and how seriously it was taken — nothing else. Deliberately
+    // absent: the risk score, the thresholds, the recurrence count, the rate
+    // limit, the route, the address hash, the rule that fired. A user who
+    // learns they are eight points below a block has learned how to sit at
+    // seven; the operator half of that stays in `security_events`, behind
+    // service_role.
+    //
+    // The subject is the EVIDENCE ROW, not a generation. A warning is about
+    // the account, and attaching it to a generation id would put a security
+    // banner on whichever unrelated render happened to be on screen.
+    case "security.warning":
+      return ok("security.warning", "security", event.aggregateId, detailOf({
+        reasonCode: str(p, "reasonCode"),
+        severity: str(p, "severity"),
+      }));
+
     default:
       return { ok: false, reason: "unknown_event_type" };
   }
@@ -141,7 +164,7 @@ export function projectEvent(event: DomainEventEnvelope): ProjectionResult {
 
 function ok(
   uiState: BrowserState,
-  kind: "generation" | "asset",
+  kind: "generation" | "asset" | "security",
   id: string,
   detail: Record<string, string | number>
 ): ProjectionResult {

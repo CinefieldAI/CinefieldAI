@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertRouteAdmin } from "@/lib/routing/admin-route-service";
+import { reportMediaSafetyDecision } from "@/lib/security/security-signals";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 
 /**
@@ -138,6 +139,19 @@ export async function approveMediaRelease(
   };
 
   if (result.released) {
+    // Phase 12-C. Recorded AFTER the decision has committed, and detached:
+    // this is a trail entry, and a logging failure must never roll back a
+    // moderation decision two administrators already agreed to.
+    //
+    // The approver is deliberately absent. `media_safety_audit` holds who
+    // approved what, behind service_role; copying an identity into a second
+    // table doubles the places it can leak from and adds no capability. The
+    // asset id is the join.
+    reportMediaSafetyDecision({
+      decision: "released",
+      assetId: params.assetId,
+      traceId: params.traceId ?? null,
+    });
     return { released: true, assetId: params.assetId, eventId: result.event_id ?? null };
   }
 
@@ -183,6 +197,14 @@ export async function rejectMediaAsset(
   const result = data as { rejected: boolean; reason?: RejectOutcome extends { rejected: false } ? never : string; event_id?: string };
 
   if (result.rejected) {
+    // The safe direction, and scored `info` for that reason — but still part
+    // of the trail, because "nothing was ever rejected" and "rejections were
+    // not recorded" must not look the same.
+    reportMediaSafetyDecision({
+      decision: "rejected",
+      assetId: params.assetId,
+      traceId: params.traceId ?? null,
+    });
     return { rejected: true, assetId: params.assetId, eventId: result.event_id ?? null };
   }
 
