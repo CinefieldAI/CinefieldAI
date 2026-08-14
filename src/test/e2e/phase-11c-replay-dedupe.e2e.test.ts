@@ -93,7 +93,7 @@ test("3. the cursor cannot select a stream", () => {
   const code = stripComments(ROUTE);
   // The key is computed from the channel BEFORE the header is ever read, and
   // the header's value is never concatenated into a key.
-  const keyIndex = code.indexOf("streamKeyFor(channel.channelId)");
+  const keyIndex = code.indexOf("streamKeyFor(tenant.channelId)");
   const headerIndex = code.indexOf('request.headers.get("last-event-id")');
   assert.ok(keyIndex >= 0 && headerIndex > keyIndex, "the key must be fixed before resume is read");
   assert.ok(!/streamKeyFor\([^)]*(last|cursor|header)/i.test(code), "a cursor must never reach the key");
@@ -112,7 +112,7 @@ test("4. cross-tenant replay is impossible by construction", () => {
   // One key, resolved once from the session, used by both the replay read and
   // the live read. A cursor moves a position within it and nothing else.
   assert.equal((code.match(/const streamKey = /g) ?? []).length, 1);
-  assert.match(code, /channelForTenant\(userId\)/);
+  assert.match(code, /resolveEffectiveTenant\(userId\)/);
   assert.ok(!/streamKey\s*=/.test(code.slice(code.indexOf("const stream = new ReadableStream"))),
     "the key must not be reassigned once the stream is open");
 });

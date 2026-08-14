@@ -131,7 +131,10 @@ test("4. an arbitrary client-chosen stream target is impossible", () => {
     assert.ok(!code.includes(param), `the gateway must not read ${param}`);
   }
   assert.match(code, /const \{ userId \} = await auth\(\)/, "identity comes from the session");
-  assert.match(code, /channelForTenant\(userId\)/, "the channel derives from that identity");
+  // 11-D routes that identity through the principal -> membership -> effective
+  // tenant chain; the channel still derives from the session and nothing else.
+  assert.match(code, /resolveEffectiveTenant\(userId\)/, "the tenant derives from that identity");
+  assert.match(code, /streamKeyFor\(tenant\.channelId\)/, "the key derives from the bound tenant");
 
   // And the hook cannot ask for one either.
   assert.ok(!/\?|&/.test(/const ENDPOINT = "([^"]+)"/.exec(HOOK)?.[1] ?? ""), "the client URL carries no parameters");
@@ -434,8 +437,11 @@ test("30. a realtime failure cannot retry a provider or mutate a generation", ()
   for (const forbidden of ["orchestrat", "provider", "temporal", "supabase", "credits", "media/"]) {
     assert.ok(!new RegExp(forbidden, "i").test(imports), `the adapter must not import ${forbidden}`);
   }
+  // Named operations, not the bare word "retry": 11-D's refusal path carries a
+  // Retry-After header, which is a backoff hint to a browser and not a
+  // provider retry.
   const code = stripComments(ADAPTER + ROUTE);
-  assert.ok(!/retry|resubmit|startWorkflow|reserveCredits|settle/i.test(code));
+  assert.ok(!/retryProvider|resubmit|startWorkflow|reserveCredits|settleCredits|markCompleted/i.test(code));
 });
 
 // ---------------------------------------------------------------------------

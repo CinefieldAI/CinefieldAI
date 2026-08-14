@@ -365,6 +365,151 @@ Replay is inert in both directions.
 
 ---
 
+## Gate 1 — Cross-workspace isolation, realtime portion (Phase 11-D)
+
+**Owning package:** 11-D (the SSE portion of Gate 1; 12-B owns the rest)
+
+```
+TENANT_BINDING                  PROVEN
+REPLAY_TENANT_SCOPE             PROVEN
+CONNECTION_LIMITS               IMPLEMENTED + LIVE-PROVEN
+DISTRIBUTED_LEASE               IMPLEMENTED + LIVE-PROVEN
+CROSS-TENANT SSE (release set)  CLOSED for the SSE surface
+PRODUCTION_COUNTER_DURABILITY   DEFERRED  -- Redis A is volatile-lru
+```
+
+### Principal to membership to effective tenant
+
+The chain the roadmap names exists as a real seam. What it resolves to today is
+narrower than the words suggest, and that is stated rather than dressed up:
+
+**There is no workspace.** No `workspaces` table, no `workspace_id` column in
+any migration, no Clerk organization — two pre-existing tests assert that
+absence deliberately. `clerk_user_id` is the tenant key on `projects`,
+`generations`, `media_assets`, `credit_wallets` and every RLS policy.
+
+So membership is the **identity relation**: a principal is a member of exactly
+one tenant, itself. `resolveEffectiveTenant` performs that resolution
+explicitly and returns `workspaceId: null`. A membership table was **not**
+invented — a fake membership check returns a fake answer, and a boundary built
+on one is worse than an honest narrower boundary. When workspaces become real,
+the function gains a lookup and every caller is unchanged, because all of them
+already treat the result as opaque and already refuse to re-resolve it.
+
+### The binding is immutable
+
+Resolved once, before the response body exists, captured in a `const`, never
+reassigned. The stream key is derived from it **before** `Last-Event-ID` is
+read. Verified live: `?workspace=`, `?user=`, `?channel=` and `?stream=` all
+return 401 exactly as the bare path does, because none of them is read at all —
+they are not validated away, they do not exist as inputs.
+
+Replay uses the same single key as live delivery — one `const streamKey`, and a
+test asserts every `xrange`/`xread` call references it.
+
+### Connection ceilings
+
+| Scope | Limit | Why this number |
+| --- | --- | --- |
+| user | **4** | a workspace tab, a preview tab, a second monitor, one stale tab the browser has not reaped. Beyond that is not a usage pattern worth serving. |
+| workspace | **24** | a team's shared ceiling. **Inert today** — no workspace scope is emitted because no workspace id exists. The machinery is real and tested with a synthetic workspace; only the input is missing. |
+| IP | **12** | one NAT may hold several accounts. Above the user ceiling so co-located users are not penalised, low enough that one host cannot open hundreds. |
+
+### The lease, and why it is not a counter
+
+Serverless invocations share no memory, so a process counter would permit the
+ceiling **per instance** and reset on every cold start. Slots live in Redis A as
+**one sorted set per scope**, members are lease ids and scores are absolute
+expiry timestamps. That single choice answers three problems at once:
+
+- **counting** — `ZCARD` after dropping expired members
+- **crash safety** — a died instance never releases, but its score is in the
+  past, so the next acquire evicts it. No slot leaks, no reaper process.
+- **idle eviction** — refresh pushes the score forward; a connection that stops
+  refreshing falls out on its own.
+
+An `INCR`/`DECR` counter would have neither: a lost `DECR` is a slot lost
+forever.
+
+`ZCARD`-then-`ZADD` from application code is a TOCTOU race, so acquire, refresh
+and release are each a **single Lua script**. Verified live against Redis A:
+**40 concurrent acquires against a limit of 3 admitted exactly 3.** Release
+freed a slot, an aged-out lease was reclaimed, and `ZADD XX` refused to
+resurrect a lease that had gone — re-adding would let a stalled connection
+exceed a ceiling it no longer holds a slot in.
+
+The lease id is a server-minted v4 UUID. It never leaves the server, carries no
+user id, tenant, address or secret, and the browser cannot supply, guess or
+influence it.
+
+### IP handling
+
+`x-forwarded-for` is client-writable and a proxy **appends** rather than
+replaces, so its first entry is whatever the client claimed. Trusting it would
+hand anyone unlimited buckets. Order of preference: `x-vercel-forwarded-for`,
+then `x-real-ip`, then the **last** hop of `x-forwarded-for` — never the first.
+No trustworthy address means **no IP scope at all**, not one shared bucket every
+unknown client contends for.
+
+Addresses are normalised so one host cannot occupy several buckets (IPv4-mapped
+IPv6 collapses, zone ids and ports are stripped) and then hashed. The key holds
+a hash; the address is never stored or logged. That is bucketing, not
+anonymisation — the real protection is that the address goes nowhere.
+
+### Refusal and backoff
+
+`429` with `Retry-After: 30` and a fixed string. No count, no limit value, no
+scope, no id — a client learning that the *IP* ceiling rather than the *user*
+ceiling was hit would learn something about the other people behind its NAT.
+
+The browser treats 429 as a ceiling, not a transport error: a floor of 20 s, at
+least whatever `Retry-After` asks, plus jitter. Retrying a refusal on the 500 ms
+transport schedule would turn one over-eager tab into a flood against the
+control that refused it.
+
+### Failing closed
+
+An unreachable counter **refuses** the connection. A DoS control that switches
+itself off during an outage is not a control, and the outage is exactly when the
+ceiling matters. Realtime degrades; the product does not, because the browser
+falls back to its authoritative fetch and the outbox still holds every fact.
+Nothing in the path can mutate a generation, retry a provider, restart a
+workflow or touch credits — asserted by import scan, not assumed.
+
+### Session
+
+No connection outlives the 11-B budget, so `auth()` runs again on every
+reconnect. There is no long-lived auth bypass: an expired session simply fails
+the next connection.
+
+### DEFERRED PRODUCTION HARDENING — the counter shares Redis A's policy
+
+Redis A remains `volatile-lru` by the user's deliberate deferral. Leases are
+TTL-bearing sorted sets, so under memory pressure they are **eviction
+candidates**. An evicted lease does not grant extra connections — the refresh
+detects its absence and closes the connection — but it does mean the *count* can
+under-report, so the ceiling could admit more than its nominal value during
+pressure.
+
+```
+11-D CODE / LIMIT LOGIC              PASS
+PRODUCTION COUNTER DURABILITY        DEFERRED
+```
+
+Required later, by a human: set Redis A `maxmemory-policy` to `noeviction`, then
+re-run the live limit validation. **No configuration was changed by this batch.**
+
+### Gate 1, honestly scoped
+
+The cross-tenant SSE item in the release-blocking set is **closed for the SSE
+surface**: binding proven, replay scope proven, no client-selected stream
+authority, connection limits implemented and live-proven. Gate 1 as a whole also
+covers generation, attempt, asset, reservation, ledger and presigned-URL
+objects, which belong to 12-B and remain open. This section closes the realtime
+portion only, and the counter's production durability is deferred above.
+
+---
+
 ## Replay and resume (Phase 11-C)
 
 ```
@@ -373,7 +518,7 @@ TEST_EVIDENCE_PASS         YES   (31 tests; 93 across 11-A/B/C)
 LIVE_REPLAY_VALIDATION     YES   (resume-after-cursor, dedupe, gap, real trim)
 REDIS_A_NOEVICTION         DEFERRED_PRODUCTION_HARDENING
 PRODUCTION_REPLAY_DURABILITY  DEFERRED  -- see below
-CONNECTION_LIMITS (11-D)   NOT_STARTED
+CONNECTION_LIMITS (11-D)   IMPLEMENTED (see above)
 ```
 
 ### The two identities, and why there are two
@@ -483,7 +628,7 @@ is not production-ready, and this document does not claim otherwise.
 ### Residual risk
 
 - **No connection ceiling.** 11-D owns per-user/workspace/IP limits and idle
-  eviction; `cross-tenant SSE` stays in the release-blocking set.
+  eviction. Both landed in 11-D; see the Gate 1 section above.
 - **Multi-tab is per-connection.** Each tab holds its own connection, cursor
   and dedupe set, so their semantics are independent and correct. Nothing is
   shared across tabs — deliberately, since a shared cursor would weaken the
@@ -504,7 +649,7 @@ REDIS_STREAMS_OWNER        REDIS_A
 REDIS_B_USED               NO
 REDIS_A_NOEVICTION         NO    -- volatile-lru; see MANUAL ACTION below
 SSE_REPLAY (11-C)          IMPLEMENTED (see above)
-CONNECTION_LIMITS (11-D)   NOT_STARTED
+CONNECTION_LIMITS (11-D)   IMPLEMENTED (see above)
 ```
 
 ```
@@ -610,9 +755,10 @@ silently dropping a lock is not. No configuration was changed by this batch.
   are missed. Every consumer must treat realtime as a signal and keep its own
   fetch. `Last-Event-ID` is emitted on the wire but deliberately **not read** —
   honouring it halfway would let a client believe it had resumed. 11-C owns it.
-- **No connection ceiling.** One tenant can open as many streams as it likes.
-  11-D owns the limit and idle eviction; `cross-tenant SSE` stays in the
-  release-blocking set until then.
+- **Connection ceilings arrived in 11-D.** When this section was written a
+  tenant could open as many streams as it liked; the per-user, per-IP and
+  (inert) per-workspace limits and idle eviction now live in the Gate 1
+  section above.
 - **The authenticated browser round trip was not exercised end to end.** It
   requires an interactive Clerk sign-in. What is proven: the 401 refusal live,
   the adapter -> Redis A -> XREAD round trip live with envelope integrity, and
@@ -707,7 +853,7 @@ contains none.
   by the same no-silent-cadence rule as the DR pass. The Notification Service
   is a pure function awaiting a caller.
 - **No connection limits exist** because no connection exists. 11-D owns them,
-  and `cross-tenant SSE` remains in the release-blocking set.
+  and the realtime portion of that gate closed in 11-D; see Gate 1 above.
 
 ---
 
@@ -732,7 +878,7 @@ is listed with the reason it cannot become an unsafe default.
 
 | Gate | Subject | Package | Status |
 | --- | --- | --- | --- |
-| 1 | Cross-workspace isolation incl. assets and presigned URLs | 12-B | NOT_STARTED |
+| 1 | Cross-workspace isolation incl. assets and presigned URLs | 11-D / 12-B | SSE surface CLOSED (11-D); assets, reservations and ledger open (12-B) |
 | 2 | Provider webhook signature, replay, event-id uniqueness | 6R-B · 8-FRAMEWORK | EXTERNAL_PENDING — fal publishes no verifiable signing scheme |
 | 5 | Settlement uniqueness guaranteed at DB level | 10-B | Constraint exists (`PROOF S`/`PROOF T`); gate not formally claimed |
 | 6 | SQS IAM least privilege; worker distrusts queue messages | 6R-C · 18-A | NOT_STARTED |
@@ -750,5 +896,5 @@ IDOR / BOLA              NOT_STARTED
 webhook replay           NOT_STARTED
 billing race             PASS at DB level (PROOF R/S/T/U)
 duplicate SQS delivery   NOT_STARTED
-cross-tenant SSE         NOT_STARTED
+cross-tenant SSE         PASS  (11-D: binding, replay scope, connection limits)
 ```

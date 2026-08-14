@@ -46,6 +46,15 @@ import type { RealtimeGenerationState } from "@/lib/realtime/browser-state";
 const ENDPOINT = "/api/realtime/events";
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
+/**
+ * A connection-limit refusal is not a transport blip and must not be retried
+ * on the transport schedule. 429 means "you already hold as many connections
+ * as you may" — reconnecting in 500 ms produces the identical refusal and
+ * turns one over-eager tab into a request flood against the very control that
+ * refused it. The floor is deliberately far above the normal base, and the
+ * server's Retry-After is honoured when it asks for longer.
+ */
+const LIMIT_BACKOFF_FLOOR_MS = 20_000;
 /** After this long connected, the connection counts as healthy. */
 const HEALTHY_AFTER_MS = 10_000;
 /** No frame and no heartbeat for this long means the path died silently. */
@@ -108,15 +117,26 @@ export function useRealtimeGenerations(enabled = true): UseRealtimeGenerations {
       }
     };
 
-    const scheduleReconnect = () => {
+    const scheduleReconnect = (limitedForMs?: number) => {
       if (stoppedRef.current) return;
       retryRef.current += 1;
-      // Full jitter over a capped exponential ceiling. A deploy that dropped
-      // every connection at once must not have them all return together, and
-      // an unreachable server must not be hammered.
-      const ceiling = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** (retryRef.current - 1));
-      const delay = Math.round(Math.random() * ceiling);
-      setStatus(retryRef.current > 6 ? "unavailable" : "reconnecting");
+
+      let delay: number;
+      if (limitedForMs !== undefined) {
+        // Refused by the ceiling. Wait at least the floor, at least as long
+        // as the server asked, and add jitter so every refused tab does not
+        // return in the same instant.
+        const base = Math.max(LIMIT_BACKOFF_FLOOR_MS, limitedForMs);
+        delay = Math.round(base + Math.random() * base * 0.5);
+      } else {
+        // Full jitter over a capped exponential ceiling. A deploy that
+        // dropped every connection at once must not have them all return
+        // together, and an unreachable server must not be hammered.
+        const ceiling = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** (retryRef.current - 1));
+        delay = Math.round(Math.random() * ceiling);
+      }
+
+      setStatus(retryRef.current > 6 || limitedForMs !== undefined ? "unavailable" : "reconnecting");
       clearTimer();
       timerRef.current = setTimeout(run, delay);
     };
@@ -187,6 +207,15 @@ export function useRealtimeGenerations(enabled = true): UseRealtimeGenerations {
           },
           cache: "no-store",
         });
+
+        if (response.status === 429) {
+          // The connection ceiling, not a failure. Honour Retry-After and
+          // stop treating this as a transport error.
+          const retryAfter = Number(response.headers.get("retry-after"));
+          clearTimeout(idleTimer);
+          scheduleReconnect(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0);
+          return;
+        }
 
         if (!response.ok || !response.body) {
           throw new Error(`sse_${response.status}`);

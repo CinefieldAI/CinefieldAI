@@ -1,6 +1,20 @@
 import { auth } from "@clerk/nextjs/server";
-import { channelForTenant } from "@/lib/notification/channel-identity";
 import { createRealtimeReader } from "@/lib/realtime/realtime-redis";
+import { resolveEffectiveTenant } from "@/lib/realtime/tenant-binding";
+import {
+  CONNECTION_LIMIT_RETRY_SECONDS,
+  CONNECTION_LIMIT_STATUS,
+  ipBucket,
+  LEASE_REFRESH_MS,
+  scopesFor,
+  trustedClientIp,
+} from "@/lib/realtime/connection-limits";
+import {
+  acquireConnectionLease,
+  refreshConnectionLease,
+  releaseConnectionLease,
+  type ConnectionLease,
+} from "@/lib/realtime/connection-lease";
 import { encodeSseComment, encodeSseFrame, SSE_HEADERS } from "@/lib/realtime/sse-frame";
 import {
   jitteredMaxAgeMs,
@@ -33,6 +47,18 @@ import { decideResume, exclusiveStart } from "@/lib/realtime/stream-cursor";
  * effective-workspace rules on top of this and the per-tenant connection
  * ceiling; the boundary it strengthens already exists here.
  *
+ * THE BINDING IS IMMUTABLE (Phase 11-D). Principal, membership and effective
+ * tenant are resolved ONCE, before the response body exists, and captured in
+ * a const. There is no code path that re-resolves them, and no parameter
+ * through which a later request could try.
+ *
+ * EVERY CONNECTION HOLDS A LEASE (Phase 11-D). Slots are counted in Redis A —
+ * not in process memory, which on serverless would mean the ceiling applies
+ * per instance and resets on every cold start. Acquire, refresh and release
+ * are single Lua scripts, so N simultaneous opens admit exactly the limit.
+ * The counter being unreachable REFUSES the connection: a DoS control that
+ * disables itself during an outage is not a control.
+ *
  * RESUME IS A CURSOR, NOT AN AUTHORITY (Phase 11-C). `Last-Event-ID` can move
  * a reader forwards or backwards WITHIN the one stream the session already
  * resolved. It is parsed by shape, it never selects a key, and a value that
@@ -57,19 +83,38 @@ export async function GET(request: Request): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const channel = channelForTenant(userId);
-  if (!channel.ok) {
+  // PRINCIPAL -> MEMBERSHIP -> EFFECTIVE TENANT, once.
+  const binding = resolveEffectiveTenant(userId);
+  if (!binding.ok) {
     // A signed-in principal whose id does not match the tenant shape is a
     // configuration fault, not a routing puzzle. Refuse rather than guess.
     return new Response("Forbidden", { status: 403 });
   }
+  const tenant = binding.tenant;
+  const streamKey = streamKeyFor(tenant.channelId);
 
-  const streamKey = streamKeyFor(channel.channelId);
+  // ---- CONNECTION CEILING (11-D) -----------------------------------------
+  // Taken before a reader is opened, so a refused connection costs no socket.
+  const scopes = scopesFor(tenant, ipBucket(trustedClientIp(request.headers)));
+  const acquired = await acquireConnectionLease(scopes);
+
+  if (!acquired.granted) {
+    // A product-safe refusal. No count, no limit, no scope, no other
+    // tenant's usage — only how long to wait, so the client backs off
+    // instead of reconnecting into the same answer every 500 ms.
+    const status = acquired.reason === "limit_exceeded" ? CONNECTION_LIMIT_STATUS : 503;
+    return new Response(
+      acquired.reason === "limit_exceeded" ? "Too many realtime connections" : "Realtime unavailable",
+      { status, headers: { "Retry-After": String(CONNECTION_LIMIT_RETRY_SECONDS) } }
+    );
+  }
+
+  const lease: ConnectionLease = { leaseId: acquired.leaseId, scopes };
 
   const reader = createRealtimeReader();
   if (!reader) {
-    // Realtime is unavailable; the product is not. The browser falls back to
-    // its normal state fetch, and the outbox still holds every fact.
+    // Realtime is unavailable; the product is not. Return the slot first.
+    await releaseConnectionLease(lease);
     return new Response("Realtime unavailable", { status: 503 });
   }
 
@@ -78,14 +123,25 @@ export async function GET(request: Request): Promise<Response> {
   const startedAt = Date.now();
 
   let closed = false;
+  let leaseTimer: ReturnType<typeof setInterval> | null = null;
+
   const release = () => {
     if (closed) return;
     closed = true;
+    // Stop refreshing FIRST: an interval that outlived the connection would
+    // hold a slot open for a browser that has gone.
+    if (leaseTimer !== null) {
+      clearInterval(leaseTimer);
+      leaseTimer = null;
+    }
     // Ends the outstanding XREAD BLOCK and frees the socket. Called from the
     // abort signal, from the budget expiry, and from any error path — a
     // reader that outlived its response would be a leaked connection per
     // vanished browser.
     reader.disconnect();
+    // Best effort. The lease's own expiry is the backstop that makes a
+    // crashed instance recover without this ever running.
+    void releaseConnectionLease(lease);
   };
 
   request.signal.addEventListener("abort", release, { once: true });
@@ -144,10 +200,23 @@ export async function GET(request: Request): Promise<Response> {
         return send(encodeSseFrame({ event: "notification", data: envelope, id: streamId }));
       };
 
+      // IDLE EVICTION. The lease is extended only while this loop is alive
+      // and the abort signal has not fired. A connection whose client
+      // vanished stops refreshing and falls out of the sorted set on its own;
+      // a lease that has already gone (expired, or evicted) cannot be
+      // resurrected, so the connection closes rather than exceeding a ceiling
+      // it no longer holds a slot in.
+      leaseTimer = setInterval(() => {
+        if (closed) return;
+        void refreshConnectionLease(lease).then((alive) => {
+          if (!alive) release();
+        });
+      }, LEASE_REFRESH_MS);
+
       // Open immediately so the browser's `onopen` fires and any proxy sees
       // bytes before its idle timer starts.
       send(encodeSseComment("open"));
-      send(encodeSseFrame({ event: "ready", data: { channel: channel.channelId } }));
+      send(encodeSseFrame({ event: "ready", data: { channel: tenant.channelId } }));
 
       // ---- RESUME (11-C) ---------------------------------------------------
       // The oldest retained entry is what decides whether a replay can be
