@@ -152,6 +152,26 @@ dialog
   slider: Duration
 ```
 
+## Selected Model Prompt Rows
+
+Each row below was selected on `https://higgsfield.ai/marketing-studio` Video mode and the visible prompt-row buttons were captured from the page.
+
+| Selected model | Prompt row after `Add reference` |
+| --- | --- |
+| Marketing Studio Video | Marketing Studio Video; 2D product motion; 9:16; 5s; Decrease batch size; 1/4; Increase batch size; Product |
+| Seedance 2.5 | Seedance 2.5; References; 16:9; 720p; 5s; Decrease batch size; 1/4; Increase batch size; High; On |
+| Seedance 2.5 Edit | Seedance 2.5 Edit; Edit video; 720p; Decrease batch size; 1/4; Increase batch size; High; On |
+| Seedance 2.0 | Seedance 2.0; icon-only blank control; icon-only diamond control; 8s; Decrease batch size; 1/4; Increase batch size; High; On |
+| Seedance 2.0 Fast | Seedance 2.0 Fast; icon-only blank control; icon-only diamond control; 8s; Decrease batch size; 1/4; Increase batch size; High; On |
+| Seedance 2.0 Mini | Seedance 2.0 Mini; icon-only blank control; icon-only diamond control; 8s; Decrease batch size; 1/4; Increase batch size; On |
+| MiniMax H3 | MiniMax H3; Auto; 5s |
+| Gemini Omni Flash | Gemini Omni Flash; 9:16; 10s; Decrease batch size; 1/4; Increase batch size |
+| Kling 3.0 | Kling 3.0; 16:9; 4K; 5s; Multi-shot Off; On; Off |
+| Kling 3.0 Motion Control | Kling 3.0 Motion Control; 1080p; icon-only diamond control; Scene control Off |
+| FLUX.3 Video | FLUX.3 Video; Auto; 720p; 5s; On |
+| Grok Imagine 1.5 | Grok Imagine 1.5; Auto; 720p; 5s |
+| HappyHorse | HappyHorse; 16:9; 720p; 7s; Decrease batch size; 1/4; Increase batch size |
+
 ## Cinefield Replacement Rules
 
 Removed `/generate`-derived default from Marketing Studio Video:
@@ -169,6 +189,6 @@ Added Marketing Studio Video structure:
 Marketing Studio Video model selector
 Choose style trigger and dialog
 Marketing Studio Video model inventory
-Video-specific defaults: 9:16, 2K, 5s, 1/4
-Product upload slot beside Generate
+Model-specific Video prompt-row controls matching Higgsfield captures
+Product upload slot beside Generate only for Marketing Studio Video
 ```

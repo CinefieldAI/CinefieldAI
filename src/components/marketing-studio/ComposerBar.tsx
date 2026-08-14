@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
-import MarketingPromptControls from "./MarketingPromptControls";
+import MarketingPromptControls, { shouldShowMarketingProductSlot } from "./MarketingPromptControls";
 
 interface ComposerBarProps {
   prompt: string;
@@ -219,7 +219,7 @@ export default function ComposerBar({
             </div>
           )}
 
-          {composerMode === "video" && (
+          {composerMode === "video" && shouldShowMarketingProductSlot(selectedVideoModel) && (
             <button
               type="button"
               aria-label="Product"

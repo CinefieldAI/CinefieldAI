@@ -4,15 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
-import { AtSign, Check, ChevronDown, Clock, Minus, Monitor, Palette, Plus, X } from "lucide-react";
+import { AtSign, Check, ChevronDown, Clock, Minus, Monitor, Palette, Plus, Volume2, X } from "lucide-react";
 import { useListboxNav } from "@/hooks/useListboxNav";
 import MarketingImageModelSelector from "./MarketingImageModelSelector";
 import MarketingVideoModelSelector from "./MarketingVideoModelSelector";
 
 const ASPECT_RATIO_OPTIONS = ["9:16", "3:4", "2:3", "1:1", "4:3", "16:9", "3:2", "5:4", "4:5", "21:9"];
 const IMAGE_RESOLUTION_OPTIONS = ["1K", "2K", "4K"];
-const VIDEO_RESOLUTION_OPTIONS = ["720p", "1080p", "2K"];
-const DURATION_OPTIONS = ["5s", "10s", "15s", "30s"];
+const VIDEO_RESOLUTION_OPTIONS = ["480p", "720p", "1080p", "2K", "4K"];
+const DURATION_OPTIONS = ["3s", "4s", "5s", "7s", "8s", "10s", "15s", "20s", "30s"];
 const COUNT_OPTIONS = ["1/1", "1/2", "1/3", "1/4"];
 const VIDEO_BATCH_OPTIONS = ["1/4", "2/4", "3/4", "4/4"];
 const VIDEO_STYLE_OPTIONS = [
@@ -25,8 +25,240 @@ const VIDEO_STYLE_OPTIONS = [
   "SaaS",
 ];
 
+type VideoControl =
+  | { type: "style" }
+  | { type: "static"; label: string; icon: "at" | "palette" | "monitor" | "clock" | "diamond" | "none"; minWidth?: string }
+  | { type: "blank" }
+  | { type: "diamond" }
+  | { type: "aspect"; value: string }
+  | { type: "resolution"; value: string }
+  | { type: "duration"; value: string }
+  | { type: "batch" }
+  | { type: "sound"; value: "On" | "Off" };
+
+const DEFAULT_VIDEO_CONTROLS: VideoControl[] = [
+  { type: "static", label: "Auto", icon: "palette" },
+  { type: "resolution", value: "720p" },
+  { type: "duration", value: "5s" },
+];
+
+const VIDEO_MODEL_CONTROLS: Record<string, VideoControl[]> = {
+  "Marketing Studio Video": [
+    { type: "style" },
+    { type: "aspect", value: "9:16" },
+    { type: "duration", value: "5s" },
+    { type: "batch" },
+  ],
+  "Seedance 2.5": [
+    { type: "static", label: "References", icon: "at", minWidth: "134px" },
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "5s" },
+    { type: "batch" },
+    { type: "static", label: "High", icon: "diamond" },
+    { type: "sound", value: "On" },
+  ],
+  "Seedance 2.5 Edit": [
+    { type: "static", label: "Edit video", icon: "monitor", minWidth: "125px" },
+    { type: "resolution", value: "720p" },
+    { type: "batch" },
+    { type: "static", label: "High", icon: "diamond" },
+    { type: "sound", value: "On" },
+  ],
+  "Seedance 2.0": [
+    { type: "blank" },
+    { type: "diamond" },
+    { type: "duration", value: "8s" },
+    { type: "batch" },
+    { type: "static", label: "High", icon: "diamond" },
+    { type: "sound", value: "On" },
+  ],
+  "Seedance 2.0 Fast": [
+    { type: "blank" },
+    { type: "diamond" },
+    { type: "duration", value: "8s" },
+    { type: "batch" },
+    { type: "static", label: "High", icon: "diamond" },
+    { type: "sound", value: "On" },
+  ],
+  "Seedance 2.0 Mini": [
+    { type: "blank" },
+    { type: "diamond" },
+    { type: "duration", value: "8s" },
+    { type: "batch" },
+    { type: "sound", value: "On" },
+  ],
+  "MiniMax H3": [
+    { type: "static", label: "Auto", icon: "palette" },
+    { type: "duration", value: "5s" },
+  ],
+  "Gemini Omni Flash": [
+    { type: "aspect", value: "9:16" },
+    { type: "duration", value: "10s" },
+    { type: "batch" },
+  ],
+  "Kling 3.0": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "4K" },
+    { type: "duration", value: "5s" },
+    { type: "static", label: "Multi-shot Off", icon: "monitor", minWidth: "150px" },
+    { type: "sound", value: "On" },
+    { type: "static", label: "Off", icon: "none" },
+  ],
+  "Kling 3.0 Motion Control": [
+    { type: "resolution", value: "1080p" },
+    { type: "diamond" },
+    { type: "static", label: "Scene control Off", icon: "monitor", minWidth: "170px" },
+  ],
+  "FLUX.3 Video": [
+    { type: "static", label: "Auto", icon: "palette" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "5s" },
+    { type: "sound", value: "On" },
+  ],
+  "Grok Imagine 1.5": [
+    { type: "static", label: "Auto", icon: "palette" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "5s" },
+  ],
+  HappyHorse: [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "7s" },
+    { type: "batch" },
+  ],
+  "Minimax Hailuo 02": [
+    { type: "static", label: "Auto", icon: "palette" },
+    { type: "resolution", value: "1080p" },
+    { type: "duration", value: "5s" },
+  ],
+  "Sora 2": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "10s" },
+    { type: "sound", value: "On" },
+  ],
+  "Sora 2 Pro": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "1080p" },
+    { type: "duration", value: "10s" },
+    { type: "sound", value: "On" },
+  ],
+  "Veo 3.1": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "1080p" },
+    { type: "duration", value: "8s" },
+    { type: "sound", value: "On" },
+  ],
+  "Veo 3.1 Fast": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "8s" },
+    { type: "sound", value: "On" },
+  ],
+  "Wan 2.2": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "5s" },
+    { type: "sound", value: "On" },
+  ],
+  "Wan 2.2 Fast": [
+    { type: "aspect", value: "16:9" },
+    { type: "resolution", value: "720p" },
+    { type: "duration", value: "5s" },
+    { type: "sound", value: "On" },
+  ],
+};
+
+export function shouldShowMarketingProductSlot(selectedVideoModel: string) {
+  return selectedVideoModel === "Marketing Studio Video";
+}
+
 function AspectIcon({ className = "" }: { className?: string }) {
   return <span className={`block h-3 w-4 rounded-[3px] border border-current ${className}`} />;
+}
+
+function DiamondIcon({ className = "" }: { className?: string }) {
+  return <span className={`block size-3.5 rotate-45 border border-current ${className}`} />;
+}
+
+function StaticVideoControl({
+  label,
+  icon,
+  minWidth,
+}: {
+  label: string;
+  icon?: ReactNode;
+  minWidth?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex h-8 shrink-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#101112] px-2.5 text-xs font-semibold text-white transition-colors hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none"
+      style={minWidth ? { minWidth } : undefined}
+    >
+      {icon && <span className="text-[#D97757]">{icon}</span>}
+      <span className="max-w-[140px] truncate">{label}</span>
+    </button>
+  );
+}
+
+function IconOnlyVideoControl({
+  label,
+  icon,
+}: {
+  label: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#101112] text-white/80 transition-colors hover:border-[#D97757] hover:bg-[#181a1d] focus:outline-none"
+    >
+      {icon}
+    </button>
+  );
+}
+
+function BatchStepper({
+  value,
+  options,
+  onChange,
+  decrementLabel,
+  incrementLabel,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  decrementLabel: string;
+  incrementLabel: string;
+}) {
+  const index = Math.max(0, options.indexOf(value));
+
+  return (
+    <div className="flex h-8 shrink-0 items-center rounded-lg border border-white/[0.08] bg-[#101112] text-xs font-semibold text-white">
+      <button
+        type="button"
+        aria-label={decrementLabel}
+        disabled={index <= 0}
+        onClick={() => onChange(options[Math.max(0, index - 1)])}
+        className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white disabled:text-white/25"
+      >
+        <Minus className="size-3.5" />
+      </button>
+      <span className="flex h-full min-w-12 items-center justify-center px-2">{value}</span>
+      <button
+        type="button"
+        aria-label={incrementLabel}
+        disabled={index >= options.length - 1}
+        onClick={() => onChange(options[Math.min(options.length - 1, index + 1)])}
+        className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white disabled:text-white/25"
+      >
+        <Plus className="size-3.5" />
+      </button>
+    </div>
+  );
 }
 
 function usePopoverWheelLock(
@@ -273,6 +505,15 @@ function VideoStyleDialog({
   );
 }
 
+function getStaticControlIcon(icon: Extract<VideoControl, { type: "static" }>["icon"]) {
+  if (icon === "at") return <AtSign className="size-4" />;
+  if (icon === "palette") return <Palette className="size-4" />;
+  if (icon === "monitor") return <Monitor className="size-4" />;
+  if (icon === "clock") return <Clock className="size-4" />;
+  if (icon === "diamond") return <DiamondIcon className="text-[#D97757]" />;
+  return null;
+}
+
 export default function MarketingPromptControls({
   mode,
   selectedImageModel,
@@ -294,6 +535,7 @@ export default function MarketingPromptControls({
   const [imageCount, setImageCount] = useState("1/1");
   const [videoBatch, setVideoBatch] = useState("1/4");
   const [videoStyle, setVideoStyle] = useState("2D product motion");
+  const videoControls = VIDEO_MODEL_CONTROLS[selectedVideoModel] ?? DEFAULT_VIDEO_CONTROLS;
   const count = mode === "image" ? imageCount : videoBatch;
   const countOptions = mode === "image" ? COUNT_OPTIONS : VIDEO_BATCH_OPTIONS;
   const countIndex = useMemo(() => countOptions.indexOf(count), [count, countOptions]);
@@ -301,6 +543,111 @@ export default function MarketingPromptControls({
   const aspectRatio = mode === "image" ? imageAspectRatio : videoAspectRatio;
   const setAspectRatio = mode === "image" ? setImageAspectRatio : setVideoAspectRatio;
   const setCount = mode === "image" ? setImageCount : setVideoBatch;
+
+  const handleVideoModelChange = (name: string) => {
+    const nextControls = VIDEO_MODEL_CONTROLS[name] ?? DEFAULT_VIDEO_CONTROLS;
+    const nextAspect = nextControls.find((control) => control.type === "aspect");
+    const nextResolution = nextControls.find((control) => control.type === "resolution");
+    const nextDuration = nextControls.find((control) => control.type === "duration");
+
+    if (nextAspect?.type === "aspect") setVideoAspectRatio(nextAspect.value);
+    if (nextResolution?.type === "resolution") setVideoResolution(nextResolution.value);
+    if (nextDuration?.type === "duration") setDuration(nextDuration.value);
+    setVideoBatch("1/4");
+    onVideoModelChange(name);
+  };
+
+  const renderVideoControl = (control: VideoControl, index: number) => {
+    if (control.type === "style") {
+      return <VideoStyleDialog key="style" value={videoStyle} onChange={setVideoStyle} />;
+    }
+
+    if (control.type === "static") {
+      return (
+        <StaticVideoControl
+          key={`${control.label}-${index}`}
+          label={control.label}
+          icon={getStaticControlIcon(control.icon)}
+          minWidth={control.minWidth}
+        />
+      );
+    }
+
+    if (control.type === "blank") {
+      return <IconOnlyVideoControl key={`blank-${index}`} label="Video option" />;
+    }
+
+    if (control.type === "diamond") {
+      return (
+        <IconOnlyVideoControl
+          key={`diamond-${index}`}
+          label="Video quality option"
+          icon={<DiamondIcon />}
+        />
+      );
+    }
+
+    if (control.type === "aspect") {
+      return (
+        <OptionPopover
+          key="video-aspect"
+          label="Aspect Ratio"
+          value={videoAspectRatio}
+          options={ASPECT_RATIO_OPTIONS}
+          onChange={setVideoAspectRatio}
+          icon={<AspectIcon className="text-white/80" />}
+          columns={2}
+        />
+      );
+    }
+
+    if (control.type === "resolution") {
+      return (
+        <OptionPopover
+          key="video-resolution"
+          label="Resolution"
+          value={videoResolution}
+          options={VIDEO_RESOLUTION_OPTIONS}
+          onChange={setVideoResolution}
+          icon={<Monitor className="size-4" />}
+        />
+      );
+    }
+
+    if (control.type === "duration") {
+      return (
+        <OptionPopover
+          key="video-duration"
+          label="Duration"
+          value={duration}
+          options={DURATION_OPTIONS}
+          onChange={setDuration}
+          icon={<Clock className="size-4" />}
+        />
+      );
+    }
+
+    if (control.type === "batch") {
+      return (
+        <BatchStepper
+          key="video-batch"
+          value={videoBatch}
+          options={VIDEO_BATCH_OPTIONS}
+          onChange={setVideoBatch}
+          decrementLabel="Decrease batch size"
+          incrementLabel="Increase batch size"
+        />
+      );
+    }
+
+    return (
+      <StaticVideoControl
+        key={`sound-${index}`}
+        label={control.value}
+        icon={<Volume2 className="size-4" />}
+      />
+    );
+  };
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
@@ -328,67 +675,57 @@ export default function MarketingPromptControls({
       ) : (
         <MarketingVideoModelSelector
           selected={selectedVideoModel}
-          onSelect={onVideoModelChange}
+          onSelect={handleVideoModelChange}
         />
       )}
-      {mode === "video" && (
-        <VideoStyleDialog value={videoStyle} onChange={setVideoStyle} />
-      )}
-      <OptionPopover
-        label="Aspect Ratio"
-        value={aspectRatio}
-        options={ASPECT_RATIO_OPTIONS}
-        onChange={setAspectRatio}
-        icon={<AspectIcon className="text-white/80" />}
-        columns={2}
-      />
-      <OptionPopover
-        label="Resolution"
-        value={resolution}
-        options={mode === "image" ? IMAGE_RESOLUTION_OPTIONS : VIDEO_RESOLUTION_OPTIONS}
-        onChange={mode === "image" ? setImageResolution : setVideoResolution}
-        icon={<Monitor className="size-4" />}
-      />
-      {mode === "video" && (
-        <OptionPopover
-          label="Duration"
-          value={duration}
-          options={DURATION_OPTIONS}
-          onChange={setDuration}
-          icon={<Clock className="size-4" />}
-        />
-      )}
-      <div className="flex h-8 shrink-0 items-center rounded-lg border border-white/[0.08] bg-[#101112] text-xs font-semibold text-white">
-        <button
-          type="button"
-          aria-label={mode === "video" ? "Decrease batch size" : "Decrease count"}
-          disabled={countIndex <= 0}
-          onClick={() => setCount(countOptions[Math.max(0, countIndex - 1)])}
-          className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white"
-        >
-          <Minus className="size-3.5" />
-        </button>
-        {mode === "image" ? (
+      {mode === "image" ? (
+        <>
           <OptionPopover
-            label="Count"
-            value={count}
-            options={COUNT_OPTIONS}
-            onChange={setCount}
-            icon={null}
+            label="Aspect Ratio"
+            value={aspectRatio}
+            options={ASPECT_RATIO_OPTIONS}
+            onChange={setAspectRatio}
+            icon={<AspectIcon className="text-white/80" />}
+            columns={2}
           />
-        ) : (
-          <span className="flex h-full min-w-12 items-center justify-center px-2">{count}</span>
-        )}
-        <button
-          type="button"
-          aria-label={mode === "video" ? "Increase batch size" : "Increase count"}
-          disabled={countIndex >= countOptions.length - 1}
-          onClick={() => setCount(countOptions[Math.min(countOptions.length - 1, countIndex + 1)])}
-          className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white"
-        >
-          <Plus className="size-3.5" />
-        </button>
-      </div>
+          <OptionPopover
+            label="Resolution"
+            value={resolution}
+            options={IMAGE_RESOLUTION_OPTIONS}
+            onChange={setImageResolution}
+            icon={<Monitor className="size-4" />}
+          />
+          <div className="flex h-8 shrink-0 items-center rounded-lg border border-white/[0.08] bg-[#101112] text-xs font-semibold text-white">
+            <button
+              type="button"
+              aria-label="Decrease count"
+              disabled={countIndex <= 0}
+              onClick={() => setCount(countOptions[Math.max(0, countIndex - 1)])}
+              className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white disabled:text-white/25"
+            >
+              <Minus className="size-3.5" />
+            </button>
+            <OptionPopover
+              label="Count"
+              value={count}
+              options={COUNT_OPTIONS}
+              onChange={setCount}
+              icon={null}
+            />
+            <button
+              type="button"
+              aria-label="Increase count"
+              disabled={countIndex >= countOptions.length - 1}
+              onClick={() => setCount(countOptions[Math.min(countOptions.length - 1, countIndex + 1)])}
+              className="flex h-full w-8 items-center justify-center text-white/65 transition-colors hover:text-white disabled:text-white/25"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </div>
+        </>
+      ) : (
+        videoControls.map(renderVideoControl)
+      )}
     </div>
   );
 }
