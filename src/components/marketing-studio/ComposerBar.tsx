@@ -2,6 +2,7 @@
 
 type ComposerMode = "image" | "video";
 
+import { Plus } from "lucide-react";
 import PromptResizeHandles from "@/components/shared/PromptResizeHandles";
 import type { PromptSurfaceResizeController } from "@/hooks/usePromptSurfaceResize";
 import { UploadedMedia } from "./MediaAttachPanel";
@@ -17,6 +18,7 @@ interface ComposerBarProps {
   onImageModelChange: (name: string) => void;
   onVideoModelChange: (name: string) => void;
   attachedProductMedia: UploadedMedia[];
+  onProductClick: () => void;
   onGenerate: () => void;
   resizeWidth: number;
   resizeHeight: number;
@@ -99,6 +101,7 @@ export default function ComposerBar({
   onImageModelChange,
   onVideoModelChange,
   attachedProductMedia,
+  onProductClick,
   onGenerate,
   resizeWidth,
   resizeHeight,
@@ -214,6 +217,22 @@ export default function ComposerBar({
               </span>
               <span className="relative z-10">MEDIA</span>
             </div>
+          )}
+
+          {composerMode === "video" && (
+            <button
+              type="button"
+              aria-label="Product"
+              onClick={onProductClick}
+              className="relative flex h-20 w-20 shrink-0 flex-col items-start justify-between overflow-hidden rounded-xl bg-[linear-gradient(180deg,#202020_0%,#504f4f_100%)] p-1.5 text-left text-white shadow-[10px_34px_24px_rgba(0,0,0,0.08),3px_7px_5px_rgba(0,0,0,0.12),1px_3px_4px_rgba(0,0,0,0.32),0_1px_2px_rgba(0,0,0,0.32),inset_0_0_0_1px_rgba(255,255,255,0.04)] transition-brightness hover:brightness-110"
+            >
+              <span className="flex size-5 items-center justify-center rounded-full border border-white/30 bg-white/[0.04] shadow-[inset_0_0_4px_rgba(185,185,185,0.35)]">
+                <Plus className="size-3" />
+              </span>
+              <span className="font-grotesk text-[12px] font-bold uppercase leading-[14px]">
+                Product
+              </span>
+            </button>
           )}
 
           {/* GENERATE BUTTON */}

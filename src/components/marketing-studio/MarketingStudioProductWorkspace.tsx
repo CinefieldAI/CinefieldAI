@@ -47,7 +47,7 @@ export default function MarketingStudioProductWorkspace() {
   const [selectedTarget, setSelectedTarget] = useState<TargetType>("product");
   const [composerMode, setComposerMode] = useState<ComposerMode>("image");
   const [selectedImageModel, setSelectedImageModel] = useState("Nano Banana Pro");
-  const [selectedVideoModel, setSelectedVideoModel] = useState("Cinema Studio 3.5");
+  const [selectedVideoModel, setSelectedVideoModel] = useState("Marketing Studio Video");
   const [selectedMode, setSelectedMode] = useState<ModeType>("UGC");
   const [selectedStyle, setSelectedStyle] = useState<string>("ugc");
   const [prompt, setPrompt] = useState("");
@@ -432,6 +432,7 @@ export default function MarketingStudioProductWorkspace() {
                       onImageModelChange={setSelectedImageModel}
                       onVideoModelChange={setSelectedVideoModel}
                       attachedProductMedia={attachedProductMedia}
+                      onProductClick={handleProductCardClick}
                       onGenerate={handleGenerate}
                       resizeWidth={composerWidth}
                       resizeHeight={composerHeight}
@@ -502,6 +503,7 @@ export default function MarketingStudioProductWorkspace() {
                   onImageModelChange={setSelectedImageModel}
                   onVideoModelChange={setSelectedVideoModel}
                   attachedProductMedia={attachedProductMedia}
+                  onProductClick={handleProductCardClick}
                   onGenerate={handleGenerate}
                   resizeWidth={composerWidth}
                   resizeHeight={composerHeight}
