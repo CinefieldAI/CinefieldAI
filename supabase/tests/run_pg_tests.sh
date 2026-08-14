@@ -59,7 +59,7 @@ for f in \
   "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
   "$ROOT/supabase/migrations/20260820000000_media_assets.sql" \
   "$ROOT/supabase/migrations/20260821000000_media_ingest_gate.sql" \
-  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"
+  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"
 do
   psql_run -q < "$f" >/dev/null
   echo "    applied $(basename "$f")"
@@ -76,6 +76,9 @@ psql_run < "$ROOT/supabase/tests/test_media_assets.sql" 2>&1 | grep -E "NOTICE|E
 
 echo "==> media ingest gate proofs (Phase 9-B)"
 psql_run < "$ROOT/supabase/tests/test_media_ingest_gate.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
+
+echo "==> quarantine release proofs (Phase 9-E)"
+psql_run < "$ROOT/supabase/tests/test_quarantine_release.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> DR backup proofs (Phase 9-D)"
 psql_run < "$ROOT/supabase/tests/test_dr_backup.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
@@ -239,6 +242,45 @@ race 6 "SELECT cancel_intent_race(__W__, '88888888-8888-4888-8888-888888888888')
 
 echo "==> race: server-side generation creation, same idempotency key (6 connections)"
 race 6 "SELECT create_generation_race(__W__, 'idem-create-race-key');"
+
+# ---------------------------------------------------------------------------
+# Phase 9-E — quarantine release races.
+#
+# Each fixture is seeded with ONE approval already banked, so every racer's
+# own approval reaches the two-person threshold. Without the row lock in
+# approve_media_release they would all release; with it, exactly one does.
+# ---------------------------------------------------------------------------
+psql_run -q -c "CREATE TABLE IF NOT EXISTS release_race_assets (tag text PRIMARY KEY, asset_id uuid);" >/dev/null
+
+seed_release_fixture() {
+  local tag="$1" seed_approval="$2" id
+  id=$(psql_run -qtA -c "SELECT mk_evidenced_asset('${tag}');" | tr -d '[:space:]')
+  psql_run -q -c "UPDATE media_assets SET moderation_status='passed', moderated_at=now() WHERE id='${id}';" >/dev/null
+  if [ "$seed_approval" = "yes" ]; then
+    psql_run -q -c "SELECT approve_media_release('${id}'::uuid, 'admin_seed', 'ops_review');" >/dev/null
+  fi
+  psql_run -q -c "INSERT INTO release_race_assets (tag, asset_id) VALUES ('${tag}', '${id}') ON CONFLICT (tag) DO UPDATE SET asset_id = EXCLUDED.asset_id;" >/dev/null
+  echo "$id"
+}
+
+echo "==> race: concurrent quarantine release, one approval already banked (6 connections)"
+RC1=$(seed_release_fixture rc1 yes)
+race 6 "SELECT release_race(__W__, '${RC1}'::uuid, 'admin_race_' || __W__);"
+
+echo "==> race: duplicate reject of one asset (6 connections)"
+RC2=$(seed_release_fixture rc2 no)
+race 6 "SELECT reject_race(__W__, '${RC2}'::uuid);"
+
+echo "==> race: release vs reject of one asset (2 connections, opposite intents)"
+RC3=$(seed_release_fixture rc3 yes)
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "SELECT release_vs_reject_race(1, '${RC3}'::uuid, 'admin_rel', 'release');" >/dev/null 2>&1 &
+V1=$!
+docker exec -i "$CONTAINER" psql -qtA -U postgres -d "$DB" -c "SELECT release_vs_reject_race(2, '${RC3}'::uuid, 'admin_rej', 'reject');" >/dev/null 2>&1 &
+V2=$!
+wait "$V1" 2>/dev/null || true; wait "$V2" 2>/dev/null || true
+
+echo "==> Phase 9-E race invariants"
+psql_run < "$ROOT/supabase/tests/assert_quarantine_release_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
 
 echo "==> race invariants"
 psql_run < "$ROOT/supabase/tests/assert_concurrency_races.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"

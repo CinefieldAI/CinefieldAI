@@ -457,11 +457,33 @@ test("G25: every Phase 6R migration is additive, idempotent, and search_path-saf
   for (const name of PHASE_6R) {
     const sql = readSource(join("supabase/migrations", name));
 
-    // Nothing destructive.
+    // Nothing destructive AT APPLY TIME.
+    //
+    // Dollar-quoted bodies are removed first, because what a migration DOES
+    // when it runs and what a function it defines does when someone calls it
+    // are different questions. `DELETE FROM approvals WHERE asset_id = ...`
+    // inside reject_media_asset touches nothing when the migration applies;
+    // the same statement at top level would empty the table. The top-level
+    // check below is exactly as strict as it has always been.
+    const bodies = sql.match(/\$([a-zA-Z_]*)\$[\s\S]*?\$\1\$/g) ?? [];
+    const applied = sql.replace(/\$([a-zA-Z_]*)\$[\s\S]*?\$\1\$/g, "<body>");
+
     assert.ok(
-      !/\bDROP\s+TABLE\b|\bTRUNCATE\b|\bDELETE\s+FROM\b|\bDROP\s+COLUMN\b/i.test(sql),
+      !/\bDROP\s+TABLE\b|\bTRUNCATE\b|\bDELETE\s+FROM\b|\bDROP\s+COLUMN\b/i.test(applied),
       `${name} contains a destructive statement`
     );
+
+    // And a function body may delete only a named subset — never a whole
+    // table, and never by dropping or truncating one.
+    for (const body of bodies) {
+      for (const stmt of body.match(/\bDELETE\s+FROM\b[^;]*/gi) ?? []) {
+        assert.ok(/\bWHERE\b/i.test(stmt), `${name}: an unscoped DELETE inside a function body`);
+      }
+      assert.ok(
+        !/\bDROP\s+TABLE\b|\bTRUNCATE\b|\bDROP\s+COLUMN\b/i.test(body),
+        `${name}: a function body drops or truncates`
+      );
+    }
 
     // Re-runnable.
     const creates = sql.match(/CREATE\s+(TABLE|INDEX|UNIQUE INDEX)\s+(?!IF NOT EXISTS)/gi) ?? [];

@@ -249,6 +249,77 @@ bucket name and the region — identifiers, not secrets.
 
 ---
 
+## Quarantine release lane (Phase 9-E)
+
+```
+CODE_CONTROL_IMPLEMENTED   YES
+TEST_EVIDENCE_PASS         YES   (30 tests + 7 PostgreSQL proofs + 4 race proofs)
+LIVE_SCHEMA_APPLIED        YES   (20260823000000, verified on the linked project)
+MODERATION_ENGINE          NONE  — and therefore nothing can be released
+```
+
+Every asset created by 9-A/9-B starts `quarantined`. `approve_media_release`,
+`request_media_release` and `reject_media_asset` are the only code that
+changes that, they are `service_role`-only, and there is no HTTP route to
+any of them.
+
+**Two people.** The roadmap lists quarantine release among the actions that
+"tek admin onayıyla çalıştırılamaz". Release is therefore a request one
+admin raises and a *different* admin approves. The mechanism is the primary
+key on `(asset_id, approver_clerk_user_id)`: the same human approving twice
+writes the same row, so the count does not move (`PROOF E2`).
+
+**No moderation override.** An administrator has authority to release a
+CLEARED asset, never to declare one cleared. Two approvals of an unmoderated
+asset still fail with `moderation_not_passed`, and no approval is even
+banked (`PROOF E1`). The roadmap authorises releasing cleared media; it
+authorises no human override of the verdict itself, so none was built.
+
+**No engine is configured.** `src/lib/media/moderation-contract.ts` defines
+the shape a classifier must satisfy and registers nothing. `ModerationVerdict`
+has no member meaning "probably fine", so an unimplemented engine cannot
+return one — the only thing it can return is `null`, which is not a verdict.
+An unknown engine name resolves to `null` rather than to a permissive
+fallback. The consequence is visible and intended: **no asset can currently
+leave quarantine**, and the delivery gate in `attachSignedUrls` therefore
+mints no signed URL for generated media.
+
+**The delivery gate is fail-closed.** It lives inside `attachSignedUrls`
+rather than at its call sites, so a future caller cannot obtain a URL by
+forgetting the check, and a caller that passes no generation to check
+against gets no URLs at all. It is answered by the database immediately
+before minting, because a cached `true` would serve media that was rejected
+a second ago.
+
+**The audit cannot be revised.** `media_safety_audit` is append-only through
+a `BEFORE UPDATE OR DELETE` trigger that refuses every role, including the
+one that writes it (`PROOF E5`, `PROOF R4`). It carries short reason codes
+matching `^[a-z][a-z0-9_]{1,64}$` — never free text, never a URL, never a
+payload.
+
+**Concurrency is decided by the database.** Six simultaneous approvals of a
+cleared asset with one approval already banked produce exactly one release
+and one event; six simultaneous rejects produce one reject and one event; a
+release and a reject arriving together cannot both take effect, and the
+emitted event always agrees with the final row state (`PROOF R1`–`R3`).
+Replay is inert in both directions.
+
+### Residual risk
+
+- **No moderation engine exists.** Selecting one is a product and cost
+  decision, not something an implementation batch should make. Until then
+  the release lane is complete but unreachable, which is the safe failure.
+- **No admin surface.** The functions are callable only from server code
+  with a `ROUTE_ADMIN_CLERK_USER_IDS` allowlist that is currently unset —
+  meaning nobody is an admin. An operations UI is a later phase.
+- **`INPUT` and `OUTPUT` quarantine remain separate lanes** and must not be
+  merged; nothing in this batch merges them.
+- **No appeal or reopen flow exists.** Rejection is terminal for the normal
+  lane. Pulling released media back is a takedown, which is a
+  retention/legal operation (Phase 23), not a moderation reject.
+
+---
+
 ## Gates not yet addressed
 
 | Gate | Subject | Package | Status |
@@ -266,6 +337,7 @@ duplicate SQS delivery, cross-tenant SSE.
 
 ```
 SSRF                     PASS  (9-E minimum)
+media moderation gate    PASS at DB level (PROOF E1-E7, R1-R4); no engine yet
 IDOR / BOLA              NOT_STARTED
 webhook replay           NOT_STARTED
 billing race             PASS at DB level (PROOF R/S/T/U)

@@ -785,7 +785,10 @@ async function collectAndFinalize(params: {
     isMock: model.isMock,
   });
 
-  const withSignedUrls = await attachSignedUrls(admin, uploaded);
+  // Phase 9-E: the delivery gate runs inside attachSignedUrls. A completed
+  // generation whose asset is still quarantined returns outputs with NO
+  // signed URL — completion and deliverability are different facts.
+  const withSignedUrls = await attachSignedUrls(admin, uploaded, { generationId });
 
   return {
     generationId,

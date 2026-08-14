@@ -87,8 +87,32 @@ export async function uploadOutputs(
  */
 export async function attachSignedUrls(
   admin: SupabaseClient,
-  outputs: StoredOutput[]
+  outputs: StoredOutput[],
+  gate?: { generationId: string }
 ): Promise<StoredOutput[]> {
+  // ---- PHASE 9-E DELIVERY GATE -------------------------------------------
+  //
+  // A signed URL is usable media. Minting one for an asset that has not left
+  // quarantine hands the user bytes no moderation has cleared, which is what
+  // the roadmap forbids: "moderation tamamlanmadan hiçbir obje public CDN
+  // yoluna çıkmıyor."
+  //
+  // The check lives HERE rather than at the call site so no future caller can
+  // obtain a URL by forgetting it, and it is answered by the database
+  // immediately before minting — a cached answer could serve media that was
+  // rejected a second ago.
+  //
+  // A caller that passes no `gate` gets no URLs. Fail-closed: a request that
+  // does not say which generation these outputs belong to cannot be checked,
+  // and an uncheckable request is not a safe one.
+  if (!gate) {
+    return outputs.map((output) => ({ ...output, signedUrl: null }));
+  }
+
+  if (!(await isGenerationAssetDeliverable(admin, gate.generationId))) {
+    return outputs.map((output) => ({ ...output, signedUrl: null }));
+  }
+
   const withUrls: StoredOutput[] = [];
 
   for (const output of outputs) {
@@ -100,4 +124,38 @@ export async function attachSignedUrls(
   }
 
   return withUrls;
+}
+
+/**
+ * Whether this generation's canonical original has left quarantine.
+ *
+ * Read here rather than imported from the safety module, to keep the storage
+ * layer free of a dependency on the admin layer. The question is one row and
+ * four columns; duplicating a `select` is cheaper than an import cycle.
+ */
+async function isGenerationAssetDeliverable(
+  admin: SupabaseClient,
+  generationId: string
+): Promise<boolean> {
+  const { data } = await admin
+    .from("media_assets")
+    .select("quarantine_status,ingest_status,status,tombstoned_at")
+    .eq("generation_id", generationId)
+    .eq("role", "original")
+    .maybeSingle();
+
+  const row = data as {
+    quarantine_status?: string;
+    ingest_status?: string;
+    status?: string;
+    tombstoned_at?: string | null;
+  } | null;
+
+  if (!row || row.tombstoned_at) return false;
+
+  return (
+    row.quarantine_status === "released" &&
+    row.ingest_status === "verified" &&
+    row.status === "finalized"
+  );
 }
