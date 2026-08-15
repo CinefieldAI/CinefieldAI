@@ -22,6 +22,9 @@ import StyleModal from "./StyleModal";
 import CameraSettings from "./CameraSettings";
 import Cinema3DirectorsPanel from "./Cinema3DirectorsPanel";
 import CinemaStudio25DirectorPanel from "./CinemaStudio25DirectorPanel";
+import CinemaStudio40CreativeControls, {
+  type Cinema40PanelId,
+} from "./CinemaStudio40CreativeControls";
 import DockedPanelContainer from "./DockedPanelContainer";
 import CinemaStudioImagePanel from "./CinemaStudioImagePanel";
 import ImageForm from "@/components/image-tools/ImageForm";
@@ -151,6 +154,43 @@ export default function CinemaStudioWorkspace() {
   const [cinema25SpeedRampIndex, setCinema25SpeedRampIndex] = useState(0);
   const [cinema25SpeedRampPoints, setCinema25SpeedRampPoints] = useState([50, 50, 50, 50, 50]);
 
+  // Cinema Studio 4.0 Creative Controls — isolated from Cinema Studio 2.5's
+  // Director Panel above. `cinema40Panel` and the two inner-tab values are
+  // lifted here (not local to CinemaStudio40CreativeControls) so PromptBar's
+  // own "Camera movement" shortcut button can open the exact same popover
+  // instance from below instead of rendering a second, duplicate Movement list.
+  const [cinema40Panel, setCinema40Panel] = useState<Cinema40PanelId | null>(null);
+  const [cinema40FilmSetupTab, setCinema40FilmSetupTab] = useState<"genre" | "era" | "tempo">("genre");
+  const [cinema40CameraTab, setCinema40CameraTab] = useState<"setup" | "movement">("setup");
+  const [cinema40AssetsPickerOpen, setCinema40AssetsPickerOpen] = useState(false);
+  const [cinema40AssetsPickerTab, setCinema40AssetsPickerTab] = useState<"uploads" | "elements">("uploads");
+  const [cinema40References, setCinema40References] = useState<string[]>([]);
+  const [cinema40FilmSetup, setCinema40FilmSetup] = useState({ genre: "General", era: "Auto", tempo: "Auto" });
+  const [cinema40Camera, setCinema40Camera] = useState({ camera: "Auto", lens: "Auto" });
+  const [cinema40ColorPalette, setCinema40ColorPalette] = useState("Auto");
+  const [cinema40Lighting, setCinema40Lighting] = useState("Auto");
+
+  const resetCinema40Controls = () => {
+    setCinema40References([]);
+    setCinema40FilmSetup({ genre: "General", era: "Auto", tempo: "Auto" });
+    setCinema40Camera({ camera: "Auto", lens: "Auto" });
+    setCinema40ColorPalette("Auto");
+    setCinema40Lighting("Auto");
+  };
+
+  const appendCinema40MovementTag = (tag: string) => {
+    setPrompt((p) => (p.trim() ? `${p.trim()} #${tag}` : `#${tag}`));
+  };
+
+  // Mirrors PromptBar's own portalRoot pattern (set after mount so
+  // document.body exists) — CinemaStudio40CreativeControls renders its
+  // popovers via this container since it is a sibling of PromptBar, not a
+  // child, so it cannot reach PromptBar's own "prompt-popover-root" div.
+  const [cinema40PortalRoot, setCinema40PortalRoot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setCinema40PortalRoot(document.body);
+  }, []);
+
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
 
@@ -242,6 +282,7 @@ export default function CinemaStudioWorkspace() {
   const isCinema35 = selectedModel.id === "cinema-3.5";
   const isCinema30 = selectedModel.id === "cinema-3.0";
   const isCinema25 = selectedModel.id === "cinema-2.5";
+  const isCinema40 = selectedModel.id === "cinema-studio-4.0";
 
   // Navbar requires handlers; on /generate these are inert (links still work).
   const noop = () => {};
@@ -655,6 +696,85 @@ export default function CinemaStudioWorkspace() {
                   onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
                   nanoBanana2LiteThinking={nanoBanana2LiteThinking}
                   onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
+                />
+              </div>
+            ) : isCinema40 ? (
+              <div key="cinema40-mode-container" className="flex min-w-0 flex-1 flex-col gap-2 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-2">
+                <CinemaStudio40CreativeControls
+                  settings={{
+                    references: cinema40References,
+                    filmSetup: cinema40FilmSetup,
+                    camera: cinema40Camera,
+                    colorPalette: cinema40ColorPalette,
+                    lighting: cinema40Lighting,
+                  }}
+                  onFilmSetupChange={(next) => setCinema40FilmSetup((s) => ({ ...s, ...next }))}
+                  onCameraChange={(next) => setCinema40Camera((s) => ({ ...s, ...next }))}
+                  onColorPaletteChange={setCinema40ColorPalette}
+                  onLightingChange={setCinema40Lighting}
+                  onAddReference={(url) => setCinema40References((s) => [...s, url])}
+                  onResetAll={resetCinema40Controls}
+                  onAppendMovementTag={appendCinema40MovementTag}
+                  openPanel={cinema40Panel}
+                  onOpenPanelChange={setCinema40Panel}
+                  cameraTab={cinema40CameraTab}
+                  onCameraTabChange={setCinema40CameraTab}
+                  filmSetupTab={cinema40FilmSetupTab}
+                  onFilmSetupTabChange={setCinema40FilmSetupTab}
+                  assetsPickerOpen={cinema40AssetsPickerOpen}
+                  onAssetsPickerOpenChange={setCinema40AssetsPickerOpen}
+                  assetsPickerTab={cinema40AssetsPickerTab}
+                  onAssetsPickerTabChange={setCinema40AssetsPickerTab}
+                  portalContainer={cinema40PortalRoot}
+                />
+                <PromptBar
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  mode={mode}
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
+                  resolution={resolution}
+                  onResolutionChange={setResolution}
+                  duration={duration}
+                  durations={selectedModel.durations}
+                  onDurationChange={setDuration}
+                  batch={batch}
+                  onBatchChange={setBatch}
+                  sound={sound}
+                  onSoundChange={setSound}
+                  creditCost={creditCost}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  klingAdvancedPrompt={klingAdvancedPrompt}
+                  onKlingAdvancedPromptChange={setKlingAdvancedPrompt}
+                  kling3TurboSettings={kling3TurboSettings}
+                  onKling3TurboSettingsChange={setKling3TurboSettings}
+                  cinema25References={cinema25References}
+                  onCinema25AssignReference={(slotIndex, url) =>
+                    setCinema25References((s) => {
+                      const next = [...s];
+                      next[slotIndex] = url;
+                      return next;
+                    })
+                  }
+                  cinema25ReferencesPopoverOpen={cinema25ReferencesPopoverOpen}
+                  onCinema25ReferencesPopoverOpenChange={setCinema25ReferencesPopoverOpen}
+                  nanoBanana2LiteThinking={nanoBanana2LiteThinking}
+                  onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
+                  onOpenCinema40References={() => {
+                    setCinema40AssetsPickerTab("uploads");
+                    setCinema40AssetsPickerOpen(true);
+                  }}
+                  onOpenCinema40Elements={() => {
+                    setCinema40AssetsPickerTab("elements");
+                    setCinema40AssetsPickerOpen(true);
+                  }}
+                  onOpenCinema40CameraMovement={() => {
+                    setCinema40Panel("camera");
+                    setCinema40CameraTab("movement");
+                  }}
                 />
               </div>
             ) : (

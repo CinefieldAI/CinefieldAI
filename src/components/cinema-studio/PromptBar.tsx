@@ -105,6 +105,15 @@ export interface PromptBarProps {
   // so its current selection can be captured into generation metadata.
   nanoBanana2LiteThinking: "High" | "Minimal";
   onNanoBanana2LiteThinkingChange: (value: "High" | "Minimal") => void;
+
+  // Cinema Studio 4.0 — the bottom composer row's References/Elements
+  // leading buttons and its "Camera movement" shortcut icon all open the
+  // SAME popovers CinemaStudio40CreativeControls renders above the bar
+  // (state lifted to the workspace), rather than duplicating that UI here.
+  // Optional so every other page/model that renders PromptBar is unaffected.
+  onOpenCinema40References?: () => void;
+  onOpenCinema40Elements?: () => void;
+  onOpenCinema40CameraMovement?: () => void;
 }
 
 /** Verbatim reference icon — three sparkle stars + a pencil stroke (Kling 2.6's Enhance chip). */
@@ -573,6 +582,9 @@ export default function PromptBar(props: PromptBarProps) {
     onCinema25ReferencesPopoverOpenChange,
     nanoBanana2LiteThinking,
     onNanoBanana2LiteThinkingChange,
+    onOpenCinema40References,
+    onOpenCinema40Elements,
+    onOpenCinema40CameraMovement,
   } = props;
 
   const isVideo = mode === "video";
@@ -584,6 +596,9 @@ export default function PromptBar(props: PromptBarProps) {
   const isCinema35 = model === "cinema-3.5";
   const isCinema30 = model === "cinema-3.0";
   const isCinema25 = model === "cinema-2.5";
+
+  // Cinema Studio 4.0 detection
+  const isCinema40 = model === "cinema-studio-4.0";
 
   // Seedance 2.0 family detection
   const isSeedance2Family =
@@ -891,6 +906,17 @@ export default function PromptBar(props: PromptBarProps) {
       onDurationChange(6);
     }
   }, [isHappyHorse, onAspectRatioChange, onResolutionChange, onDurationChange]);
+
+  // Set Cinema Studio 4.0 defaults
+  useEffect(() => {
+    if (isCinema40) {
+      onAspectRatioChange("16:9");
+      onResolutionChange("1080p");
+      onDurationChange(5);
+      onBatchChange("1/4");
+      onSoundChange(true);
+    }
+  }, [isCinema40, onAspectRatioChange, onResolutionChange, onDurationChange, onBatchChange, onSoundChange]);
 
   // Set Grok Imagine defaults
   useEffect(() => {
@@ -1582,6 +1608,65 @@ export default function PromptBar(props: PromptBarProps) {
               </div>
             )}
 
+            {/* Cinema Studio 4.0 — References/Elements open the exact same
+                popover CinemaStudio40CreativeControls renders above the bar
+                (no second Assets Picker instance); the third icon jumps
+                straight to that same panel's Camera → Movement tab instead
+                of duplicating the tag list here. */}
+            {isCinema40 && (
+              <div className="flex h-8 items-center rounded-lg border border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 transition-colors">
+                <button
+                  type="button"
+                  onClick={onOpenCinema40References}
+                  aria-label="References"
+                  title="References"
+                  className="flex h-8 w-8 items-center justify-center rounded-l-lg text-neutral-400 hover:bg-white/10 transition-colors"
+                >
+                  <Plus className="size-4 text-white/80" />
+                </button>
+
+                <div className="h-4 w-px bg-white/20" />
+
+                <button
+                  type="button"
+                  onClick={onOpenCinema40Elements}
+                  aria-label="Elements"
+                  title="Elements"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center text-white/80 transition-colors hover:bg-white/10"
+                >
+                  <AtSign className="size-4" />
+                </button>
+
+                <div className="h-4 w-px bg-white/20" />
+
+                <button
+                  type="button"
+                  onClick={onOpenCinema40CameraMovement}
+                  aria-label="Camera movement"
+                  title="Camera movement"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-r-lg text-white/80 transition-colors hover:bg-white/10"
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="size-4"
+                  >
+                    <path
+                      d="M14.5 7L19 4.5V15.5L14.5 13"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <rect x="2.5" y="5.5" width="12" height="9" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
@@ -1706,6 +1791,8 @@ export default function PromptBar(props: PromptBarProps) {
                   canonicalResolutions ??
                   (isCinema25
                     ? ["720p", "1080p"]
+                    : isCinema40
+                    ? ["1080p"]
                     : isKling3 || isKling3Turbo || isKling3Omni
                     ? ["720p", "1080p", "4K"]
                     : isVeo31Lite ||
@@ -1878,6 +1965,25 @@ export default function PromptBar(props: PromptBarProps) {
                 width={isCinema35 ? 200 : undefined}
                 collisionPadding={isCinema35 ? 12 : undefined}
               />
+            )}
+
+            {/* Cinema Studio 4.0 — Sound toggle + batch stepper, placed after
+                Duration. BatchStepper reuses the exact component Nano Banana
+                Pro already uses further up this file; no new stepper built. */}
+            {isCinema40 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSoundChange(!sound)}
+                  aria-label="Toggle sound"
+                  aria-pressed={sound}
+                  className={`${PILL} ${sound ? "text-white" : "text-neutral-400"}`}
+                >
+                  {sound ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+                  {sound ? "On" : "Off"}
+                </button>
+                <BatchStepper value={batch} onChange={onBatchChange} />
+              </>
             )}
 
             {/* Bitrate chip - Seedance 2.0 family, placed after Duration. Excluded

@@ -197,6 +197,17 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         baseCredits: 120,
         characterStyle: true,
       },
+      {
+        id: "cinema-studio-4.0",
+        name: "Cinema Studio 4.0",
+        description: "Direct every detail — film setup, camera, color and lighting",
+        icon: Clapperboard,
+        resolution: "1080p",
+        durations: [5],
+        defaultDuration: 5,
+        baseCredits: 80,
+        characterStyle: true,
+      },
     ],
   },
   {
@@ -509,6 +520,71 @@ export const CAMERA_MOVEMENTS = [
 export const CAMERAS = ["Auto", "Classic Digital", "Vintage Haze"];
 export const LENSES = ["Auto", "35mm", "50mm", "85mm"];
 export const APERTURES = ["Auto", "f/1.4", "f/2.8", "f/4", "f/8"];
+
+/* ------------------------------------------------------------------ */
+/* Cinema Studio 4.0 — Creative Controls option sets                   */
+/* ------------------------------------------------------------------ */
+
+/** Film setup → Era tab. */
+export const CINEMA40_ERAS = ["Auto", "1960s", "1980s", "1990s", "2000s", "2020s"];
+
+/** Film setup → Tempo tab (pacing of the montage). */
+export const CINEMA40_TEMPO = ["Auto", "Slow Burn", "Steady", "Building", "Frenetic", "Whiplash"];
+
+/** Camera → Setup tab, CAMERA group. */
+export const CINEMA40_CAMERAS = ["Auto", "Modern", "35mm Film", "8mm Film", "DV Camcorder"];
+
+/** Camera → Setup tab, LENS group. */
+export const CINEMA40_LENSES = [
+  "Auto",
+  "Clean Sharp",
+  "Anamorphic",
+  "Vintage Anamorphic",
+  "Warm Vintage",
+  "Halation Vintage",
+];
+
+/**
+ * Camera → Movement tab. Each entry inserts a `#Tag` into the prompt rather
+ * than being "selected" — there is no active/inactive state, clicking one
+ * just appends it (matching the reference: "Adds to the prompt box, or type
+ * # there").
+ */
+export const CINEMA40_MOVEMENT_TAGS = [
+  "Static shot",
+  "Handheld",
+  "Tracking",
+  "POV",
+  "Pan left",
+  "Pan right",
+  "Tilt up",
+  "Tilt down",
+  "Crane up",
+  "Crane down",
+  "Pedestal up",
+  "Pedestal down",
+  "Dolly in",
+  "Dolly out",
+  "Dolly zoom",
+  "Truck left",
+  "Truck right",
+  "Slider left",
+  "Slider right",
+  "Arc left",
+  "Arc right",
+  "Side tracking",
+  "Whip pan",
+  "Slow zoom in",
+  "Slow zoom out",
+  "Crush zoom",
+  "Rack focus",
+  "Drone orbit",
+  "Aerial pullback",
+  "Helicopter shot",
+  "Snorricam",
+  "Robot arm",
+  "Bullet time",
+];
 
 /* ------------------------------------------------------------------ */
 /* Prompt-bar option sets                                              */
