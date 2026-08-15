@@ -419,8 +419,23 @@ test("S14B-27  no external account is required by this batch - package.json gain
 test("S14B-28  no production deploy path exists - Deploy Guard/Rollback Guard execution is not implemented", () => {
   for (const { path: file, body } of deploymentSourceFiles()) {
     const bare = stripComments(body);
-    assert.ok(!/vercel\.deploy|rollback\(|promoteToProduction|triggerDeploy/i.test(bare),
-      `${file} contains a deploy/rollback execution path`);
+    // Targets EXECUTION, not the word "rollback". Phase 14-D legitimately
+    // added `evaluateRollback()` — a pure decision function that returns a
+    // verdict and touches nothing. The bare `rollback(` pattern was a fair
+    // proxy while no rollback code existed at all; it now conflates deciding
+    // with executing, which is the distinction 14-D is built around.
+    assert.ok(
+      !/vercel\.deploy|promoteToProduction|triggerDeploy|createDeployment/i.test(bare),
+      `${file} contains a deploy execution path`
+    );
+    assert.ok(
+      !/\b(perform|execute|apply|do)Rollback\s*\(|\brollbackTo\s*\(|\brollbackDeployment\s*\(/i.test(bare),
+      `${file} contains a rollback execution path`
+    );
+    // The strongest remaining guarantee: no network primitive at all, so
+    // nothing in this module can reach a deployment platform regardless of
+    // what any function is named.
+    assert.ok(!/\bfetch\s*\(|axios|@vercel\//i.test(bare), `${file} can reach the network`);
   }
   // PR_ELIGIBLE is explicitly documented as distinct from deploy eligibility.
   const contract = read("src/lib/deployment/pr-proposal-contract.ts");
