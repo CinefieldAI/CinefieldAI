@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { stripSqlComments } from "../../../scripts/scan-migration-safety";
 import {
   DEPENDENCY_MATRIX,
   PROBE_TIMEOUT_MS,
@@ -349,8 +350,26 @@ test("21. no worker heartbeat table was invented", () => {
   // the health/reconciliation role (¶239, ¶669, ¶1136) — a second liveness
   // owner writing rows would be a lifecycle owner nobody asked for. Deferred
   // deliberately, and no migration was created.
+  // Asserts the ABSENCE OF A HEARTBEAT STORE, not a frozen migration list.
+  //
+  // This previously pinned "the newest migration is <X>", which made it fail
+  // the moment ANY later, unrelated migration landed — it did, and the test
+  // reported "a heartbeat table was invented" about a migration that revokes
+  // grants. The intent was always "no heartbeat storage exists"; that is what
+  // is checked now, and it stays true no matter how the schema grows.
+  // SQL comments are stripped before matching. One migration's comment reads
+  // "-- not a heartbeat: nothing has to be alive for recovery to work", and
+  // matching raw text flagged it for the prose that says the opposite — the
+  // same trap this file already documents for the TypeScript sources below.
   const migrations = readdirSync(path.join(ROOT, "supabase/migrations")).sort();
-  assert.equal(migrations[migrations.length - 1], "20260827000000_policy_decision_evidence.sql");
+  const heartbeatMigrations = migrations.filter(
+    (m) =>
+      /heartbeat/i.test(m) ||
+      /heartbeat/i.test(
+        stripSqlComments(readFileSync(path.join(ROOT, "supabase/migrations", m), "utf8"))
+      )
+  );
+  assert.deepEqual(heartbeatMigrations, [], "a heartbeat store was added to the schema");
   // Comments stripped: the contract header QUOTES the roadmap line that gives
   // Better Stack the heartbeat role, and matching prose would report the
   // opposite of the truth.

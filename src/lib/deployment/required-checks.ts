@@ -143,12 +143,12 @@ export const REQUIRED_CHECK_REGISTRY: Readonly<Record<RequiredCheckId, RequiredC
   },
   migration_safety: {
     id: "migration_safety",
-    command: "(static review of touched supabase/migrations/ files)",
+    command: "npx tsx scripts/scan-migration-safety.ts",
     blocking: true,
     applicableRiskClasses: ["HIGH_RISK", "FORBIDDEN_AUTOMATION"],
     status: "available",
     failureBehavior: "block_pr",
-    why: "Required whenever a migration is touched, regardless of computed risk tier — see the migration signal rule below.",
+    why: "Static destructive-SQL scan (DROP TABLE/COLUMN/SCHEMA, statement-position TRUNCATE, unqualified DELETE, in-place column retype). Required whenever a migration is touched, regardless of computed risk tier. It does NOT prove a migration is correct or reversible, and cannot see whether an already-applied migration was rewritten — postgres_proofs and human review cover those.",
   },
   postgres_proofs: {
     id: "postgres_proofs",

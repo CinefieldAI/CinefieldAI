@@ -577,11 +577,25 @@ test("30. the Phase 12 security surfaces are untouched in substance", () => {
   assert.match(stripComments(read("src/lib/policy/policy-gate.ts")), /policy_evaluation_failed/);
 });
 
-test("31. no migration was created", () => {
-  const migrations = readdirSync(path.join(ROOT, "supabase/migrations")).sort();
-  const newest = migrations[migrations.length - 1];
-  assert.equal(newest, "20260827000000_policy_decision_evidence.sql",
-    "a migration was added; trace_id already existed and none was needed");
+test("31. no trace-propagation migration was created", () => {
+  // Asserts that 13-A ADDED NO TRACE MIGRATION, not that the migration list
+  // is frozen. The previous form pinned "the newest migration is <X>", which
+  // failed as soon as any later, unrelated migration landed and then blamed
+  // 13-A for it. `trace_id` already existed in the schema before 13-A, so the
+  // real claim is that no migration was needed to introduce it — and that is
+  // what is checked here.
+  const dir = path.join(ROOT, "supabase/migrations");
+  const migrations = readdirSync(dir).sort();
+
+  const traceMigrations = migrations.filter(
+    (m) => /trace/i.test(m) || /\badd\s+column\b[^;]*trace_id/i.test(readFileSync(path.join(dir, m), "utf8"))
+  );
+  assert.deepEqual(traceMigrations, [],
+    "a migration was added for trace_id; it already existed and none was needed");
+
+  // And the column 13-A relies on genuinely predates this batch.
+  const securityEvents = readFileSync(path.join(dir, "20260826000000_security_events.sql"), "utf8");
+  assert.match(securityEvents, /trace_id/, "the pre-existing trace_id column is missing");
 });
 
 test("32. the pinned client prompt-log findings are untouched", () => {

@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { stripSqlComments } from "../../../scripts/scan-migration-safety";
 
 /**
  * PHASE 6R CLOSURE AUDIT (6R-G / 6R-A).
@@ -466,10 +467,21 @@ test("G25: every Phase 6R migration is additive, idempotent, and search_path-saf
     // the same statement at top level would empty the table. The top-level
     // check below is exactly as strict as it has always been.
     const bodies = sql.match(/\$([a-zA-Z_]*)\$[\s\S]*?\$\1\$/g) ?? [];
-    const applied = sql.replace(/\$([a-zA-Z_]*)\$[\s\S]*?\$\1\$/g, "<body>");
+    // Comments are stripped too, for the same reason the bodies are: what a
+    // migration DOES and what its header SAYS are different questions. A
+    // migration titled "-- ... TRUNCATE removal ..." was being reported as
+    // containing a TRUNCATE, which is the opposite of what that line means.
+    // `stripSqlComments` is the Phase 14-A scanner's, so "what counts as a
+    // comment" has one definition rather than two that can drift.
+    const applied = stripSqlComments(sql.replace(/\$([a-zA-Z_]*)\$[\s\S]*?\$\1\$/g, "<body>"));
 
+    // TRUNCATE is matched in STATEMENT POSITION only. As a bare word it is
+    // also a PRIVILEGE NAME: `GRANT ...,TRUNCATE,... ON TABLE` and
+    // `REVOKE TRUNCATE ON ALL TABLES` are grant management, and the latter
+    // REMOVES the ability to truncate — flagging it as destructive inverted
+    // its meaning. The other three shapes have no such second reading.
     assert.ok(
-      !/\bDROP\s+TABLE\b|\bTRUNCATE\b|\bDELETE\s+FROM\b|\bDROP\s+COLUMN\b/i.test(applied),
+      !/\bDROP\s+TABLE\b|(?:^|;)\s*TRUNCATE\b|\bDELETE\s+FROM\b|\bDROP\s+COLUMN\b/im.test(applied),
       `${name} contains a destructive statement`
     );
 

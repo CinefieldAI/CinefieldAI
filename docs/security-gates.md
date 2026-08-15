@@ -2541,6 +2541,33 @@ this repo has no separate "unit only" command), `build` (`next build`),
 wired yet, and never resolved as required. A deferred check is never reported
 as passing.
 
+**`migration_safety` was made real in Phase 14-A.** It shipped in 14-B marked
+`status: "available"` while its `command` was the parenthetical string
+"(static review of touched supabase/migrations/ files)" — a description of a
+human reading files, not something a runner can execute. The Phase 14 post-14B
+audit flagged that as a real (LOW) defect: a registry that names a check,
+marks it available, and has nothing behind it misreports its own coverage.
+It now names `npx tsx scripts/scan-migration-safety.ts`, a real scanner in the
+same shape as the secret and telemetry ones.
+
+That scanner flags destructive SQL SHAPES — `DROP TABLE`/`COLUMN`/`SCHEMA`/
+`DATABASE`, statement-position `TRUNCATE`, unqualified `DELETE FROM`, and
+in-place column retype — and deliberately does NOT flag `DROP POLICY`,
+`DROP FUNCTION`, `DROP TRIGGER` or `DROP CONSTRAINT`, all of which appear
+legitimately here and change rules rather than rows. Two false-positive traps
+are closed by construction: SQL comments are blanked before matching (one
+migration's header literally reads "TRUNCATE removal"), and `TRUNCATE` counts
+only in statement position, because as a bare word it is also a PRIVILEGE
+name — `GRANT ...,TRUNCATE,...` and `REVOKE TRUNCATE ON ALL TABLES` are grant
+management, and the latter *removes* the ability to truncate.
+
+It proves a narrow thing, and says so: it cannot prove a migration is correct
+or reversible, and it cannot see whether an already-applied migration was
+rewritten, because applied state lives in the database rather than the files.
+`postgres_proofs` and human review cover those. A test asserts that no
+registry entry may claim `available` while its command is a parenthetical
+description, so this class of defect cannot recur silently.
+
 `resolveRequiredChecks(riskClass, changedFilePaths)` takes exactly those two
 server-computed arguments — no third parameter exists for a caller's
 preference, and a regression test asserts the function's own arity and that
@@ -2595,3 +2622,92 @@ live producer of that decision (see the Residual Risk correction above); its
 `ALLOW` branch is proven by test with synthetic approval evidence, the same
 way `phase-12e-policy-gate.e2e.test.ts` test 13 proves `media.quarantine.
 release`'s `ALLOW` branch without releasing anything.
+
+## Phase 14-A — incident → diagnosis → fix-proposal seam (code-only)
+
+Completes the first arrow of the roadmap's canonical self-healing chain and
+stops there:
+
+```
+AlertEnvelope (13-D) → IncidentDiagnosis (14-A) → PrProposalInput (14-B)
+  → change-risk (14-B) → policy gate (12-E) → REVIEW_REQUIRED
+```
+
+Everything after PR eligibility — branch, commit, push, open PR, merge, deploy
+— is 14-A's external half and is **NOT built**. No GitHub SDK, no token, no
+`gh`, no network call, and no new dependency; asserted by a directory sweep.
+
+### Diagnosis is evidence, never authority
+
+`IncidentDiagnosis` has no field for a risk class, a required check, an
+approval or a deploy flag — a structural guarantee rather than a runtime rule.
+The bridge that turns a diagnosis into a `PrProposalInput` cannot supply them
+either, because 14-B's input shape has no field for any of them. Risk is
+re-derived from the candidate paths by 14-B's classifier and approval comes
+from a human, so a diagnosis that was confident and wrong cannot make a change
+cheaper to land. A test proves the point adversarially: a forged provider that
+claims `confidence: "high"` over `policies/data/actions.json` still classifies
+`FORBIDDEN_AUTOMATION`.
+
+### Sentry Seer is not here, and the seam does not pretend otherwise
+
+`LocalDeterministicRootCauseProvider` is a lookup table over the 13-D alert
+catalogue. It performs no inference, calls no model and reaches no network;
+it declares `external: false`, and a test asserts it. Roadmap ¶111/¶753 place
+Seer among the scale-triggered layers ("ihtiyaç/ölçek sinyallerine göre
+aktive edilir"), so its absence is the roadmap's position, not a gap. The
+`RootCauseProvider` interface exists so a future `SentrySeerRootCauseProvider`
+drops in without any consumer changing — the same seam shape `TelemetrySink`
+(13-A) and `AlertDeliverySink` (13-D) already use.
+
+**SENTRY_SEER_STATUS: BLOCKED_EXTERNAL.** When it activates it may consume
+only 13-E-compatible sanitized input; raw production telemetry must never
+reach an external RCA.
+
+### Eligibility: most incidents are NOT remediation candidates
+
+Exactly one alert type is remediation-eligible today — `dispatcher_pass_failing`,
+which is "bounded dispatcher failure with code ownership": the loop and its
+transport both live in this repository, the failure is deterministic, and the
+blast radius of a wrong guess is a PR a human still has to read.
+
+Everything else returns `HUMAN_INVESTIGATION_REQUIRED`, conservatively and on
+purpose. Security and infrastructure incidents are `FORBIDDEN_AUTOMATION` in
+the change-risk taxonomy, so proposing code changes for them would be
+proposing exactly what the taxonomy refuses to automate; an operational
+backlog is as likely to be load as a bug; a degraded provider is someone
+else's code. An uncatalogued alert type returns `ANALYSIS_UNAVAILABLE` rather
+than a guess.
+
+### Candidate path safety
+
+Provider-supplied paths are normalized and filtered: traversal, absolute
+paths (POSIX and Windows), `.env*`, `node_modules/`, `.git/`, `.next/`,
+`CinefieldAI/`, and credential/key/pem shapes are all DROPPED — not repaired,
+because a path that needed rewriting to be safe is a path nobody reviewed.
+
+Worth recording: 14-B's `CHANGE_PATH_PATTERN` is `[a-zA-Z0-9_./-]{1,256}`,
+which **permits `../`** — every character of a traversal sequence is in its
+allowed set. That was harmless while paths came only from a trusted caller,
+but a diagnosis provider is precisely the component that becomes an external
+model later, so traversal is rejected explicitly here rather than assumed
+impossible upstream. A test pins that premise so the reasoning survives.
+
+### Failure semantics and loop-safety preparation
+
+A throwing provider yields `ANALYSIS_UNAVAILABLE`; nothing throws into a
+caller. The seam performs no database mutation and cannot reach the money path
+(asserted by sweep). It carries 13-D's `dedupeKey` and `occurrenceCount`
+unchanged, so Phase 14-F's future dedupe, cooldown and attempt limits have a
+stable incident identity to key off — re-deriving a second identity here would
+guarantee the two disagree.
+
+### No production caller yet, deliberately
+
+The seam is callable and tested, but the 13-D Alert Router does **not**
+auto-invoke it. Phase 14-F owns the global auto-remediation kill-switch and
+the Seer/agent PR-storm rate limit, and neither exists yet; wiring automatic
+proposal generation before those land would create exactly the unbounded-PR
+failure 14-F is specified to prevent (¶253–259: those three additions exist
+"AI ops'un kendisi sapıttığında"). This is the same guardrail-before-capability
+order `requireAiWritePolicy` and the alert sinks already followed.
