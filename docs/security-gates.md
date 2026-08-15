@@ -2711,3 +2711,132 @@ proposal generation before those land would create exactly the unbounded-PR
 failure 14-F is specified to prevent (¶253–259: those three additions exist
 "AI ops'un kendisi sapıttığında"). This is the same guardrail-before-capability
 order `requireAiWritePolicy` and the alert sinks already followed.
+
+## Phase 14 F/C/E/D — the safe-deployment chain (code-only)
+
+Implemented in the order **F → C → E → D**, not package lettering. 14-A was
+deliberately unwired until F bounded the loop; C is a pure decision model that
+needs no Vercel; E must exist before D, because a Deployment Guard that
+approves a release without asking what is being deployed verifies the process
+and never the payload.
+
+**No external integration is active.** No GitHub API/token, no Sentry, no
+Vercel call, no deploy, no rollback execution, no Telegram. Every stage is a
+decision model; the acting systems are deferred.
+
+### 14-F — the remediation loop is bounded
+
+**Kill switch, default ENGAGED.** `CINEFIELD_AUTO_REMEDIATION_ENABLED` must
+equal exactly `"true"`; anything else — absent, `"1"`, `"yes"`, a typo —
+leaves remediation frozen. A fresh deployment that has never heard of the
+variable does not quietly begin opening PRs.
+
+There is deliberately **no setter, no enable function, no override parameter
+and no API route**. An env var can only be changed by someone who can change
+the deployment's configuration; a database row can be written by anything
+holding a service-role client, and a route can be called. A test sweeps the
+whole module *and* `src/app/api` for any of these. It is also **not** the same
+control as the provider-routing kill switch — disabling a flaky provider must
+not also disable the brake on the automation.
+
+**Limits** (small on purpose; the cost of being wrong is asymmetric): 3
+attempts per incident ever, 1-hour cooldown between them, 5 attempts per hour
+globally, 1000 tracked incidents. The **global** ceiling is what actually
+stops an alert storm across twenty distinct resources from fanning out into
+twenty proposals — per-incident limits alone permit exactly that.
+
+Identity is **reused, not re-derived**: 13-D's `dedupeKey`
+(`source:type:resource`) and `occurrenceCount`, carried unchanged through
+14-A. A second identity would eventually disagree with the first.
+
+**Provenance** records incident identity, actor class, agent, attempt number,
+decision, reason code, policy version and risk class through the 13-E guarded
+logger. Two fields would have been silently dropped by the redactor and were
+caught before landing: `dedupeKey` contains colons while `correlationId` is an
+`id` field forbidding them, and `"forbidden_automation"` is 20 characters
+against `severity`'s 16-character cap. The allow-list gained a `dedupeKey`
+entry (kind `name`, which permits colons) and risk moved to `classification`
+— neither value was mangled to fit.
+
+**The bounded caller is the dispatcher worker, not the alert router.** Wiring
+the router would make every alert a remediation candidate, which is how "one
+eligible type" quietly becomes all of them. The guardrail runs *before* the
+14-A seam, so a frozen system does no diagnosis work and a storm does not
+produce N diagnoses before N refusals.
+
+### 14-C — preview candidate gate
+
+Three eligibilities stay distinct because conflating any two is the failure
+the separation prevents:
+
+```
+PR_ELIGIBLE      (14-B) may a pull request be opened?
+PREVIEW_ELIGIBLE (14-C) may a preview be built and tested?
+PROD_CANDIDATE   (14-C) has it earned being CONSIDERED for deployment?
+```
+
+None implies the next, and `PROD_CANDIDATE` is still not permission to deploy.
+
+**Absence is never a pass.** A required check with no recorded outcome is a
+refusal, as are `pending` and `skipped`. Deferred checks (no tool exists) are
+neither counted as passing nor allowed to block — reporting an unrunnable
+check as passed is the defect 14-A closed for `migration_safety`.
+
+`DEGRADED` readiness is acceptable, matching Phase 13's own `isReady()`;
+`UNREADY` and `UNKNOWN` block (`UNKNOWN != HEALTHY`). An open critical
+security alert blocks however green the build is. `FORBIDDEN_AUTOMATION` can
+never reach candidate, and `HIGH_RISK` needs human approval even with
+everything mechanical green — green checks answer "does it work", not
+"should we".
+
+### 14-E — artifact verification
+
+**Identity is the digest.** A filename is not an identity (two builds produce
+the same one) and neither is a PR number (it identifies an intent to change,
+not the bytes); the shape has no field for either.
+
+Fails closed in every direction — missing artifact, missing/malformed digest,
+`UNKNOWN` status, digest mismatch, commit mismatch, lineage mismatch, missing
+provenance. `verified: true` is returned from exactly one expression, guarded
+on the refusal list being empty; there is no default-allow branch.
+
+`UNKNOWN` blocks under its own code rather than folded into `UNVERIFIED` —
+"we asked and the answer was no" and "we could not find out" mean different
+things, and the second usually means something is misconfigured.
+
+**Lineage binding** stops a stale-but-verified artifact from an earlier green
+build riding along with a newer commit; same digest and status would otherwise
+pass.
+
+**Phase 24 is not duplicated**: no signing, key material, SBOM generation,
+attestation issuance or transparency log. This consumes a provenance
+reference; Phase 24 issues one.
+
+### 14-D — deployment guard and rollback guard
+
+Deployment eligibility requires **all** of: 14-C candidate, 14-E verified
+artifact, green CI, human approval where risk demands it, no critical security
+alert, healthy readiness. The guard **re-runs** 14-E verification against the
+current candidate rather than trusting a cached boolean — a verdict computed
+earlier against a different claim is the stale-approval hazard lineage
+checking exists to catch.
+
+Rollback triggers on **Phase 13 signals only**; there is no field for an AI
+opinion. Readiness failure REQUIRES rollback; an alert alone RECOMMENDS it.
+
+**"Roll back to latest" is not a decision this can make.** Without a known
+`verifiedGood` previous deployment the verdict is `REVIEW_REQUIRED` even when
+the current release is plainly unhealthy — rolling into an unknown state is
+not a recovery, and an automated wrong guess can take the product down twice
+while a human deciding takes minutes. A test asserts the guard never reasons
+about a "latest" deployment at all.
+
+Rollback cannot start the remediation loop, reach billing, or touch the
+provider path.
+
+### Still deferred after this batch
+
+GitHub App/token, branch protection, Dependabot, real branch/commit/PR
+creation; Sentry Seer; Vercel project, Preview and deployment checks; real
+production deploy and rollback execution; Telegram and status page; custom
+domain. **Phase 14 is not production-complete** — its decision layer is.
