@@ -202,6 +202,11 @@ export const TELEMETRY_ALLOWLIST: Readonly<Record<string, FieldRule>> = {
   modelId: { kind: "name", max: 128, why: "Model identifier from the public catalog. Essential to provider observability." },
   targetId: { kind: "name", max: 128, why: "Routing control target — a model or provider id, not a user." },
   policyVersion: { kind: "name", max: 64, why: "Which policy produced a 12-E decision. Required for reproducibility." },
+  dedupeKey: {
+    kind: "name",
+    max: 128,
+    why: "Phase 14-F. Phase 13-D's incident identity, `source:type:resource` — three closed vocabularies joined by colons, which is why it is a NAME (colons) rather than an id or code (neither permits them). It is the join key for a whole incident timeline in the audit trail, and it is derived entirely from enum labels: no user, tenant, prompt or provider value can appear in it.",
+  },
 
   // ---- numbers -----------------------------------------------------------
   durationMs: { kind: "duration", why: "Latency. A number about our system, not about the output." },

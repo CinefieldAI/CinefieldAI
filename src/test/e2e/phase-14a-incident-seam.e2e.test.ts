@@ -371,7 +371,20 @@ test("S14A-29  the seam mutates no production state and cannot reach the money p
   for (const { path: file, body } of deploymentSourceFiles()) {
     const bare = stripComments(body);
     assert.ok(!/stripe|reserve\(|settle\(|refund|wallet|credit_ledger/i.test(bare), `${file} reaches Phase 10`);
-    assert.ok(!/\.rpc\(|\.upsert\(|\.insert\(|\.delete\(/.test(bare), `${file} performs a database mutation`);
+
+    // NO DATABASE CLIENT IS IMPORTED — a stronger claim than method-name
+    // matching, because a mutation is impossible without a client at all.
+    //
+    // The previous form also matched `.delete(`, which caught 14-F's
+    // `incidents.delete(...)` — an in-memory Map eviction, not a database
+    // write. Matching method names alone cannot tell a Map from a table;
+    // matching the import can.
+    assert.ok(
+      !/supabaseAdmin|getSupabaseAdminClient|createClient|@supabase/.test(bare),
+      `${file} imports a database client`
+    );
+    // The Supabase mutation verbs that have no in-memory namesake still stand.
+    assert.ok(!/\.rpc\(|\.upsert\(|\.insert\(/.test(bare), `${file} performs a database mutation`);
   }
 });
 

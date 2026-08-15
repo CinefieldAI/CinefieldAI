@@ -45,6 +45,7 @@ import { errorFields } from "../src/lib/observability/error-projection";
 import { alertOnDispatcherFailure, alertOnReadiness, alertOnRealtimeDebt } from "../src/lib/alerts/alert-sources";
 import { registerAlertSink, LoggingAlertSink } from "../src/lib/alerts/alert-sink";
 import { readiness } from "../src/lib/health/health-service";
+import { considerIncidentForRemediation } from "../src/lib/deployment/remediation-runner";
 
 const log = createLogger("realtime-dispatcher");
 
@@ -184,7 +185,30 @@ async function main(): Promise<void> {
       // case where nothing is. The error object never reaches the router —
       // only the streak count crosses over.
       try {
-        alertOnDispatcherFailure(errorStreak);
+        const raised = alertOnDispatcherFailure(errorStreak);
+
+        // ---- PHASE 14-F: the first bounded remediation caller -------------
+        //
+        // 14-A shipped deliberately unwired because nothing bounded the loop.
+        // 14-F's guardrail is that bound, so this is now a legitimate caller
+        // rather than a way to generate PRs until someone notices.
+        //
+        // It is deliberately NOT wired inside the alert router: every alert
+        // would then be a remediation candidate, and widening the router is
+        // how "one eligible type" quietly becomes "all of them". Only this
+        // one call site, for the one alert whose code this repository owns.
+        //
+        // Everything that could go wrong is already bounded elsewhere — the
+        // kill switch (default OFF), the per-incident and global budgets, the
+        // cooldown, and the fact that the furthest possible outcome is a
+        // proposal held at REVIEW_REQUIRED. Nothing here can open a PR.
+        if (raised?.outcome === "emitted" && raised.envelope) {
+          void considerIncidentForRemediation(raised.envelope, {
+            agentId: "local-deterministic",
+          }).catch(() => {
+            /* Fail safe: no proposal. Never deepen the dispatcher's error path. */
+          });
+        }
       } catch {
         /* Alerting must not deepen an error path that is already backing off. */
       }
