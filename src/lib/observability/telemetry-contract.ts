@@ -183,7 +183,12 @@ export const TELEMETRY_ALLOWLIST: Readonly<Record<string, FieldRule>> = {
     why: "Verified across all 33 existing uses to carry a CODE or an Error class name, never an Error object. The redactor enforces that regardless, since the field name invites the opposite.",
   },
   errorClass: { kind: "name", max: 64, why: "Constructor name only, e.g. ConfigurationError. No message, no stack." },
-  severity: { kind: "code", max: 16, why: "Severity from the closed 12-C set: info, low, medium or high." },
+  severity: { kind: "code", max: 16, why: "Severity from a closed set: 12-C uses info/low/medium/high, 13-D uses info/warning/error/critical. Both are enum labels chosen server-side." },
+  resource: {
+    kind: "code",
+    max: 64,
+    why: "Phase 13-D. WHAT an alert is about, from a closed internal vocabulary: a dependency name, a runtime name, a provider id or a security event kind. The alert contract pattern-checks it before it can reach a dedupe key or a log line, so it cannot hold a URL, an address, an email or user text.",
+  },
   retryable: { kind: "bool", why: "Whether the caller may retry. A boolean cannot carry content." },
 
   // ---- where it happened -------------------------------------------------

@@ -2327,3 +2327,103 @@ no synthetic checks, no worker heartbeat, no alerting on `UNREADY`, no public
 status page. No Better Stack, Datadog, Sentry or OpenTelemetry exporter is
 configured, and no DSN or API key for one exists in the repository. Health is
 currently observable only from inside the process.
+
+## Alert router (Phase 13-D, code half)
+
+`src/lib/alerts/` normalizes, deduplicates, correlates and routes internal
+signals into a symbolic channel decision. It does not deliver anywhere — no
+Telegram bot, no status page, no webhook, no token, no network call anywhere
+in the directory. A test scans the source and fails if a network call, a
+webhook host or a bot token pattern appears.
+
+**What crosses the boundary from a producer to an alert is a fixed
+allow-list**, exactly like the 13-E telemetry guard: `alertId`, `type`,
+`source`, `severity`, `resource`, `reasonCode`, `dedupeKey`, `state`,
+`firstSeen`, `lastSeen`, `occurrenceCount`, `channels`, `correlation` — and
+nothing else. A producer that passes a prompt, a signed URL, a raw error
+object or a security-evidence row has it silently dropped by
+`normalizeCorrelation`/the envelope constructor, not merely discouraged.
+`resource` and `reasonCode` are pattern-checked (`^[a-z][a-z0-9_-]{0,63}$` /
+`^[a-z][a-z0-9_]{1,64}$`) before anything is built, so neither can hold a URL,
+an address, an email or free text — a candidate that fails either check is
+rejected outright, before a dedupe key or a log line is ever produced.
+
+**Severity is server-derived from one catalogue** (`ALERT_CATALOGUE`), never
+parsed from text and never accepted from a candidate — `raiseAlert` reads
+`ALERT_CATALOGUE[type].severity` and ignores any `severity` field a caller
+supplies (S13D-2 pins this by forging one and asserting it is overridden).
+
+**Deduplication:** key is `source:type:resource` only — never an occurrence
+id, trace id or timestamp, which would make every repeat look distinct.
+Inside the type's window, repeats increment a count and deliver nothing.
+Suppression is not permanent: an escalation ladder (10 / 100 / 1,000 /
+10,000 occurrences) re-emits once per threshold crossed, and a `CRITICAL`
+alert re-emits after 300 seconds of silence regardless of the ladder, so a
+sustained critical failure cannot read the same as one that recovered.
+
+**Routing** (`channelsFor`): `DASHBOARD` always; `TELEGRAM` added at
+`ERROR`/`CRITICAL`; `STATUS_PAGE` added only when severity is `CRITICAL` **and**
+the catalogue marks the type user-visible. Every security alert type is
+`CRITICAL` and explicitly `userVisible: false` — publishing a security event
+on a public status page would confirm to whoever triggered it that the probe
+landed, and disclose which internal subsystem noticed. Only one alert type in
+the whole catalogue (`runtime_unready`) is user-visible, because a whole
+runtime failing is the one internal signal users eventually feel anyway.
+
+**The only implemented sink is `LoggingAlertSink`.** It writes through the
+existing 13-E-guarded structured logger and makes no outbound call.
+`TelegramAlertSink`, `StatusPageSink` and any Datadog/Sentry bridge are named
+in `AlertDeliverySink`'s own doc comment as the unbuilt external half of
+13-D — a test asserts exactly one class in `alert-sink.ts` implements the
+interface and that its name is `LoggingAlertSink`.
+
+**Real production callers, not a library nobody imports:**
+
+| Caller | What it raises | When |
+| --- | --- | --- |
+| `security-event-logger.ts` | `security_high_severity`, `security_action_recommended` | After every newly *recorded* (non-coalesced) row — 12-C's own storm control decides what counts as new, and the alert layer does not re-decide it |
+| `worker/realtime-dispatcher-worker.ts` | health-transition, outbox-debt, dispatcher-failure alerts | Once a minute, alongside the existing debt log; a throwing alert call is caught and cannot break the dispatch loop |
+
+**Catalogue-vs-producer coverage is asserted in both directions.** Every
+alert type in `ALERT_CATALOGUE` has a real `raiseAlert`/`resolveAlert` call
+site in `alert-sources.ts`, and every type a producer can raise is in the
+catalogue — this repository has found "component exists, nothing calls it"
+five times now (D-11-1, D-12-1, the 12-C logger near-miss, D12-D2, the
+LOCAL_PREVIEW guard), and an alert type with no producer is the same defect
+restated as an entry in a table.
+
+**Signals named in the roadmap with no producer today are left out of the
+catalogue entirely**, not stubbed: workflow-start outbox debt (no debt
+aggregate exists yet), DR backup debt (no backup job runs yet), SQS/DLQ depth
+(no metrics client), Kafka lag (activation-ready only), replay-gap spikes. An
+alert type nothing can raise would sit permanently silent and read as
+"healthy" to whoever checked it — worse than not having the type.
+
+**A defect the live local proof caught, with a standing regression test.**
+`dependencyHealth()` still probes `OPTIONAL`/`DEFERRED` dependencies for the
+diagnostic view even though `rollUp()` excludes them from readiness — so
+Kafka and Redis B report `UNKNOWN` on every poll forever, by design, since
+their probes deliberately do no I/O yet. The first version of
+`alertOnReadiness` alerted on any dependency at `UNKNOWN` regardless of
+criticality, so a plain worker startup — zero actual incidents — paged three
+`ERROR`/`TELEGRAM` alerts for infrastructure that was never meant to be
+running. Fixed with the same one-line guard `rollUp()` already uses
+(`criticality === "OPTIONAL" || criticality === "DEFERRED"` → skip), and
+`S13D-12b` pins it so the alert layer cannot silently know more than the
+health contract already decided.
+
+**Failure semantics.** `raiseAlert` never throws to its caller; a sink that
+throws is caught inside `dispatchToSinks` and never propagates. Neither
+production caller can have its own behaviour altered by an alerting fault —
+the security logger still writes its row and returns its result regardless of
+whether the alert raise succeeded, and the dispatcher wraps its alert calls
+separately from its dispatch pass. `src/lib/alerts/` imports no Supabase
+client, no Temporal client, nothing that touches credit, settlement,
+quarantine or a provider adapter.
+
+**Not covered by this package.** No Telegram bot exists. No
+`status.cinefield.ai` exists. No Better Stack, Datadog or Sentry account was
+created and none is configured. The `ACKNOWLEDGED` alert-lifecycle state is
+defined in the type but has no code path that can produce it — acknowledgement
+needs a human and an operator surface, which is Phase 16; a router that
+acknowledged its own alerts would be marking its own homework.

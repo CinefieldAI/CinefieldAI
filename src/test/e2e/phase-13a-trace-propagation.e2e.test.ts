@@ -66,6 +66,17 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 const stripComments = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
+/** Every route.ts under src/app/api, tracked or not — unlike `git grep`. */
+function walkApiRoutes(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkApiRoutes(full));
+    else if (entry.name === "route.ts") out.push(full);
+  }
+  return out.sort();
+}
+
 const VALID_PARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
 function captureLogs(): { seen: TelemetryEnvelope[]; stop: () => void } {
@@ -224,11 +235,19 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
     body.indexOf("enterRequestTrace") < body.indexOf("enforceRouteRateLimit"),
     "the trace must be bound before the limiter runs"
   );
-  // All 14 routes reach it.
-  const routes = execFileSync("git", ["grep", "-l", "guardRoute", "--", "src/app/api"], {
-    cwd: ROOT, encoding: "utf8", shell: true,
-  }).split(/\r?\n/).filter(Boolean);
-  assert.equal(routes.length, 14);
+  // EVERY route reaches it — counted by walking the directory, not by
+  // `git grep`, which searches tracked files only. This pin read 14 while
+  // `/api/health/live` sat untracked and had to move to 15 the moment that
+  // route was committed; a guard blind to untracked files is blind to
+  // exactly the code most likely to need checking.
+  //
+  // 15 = the 14 pre-existing API routes plus `/api/health/live` (Phase 13
+  // health foundation), which takes no exemption from `guardRoute` and uses
+  // the `public_health` policy class instead of skipping the guard.
+  const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
+    /guardRoute/.test(readFileSync(file, "utf8"))
+  );
+  assert.equal(routes.length, 15, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

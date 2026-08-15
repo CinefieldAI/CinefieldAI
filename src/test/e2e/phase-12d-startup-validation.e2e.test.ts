@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
   assertStartupConfiguration,
@@ -34,6 +34,17 @@ const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
 const stripComments = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+/** Every .ts/.tsx file under a directory, tracked or not — unlike `git grep`. */
+function walkFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkFiles(full));
+    else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) out.push(full);
+  }
+  return out.sort();
+}
 
 const WORKERS = [
   {
@@ -309,8 +320,13 @@ test("9. the health report is presence-only and exposes no endpoint", () => {
   // attacker which subsystem is half-configured.
   const routes = readFileSync(path.join(ROOT, "src/lib/config/startup-validation.ts"), "utf8");
   assert.ok(!/NextResponse|export async function GET|route\.ts/.test(routes));
-  const apiUsage = spawnSync("git", ["grep", "-l", "configurationHealth", "--", "src/app"], {
-    cwd: ROOT, encoding: "utf8", shell: true,
-  });
-  assert.equal((apiUsage.stdout ?? "").trim(), "", "configurationHealth must not be wired to a route");
+  // A DIRECTORY WALK, NOT `git grep`. `git grep` only sees tracked files, so
+  // this assertion was blind to `src/app/api/health/live/route.ts` for the
+  // whole Phase 13 health foundation batch while it sat untracked on disk —
+  // exactly the code most likely to trip it, since it is new. The walk sees
+  // it whether or not git has indexed it yet.
+  const routedFiles = walkFiles(path.join(ROOT, "src/app")).filter((file) =>
+    /configurationHealth/.test(stripComments(readFileSync(file, "utf8")))
+  );
+  assert.deepEqual(routedFiles, [], "configurationHealth must not be wired to a route");
 });

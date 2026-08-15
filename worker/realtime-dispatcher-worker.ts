@@ -42,6 +42,9 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "../src/lib/su
 import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
 import { createLogger } from "../src/lib/observability/logger";
 import { errorFields } from "../src/lib/observability/error-projection";
+import { alertOnDispatcherFailure, alertOnReadiness, alertOnRealtimeDebt } from "../src/lib/alerts/alert-sources";
+import { registerAlertSink, LoggingAlertSink } from "../src/lib/alerts/alert-sink";
+import { readiness } from "../src/lib/health/health-service";
 
 const log = createLogger("realtime-dispatcher");
 
@@ -104,6 +107,12 @@ async function main(): Promise<void> {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 
+  // ---- PHASE 13-D ALERT ROUTER ------------------------------------------
+  // The logging sink is the ONLY sink that exists. It writes through the 13-E
+  // guarded logger and makes no network call; Telegram and status-page sinks
+  // are 13-D's external half and are not built.
+  registerAlertSink(new LoggingAlertSink());
+
   console.log("[realtime-dispatcher] started");
 
   let errorStreak = 0;
@@ -137,6 +146,23 @@ async function main(): Promise<void> {
             rejected: debt.unroutable + debt.invalid,
           });
         }
+
+        // ---- PHASE 13-D --------------------------------------------------
+        // The debt read and the readiness evaluation already happen on this
+        // tick; the alert router turns them into bounded candidates. Both
+        // calls are wrapped because an alerting fault must not break the
+        // dispatcher — this loop owns realtime delivery, and monitoring may
+        // never be the thing that stops it.
+        //
+        // Readiness is evaluated once a minute, not per pass. It is
+        // transition-based: an unchanged report produces nothing, so a
+        // dependency that stays down does not re-alert every minute.
+        try {
+          if (debt) alertOnRealtimeDebt(debt);
+          alertOnReadiness(await readiness("realtime-dispatcher"));
+        } catch {
+          log.warn("alert_evaluation_failed", { subsystem: "alerts", result: "error" });
+        }
       }
 
       // A full batch means more is waiting: keep going without pausing.
@@ -153,6 +179,15 @@ async function main(): Promise<void> {
       const delay = Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
       // Class only — never a driver message, which can echo row content.
       log.error("dispatch_pass_failed", { ...errorFields(error), durationMs: delay });
+      // Sustained failure of the loop itself. Distinct from a debt alert:
+      // debt alerts assume something is draining the queue, and this is the
+      // case where nothing is. The error object never reaches the router —
+      // only the streak count crosses over.
+      try {
+        alertOnDispatcherFailure(errorStreak);
+      } catch {
+        /* Alerting must not deepen an error path that is already backing off. */
+      }
       await sleep(delay, controller.signal);
     }
   }

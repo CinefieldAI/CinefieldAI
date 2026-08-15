@@ -12,6 +12,7 @@ import {
 import { assessRisk, enforceability, TEMPORARY_BLOCK_TTL_SECONDS } from "./risk-engine";
 import { getRedisClient } from "@/lib/redis/redis-client";
 import { evaluatePolicy } from "@/lib/policy/policy-engine";
+import { alertOnSecurityEvent } from "@/lib/alerts/alert-sources";
 
 /**
  * The Security Event Logger (Phase 12-C).
@@ -146,6 +147,29 @@ export async function recordSecurityEvent(
     if (effective === "temporary_block") {
       await applyTemporaryBlock(admin, input.actorClerkUserId ?? input.subjectHash ?? null, input.traceId ?? null);
     }
+
+    // ---- PHASE 13-D ALERT ROUTER -------------------------------------------
+    // The row is written; this decides whether a human should hear about it.
+    //
+    // It is raised HERE rather than inside the coalesce branch above on
+    // purpose: a coalesced signal produced no new evidence row, and alerting
+    // on it would mean the storm control at the database layer was undone by
+    // the alert layer.
+    //
+    // Only a bounded PROJECTION crosses over — kind, severity, reason code,
+    // recommended action, and correlation ids. The evidence stays in the
+    // table. The router cannot throw and its result is deliberately unused:
+    // nothing about this security event may depend on whether an alert was
+    // raised, and a failure to alert must never turn into a failure to record.
+    alertOnSecurityEvent({
+      kind: input.kind,
+      severity,
+      reasonCode: input.reasonCode,
+      recommendedAction: decision.action,
+      eventId: result.event_id,
+      traceId: input.traceId ?? undefined,
+      tenantId: input.tenantId ?? undefined,
+    });
 
     return {
       recorded: true,
