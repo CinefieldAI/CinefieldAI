@@ -238,6 +238,8 @@ export async function submitGeneration(params: {
   generationId: string;
   clerkUserId: string;
   attemptId: string;
+  /** Phase 13-A. Carried from durable workflow history onto the command wire. */
+  traceId?: string;
 }): Promise<SubmitOutcome> {
   if (isSqsCommandBusEnabled()) {
     await getCommandBus().enqueue({
@@ -247,7 +249,12 @@ export async function submitGeneration(params: {
         generationId: params.generationId,
         attemptId: params.attemptId,
       },
+      // The trace rides alongside the idempotency key and is emphatically
+      // NOT one: `commandIdFor(...)` still decides duplicate suppression, and
+      // two retries of the same attempt collapse on that key whatever their
+      // traces say.
       idempotencyKey: commandIdFor("provider.submit", params.attemptId),
+      ...(params.traceId ? { traceId: params.traceId } : {}),
     });
     log({
       generationId: params.generationId,

@@ -86,6 +86,24 @@ export interface GenerationWorkflowInput {
   generationId: string;
   /** Captured server-side from a verified Clerk session at start time. */
   clerkUserId: string;
+  /**
+   * Phase 13-A. The trace this generation belongs to (¶1711).
+   *
+   * DURABLE BY CONSTRUCTION: a workflow argument is written into Temporal's
+   * history, so the trace survives a worker restart, a replay and a task
+   * handed to a different container — none of which an in-process async
+   * context would survive. That is why it is a field here rather than
+   * ambient state.
+   *
+   * Optional: a workflow started before this field existed, or by a path
+   * with no request behind it, is still valid and simply has no trace.
+   * Correlation is observational, so its absence is never an error.
+   *
+   * It is a LABEL. It does not identify the tenant (clerkUserId does), does
+   * not authorize anything, and is not an idempotency key — the workflow id
+   * is still the deterministic `gen:<generationId>`.
+   */
+  traceId?: string;
 }
 
 /**
@@ -354,6 +372,11 @@ export async function generationWorkflow(
       generationId: input.generationId,
       clerkUserId: input.clerkUserId,
       attemptId: liveAttemptId,
+      // Phase 13-A: the trace travels from workflow history into the command
+      // the activity enqueues, which is the API -> worker -> provider hop
+      // ¶1711 names. Deterministic — it is read from the input, never minted
+      // inside a workflow, where a random value would break replay.
+      ...(input.traceId ? { traceId: input.traceId } : {}),
     });
 
     // ---- PHASE 7-C: bounded safe failover -----------------------------------
@@ -426,6 +449,7 @@ export async function generationWorkflow(
         generationId: input.generationId,
         clerkUserId: input.clerkUserId,
         attemptId: liveAttemptId,
+        ...(input.traceId ? { traceId: input.traceId } : {}),
       });
     }
 

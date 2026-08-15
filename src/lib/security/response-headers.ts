@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { enforceRouteRateLimit, type LimitDecision, type RouteClass } from "./route-rate-limit";
 import { installSecuritySignals } from "./security-signals";
+import { enterRequestTrace } from "@/lib/observability/trace-scope";
 
 /**
  * Phase 12-C. Connected HERE, at module load, because this is the module
@@ -113,6 +114,19 @@ export async function guardRoute(params: {
   userId?: string | null;
   headers?: Headers;
 }): Promise<NextResponse | null> {
+  // ---- PHASE 13-A: the common request boundary binds the trace ----------
+  //
+  // Every one of the 14 API routes already calls guardRoute first, so this is
+  // the one place a trace can be established without wrapping 14 handler
+  // bodies or duplicating traceparent parsing in each.
+  //
+  // It CANNOT affect the decision below. Minting is a crypto random draw that
+  // does not fail, it reads no request field the limiter uses, and it returns
+  // nothing the limiter consults — a trace is a label, never an input to a
+  // security control. The rate limit, the identity and the fail-closed
+  // behaviour are all exactly as PRE-12 left them.
+  enterRequestTrace(params.headers);
+
   const decision: LimitDecision = await enforceRouteRateLimit(params);
   if (decision.allowed) return null;
 

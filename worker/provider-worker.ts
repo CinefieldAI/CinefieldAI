@@ -36,6 +36,7 @@ import { SQS_QUEUES } from "../src/lib/aws/sqs-topology";
 import { handleProviderCommand } from "./provider-command-handler";
 import { assertStartupConfiguration } from "../src/lib/config/startup-validation";
 import { createFieldLogger } from "../src/lib/observability/logger";
+import { resumeDurableTrace } from "../src/lib/observability/trace-scope";
 
 /**
  * Phase 13-E: delegates to the Sensitive Data Guard.
@@ -134,7 +135,16 @@ async function main(): Promise<void> {
 
       let outcome;
       try {
-        outcome = await handleProviderCommand(parsed.command);
+        // ---- PHASE 13-A: resume the trace that crossed the queue --------
+        // The async scope did not survive SQS — nothing in-process does. The
+        // trace id travelled as a FIELD on the wire, is validated on the way
+        // back in (6R.22: a queue message is not an authority), and is
+        // rebound here so everything the handler logs correlates to the
+        // request that started it. An unusable value yields a fresh trace
+        // rather than a broken one.
+        outcome = await resumeDurableTrace(parsed.command.traceId, () =>
+          handleProviderCommand(parsed.command)
+        );
       } catch (caught) {
         // The handler could not reach a durable decision (DB down, etc).
         // Retain: redelivery will retry, and the attempt claim keeps a

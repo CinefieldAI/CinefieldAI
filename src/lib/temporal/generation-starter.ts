@@ -3,6 +3,7 @@ import { WorkflowIdConflictPolicy } from "@temporalio/client";
 import { getTemporalClient } from "./client";
 import { TASK_QUEUES } from "./task-queues";
 import { generationWorkflowId } from "./workflow-ids";
+import { currentTraceId } from "@/lib/observability/trace-scope";
 
 /**
  * Starts the Temporal GenerationWorkflow for one generation (Phase 6R.3).
@@ -48,6 +49,8 @@ export interface StartGenerationWorkflowResult {
 export async function startGenerationWorkflow(params: {
   generationId: string;
   clerkUserId: string;
+  /** Phase 13-A. Falls back to the ambient request trace when omitted. */
+  traceId?: string;
 }): Promise<StartGenerationWorkflowResult> {
   const client = await getTemporalClient();
   const workflowId = generationWorkflowId(params.generationId);
@@ -56,7 +59,18 @@ export async function startGenerationWorkflow(params: {
     taskQueue: TASK_QUEUES.generation,
     workflowId,
     workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-    args: [{ generationId: params.generationId, clerkUserId: params.clerkUserId }],
+    args: [
+      {
+        generationId: params.generationId,
+        clerkUserId: params.clerkUserId,
+        // Read from the ambient request scope when the caller did not pass
+        // one. This is the handover from in-process context to durable
+        // storage — the last point at which the async scope still exists.
+        ...(params.traceId ?? currentTraceId()
+          ? { traceId: params.traceId ?? currentTraceId() }
+          : {}),
+      },
+    ],
   });
 
   return { workflowId, runId: handle.firstExecutionRunId };

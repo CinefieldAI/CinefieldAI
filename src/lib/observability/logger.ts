@@ -1,5 +1,6 @@
 import "server-only";
 import { sanitizeTelemetry } from "./telemetry-redaction";
+import { currentTraceId } from "./trace-scope";
 import type { TelemetryEnvelope, TelemetryLevel } from "./telemetry-contract";
 
 /**
@@ -100,7 +101,29 @@ function entriesOf(fields: LogFields | undefined): Record<string, unknown> | und
 }
 
 function write(level: TelemetryLevel, subsystem: string, event: string, fields?: LogFields): void {
-  const envelope = sanitizeTelemetry({ level, event, subsystem, fields: entriesOf(fields) });
+  // ---- PHASE 13-A: the ambient trace, attached here and nowhere else -----
+  //
+  // 25 modules and several hundred call sites log through this function. If
+  // each had to pass a trace id, the diff would cross the orchestration,
+  // provider, Redis and workflow paths — and every line added afterwards
+  // would silently lack correlation. Reading the ambient scope once, here,
+  // gives ¶1711's trace id to all of them without touching one call site.
+  //
+  // A caller-supplied `traceId` WINS. Code that crossed a durable boundary
+  // knows its trace better than an ambient scope does, and the ambient scope
+  // is often simply absent there — a worker loop has no request.
+  //
+  // `undefined` when there is no scope is a legitimate answer, not a gap to
+  // paper over: a scheduled job genuinely has no request trace, and minting
+  // one would fabricate a correlation that never existed.
+  const bag = entriesOf(fields);
+  const ambient = currentTraceId();
+  const withTrace =
+    ambient && (bag === undefined || bag.traceId === undefined)
+      ? { ...(bag ?? {}), traceId: ambient }
+      : bag;
+
+  const envelope = sanitizeTelemetry({ level, event, subsystem, fields: withTrace });
 
   if (consoleEnabled) {
     // The same shape the modules already emitted — `[cinefield:x] {json}` —

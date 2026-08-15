@@ -4,6 +4,7 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabas
 import { setRateLimitObserver } from "./route-rate-limit";
 import { recordSecurityEventDetached } from "./security-event-logger";
 import type { SecurityEventInput } from "./security-event-contract";
+import { currentTraceId } from "@/lib/observability/trace-scope";
 
 /**
  * Where security signals are actually CONNECTED (Phase 12-C).
@@ -63,13 +64,27 @@ export function setSecurityEmitterForTest(sink: ((input: SecurityEventInput) => 
 }
 
 function emit(input: SecurityEventInput): void {
+  // ---- PHASE 13-A: correlate to the request, when there IS one -----------
+  //
+  // A security signal raised while handling an HTTP request belongs to that
+  // request's trace. One raised by the dispatcher loop, a scheduled job or a
+  // worker startup does NOT — those have no request behind them, and minting
+  // a trace id for them would fabricate a correlation that never existed.
+  // So the ambient trace is attached when present and omitted when absent,
+  // and absence is a legitimate, expected state rather than a gap.
+  //
+  // A caller-supplied traceId always wins: code that resumed a trace across
+  // a durable boundary knows it better than an ambient scope does.
+  const traced: SecurityEventInput =
+    input.traceId || !currentTraceId() ? input : { ...input, traceId: currentTraceId() };
+
   if (testSink) {
-    testSink(input);
+    testSink(traced);
     return;
   }
   const admin = adminOrNull();
   if (!admin) return;
-  recordSecurityEventDetached(admin, input);
+  recordSecurityEventDetached(admin, traced);
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import {
 } from "./policy-contract";
 import { reportPolicyDecision } from "@/lib/security/security-signals";
 import { isTemporarilyBlocked } from "@/lib/security/security-event-logger";
+import { currentTraceId } from "@/lib/observability/trace-scope";
 
 /**
  * The enforcement point (Phase 12-E).
@@ -97,7 +98,17 @@ async function buildInput(ctx: GateContext): Promise<PolicyInput> {
     approvalEvidence: { humanApproved: ctx.approvalEvidence?.humanApproved === true },
     environment: currentEnvironment(),
     originClass: "server",
-    correlationId: ctx.correlationId ?? null,
+    // ---- PHASE 13-A: correlationId converges on traceId ------------------
+    //
+    // Two names existed for one concept — `traceId` on the command wire and
+    // the outbox, `correlationId` here and in 12-E's decision log. They are
+    // now the same value: the ambient trace, unless a caller supplied its own.
+    //
+    // The FIELD NAMES stay as they are. Renaming `correlationId` would touch
+    // 12-E's contract and its recorded decisions, and historical evidence is
+    // not rewritten to tidy a name. New readers can rely on the values
+    // matching; `telemetry-contract.ts` documents the relationship.
+    correlationId: ctx.correlationId ?? currentTraceId() ?? null,
   };
 }
 
@@ -144,7 +155,10 @@ export async function requirePolicy(ctx: GateContext): Promise<PolicyDecision> {
     tenantId: ctx.tenantId ?? null,
     resourceType: ctx.resource?.type ?? null,
     resourceId: ctx.resource?.id ?? null,
-    correlationId: ctx.correlationId ?? null,
+    // Same convergence as the policy input above — otherwise the decision the
+    // engine saw and the decision the log records would carry different
+    // correlation values, which is worse than carrying none.
+    correlationId: ctx.correlationId ?? currentTraceId() ?? null,
   });
 
   if (decision.decision !== "ALLOW") throw new PolicyDenied(decision);

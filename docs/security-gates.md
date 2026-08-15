@@ -365,6 +365,160 @@ Replay is inert in both directions.
 
 ---
 
+## Distributed trace propagation + span standard (Phase 13-A, code half)
+
+```
+TRACE AUTHORITY              ONE generator, server-minted
+W3C TRACEPARENT              parsed strictly; INBOUND UNTRUSTED by default
+HTTP PROPAGATION             all 14 routes, at the existing common boundary
+DURABLE PROPAGATION          Temporal history · SQS wire · outbox · security events
+SPAN STANDARD                12 closed low-cardinality names
+SPAN ATTRIBUTES              through the 13-E Sensitive Data Guard
+EXTERNAL EXPORTER            NONE
+SENTRY / OTLP                NOT CONFIGURED
+MIGRATION                    NONE — trace_id already existed
+```
+
+### The criterion, and what satisfies it
+
+¶1711: *"Tek generation trace_id ile API→worker→provider zincirinde
+izleniyor."* One generation, one trace id, followed across API → worker →
+provider. ¶1731 asks for the OpenTelemetry trace/span **standard** — naming,
+attributes and propagation — which is achievable with no exporter, no DSN and
+no account. That is why this half shipped first; ¶1710's Sentry half waits on
+an account.
+
+¶1157 asked for the same shape at the 6R foundation, and the plumbing was
+built then: the command wire, the domain event, the outbox and 54 places in
+the database all carried `trace_id`. **Nothing ever put a value in.** 13-A
+mints it.
+
+### One generator, and a trace is never an authority
+
+There is exactly one function that creates a trace id. Two generators means
+two formats, and the first time they meet in a query the correlation silently
+returns nothing — which reads as "no activity" rather than as a bug.
+
+A trace id arrives, in part, from a header. So it may never choose a tenant,
+select a Redis stream, authorize a generation, act as an idempotency key or
+become a billing identifier. Each is asserted separately, because "we would
+never do that" is not a control. The policy input has **no trace field at
+all**, so the 12-E gate cannot be steered by one even deliberately.
+
+### Inbound traceparent is NOT trusted by default
+
+`resolveTraceContext` parses W3C `traceparent` strictly — version `00` only,
+32/16 lowercase hex, no all-zero ids, length-bounded before any regex runs —
+and a malformed header is discarded rather than repaired. Salvaging half of
+one would let a caller control part of an identifier that appears in operator
+dashboards.
+
+**But even a VALID header is ignored today.** `trustInbound` defaults to
+false: every request arrives from a browser, and a browser-supplied trace id
+is attacker-controlled text. Trust is a per-boundary decision, so when 12-A's
+Cloudflare edge or an internal service exists, one call site flips.
+
+`origin` records which happened — `inherited`, `minted` or `rejected` — so an
+operator can tell "nobody sent a trace" from "somebody sent a broken one".
+
+### The HTTP edge is the boundary that already existed
+
+`guardRoute` is called first by all 14 API routes, so the trace is bound
+there — no wrapping of 14 handler bodies, no traceparent parsing duplicated
+per route. It uses `enterWith` rather than a callback because the guard
+RETURNS before the handler body runs; concurrent-request isolation was
+verified before this was relied on.
+
+It cannot affect the guard's decision: minting is a random draw that does not
+fail, it reads no field the limiter uses, and the limiter consults nothing it
+produces. A test asserts the trace is bound BEFORE the limiter and that the
+limiter never reads one.
+
+### The async scope stops at every durable boundary — deliberately
+
+`AsyncLocalStorage` makes the trace ambient inside one process, which is what
+gives all 25 logger-migrated modules correlation without touching a call
+site. It does **not** cross SQS, Temporal, an outbox row or a worker restart,
+and code that assumed it did would break traces exactly where a distributed
+trace is most useful.
+
+So every durable hop carries the id as a FIELD:
+
+| Hop | Carrier | Durability |
+| --- | --- | --- |
+| Temporal | `GenerationWorkflowInput.traceId` | workflow history — survives replay and restart |
+| SQS | `CommandEnvelope.traceId` | already on the wire contract |
+| outbox | `outbox_events.trace_id` | already a column |
+| security | `security_events.trace_id` | already a column |
+
+The provider worker RESUMES from the wire field, validating it on the way in
+— a queue message is not an authority (6R.22) — and an unusable value yields
+a fresh trace rather than a broken one. A workflow never mints: a random
+value inside a workflow breaks deterministic replay.
+
+### traceId and correlationId
+
+Two names existed for one concept. They now hold the same value: the ambient
+trace, unless a caller supplies its own. The FIELD NAMES stay — renaming
+`correlationId` would touch 12-E's contract and its recorded decisions, and
+**historical evidence is not rewritten to tidy a name**.
+
+### Security events: correlated when a request exists, never faked
+
+A signal raised while handling a request inherits that trace. One raised by
+the dispatcher loop, a scheduled job or a worker startup does not — those
+have no request behind them, and minting an id for them would fabricate a
+correlation that never existed. Absence is a legitimate, expected state.
+
+### Span names are low-cardinality; identifiers are attributes
+
+A span name is a dimension key in every backend that will consume this. A
+generation id in one produces a series per generation — an unusable dashboard
+and an observability bill. Worse, a name containing a user id or a prompt
+would be sensitive data in the one field no sanitizer inspects, because names
+are structure rather than payload.
+
+So the vocabulary is **closed** — 12 names, `startSpan` accepts nothing else:
+`http.request` `generation.create` `generation.execute` `orchestration.execute`
+`temporal.workflow` `temporal.activity` `provider.submit` `provider.poll`
+`media.ingest` `outbox.dispatch` `security.event` `policy.evaluate`.
+
+Attributes run through **13-E's** `sanitizeTelemetry`, not a second
+allow-list. A prompt, a signed URL or a raw provider response cannot enter a
+span any more than a log line. Four sinks with four ideas of "safe" was the
+failure 13-E prevented; a span path with its own filter would reintroduce it.
+
+### Failure semantics
+
+Tracing is observational. Nothing throws, a broken span sink is swallowed,
+and `withSpan` re-throws the caller's error unchanged so error handling is
+untouched. A tracing failure must never fail a generation, restart a
+workflow, retry a provider, mutate credits or bypass a security control.
+
+### Trace in the response
+
+**Not returned to the client, and no debugging endpoint was invented.** The
+roadmap asks for neither. A trace id in a response is a small internal-topology
+disclosure with no user-facing benefit today; when 13-D's status page or an
+admin surface needs one, that is the moment to decide it deliberately.
+
+### Residual
+
+- **No exporter.** Sentry and OTLP are 13-A's account-dependent half. The
+  `TelemetrySink` and `SpanSink` interfaces are the attach points; nothing is
+  registered, and an exporter with no service behind it is the
+  built-but-unwired defect this repository has closed four times.
+- **Spans are emitted at a few representative points**, not yet at every hop
+  in the closed vocabulary. The standard, the guard and the propagation are
+  the deliverable; blanket instrumentation belongs with the exporter that
+  would consume it.
+- **`generation.create` does not persist trace_id on the generations row.**
+  It travels on the workflow, the command, the outbox and the security event —
+  which is the API → worker → provider chain ¶1711 names. Adding a column
+  would be a migration this batch deliberately did not make.
+
+---
+
 ## Sensitive Data Guard — telemetry allow-list (Phase 13-E)
 
 ```
