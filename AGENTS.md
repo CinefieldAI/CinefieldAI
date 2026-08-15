@@ -18,6 +18,18 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `879400d` (2026-08-16).**
+The model entry in `cinemaStudioData.ts` (id `cinema-studio-4.0`), the new
+`CinemaStudio40CreativeControls.tsx` component (the References/Film
+setup/Camera/Color palette/Lighting pill row), and every `isCinema40`-gated
+block added to `CinemaStudioWorkspace.tsx` and `PromptBar.tsx` are frozen at
+that commit. It was built to mirror a specific reference (higgsfield.ai's
+Cinema Studio 4.0 creative-controls panel, inspected live) and verified
+end-to-end in-browser before landing — do not restyle, re-scope, or "clean
+up" its option lists (Genre reuses the existing `GENRES` array; Era, Tempo,
+Camera/Lens, and the Camera Movement tag list are new arrays in
+`cinemaStudioData.ts`) without an explicit user request naming this feature.
+
 # More than one agent works in this repo
 
 Sessions run in parallel here and have already collided twice: a commit picked
