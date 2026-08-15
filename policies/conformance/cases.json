@@ -112,6 +112,40 @@
       "expect": { "decision": "DENY", "reason": "not_implemented" }
     },
     {
+      "name": "Phase 14-B: code.pr.create by an allowlisted agent still needs human approval",
+      "patch": {
+        "action": "code.pr.create",
+        "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" }
+      },
+      "expect": { "decision": "REQUIRE_APPROVAL", "reason": "ai_write_needs_human_approval" }
+    },
+    {
+      "name": "Phase 14-B: code.pr.create is allowed only with human approval evidence attached",
+      "patch": {
+        "action": "code.pr.create",
+        "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" },
+        "approvalEvidence": { "humanApproved": true }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "Phase 14-B: code.pr.create is AI-only - a human actor cannot use it",
+      "patch": {
+        "action": "code.pr.create",
+        "actor": { "id": "user_admin_1", "role": "route_admin", "kind": "human" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 14-B: code.pr.create from a browser origin is refused as untrusted, before the AI rule",
+      "patch": {
+        "action": "code.pr.create",
+        "actor": { "id": "agent_seer", "role": "ai_agent", "kind": "ai_agent" },
+        "originClass": "browser"
+      },
+      "expect": { "decision": "DENY", "reason": "untrusted_origin" }
+    },
+    {
       "name": "a member may not release quarantine",
       "patch": { "action": "media.quarantine.release", "actor": { "id": "user_2", "role": "member", "kind": "human" } },
       "expect": { "decision": "DENY", "reason": "role_not_permitted" }

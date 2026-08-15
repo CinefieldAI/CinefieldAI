@@ -1128,16 +1128,39 @@ workflow sırasıyla mümkündür. Bu sıra hiçbir incident aciliyetiyle atlanm
 ¶1854 adds that a tool-level allowlist is mandatory and no general authority is
 ever granted.
 
-`aiWriteAllowlist` is **empty**, so every agent write denies with
-`ai_write_authority_off` — and a Rego test fails if an entry appears, which
-forces the change to be deliberate. Even an allowlisted tool would only reach
-`REQUIRE_APPROVAL`: policy is never the last step for an agent.
+`aiWriteAllowlist` started **empty**, so every agent write denied with
+`ai_write_authority_off` — a Rego test fails if an entry appears without a
+matching TypeScript conformance case, which forces the change to be
+deliberate. Even an allowlisted tool only reaches `REQUIRE_APPROVAL`: policy
+is never the last step for an agent.
+
+**Phase 14-B narrowed the allowlist from empty to exactly one entry:
+`code.pr.create`.** It is the single narrow capability 14-A's canonical chain
+needs — an AI Fix Agent preparing a pull request, never merging or deploying
+one — and it still requires human approval evidence like every other
+allowlisted action; nothing about the allowlist having a first member weakens
+the "policy is never the last step for an agent" rule above. Every action
+that is not `code.pr.create` is denied by `ai_write_authority_off` exactly as
+before, pinned by `phase-12e-policy-gate.e2e.test.ts` test 10's
+`assert.deepEqual(REGISTRY.aiWriteAllowlist, ["code.pr.create"])`.
 
 `requireAiWritePolicy` is a separate entry point rather than a flag, so "an
 agent is asking" is a call site a reviewer can grep for and no human path can
-acquire agent semantics by passing the wrong argument. **Nothing calls it
-yet** — no MCP write surface exists. That is the correct order: the guardrail
-lands before the capability.
+acquire agent semantics by passing the wrong argument. **It now has its first
+real caller** — `src/lib/deployment/ai-pr-authority.ts`'s
+`evaluateAiPrProposal`, which composes this gate with a change-risk taxonomy
+and a required-CI-check registry (Phase 14-B) — proving the guardrail landed
+before the capability, in that order, rather than the reverse. No GitHub
+integration exists yet: `evaluateAiPrProposal` decides whether a PR *may* be
+opened, and returns that decision as data. Nothing calls a GitHub API,
+creates a branch, or opens a PR — 14-A's own external half.
+
+A structural guarantee sits above the allowlist entry itself: 14-B's
+change-risk classifier treats `src/lib/policy/` and `policies/` (including
+`policies/data/actions.json`, the allowlist file itself) as
+`FORBIDDEN_AUTOMATION` — a change in that class never reaches
+`requireAiWritePolicy` at all, so an AI Fix Agent cannot propose editing its
+own allowlist through the very mechanism the allowlist gates.
 
 Agent-initiated decisions are recorded with an `ai_`-prefixed reason code
 (¶1852 — AI provenance alongside the policy version).
@@ -1215,12 +1238,20 @@ implementation inherits a reviewed rule rather than inventing one:
 
 ### Residual risk
 
-- **`REQUIRE_APPROVAL` is currently unreachable in practice.** The rule exists
-  in both evaluators and is exercised by test, but every action that would
-  trigger it is registered as not-implemented and therefore denies earlier,
-  and the AI allowlist is empty. That precedence is correct — deny outranks
-  hold — but it means the approval path has no live producer until Phase 14 or
-  Phase 16 lands one.
+- **`REQUIRE_APPROVAL` is reachable as of Phase 14-B, but only through
+  `code.pr.create`.** `ai-pr-authority.ts`'s `evaluateAiPrProposal` calls
+  `requireAiWritePolicy` for every change that is not `FORBIDDEN_AUTOMATION`,
+  and since nothing in this repository yet produces real
+  `approvalEvidence.humanApproved = true` (that evidence-producing workflow is
+  Phase 16's), every real call resolves to `REQUIRE_APPROVAL` today — the
+  first genuinely live producer of that decision. Every OTHER action that
+  would trigger it (`data.export`, `admin.review.resolve`, `account.suspend`,
+  and the rest of Phase 16/23's seams) is still registered as
+  not-implemented and denies earlier, which remains correct — deny outranks
+  hold. The `ALLOW` branch of `code.pr.create` remains unreachable in
+  production for the same reason it was designed to be: nothing may assert
+  `humanApproved: true` without a real approval workflow, and none exists
+  yet.
 - **`risk.adminReviewRequired` and `risk.challengeRequired` are hard-coded
   false in the gate.** Phase 12-C records those as RECOMMENDATIONS on evidence
   rows; no durable per-subject flag exists, and deriving one from a
@@ -2253,7 +2284,8 @@ is listed with the reason it cannot become an unsafe default.
 | 2 | Provider webhook signature, replay, event-id uniqueness | 6R-B · 8-FRAMEWORK | EXTERNAL_PENDING — fal publishes no verifiable signing scheme |
 | 5 | Settlement uniqueness guaranteed at DB level | 10-B | Constraint exists (`PROOF S`/`PROOF T`); gate not formally claimed |
 | 6 | SQS IAM least privilege; worker distrusts queue messages | 6R-C · 18-A | NOT_STARTED |
-| 7–12 | — | — | NOT_STARTED |
+| 7–10, 12 | — | — | NOT_STARTED |
+| 11 | AI/MCP write authority default-off; tool-level allowlist; production write only via policy + human approval | 14-x · 19-x | PARTIAL — the allowlist mechanism and its first entry (`code.pr.create`, PR-creation-scoped, still human-approval-gated) exist and are proven by conformance test as of Phase 14-B. No GitHub integration exists to actually open a PR, no production-write action is allow-listed, and 14-A/14-C/14-D/14-E/14-F remain unbuilt. |
 
 ## Release-blocking security test set
 
@@ -2427,3 +2459,139 @@ created and none is configured. The `ACKNOWLEDGED` alert-lifecycle state is
 defined in the type but has no code path that can produce it — acknowledgement
 needs a human and an operator surface, which is Phase 16; a router that
 acknowledged its own alerts would be marking its own homework.
+
+## Phase 14-B — AI PR-scoped authority, change-risk taxonomy, required-check registry
+
+Code-only. No GitHub API, no GitHub App/token, no branch, no commit, no PR,
+no Sentry Seer, no Vercel Preview deployment, no production deploy, no
+rollback execution. **14-A is NOT complete** — this is the safety foundation
+14-A's real, external half would sit on top of, not 14-A itself.
+
+### The AI PR-only boundary, machine-testable
+
+`policies/data/actions.json` gained one entry: `code.pr.create` —
+`requiredRoles: ["ai_agent"]`, `requiresHumanApproval: true`,
+`requiresTwoPerson: false`, `implemented: true`, `owner: "phase-14"` — and
+`aiWriteAllowlist` grew from `[]` to `["code.pr.create"]`. Every other action
+remains denied by `ai_write_authority_off` exactly as before; the allowlist
+did not open, it gained one narrowly-scoped, still-gated member.
+
+**Direct-main-push deny, direct-production-deploy deny.** Neither action is
+registered, allow-listed, or reachable — there is no `code.main.push`, no
+`production.deploy`, no wildcard (`code.*`, `repository.*`) anywhere in the
+registry, and a structural test asserts no registered action name even looks
+like one. `code.pr.create` is the only AI-reachable action, and creating a
+pull request is not pushing to main, merging, or deploying — those remain
+undefined, unbuilt capabilities.
+
+**AI self-approval deny.** No file in `src/lib/deployment/` contains
+approval-granting code (`setApproved`, `grantApproval`, a hardcoded
+`humanApproved: true`). `approvalEvidence` is supplied by the SERVER caller of
+`evaluateAiPrProposal`, exactly as every other `requireAiWritePolicy` call
+site already requires — a proposal's own input has no field that could carry
+a self-asserted approval.
+
+### Change-risk taxonomy (`src/lib/deployment/change-risk.ts`)
+
+Four classes — `LOW_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `FORBIDDEN_AUTOMATION`
+— derived from an ordered, most-severe-first table of REAL path prefixes in
+this repository (not speculative ones), with the overall risk being the
+maximum across every touched path. Unknown paths default to `MEDIUM_RISK`,
+never `LOW_RISK` — the same "unknown != safe" posture as
+`AMBIGUOUS != SAFE TO RETRY` and `UNKNOWN != HEALTHY` elsewhere in this
+document.
+
+**`FORBIDDEN_AUTOMATION`**: `src/lib/policy/` and `policies/` (the policy
+engine and its own registry — an AI Fix Agent cannot propose editing its own
+allowlist), `src/lib/config/` and `.env*` (secrets/config validation),
+`infra/` / `terraform/` / `.github/workflows/` (production infrastructure and
+CI configuration, reserved even though these directories don't exist yet),
+`src/lib/media/quarantine-release.ts` (the quarantine override mechanism
+itself).
+
+**`HIGH_RISK`**: `supabase/migrations/` (schema and RLS both live here; a
+migration is never markable low), `worker/` and
+`src/lib/orchestration/` outside `providers/` (generation lifecycle, queue
+ownership), `src/lib/security/` and `src/proxy.ts` (auth), moderation code,
+billing/credit code, admin-path UI or routes, the upload-URL route, and the
+generation-facing API route surface.
+
+**`MEDIUM_RISK`**: `src/lib/orchestration/providers/` specifically — provider
+ADAPTER logic, distinct from provider SUBMISSION (the parent directory,
+`HIGH_RISK`), matching the roadmap's own explicit separation of the two.
+
+**`LOW_RISK`**: documentation and test fixtures only.
+
+Risk is **never** accepted from a caller. `classifyChangeRisk` takes exactly
+one parameter — the changed file paths — and there is no field anywhere in
+`PrProposalInput` for a risk claim; a `riskClass` an AI proposal tried to
+smuggle in is structurally impossible to construct, let alone honor.
+
+### Required CI check registry (`src/lib/deployment/required-checks.ts`)
+
+Ten check ids, each mapped to a REAL runnable command in this repository:
+`typecheck` (`tsc --noEmit`), `test_suite` (the combined `node:test` run —
+this repo has no separate "unit only" command), `build` (`next build`),
+`changed_file_lint` (scoped `eslint`), `secret_scan`, `telemetry_scan`,
+`policy_conformance` (`opa test`, a genuinely separate toolchain), plus
+`migration_safety` and `postgres_proofs` (required whenever
+`supabase/migrations/` is touched, regardless of computed risk tier) and
+`dependency_review` — registered because the roadmap names it, marked
+`status: "deferred"` because no Dependabot/GitHub dependency-review tool is
+wired yet, and never resolved as required. A deferred check is never reported
+as passing.
+
+`resolveRequiredChecks(riskClass, changedFilePaths)` takes exactly those two
+server-computed arguments — no third parameter exists for a caller's
+preference, and a regression test asserts the function's own arity and that
+neither its signature nor `PrProposalInput`'s shape contains a
+skip/exclude/preference-shaped field.
+
+### PR proposal contract and deployment-state separation
+
+`PrProposalInput` (what a future AI Fix Agent would submit) and
+`PrProposalRecord` (what the server computes) are deliberately two different
+shapes. The input has a title, a bounded summary, changed file paths, an
+optional correlation id, and a rollback-expectation enum — no risk field, no
+check-selection field, no file contents, nothing secret- or URL-shaped. The
+record adds the computed risk class, the resolved required checks, the
+policy decision (or `null` for `FORBIDDEN_AUTOMATION`, which never reaches
+the gate), and a lifecycle state.
+
+**`PR_ELIGIBLE` is not `DEPLOY_ELIGIBLE`.** The four states —
+`PATCH_PROPOSED`, `PR_ELIGIBLE`, `CI_BLOCKED`, `REVIEW_REQUIRED` — describe
+whether an AI Fix Agent may have a pull request opened for human review.
+None of them describe production readiness; 14-C (pre-prod validation) and
+14-D (Deploy Guard / Rollback Guard) are separate, unbuilt packages that
+would gate the much larger step from an open PR to a production deployment.
+
+### Composition, not a second policy engine
+
+`src/lib/deployment/ai-pr-authority.ts`'s `evaluateAiPrProposal` classifies
+risk, resolves required checks, and — for anything not
+`FORBIDDEN_AUTOMATION` — calls the EXISTING `requireAiWritePolicy` from
+`policy-gate.ts` unmodified. It does not reimplement policy evaluation, risk
+resolution, or audit logging; all three are inherited for free, including
+`requireAiWritePolicy`'s existing real risk-state fetch and its unconditional
+`reportPolicyDecision` audit-trail write. `PolicyDenied` is caught by
+`instanceof`, never by matching a message string, and converted into
+`REVIEW_REQUIRED`; any other thrown error propagates rather than being
+reinterpreted as a proposal state.
+
+**`FORBIDDEN_AUTOMATION` never reaches the policy gate at all** — the
+strongest available guarantee, because it is structural rather than a
+runtime check: the code path returns before `requireAiWritePolicy` is called,
+so no future policy change could turn a forbidden change into an `ALLOW` by
+accident. There is no branch through which it could.
+
+### Human approval boundary
+
+PR creation is not approval. CI passing is not approval. An AI's own
+recommendation is not approval. `approvalEvidence.humanApproved` is supplied
+by the server caller from durable state — nothing in this batch produces that
+state; the workflow that would is Phase 16's, unbuilt. Every real call this
+batch's own tests make resolves to `REQUIRE_APPROVAL`, the first genuinely
+live producer of that decision (see the Residual Risk correction above); its
+`ALLOW` branch is proven by test with synthetic approval evidence, the same
+way `phase-12e-policy-gate.e2e.test.ts` test 13 proves `media.quarantine.
+release`'s `ALLOW` branch without releasing anything.

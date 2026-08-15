@@ -2,7 +2,7 @@
   "policyVersion": "2026-08-14.1",
   "environments": ["development", "preview", "production"],
   "roles": ["service", "route_admin", "member", "anonymous", "ai_agent"],
-  "aiWriteAllowlist": [],
+  "aiWriteAllowlist": ["code.pr.create"],
   "actions": {
     "media.quarantine.request": {
       "critical": true,
@@ -122,6 +122,14 @@
       "requiresTwoPerson": false,
       "requiresHumanApproval": true,
       "implemented": false,
+      "owner": "phase-14"
+    },
+    "code.pr.create": {
+      "critical": true,
+      "requiredRoles": ["ai_agent"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": true,
+      "implemented": true,
       "owner": "phase-14"
     }
   }
