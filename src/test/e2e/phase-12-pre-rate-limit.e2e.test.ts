@@ -245,9 +245,9 @@ test("9. a Redis outage on a paid path fails CLOSED", async () => {
   assert.equal(noClient.allowed, false);
 });
 
-test("10. fail-open applies only to the two classes that justify it", async () => {
+test("10. fail-open applies only to the classes that justify it", async () => {
   const broken = fakeRedis({ fail: true });
-  for (const cls of ["authenticated_read", "public_dev_stub"] as const) {
+  for (const cls of ["authenticated_read", "public_dev_stub", "public_health"] as const) {
     const headers = new Headers({ "x-vercel-forwarded-for": "203.0.113.5" });
     const outcome = await enforceRouteRateLimit({ routeClass: cls, userId: cls === "authenticated_read" ? USER_A : null, headers, redisOverride: broken });
     assert.equal(outcome.allowed, true, `${cls} is allowed to fail open`);
@@ -255,8 +255,21 @@ test("10. fail-open applies only to the two classes that justify it", async () =
 
   // And the table says so explicitly, so a future class inherits nothing by
   // accident.
+  //
+  // `public_health` was added by the Phase 13 health foundation, and this
+  // assertion is what forced that to be a deliberate decision rather than a
+  // side effect. Its justification is the sharpest of the three: liveness must
+  // not depend on Redis, because an orchestrator answers a failed liveness
+  // probe by RESTARTING the container. A cache outage that failed every
+  // liveness check would restart every healthy process — the dependency
+  // incident amplified into an application outage, which is exactly what
+  // separating liveness from readiness exists to prevent.
   const open = Object.entries(ROUTE_POLICIES).filter(([, p]) => p.onUnavailable === "open").map(([k]) => k);
-  assert.deepEqual(open.sort(), ["authenticated_read", "public_dev_stub"]);
+  assert.deepEqual(open.sort(), ["authenticated_read", "public_dev_stub", "public_health"]);
+
+  // The paid and durable paths are untouched by that addition.
+  const closed = Object.entries(ROUTE_POLICIES).filter(([, p]) => p.onUnavailable === "closed").map(([k]) => k);
+  assert.deepEqual(closed.sort(), ["durable_write", "paid_compute", "realtime_connect"]);
 });
 
 test("there is no in-memory fallback anywhere", () => {

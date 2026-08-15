@@ -2269,3 +2269,61 @@ billing race             PASS at DB level (PROOF R/S/T/U)
 duplicate SQS delivery   NOT_STARTED
 cross-tenant SSE         PASS  (11-D: binding, replay scope, connection limits)
 ```
+
+## Health surface exposure (Phase 13 health foundation)
+
+Health checks are an information-disclosure surface as much as an operational
+one, so the exposure decision is recorded here rather than left to whoever adds
+the next endpoint.
+
+**One public endpoint, minimum information.**
+
+```
+GET /api/health/live      PUBLIC     {status, timestamp} — nothing else
+readiness()               server-only, NO ROUTE
+dependencyHealth()        server-only, NO ROUTE
+```
+
+`/api/health/live` performs no dependency check and returns no version, build
+id, region, runtime name or dependency list. A monitor needs a 200 and a body
+it can match; everything past that is disclosure with no consumer.
+
+Readiness and dependency health are deliberately unrouted. An unauthenticated
+readiness endpoint enumerates which subsystems are unwell — which database,
+which queue, which cache — which is simultaneously a map of the architecture
+and a list of what is currently weakest. 12-D made the same call for
+`configurationHealth()`.
+
+**The route took no exemption.** Its first version skipped `guardRoute` and
+returned a raw `NextResponse.json`, arguing that a liveness probe should never
+be refused. PRE-12's structural guards rejected it, correctly — a route that
+opts out of the rate limiter and the cache contract is exactly how those guards
+stop meaning anything. The fix went into the policy table instead: a new
+`public_health` route class.
+
+| Class | Anonymous | Limit | On limiter unavailable |
+| --- | --- | --- | --- |
+| `public_health` | yes | 240 / 60s | **open** |
+
+Fail-open is the point. An uptime monitor uses two requests a minute against a
+budget of 240, so the limit only catches abuse; and a Redis outage must not be
+able to make liveness fail, because a failed liveness answer is a restart. The
+fail-open pin in `phase-12-pre-rate-limit.e2e.test.ts` was updated deliberately
+to `["authenticated_read", "public_dev_stub", "public_health"]`, with a
+companion assertion that every other class still fails closed.
+
+**Probes cannot be used to reach anything.** `src/lib/health/` imports the
+contract, the probes and the logger, and nothing that could restart a
+generation, retry a provider, settle a credit or release a quarantine. Probes
+are read-only: a read-only RPC for Supabase, `PING` + `CONFIG GET` for Redis A,
+one bounded `SCAN` for provider health (never `KEYS`), config presence for the
+rest. Health output carries no URL, host, credential or raw latency — latency
+is reported as a bucket (`fast` / `normal` / `slow` / `timeout`), and reasons
+are a closed set of codes, so the 13-E telemetry allow-list has nothing to
+strip.
+
+**Not covered by this package.** 13-C remains open: no external uptime monitor,
+no synthetic checks, no worker heartbeat, no alerting on `UNREADY`, no public
+status page. No Better Stack, Datadog, Sentry or OpenTelemetry exporter is
+configured, and no DSN or API key for one exists in the repository. Health is
+currently observable only from inside the process.

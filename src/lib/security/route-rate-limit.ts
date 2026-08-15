@@ -55,7 +55,8 @@ export type RouteClass =
   | "durable_write"
   | "authenticated_read"
   | "realtime_connect"
-  | "public_dev_stub";
+  | "public_dev_stub"
+  | "public_health";
 
 export interface RoutePolicy {
   /** Distinguishes independently-limited operations for one subject. */
@@ -107,6 +108,24 @@ export const ROUTE_POLICIES: Readonly<Record<RouteClass, RoutePolicy>> = {
   authenticated_read: { action: "auth-read", limit: 120, windowSeconds: 60, onUnavailable: "open", retryHintSeconds: 10 },
   realtime_connect: { action: "realtime-connect", limit: 20, windowSeconds: 300, onUnavailable: "closed", retryHintSeconds: 30 },
   public_dev_stub: { action: "public-stub", limit: 30, windowSeconds: 60, onUnavailable: "open", retryHintSeconds: 20 },
+  /**
+   * Phase 13 health foundation. Public liveness, and the only route class
+   * whose CALLER is expected to be a machine on a fixed schedule.
+   *
+   * The limit is generous because the failure mode is asymmetric: an external
+   * uptime monitor polling every 30s uses two of these a minute, while a 429
+   * would be read by that monitor as an OUTAGE. Refusing a liveness probe to
+   * save a counter increment would manufacture the incident it is watching
+   * for. 240/min still caps a flood four orders of magnitude below what an
+   * unlimited endpoint would allow.
+   *
+   * It fails OPEN for the same reason and more sharply: liveness must not
+   * depend on Redis. A cache outage that made every liveness probe fail would
+   * tell an orchestrator to restart every healthy container — the dependency
+   * incident amplified into an application outage, which is precisely what
+   * separating liveness from readiness exists to prevent.
+   */
+  public_health: { action: "public-health", limit: 240, windowSeconds: 60, onUnavailable: "open", retryHintSeconds: 5 },
 };
 
 export type LimitDecision =
@@ -195,7 +214,10 @@ export interface EnforceParams {
  */
 export async function enforceRouteRateLimit(params: EnforceParams): Promise<LimitDecision> {
   const policy = ROUTE_POLICIES[params.routeClass];
-  const anonymousAllowed = params.routeClass === "public_dev_stub";
+  // Two classes admit an unauthenticated caller: the dev stubs, and public
+  // liveness — which an external monitor reaches with no session by design.
+  const anonymousAllowed =
+    params.routeClass === "public_dev_stub" || params.routeClass === "public_health";
 
   let subject: "user" | "ip";
   let subjectId: string | null;
