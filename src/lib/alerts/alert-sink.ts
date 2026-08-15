@@ -89,6 +89,18 @@ export class LoggingAlertSink implements AlertDeliverySink {
   readonly channel: AlertChannel = "DASHBOARD";
 
   deliver(envelope: AlertEnvelope): void {
+    // Field by field, never spread. `...(cond ? {k: v} : {})` reads safely to
+    // a human here because `v` comes from an already-normalized envelope, but
+    // the 13-E scanner cannot evaluate that — it can only verify a log call by
+    // its LITERAL key names, and a spread defeats exactly that check (the
+    // scanner's own two-tool design exists because call-site matching alone
+    // is not enough, and a spread is where that gap would reopen). Passing
+    // `traceId`/`generationId` as possibly-`undefined` is behaviourally
+    // identical to the conditional spread it replaces: the 13-E redactor
+    // already drops an undefined value, so no field is emitted differently —
+    // only the field name is now provably static, matching the same
+    // field-by-field convention `security-event-logger.ts` already uses for
+    // the same optional-trace-id case.
     log.warn("alert_raised", {
       subsystem: "alerts",
       // Every field name below is in the 13-E allow-list, and every VALUE is
@@ -100,8 +112,8 @@ export class LoggingAlertSink implements AlertDeliverySink {
       reasonCode: envelope.reasonCode,
       count: envelope.occurrenceCount,
       result: envelope.state.toLowerCase(),
-      ...(envelope.correlation.traceId ? { traceId: envelope.correlation.traceId } : {}),
-      ...(envelope.correlation.generationId ? { generationId: envelope.correlation.generationId } : {}),
+      traceId: envelope.correlation.traceId,
+      generationId: envelope.correlation.generationId,
     });
   }
 }

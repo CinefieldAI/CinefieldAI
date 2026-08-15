@@ -175,7 +175,7 @@ test("S13D-6  a signed URL is dropped", () => {
     resource: "fal",
     reasonCode: "intermittent_failures",
     url: "https://r2.example.com/x.mp4?X-Amz-Signature=deadbeef",
-    redisUrl: "rediss://user:pw@host:6379",
+    redisUrl: "rediss://user:pw@cache.example.com:6379",
   } as never);
   const serialized = JSON.stringify(result.envelope);
   assert.ok(!/X-Amz-Signature/i.test(serialized), "signed URL must not survive");
@@ -599,7 +599,7 @@ test("S13D-24  the sensitive-data guard is enforced on every alert field", () =>
   const prose = raiseAlert({
     type: "dependency_degraded",
     resource: "redis-a",
-    reasonCode: "Connection refused to rediss://user:pw@host",
+    reasonCode: "Connection refused to rediss://user:pw@cache.example.com",
   });
   assert.equal(prose.outcome, "rejected");
   assert.equal(prose.reason, "invalid_reason_code");
