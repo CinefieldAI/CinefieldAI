@@ -3116,10 +3116,111 @@ write side.
 | D3 | no canonical precedence when several budgets applied; a caller could pick the most permissive | `resolveApplicableBudgets` + `VERDICT_STRICTNESS` + `strictestVerdict`, documented above |
 | D4 | `costMicros` carried a projected window total but was named and documented as a per-request cost | renamed `projectedSpendMicros` across types, allow-list, tests and docs; the justification now describes a window projection |
 
-### Not in this batch
+### Not in this slice
 
 Writing `cost_amount` at settlement; enabling any scheduled cadence
 (`providerCostReconcileTask` stays a manually-invokable `task()`); actually
 setting a routing control; real budget limits; Stripe / AWS / provider invoice
-correlation; any UI (Phase 16). 15-B/2 will aggregate **estimated** spend only.
-**Phase 15-B is not complete, and Phase 15 is not complete.**
+correlation; any UI (Phase 16). **Phase 15-B is not complete, and Phase 15 is
+not complete.**
+
+## Phase 15-B/2 — estimated spend aggregation and guard wiring (code-only)
+
+15-B/1 built a decision model nothing called. This slice supplies the missing
+production observation path:
+
+```
+generation_attempts  ->  readAttemptVolumes()        (the only DB touch)
+                     ->  observeProviderCost()       (15-B/1 contract)
+                     ->  aggregateCost()             (window total)
+                     ->  resolveApplicableBudgets()  (strictest wins)
+                     ->  evaluateResolvedCostGuard() (decision + recommendation)
+                     ->  raiseAlert()                (13-D)
+```
+
+`src/lib/finops/estimated-spend-repository.ts` reads; `spend-guard-runner.ts`
+is pure; `runEstimatedSpendGuard` in
+`src/trigger/operational/operational-services.ts` is the real production
+caller, surfaced as `estimatedSpendGuardTask` — a plain `task()`, **no
+schedule**, like every other operational task there.
+
+### Volume is counted in ATTEMPTS, and the query is three columns wide
+
+A generation that failed twice and succeeded on the third try called the
+provider three times. Counting generations would under-report it by exactly the
+retries, which are the traffic most likely to blow a budget.
+
+Only attempts that reached a provider count: `submitting`, `submitted`,
+`processing`, `succeeded`, `failed`. `pending` and `claimed` are excluded —
+those rows exist but the request never left Cinefield. `submitting` **is**
+included, because an attempt stuck in flight is precisely the case where money
+may have been spent with nothing to show for it.
+
+The select list is `provider, provider_model, status`. No attempt id, no
+generation id, no user id, no error text — and the `generations` table, which
+holds the prompt, is never read at all.
+
+### `per_output` models cannot be priced from current data, and say so
+
+`per_request` maps cleanly: one attempt is one request, N attempts are N units.
+That is a fact about the schema.
+
+`per_output` needs an output count, and no such evidence exists. `generations`
+has no quantity column, and while `media_assets` has a `provider_output` value
+in its `source` CHECK constraint, **nothing writes one** — the only insert path
+in the repository is the browser-upload route. Counting it would return zero
+outputs for generated content: not a missing number but a wrong one, pricing
+real traffic at nothing.
+
+So `billableUnitsFor` returns null for `per_output`, which becomes UNKNOWN and
+withholds ALLOW. Seeded pricing is four `per_output` rows to two `per_request`,
+so **most image traffic is currently unpriceable**. That is the honest state of
+the evidence; the fix is to record output counts, not to assume one output per
+request so the arithmetic completes. `unpriceableLines` is in the task metrics
+so the gap is visible rather than inferred, and a window with any unpriceable
+line reports `partial`, never `success`.
+
+### Four ways the window can lie, all closed
+
+| condition | result |
+| --- | --- |
+| query returned rows | priced normally |
+| query succeeded, zero rows | `sourceAvailable: true`, a real zero, ALLOW |
+| query errored or threw | `sourceAvailable: false` -> UNAVAILABLE -> UNKNOWN |
+| row count exceeded the scan cap | `sourceAvailable: false` — a truncated count is smaller than the truth, so reporting it would understate spend |
+| a row missing provider or model | whole window unattributable, never silently dropped from the total |
+
+**An unreadable window is decided before the budgets are consulted.** It has no
+lines, so the representative observation carries no provider — and
+`budgetApplies` would then match no provider-scoped budget, the resolver would
+correctly answer "no applicable budget", and that reports as ALLOW. The window
+is not unbudgeted, it is *unread*, and the two must never produce the same
+verdict. This was a real fail-open found by the test matrix during
+implementation; it is closed by short-circuiting in `runSpendGuard` rather than
+by teaching the resolver about missing evidence.
+
+### Two telemetry contracts, deliberately not conflated
+
+`costTelemetryFields` is the 13-E surface — what reaches a log line through the
+13-D alert, and it passes with nothing dropped. `spendGuardMetrics` feeds
+`OperationalTaskResult.metrics`, a return value rather than a log; every
+operational service here returns counts under its own names (`models`,
+`unpriced`, `ambiguousAttempts`), none allow-listed and none logged. Its
+obligation is the operational contract's: counts only, never content, and no
+window bound — a timestamp would make every pass its own metric series.
+
+### Still an estimate, and still nothing is mutated
+
+Attempt counts times a price list is a forecast. `basis` remains
+`ESTIMATE_BASED` on every result. This slice writes no `cost_amount`, sets no
+routing control, spends no credits, calls no provider and creates no schedule —
+all enforced by test, against comment-stripped source, so a file that documents
+the rule it obeys is not read as breaking it.
+
+### Not in this slice
+
+Real budget limits (the registry is still deliberately empty, so a pass today
+resolves to `no_applicable_budget`); output-count evidence; the pre-spend gate
+in front of `executeGeneration`; actually setting a routing control; cadence;
+Stripe / AWS / invoice correlation; UI. **Phase 15-B is not complete, and Phase
+15 is not complete.**

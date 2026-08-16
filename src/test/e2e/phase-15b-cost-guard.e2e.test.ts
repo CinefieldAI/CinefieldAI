@@ -399,11 +399,31 @@ test("S15B-18  the recommendation is bounded and matches the budget's scope", ()
 // 19–23  PHASE 7 OWNS ROUTING CONTROL; PHASE 21 OWNS FLAGS
 // ---------------------------------------------------------------------------
 
-test("S15B-19  the package mutates no routing state", () => {
+test("S15B-19  every decision module is pure, and exactly one file may do I/O", () => {
+  // Phase 15-B/2 added a repository, so "the whole package is pure" is no
+  // longer the right claim. The replacement is STRICTER, not looser: it names
+  // the single file permitted to touch a database, requires every other file
+  // to be pure, and requires that file to read only.
+  const IO_FILE = "src/lib/finops/estimated-spend-repository.ts";
+
   for (const { file, text } of finopsCode) {
-    assert.ok(!/\bawait\s/.test(text), `${file} performs async work; this package is pure`);
+    if (file === IO_FILE) continue;
+    assert.ok(!/\bawait\s/.test(text), `${file} performs async work; decision modules are pure`);
     assert.ok(!/redis|supabase|createClient|fetch\(/i.test(text), `${file} reaches for I/O`);
   }
+
+  // The exception is real and singular — a second one must be a deliberate act.
+  const ioFiles = finopsCode.filter((f) => /\bawait\s|createClient|fetch\(/.test(f.text));
+  assert.deepEqual(ioFiles.map((f) => f.file), [IO_FILE], "only one file in this package may do I/O");
+
+  // And that file reads. A cost observer with a write verb in it would be a
+  // subsystem that can change the very numbers it is meant to be reporting.
+  const repo = finopsCode.find((f) => f.file === IO_FILE);
+  assert.ok(repo);
+  for (const write of [".insert(", ".update(", ".upsert(", ".delete(", ".rpc("]) {
+    assert.ok(!repo.text.includes(write), `${IO_FILE} performs a write: ${write}`);
+  }
+  assert.ok(/\.select\(/.test(repo.text), "and it does read");
 });
 
 test("S15B-20  setRoutingControl is never called", () => {

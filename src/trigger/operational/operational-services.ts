@@ -5,6 +5,13 @@ import { getProviderLatency } from "@/lib/redis/provider-latency-store";
 import { getProviderErrorRate } from "@/lib/redis/provider-error-rate-store";
 import { getActivePricing } from "@/lib/pricing/pricing-repository";
 import { listModels } from "@/lib/orchestration/model-registry";
+import { COST_BUDGETS } from "@/lib/finops/cost-budget";
+import {
+  readAttemptVolumes,
+  type SpendWindow,
+} from "@/lib/finops/estimated-spend-repository";
+import { runSpendGuard, spendGuardMetrics } from "@/lib/finops/spend-guard-runner";
+import type { PricingRecord } from "@/lib/pricing/pricing-types";
 import {
   buildResult,
   resolveLimit,
@@ -450,4 +457,149 @@ export async function runSecurityAnalyze(
   } catch (caught) {
     return buildResult(startedAt, "failed", {}, { reasonCode: toSafeReasonCode(caught) });
   }
+}
+
+// ---------------------------------------------------------------------------
+// ESTIMATED SPEND GUARD (PHASE 15-B/2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Prices one window of provider traffic against the configured cost budgets
+ * and raises a Phase 13-D alert if the strictest applicable budget is under
+ * pressure.
+ *
+ * THE PRODUCTION CALLER for the Phase 15-B cost model. Everything it consumes
+ * already existed: `readAttemptVolumes` counts attempts, the model registry
+ * maps a provider model id to ours, `getActivePricing` supplies the price, and
+ * `runSpendGuard` does the arithmetic and the alerting. This function is the
+ * wiring, and it is deliberately thin.
+ *
+ * ===========================================================================
+ * WHAT IT DOES NOT DO
+ * ===========================================================================
+ * It submits nothing, spends nothing, and disables nothing. It does not write
+ * `generation_attempts.cost_amount` — no actual provider cost evidence exists
+ * to write, and a forecast in that column would be indistinguishable from a
+ * bill forever after. It does not call `setRoutingControl`: the guard produces
+ * a RECOMMENDATION naming a Phase 7 target, and whether an automated cost
+ * signal may take a provider offline unattended is a question nobody has
+ * answered yet.
+ *
+ * It also does not decide WHEN to run. The window comes from the payload, and
+ * `estimatedSpendGuardTask` is a plain `task()` with no schedule, for the same
+ * reason every other operational task here has none.
+ *
+ * ===========================================================================
+ * UNCERTAINTY IS REPORTED, NOT SMOOTHED
+ * ===========================================================================
+ * `unavailable` is a correct outcome. An unreadable attempt window, an
+ * unreadable price and a model whose billing unit cannot be mapped from
+ * current data all resolve to a non-ALLOW verdict rather than to a cheerful
+ * zero. Today most image models are `per_output` and no output-count evidence
+ * exists, so a real window will usually report unpriceable lines — that is the
+ * honest state of the data, and `unpriceableLines` is in the metrics so it is
+ * visible rather than inferred.
+ */
+export async function runEstimatedSpendGuard(
+  input?: SpendGuardTaskInput,
+  deps: OperationalDeps = defaultOperationalDeps
+): Promise<OperationalTaskResult> {
+  const startedAt = new Date().toISOString();
+
+  if (!deps.isAdminConfigured()) {
+    return buildResult(startedAt, "unavailable", {}, { reasonCode: "supabase_admin_not_configured" });
+  }
+
+  const window = resolveSpendWindow(input, startedAt);
+  if (!window) {
+    return buildResult(startedAt, "unavailable", {}, { reasonCode: "invalid_spend_window" });
+  }
+
+  try {
+    const volumes = await readAttemptVolumes(deps.getAdmin(), window, resolveLimit(input));
+
+    // Registry lookup, built once. A provider model id we do not recognise
+    // resolves to null, which becomes UNKNOWN downstream — never a skipped
+    // line, because a line quietly dropped is spend quietly ignored.
+    const registry = new Map<string, string>();
+    for (const model of deps.listModels()) {
+      registry.set(`${model.providerId} ${model.providerModelId}`, model.id);
+    }
+
+    // Pricing is read here, up front, so `runSpendGuard` stays pure. A failed
+    // read flips one flag for the whole pass rather than being mistaken for a
+    // set of individually unpriced models.
+    const pricing = new Map<string, PricingRecord | null>();
+    let pricingSourceAvailable = true;
+    for (const volume of volumes.volumes) {
+      const platformModelId = registry.get(`${volume.provider} ${volume.providerModelId}`);
+      if (!platformModelId || pricing.has(platformModelId)) continue;
+      try {
+        pricing.set(platformModelId, await deps.getActivePricing(platformModelId));
+      } catch {
+        pricingSourceAvailable = false;
+        break;
+      }
+    }
+
+    const outcome = runSpendGuard({
+      volumes,
+      platformModelIdFor: (v) => registry.get(`${v.provider} ${v.providerModelId}`) ?? null,
+      pricingFor: (platformModelId) => pricing.get(platformModelId) ?? null,
+      pricingSourceAvailable,
+      budgets: COST_BUDGETS,
+      now: new Date(startedAt),
+    });
+
+    const metrics = spendGuardMetrics(outcome);
+
+    if (!volumes.sourceAvailable || !pricingSourceAvailable) {
+      return buildResult(startedAt, "unavailable", metrics, {
+        reasonCode: pricingSourceAvailable ? volumes.reasonCode : "pricing_source_unavailable",
+      });
+    }
+    if (outcome.lineCount === 0) {
+      return buildResult(startedAt, "no_work", metrics, { reasonCode: "empty_window" });
+    }
+    // A window that could not be fully priced is PARTIAL, not success. The
+    // distinction matters: success would read as "this window is within
+    // budget" when part of it was never costed at all.
+    if (outcome.unpriceableLineCount > 0) {
+      return buildResult(startedAt, "partial", metrics, { reasonCode: outcome.guard.reasonCode });
+    }
+    return buildResult(startedAt, "success", metrics, { reasonCode: outcome.guard.reasonCode });
+  } catch (caught) {
+    return buildResult(startedAt, "failed", {}, { reasonCode: toSafeReasonCode(caught) });
+  }
+}
+
+/** Bounded window input. Explicit bounds, or a lookback ending now. */
+export interface SpendGuardTaskInput extends OperationalTaskInput {
+  windowStart?: string;
+  windowEnd?: string;
+  /** Used only when explicit bounds are absent. Bounded by MAX_LOOKBACK_HOURS. */
+  lookbackHours?: number;
+}
+
+/** Default and ceiling for the lookback. A window, never a cadence. */
+export const DEFAULT_LOOKBACK_HOURS = 24;
+export const MAX_LOOKBACK_HOURS = 24 * 31;
+
+function resolveSpendWindow(input: SpendGuardTaskInput | undefined, nowIso: string): SpendWindow | null {
+  if (input?.windowStart && input?.windowEnd) {
+    const start = Date.parse(input.windowStart);
+    const end = Date.parse(input.windowEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    return { windowStart: new Date(start).toISOString(), windowEnd: new Date(end).toISOString() };
+  }
+
+  const hours = input?.lookbackHours ?? DEFAULT_LOOKBACK_HOURS;
+  if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_LOOKBACK_HOURS) return null;
+
+  const end = Date.parse(nowIso);
+  if (!Number.isFinite(end)) return null;
+  return {
+    windowStart: new Date(end - hours * 3_600_000).toISOString(),
+    windowEnd: new Date(end).toISOString(),
+  };
 }

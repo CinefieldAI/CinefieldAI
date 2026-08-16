@@ -3,6 +3,8 @@ import {
   runCreditAudit,
   runGenerationReconcile,
   runProviderCostReconcile,
+  runEstimatedSpendGuard,
+  type SpendGuardTaskInput,
   runProviderHealthAudit,
   runRestoreVerification,
   runSecurityAnalyze,
@@ -67,6 +69,20 @@ export const providerCostReconcileTask = task({
   maxDuration: OPERATIONAL_MAX_DURATION_SECONDS,
   run: async (payload: OperationalTaskInput = {}): Promise<OperationalTaskResult> =>
     runProviderCostReconcile(payload),
+});
+
+/**
+ * Phase 15-B/2. Also `task()`, not `schedules.task()` — for the same reason as
+ * every task above, and one more: this one evaluates money. Choosing how often
+ * a budget is checked is a policy decision, and the budget registry is still
+ * deliberately empty, so a cadence would currently schedule a pass with
+ * nothing to compare against.
+ */
+export const estimatedSpendGuardTask = task({
+  id: "cinefield-op-estimated-spend-guard",
+  maxDuration: OPERATIONAL_MAX_DURATION_SECONDS,
+  run: async (payload: SpendGuardTaskInput = {}): Promise<OperationalTaskResult> =>
+    runEstimatedSpendGuard(payload),
 });
 
 export const storageCleanupPlanTask = task({
