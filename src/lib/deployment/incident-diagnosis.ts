@@ -211,6 +211,13 @@ const ELIGIBILITY: Readonly<Record<AlertType, EligibilityRule>> = {
     candidateFilePaths: [],
     why: "The Risk Engine asked for human review by name; automating past that would defeat the request.",
   },
+  dr_restore_validation_failed: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-C. A restore validation failure means backed-up data or its restore path is unreliable — the fix is a DR/infrastructure investigation, never a source-code patch. An agent asked to remediate it would have nothing to change and no way to verify a fix.",
+  },
   cost_budget_at_risk: {
     category: "operational_backlog",
     confidence: "none",

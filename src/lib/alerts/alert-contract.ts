@@ -63,7 +63,8 @@ export type AlertSource =
   | "dispatcher"
   | "provider"
   | "reliability"
-  | "cost";
+  | "cost"
+  | "dr";
 
 /**
  * Alert lifecycle.
@@ -113,7 +114,9 @@ export type AlertType =
   | "slo_budget_exhausted"
   // ---- cost (Phase 15-B FinOps budget pressure, estimate-based) -----------
   | "cost_budget_at_risk"
-  | "cost_budget_exhausted";
+  | "cost_budget_exhausted"
+  // ---- dr (Phase 15-C restore verification, proven failure only) ---------
+  | "dr_restore_validation_failed";
 
 export interface AlertTypeRule {
   readonly source: AlertSource;
@@ -221,6 +224,13 @@ export const ALERT_CATALOGUE: Readonly<Record<AlertType, AlertTypeRule>> = {
     dedupeWindowSeconds: 1_800,
     userVisible: false,
     why: "Phase 15-A. A service level objective is breached for this window. Not user-visible: an SLO is an internal commitment, and publishing which objective slipped tells an outsider where the system is weakest.",
+  },
+  dr_restore_validation_failed: {
+    source: "dr",
+    severity: "ERROR",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 15-C. An isolated restore was validated against the canonical database and at least one check — row count, content checksum, or referential integrity — proved a mismatch. Never user-visible: disaster-recovery posture is internal operational information, and publishing it would tell an outsider exactly how fragile backups are.",
   },
   cost_budget_at_risk: {
     source: "cost",

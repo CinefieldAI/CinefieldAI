@@ -276,6 +276,9 @@ export const PRODUCED_ALERT_TYPES: readonly AlertType[] = [
   // signal and depends on 13-D rather than the other way round.
   "cost_budget_at_risk",
   "cost_budget_exhausted",
+  // Raised by src/lib/dr/dr-alert-bridge.ts (Phase 15-C), which owns the
+  // signal and depends on 13-D rather than the other way round.
+  "dr_restore_validation_failed",
 ];
 
 export type { AlertCandidate };

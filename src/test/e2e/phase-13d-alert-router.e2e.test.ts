@@ -658,6 +658,7 @@ test("S13D-27  every catalogued type has a producer, and every producer type is 
     join(ALERTS_DIR, "alert-sources.ts"),
     join(ROOT, "src", "lib", "slo", "slo-alert-bridge.ts"),
     join(ROOT, "src", "lib", "finops", "cost-alert-bridge.ts"),
+    join(ROOT, "src", "lib", "dr", "dr-alert-bridge.ts"),
   ];
   const producerCode = producerFiles
     .filter((f) => existsSync(f))

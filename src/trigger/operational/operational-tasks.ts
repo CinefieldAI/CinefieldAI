@@ -95,7 +95,8 @@ export const storageCleanupPlanTask = task({
 export const restoreVerificationTask = task({
   id: "cinefield-op-restore-verification",
   maxDuration: OPERATIONAL_MAX_DURATION_SECONDS,
-  run: async (): Promise<OperationalTaskResult> => runRestoreVerification(),
+  run: async (payload: OperationalTaskInput = {}): Promise<OperationalTaskResult> =>
+    runRestoreVerification(payload),
 });
 
 export const securityAnalyzeTask = task({

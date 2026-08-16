@@ -14,6 +14,15 @@ import {
 } from "@/lib/finops/estimated-spend-repository";
 import { runSpendGuard, spendGuardMetrics } from "@/lib/finops/spend-guard-runner";
 import type { PricingRecord } from "@/lib/pricing/pricing-types";
+import { runRestoreValidation } from "@/lib/dr/restore-verification-engine";
+import { alertOnRestoreEvidence } from "@/lib/dr/dr-alert-bridge";
+import { DURABLE_TABLES } from "@/lib/dr/restore-evidence-contract";
+import type {
+  ChecksumItem,
+  RestoreEvidence,
+  RowCountItem,
+} from "@/lib/dr/restore-evidence-contract";
+import type { RestoreEvidenceSource } from "@/lib/dr/restore-target";
 import {
   buildResult,
   resolveLimit,
@@ -50,6 +59,16 @@ export interface OperationalDeps {
   getProviderErrorRate: typeof getProviderErrorRate;
   getActivePricing: typeof getActivePricing;
   listModels: typeof listModels;
+  /**
+   * The restore target to validate, or `null` when none is wired up.
+   *
+   * Defaults to `() => null` — Phase 15-C/1 ships the engine and the
+   * contract, not a live adapter. No Docker harness, no staging project and
+   * no Supabase Dashboard client is reachable from here, so the honest
+   * default is "not configured", exactly like `isDrConfigured()` for the
+   * Phase 9-D backup path.
+   */
+  getRestoreEvidenceSource: () => RestoreEvidenceSource | null;
 }
 
 export const defaultOperationalDeps: OperationalDeps = {
@@ -60,6 +79,7 @@ export const defaultOperationalDeps: OperationalDeps = {
   getProviderErrorRate,
   getActivePricing,
   listModels,
+  getRestoreEvidenceSource: () => null,
 };
 
 // ---------------------------------------------------------------------------
@@ -397,18 +417,153 @@ export async function runStorageCleanupPlan(
 // ---------------------------------------------------------------------------
 
 /**
- * Restore verification is NOT implemented, and says so.
+ * Real restore-verification logic (Phase 15-C/1).
  *
- * Cinefield has no backup/restore contract yet (Phase 15 owns DR). Rather
- * than pretend a verification ran — which would be worse than no check at
- * all, because an ops dashboard would show green — this task always
- * reports `unavailable` with an explicit reason. It exists so the
- * operational surface is honest about the gap and so a future phase has a
- * defined place to implement it.
+ * ---------------------------------------------------------------------------
+ * IT DOES NOT PERFORM A RESTORE. IT VALIDATES ONE.
+ * ---------------------------------------------------------------------------
+ * "Restoring" — triggering PostgreSQL PITR, standing up an isolated instance,
+ * copying an S3 object back to R2 — is external and/or a later slice's work.
+ * This function's only job is: given a restore target that says it is ready,
+ * does its data actually agree with the canonical database? BACKUP_EXISTS is
+ * not RESTORE_SUCCEEDED, and RESTORE_STARTED is not RESTORE_VALIDATED — this
+ * is the function that tells the two apart.
+ *
+ * `deps.getRestoreEvidenceSource()` is `null` by default, so on an unmodified
+ * deployment this reports `NOT_CONFIGURED` honestly — the same shape the
+ * previous stub reported, but now because nothing is wired up rather than
+ * because nothing was written. Wiring a real adapter (a throwaway-Postgres
+ * reader, a future staging-project reader) is future work; this function
+ * already refuses correctly the moment one exists but is unsafe, unready, or
+ * disagrees with the canonical database.
+ *
+ * "Expected" row counts and checksums are read from the CANONICAL database
+ * (`deps.getAdmin()`), read-only, exactly like `countBackupDebt` already
+ * does. Reading production is not the risk here — writing to, or dispatching
+ * side effects from, the RESTORE TARGET is, and this function's only write
+ * of any kind is the bounded 13-D alert on a proven failure.
  */
-export async function runRestoreVerification(): Promise<OperationalTaskResult> {
+export async function runRestoreVerification(
+  input?: OperationalTaskInput,
+  deps: OperationalDeps = defaultOperationalDeps
+): Promise<OperationalTaskResult> {
   const startedAt = new Date().toISOString();
-  return buildResult(startedAt, "unavailable", {}, { reasonCode: "restore_contract_not_implemented" });
+
+  const source = deps.getRestoreEvidenceSource();
+  if (!source) {
+    return buildResult(startedAt, "unavailable", {}, { reasonCode: "restore_target_not_configured" });
+  }
+
+  if (!deps.isAdminConfigured()) {
+    // The canonical database is what "expected" is read from. Without it
+    // there is nothing to validate the restore target AGAINST, which is a
+    // different unavailability than "no restore target exists".
+    return buildResult(startedAt, "unavailable", {}, { reasonCode: "supabase_admin_not_configured" });
+  }
+
+  try {
+    const admin = deps.getAdmin();
+    const limit = resolveLimit(input);
+
+    const expectedRowCounts = await readExpectedRowCounts(admin);
+    if (!expectedRowCounts) {
+      return buildResult(startedAt, "unavailable", {}, { reasonCode: "expected_row_count_read_failed" });
+    }
+
+    const expectedChecksums = await readExpectedChecksums(admin, limit);
+    if (!expectedChecksums) {
+      return buildResult(startedAt, "unavailable", {}, { reasonCode: "expected_checksum_read_failed" });
+    }
+
+    const evidence = await runRestoreValidation({
+      source,
+      expectedRowCounts,
+      expectedChecksums,
+      startedAt: new Date(startedAt),
+    });
+
+    alertOnRestoreEvidence(evidence);
+
+    return buildResult(startedAt, statusFor(evidence.state), metricsFor(evidence), {
+      reasonCode: evidence.reasonCode,
+    });
+  } catch (caught) {
+    return buildResult(startedAt, "failed", {}, { reasonCode: toSafeReasonCode(caught) });
+  }
+}
+
+/**
+ * "Expected" row counts, read from the canonical database. `count: "exact",
+ * head: true` — the same shape `countBackupDebt` already uses — returns a
+ * number without a single row crossing the network.
+ */
+async function readExpectedRowCounts(
+  admin: ReturnType<typeof getSupabaseAdminClient>
+): Promise<RowCountItem[] | null> {
+  const items: RowCountItem[] = [];
+  for (const entry of DURABLE_TABLES) {
+    const { count, error } = await admin.from(entry.table).select("*", { count: "exact", head: true });
+    if (error || typeof count !== "number") return null;
+    items.push({ table: entry.table, rowCount: count });
+  }
+  return items;
+}
+
+/**
+ * A bounded sample of `checksum_sha256` from the most recently backed-up
+ * assets. Backup eligibility (Phase 9-D) already requires
+ * `ingest_status = 'verified'`, which the 9-B ingest gate's own constraint
+ * requires alongside a non-null `checksum_sha256` — so every row this reads
+ * is guaranteed to carry one.
+ */
+async function readExpectedChecksums(
+  admin: ReturnType<typeof getSupabaseAdminClient>,
+  limit: number
+): Promise<ChecksumItem[] | null> {
+  const { data, error } = await admin
+    .from("media_assets")
+    .select("id, checksum_sha256")
+    .eq("backup_status", "backed_up")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return null;
+
+  const rows = (data ?? []) as { id: string; checksum_sha256: string | null }[];
+  return rows
+    .filter((row): row is { id: string; checksum_sha256: string } => typeof row.checksum_sha256 === "string")
+    .map((row) => ({ subjectId: row.id, expectedDigest: row.checksum_sha256 }));
+}
+
+function statusFor(state: RestoreEvidence["state"]): OperationalTaskResult["status"] {
+  switch (state) {
+    case "VALIDATION_PASSED":
+      return "success";
+    case "VALIDATION_FAILED":
+      return "failed";
+    case "NOT_CONFIGURED":
+    case "UNAVAILABLE":
+    case "RESTORE_NOT_READY":
+    default:
+      return "unavailable";
+  }
+}
+
+/** Bounded counts only — never a row, a table name list, or a digest. */
+function metricsFor(evidence: RestoreEvidence): Record<string, number> {
+  const metrics: Record<string, number> = {};
+  if (evidence.rowCount) {
+    metrics.rowCountTablesChecked = evidence.rowCount.results.length;
+    metrics.rowCountTablesMatched = evidence.rowCount.results.filter((r) => r.outcome === "MATCH").length;
+  }
+  if (evidence.checksum) {
+    metrics.checksumsChecked = evidence.checksum.results.length;
+    metrics.checksumsMatched = evidence.checksum.results.filter((r) => r.outcome === "MATCH").length;
+  }
+  if (evidence.referentialIntegrity) {
+    metrics.invalidConstraints = evidence.referentialIntegrity.invalidConstraintCount ?? 0;
+  }
+  return metrics;
 }
 
 // ---------------------------------------------------------------------------

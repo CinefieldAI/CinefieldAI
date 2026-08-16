@@ -32,6 +32,13 @@ interface TableData {
   credit_reconciliation?: Record<string, unknown>[];
   /** Phase 15-B/3: the canonical routed-identity join. */
   provider_models?: Record<string, unknown>[];
+  /**
+   * Phase 15-C/1: every other durable table `runRestoreVerification` reads a
+   * row count from. An index signature rather than sixteen named fields,
+   * since the fake has no per-table logic to type — only the row-count
+   * helper below cares which key is which.
+   */
+  [table: string]: Record<string, unknown>[] | undefined;
 }
 
 class FakeDb {
@@ -66,12 +73,29 @@ class FakeQuery {
     this.rows = [...((db.data as Record<string, Record<string, unknown>[]>)[table] ?? [])];
   }
 
-  select() {
+  private headCount = false;
+
+  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+    // Phase 15-C/1: `{ count: "exact", head: true }` returns a row count with
+    // no rows crossing the network, matching what the real PostgREST builder
+    // does for the same options.
+    this.headCount = opts?.head === true && opts?.count === "exact";
     return this;
   }
 
   eq(col: string, value: unknown) {
     this.rows = this.rows.filter((r) => r[col] === value);
+    return this;
+  }
+
+  /** Phase 15-C/1: most-recently-backed-up assets first. */
+  order(col: string, opts?: { ascending?: boolean }) {
+    const dir = opts?.ascending === false ? -1 : 1;
+    this.rows = [...this.rows].sort((a, b) => {
+      const av = String(a[col] ?? "");
+      const bv = String(b[col] ?? "");
+      return av < bv ? -1 * dir : av > bv ? 1 * dir : 0;
+    });
     return this;
   }
 
@@ -103,7 +127,14 @@ class FakeQuery {
 
   private resolve() {
     if (this.db.failTable === this.table) {
-      return Promise.resolve({ data: null, error: { message: "boom" } as { message: string } | null });
+      return Promise.resolve({
+        data: null,
+        count: null,
+        error: { message: "boom" } as { message: string } | null,
+      });
+    }
+    if (this.headCount) {
+      return Promise.resolve({ data: null, count: this.rows.length, error: null as { message: string } | null });
     }
     return Promise.resolve({ data: this.rows, error: null as { message: string } | null });
   }
@@ -416,9 +447,15 @@ test("storage cleanup: nothing to clean reports no_work", async () => {
 // ---------------------------------------------------------------------------
 
 test("restore verification: honestly reports unavailable rather than faking a green check", async () => {
+  // Phase 15-C/1 replaced the honest stub with a real validation engine, but
+  // `defaultOperationalDeps.getRestoreEvidenceSource` still resolves to
+  // `null` on an unmodified deployment — no Docker harness, no staging
+  // project and no Supabase Dashboard client is reachable from here. The
+  // reason code changed (a specific "nothing is wired up" beats a generic
+  // "not implemented"); the honesty the old stub existed to prove did not.
   const result = await runRestoreVerification();
   assert.equal(result.status, "unavailable");
-  assert.equal(result.reasonCode, "restore_contract_not_implemented");
+  assert.equal(result.reasonCode, "restore_target_not_configured");
   assert.notEqual(result.status, "success", "never report success for a check that did not happen");
 });
 
@@ -702,6 +739,181 @@ test("spend guard: the operational path performs no write of any kind", async ()
 
   // No RPC, no delete. Cost observation reads; it never changes the numbers
   // it is meant to be reporting, and never touches Phase 10 or Phase 7 state.
+  assert.deepEqual(db.rpcCalls, []);
+  assert.equal(db.deletes, 0);
+});
+
+// ---------------------------------------------------------------------------
+// RESTORE VERIFICATION (Phase 15-C/1, behaviourally proven)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors S15B2's precedent exactly: the real operational entry point,
+ * exercised end to end through the same injected `OperationalDeps` seam the
+ * other operational services use. A source-regex assertion that
+ * `runRestoreVerification` exists proves a declaration, not behaviour.
+ */
+
+const GOOD = "a".repeat(64);
+const OTHER = "b".repeat(64);
+
+/** Every durable table `readExpectedRowCounts` reads, at a fixed count. */
+function durableTableFixture(rowCount = 5): TableData {
+  const tables = [
+    "generations", "generation_attempts", "profiles", "projects", "credit_wallets",
+    "credit_ledger", "media_assets", "models", "providers", "provider_models",
+    "model_versions", "model_pricing", "plan_limits", "security_events",
+    "media_safety_audit", "media_release_approvals",
+  ];
+  const data: TableData = {};
+  for (const t of tables) data[t] = Array.from({ length: rowCount }, (_, i) => ({ id: `${t}-${i}` }));
+  // media_assets keeps the same row COUNT as every other durable table — the
+  // fixture only adds the fields the checksum sample query actually reads
+  // (backup_status, checksum_sha256, created_at) to the rows already there,
+  // rather than replacing them and silently shrinking the expected count.
+  data.media_assets = data.media_assets!.map((row, i) => ({
+    ...row,
+    backup_status: "backed_up",
+    checksum_sha256: GOOD,
+    created_at: `2026-08-${String(16 - i).padStart(2, "0")}T00:00:00.000Z`,
+  }));
+  return data;
+}
+
+function fakeRestoreSource(over: Partial<{
+  environmentClass: "isolated_throwaway" | "isolated_staging" | "production" | "unknown";
+  ready: boolean;
+  rowCount: number;
+  checksum: string;
+  invalidConstraints: string[];
+}> = {}) {
+  const rowCount = over.rowCount ?? 5;
+  return {
+    environment: { environmentClass: over.environmentClass ?? "isolated_throwaway", label: "docker-pg-test" },
+    restoreId: "restore-1",
+    backupId: "backup-1",
+    isRestoreReady: async () => over.ready ?? true,
+    getActualRowCount: async () => rowCount,
+    getActualChecksum: async () => over.checksum ?? GOOD,
+    getConstraintHealth: async () => ({ totalForeignKeys: 4, invalidConstraints: over.invalidConstraints ?? [] }),
+  };
+}
+
+test("restore verification: no restore target configured maps to NOT_CONFIGURED", async () => {
+  const db = new FakeDb(durableTableFixture());
+  const result = await runRestoreVerification({}, depsFor(db, { getRestoreEvidenceSource: () => null }));
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "restore_target_not_configured");
+});
+
+test("restore verification: an unreachable canonical database is unavailable, never a pass", async () => {
+  const db = new FakeDb(durableTableFixture());
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { isAdminConfigured: () => false, getRestoreEvidenceSource: () => fakeRestoreSource() as never })
+  );
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "supabase_admin_not_configured");
+});
+
+test("restore verification: a canonical row-count read failure is unavailable", async () => {
+  const db = new FakeDb(durableTableFixture());
+  db.failTable = "generations";
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource() as never })
+  );
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "expected_row_count_read_failed");
+});
+
+test("restore verification: a production-declared restore target is refused with zero reads", async () => {
+  const db = new FakeDb(durableTableFixture());
+  let sourceReadCalls = 0;
+  const source = {
+    ...fakeRestoreSource({ environmentClass: "production" }),
+    getActualRowCount: async () => {
+      sourceReadCalls += 1;
+      return 5;
+    },
+  };
+  const result = await runRestoreVerification({}, depsFor(db, { getRestoreEvidenceSource: () => source as never }));
+  assert.equal(result.status, "unavailable");
+  assert.equal(sourceReadCalls, 0, "a production-declared target must never be read from");
+});
+
+test("restore verification: a not-ready restore target is unavailable", async () => {
+  const db = new FakeDb(durableTableFixture());
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource({ ready: false }) as never })
+  );
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "restore_not_ready");
+});
+
+test("restore verification: a proven checksum mismatch fails, with a bounded reason", async () => {
+  const db = new FakeDb(durableTableFixture());
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource({ checksum: OTHER }) as never })
+  );
+  assert.equal(result.status, "failed");
+  assert.equal(result.reasonCode, "checksum_mismatch");
+});
+
+test("restore verification: a proven row-count mismatch fails", async () => {
+  const db = new FakeDb(durableTableFixture(5));
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource({ rowCount: 999 }) as never })
+  );
+  assert.equal(result.status, "failed");
+  assert.equal(result.reasonCode, "row_count_mismatch");
+});
+
+test("restore verification: a broken foreign key fails", async () => {
+  const db = new FakeDb(durableTableFixture(5));
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, {
+      getRestoreEvidenceSource: () => fakeRestoreSource({ invalidConstraints: ["media_assets_generation_id_fkey"] }) as never,
+    })
+  );
+  assert.equal(result.status, "failed");
+  assert.equal(result.reasonCode, "referential_integrity_invalid");
+});
+
+test("restore verification: full agreement is a real success, with bounded metrics", async () => {
+  const db = new FakeDb(durableTableFixture(5));
+  const result = await runRestoreVerification(
+    {},
+    depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource() as never })
+  );
+  assert.equal(result.status, "success");
+  assert.equal(result.reasonCode, "restore_validation_passed");
+  assert.equal(result.metrics.rowCountTablesChecked, 16);
+  assert.equal(result.metrics.rowCountTablesMatched, 16);
+  // 5 backed_up media_assets rows exist in the fixture, all within the
+  // default sample limit (100), so all 5 are sampled.
+  assert.equal(result.metrics.checksumsChecked, 5);
+  assert.equal(result.metrics.checksumsMatched, 5);
+  assert.equal(result.metrics.invalidConstraints, 0);
+});
+
+test("restore verification: never claims success without evidence — a partial source read never passes", async () => {
+  const db = new FakeDb(durableTableFixture(5));
+  const source = {
+    ...fakeRestoreSource(),
+    getActualRowCount: async () => null,
+  };
+  const result = await runRestoreVerification({}, depsFor(db, { getRestoreEvidenceSource: () => source as never }));
+  assert.notEqual(result.status, "success");
+});
+
+test("restore verification: performs no write of any kind against the canonical database", async () => {
+  const db = new FakeDb(durableTableFixture(5));
+  await runRestoreVerification({}, depsFor(db, { getRestoreEvidenceSource: () => fakeRestoreSource() as never }));
   assert.deepEqual(db.rpcCalls, []);
   assert.equal(db.deletes, 0);
 });

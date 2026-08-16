@@ -3333,3 +3333,159 @@ business decision, not something an agent may invent. When it is made, it
 belongs in a dedicated server-side FinOps budget configuration with GLOBAL /
 PROVIDER / PROVIDER_MODEL scopes — not scattered across source files. No
 `cost_amount` write, no routing mutation, no migration, no UI.
+
+## Phase 15-C/1 — restore verification contract and validation engine (code-only)
+
+Roadmap 15-C: PostgreSQL PITR, R2→S3 backup, restore verification, checksum,
+row-count, referential integrity, isolated staging restore. Done criterion:
+*"an isolated restore can be verified rather than merely assuming backups
+exist."* This batch delivers the verification ENGINE and its CONTRACT; it
+does not perform a live restore, and it does not close Phase 15-C.
+
+`src/lib/dr/` — `restore-evidence-contract.ts`, `restore-canonical-digest.ts`,
+`restore-isolation-guard.ts`, `restore-target.ts`,
+`restore-row-count-validator.ts`, `restore-checksum-validator.ts`,
+`restore-referential-integrity-validator.ts`, `restore-verification-engine.ts`,
+`dr-alert-bridge.ts`. All pure except the isolation-guard's environment check
+and the engine's orchestration of an injected source — no database driver, no
+AWS SDK, no Docker anywhere in the package.
+
+### The principle this package exists to enforce
+
+    BACKUP_EXISTS   != RESTORE_SUCCEEDED
+    RESTORE_STARTED != RESTORE_VALIDATED
+
+A backup existing (Phase 9-D's `backup_status = 'backed_up'`) proves bytes
+were written to S3 and S3 answered a HeadObject. It proves nothing about
+whether a PITR snapshot would reconstitute a working Cinefield. Only a
+validated restore does, and `VALIDATION_PASSED` is reachable in exactly one
+way: every check that ran agreed. Nothing upgrades to it by omission —
+missing evidence is `UNAVAILABLE`, never a silent pass.
+
+### Five states, and what each one costs to reach
+
+    NOT_CONFIGURED    no restore target wired up at all — not a failure
+    UNAVAILABLE       a read failed, or the environment was refused
+    RESTORE_NOT_READY the target answered, but the restore has not finished
+    VALIDATION_FAILED a check PROVED a mismatch
+    VALIDATION_PASSED every check that ran agreed
+
+The engine's call order is the safety property: no source is configured →
+stop. Environment declared unsafe → stop, **before a single read** — a
+target declared "production" or "unknown" never has `isRestoreReady()`
+called on it, let alone a row-count or checksum read. Not ready → stop. Only
+then do row-count, checksum, and referential-integrity validation run, in
+parallel, over the same injected source.
+
+### Environment identity is declared, never inferred
+
+`RestoreEnvironmentClass` is one of isolated_throwaway, isolated_staging,
+production, or unknown. `assertRestoreSafeEnvironment` reads a value the
+CALLER asserted; it does not read `NODE_ENV`, does not parse a hostname,
+does not guess. Unknown is refused exactly like production — there is no
+default, because a default is exactly how a validator ends up treating an
+unrecognised target as safe ("the hostname didn't look like production, so
+it must be fine"). A malformed label (long, or shaped like a connection
+string) is refused the same way.
+
+### Row-count validation: a written allow-list, not every table
+
+`DURABLE_TABLES` names sixteen tables and WHY each is restore-significant:
+`generations`, `generation_attempts`, `profiles`, `projects`,
+`credit_wallets`, `credit_ledger`, `media_assets`, `models`, `providers`,
+`provider_models`, `model_versions`, `model_pricing`, `plan_limits`,
+`security_events`, `media_safety_audit`, `media_release_approvals`.
+
+Excluded on purpose: `outbox_events` and `workflow_start_outbox`, whose own
+migrations state rows "may still be deleted by a future retention/archival
+job" and document an entire migration retiring abandoned rows
+(`20260818010000_retire_historical_start_intents.sql`) — comparing their
+counts across a restore would flag healthy purging as corruption.
+`outbox_tx_proof` and `credit_reservations` are the same shape: transient
+claim/lease state.
+
+Overall outcome: a proven MISMATCH outranks UNAVAILABLE, which outranks
+MATCH — a known problem in one table is reported even when another table's
+read failed, but an unreadable table can never be silently treated as
+agreeing. MATCH requires every expected table to have been read AND to have
+agreed.
+
+### Checksum validation reuses `checksum_sha256`, computes no new digest over media
+
+The Phase 9-B ingest gate's own content-identity column (64 lowercase hex,
+CHECK-enforced) is the digest compared — this package does not hash media
+bytes itself. `restore-canonical-digest.ts` uses plain `node:crypto`, not
+the Phase 9-B sandboxed inspector: the sandbox exists because media bytes
+are UNTRUSTED external input; a row-count manifest is the process's own
+structured data and needs no isolation, only a stable serialization (sorted
+by table name, no timestamp, no restoreId — a capture time is real
+information but not part of the DATA being verified, and including it would
+make two identical restores of the same backup produce different digests
+depending on when validation happened to run).
+
+### Referential integrity: PostgreSQL is the authority, this package reads its verdict
+
+No relationship graph exists in TypeScript. `ConstraintHealthEvidence` names
+constraints Postgres itself marked NOT VALID
+(`pg_constraint.convalidated = false`); the validator reports that verdict,
+it does not compute one. Re-encoding "media_assets references generations"
+as a second, hand-maintained fact in application code would drift the
+moment a migration changed the real one.
+
+### The restore target is an interface, not an adapter
+
+`RestoreEvidenceSource` has four read-only methods (`isRestoreReady`,
+`getActualRowCount`, `getActualChecksum`, `getConstraintHealth`) and nothing
+else — no `restore()`, no `mutate()`. No concrete implementation ships in
+this batch: `deps.getRestoreEvidenceSource` defaults to `() => null`, so an
+unmodified deployment honestly reports NOT_CONFIGURED, the same shape the
+previous stub reported but now because nothing is wired up rather than
+because nothing was written. The existing
+`supabase/tests/run_pg_tests.sh` throwaway-Docker harness is the natural
+first adapter for a later slice; it is not built here.
+
+### `runRestoreVerification`: real logic, still honest by default
+
+Reads "expected" row counts and a bounded checksum sample from the
+CANONICAL database — read-only, the same `count: "exact", head: true` shape
+`countBackupDebt` already uses, and the same eligibility Phase 9-D already
+enforces (`backup_status = 'backed_up'` implies `ingest_status = 'verified'`
+implies a non-null `checksum_sha256`). `restoreVerificationTask` remains a
+plain `task()`, no schedule — production cadence stays undefined, the same
+reasoning `providerCostReconcileTask` and `estimatedSpendGuardTask` already
+state.
+
+### Alerting: one new type, only on a proven failure
+
+`dr_restore_validation_failed` (source `dr`, severity ERROR,
+`userVisible: false`, `remediationEligible: false`) is raised through the
+existing 13-D router by `dr-alert-bridge.ts`. NOT_CONFIGURED, UNAVAILABLE
+and RESTORE_NOT_READY all raise nothing — the alert catalogue's own note on
+DR backup debt already states the rule this follows: "an alert type for a
+subsystem that cannot report is a fake alert." A positively-known
+VALIDATION_PASSED resolves a standing failure; every other state changes
+nothing.
+
+### Ownership preserved
+
+Phase 9-D's backup/write path (`dr-backup-client.ts`, `dr-backup-service.ts`)
+is unmodified and unduplicated — this package only reads what it already
+recorded. Phase 7 routing, Phase 10 credit ledger, Phase 13-D alert routing,
+Phase 13-E telemetry boundary, and Phase 21 generic feature flags are all
+untouched (verified structurally: zero occurrences of Temporal, SQS,
+provider-execution, credit-mutation, or scheduling calls anywhere in
+`src/lib/dr/`). `OperationalTaskResult.metrics` remains a return-value
+contract, not a telemetry emission point — the same precedent Phase 15-B's
+`spendGuardMetrics` established.
+
+### Not in this slice
+
+Live PostgreSQL PITR (DEFERRED_EXTERNAL — requires Supabase plan/dashboard
+configuration this repository cannot reach); a real `RestoreEvidenceSource`
+adapter; the S3→R2 restore-back contract (defined in
+`CINEFIELD_ARCHITECTURE_CONTRACT.md`, not implemented); a restore-evidence
+persistence table (bounded in-memory/task-result evidence is sufficient
+today); any Trigger.dev schedule; any UI (Phase 16 will surface last-restore
+age, checksum/row-count/integrity summaries, and RPO/RTO status). Phase 26/28
+own cross-region failover, chaos testing, and enterprise DR — nothing here
+claims any of that. **Phase 15-C is not complete.**
