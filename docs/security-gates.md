@@ -3224,3 +3224,112 @@ resolves to `no_applicable_budget`); output-count evidence; the pre-spend gate
 in front of `executeGeneration`; actually setting a routing control; cadence;
 Stripe / AWS / invoice correlation; UI. **Phase 15-B is not complete, and Phase
 15 is not complete.**
+
+## Phase 15-B/3 — spend accounting correction and production proof
+
+Four findings from the 15-B/2 post-implementation audit, all closed.
+
+### F1 — `cancelled` attempts could hide real spend (fail-open)
+
+`markAttemptTerminal` may only close an ACTIVE attempt, and that set includes
+`submitted` and `processing`. An attempt that **already reached the provider**
+can therefore be cancelled afterwards, and the provider may already have
+charged for it. Excluding every `cancelled` row under-reported spend, making
+the guard more permissive than reality.
+
+Counting every `cancelled` row is wrong in the other direction: one cancelled
+while still `pending` never left Cinefield and cost nothing.
+
+`submission_evidence` is the canonical discriminator and already existed:
+
+| status | evidence | counted | why |
+| --- | --- | --- | --- |
+| `pending` | any | NO | the request never left Cinefield |
+| `claimed` | any | NO | claimed for submission, not yet sent |
+| `submitting` | any | YES | in flight; money may already be spent |
+| `submitted` | any | YES | a provider job exists |
+| `processing` | any | YES | the provider is working on it |
+| `succeeded` | any | YES | completed and billable |
+| `failed` | any | YES | a failed provider call is still a call |
+| `cancelled` | `none` | NO | provably never crossed the boundary |
+| `cancelled` | `ambiguous` | **YES** | cannot prove it did not leave |
+| `cancelled` | `job` | **YES** | a provider job id exists |
+
+**AMBIGUOUS COUNTS.** "AMBIGUOUS is not SAFE" is a standing rule in this
+codebase; applied to money it means an attempt we cannot prove was free is
+treated as paid. Guessing the cheaper answer would be guessing in the
+provider's favour with Cinefield's budget.
+
+The rule lives in one exported function, `countsAsSpend`, pinned directly by a
+test table that also asserts every status in the schema CHECK appears in it —
+so a new status cannot be added without a recorded accounting decision.
+`cancelled` rows are **fetched** and then judged; filtering them out in SQL
+would make the rule unenforceable because the rows needing judgement would
+never arrive.
+
+### F2 — the production path is now behaviourally tested
+
+15-B/2 shipped with only a source-regex assertion that
+`runEstimatedSpendGuard` existed. That proves a declaration, not behaviour: the
+registry join, the pricing pre-fetch, window resolution and the
+`unavailable`/`no_work`/`partial`/`success` mapping were all unexecuted.
+
+Twelve behavioural tests now run the real entry point through the same injected
+`OperationalDeps` seam the other seven operational services use — covering
+unconfigured admin, invalid windows, empty windows, query failure, priced
+success, evidence-based cancelled accounting, window boundary exclusion,
+unpriced models (`partial`), pricing-read failure, routed traffic, and a proof
+that the pass performs no RPC and no delete.
+
+### F3 — NUL byte removed
+
+`estimated-spend-repository.ts` contained a literal NUL used as a Map-key
+separator, which made git classify the file as binary and hid it from
+`git show`. It is replaced by a **nested map** (`provider -> providerModelId ->
+count`) rather than another separator character: any separator is a character
+a provider id or model id could legitimately contain, which is a silent
+collision between two models' spend. Nesting removes the question instead of
+answering it.
+
+A test walks `src/lib` and `src/trigger` and fails on any NUL in a `.ts`/`.tsx`
+file. (One deliberate NUL remains in
+`src/test/e2e/phase-12e-policy-gate.e2e.test.ts`, where Phase 12-E injects it
+into an action name to prove the policy gate rejects it — a fixture, not a
+defect, and outside the walked directories.)
+
+### F4 — routed traffic now prices, through the canonical join
+
+An attempt records `routing?.providerId ?? model.providerId`, so a Phase 7
+route override writes the ROUTE's identity, which need not appear in the static
+`model-registry.ts` catalogue. Those pairs priced as UNKNOWN — safe, but
+systematically unpriceable for exactly the traffic an operator redirected.
+
+The mapping already exists in tables Phase 7 owns:
+
+```
+generation_attempts(provider, provider_model)
+  -> provider_models(provider_id, provider_model_id)   [UNIQUE together]
+  -> model_routes(provider_model_id) -> model_id       [= platform model id]
+  -> model_pricing(platform_model_id)
+```
+
+The catalogue is still consulted first; the join runs only for pairs it missed.
+**Ambiguity is reported, not resolved:** `model_routes` is unique on
+(model_version_id, provider_model_id), not on provider_model_id alone, so one
+provider model may be reachable from several platform models. When the join
+yields more than one distinct `model_id` the pair stays UNRESOLVED — two
+platform models can carry different prices, and choosing one would be
+fabricating a price behind the appearance of a lookup. A failed join is
+`sourceAvailable: false`, never "nothing matched".
+
+No fallback to `credit_price_per_unit`, no default price, no other provider's
+price — asserted structurally.
+
+### Still deferred, still honest
+
+`per_output` remains unpriceable (no output-count evidence). `COST_BUDGETS`
+remains empty: **REAL_BUDGET_LIMIT_ACTIVE = NO**, and the first real limit is a
+business decision, not something an agent may invent. When it is made, it
+belongs in a dedicated server-side FinOps budget configuration with GLOBAL /
+PROVIDER / PROVIDER_MODEL scopes — not scattered across source files. No
+`cost_amount` write, no routing mutation, no migration, no UI.

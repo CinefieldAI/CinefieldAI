@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
   runCreditAudit,
+  runEstimatedSpendGuard,
   runGenerationReconcile,
   runProviderCostReconcile,
   runProviderHealthAudit,
@@ -29,6 +30,8 @@ interface TableData {
   generations?: Record<string, unknown>[];
   generation_attempts?: Record<string, unknown>[];
   credit_reconciliation?: Record<string, unknown>[];
+  /** Phase 15-B/3: the canonical routed-identity join. */
+  provider_models?: Record<string, unknown>[];
 }
 
 class FakeDb {
@@ -74,6 +77,17 @@ class FakeQuery {
 
   in(col: string, values: unknown[]) {
     this.rows = this.rows.filter((r) => values.includes(r[col]));
+    return this;
+  }
+
+  /** Phase 15-B/3: the spend window is a half-open [start, end) range. */
+  gte(col: string, value: unknown) {
+    this.rows = this.rows.filter((r) => String(r[col] ?? "") >= String(value));
+    return this;
+  }
+
+  lt(col: string, value: unknown) {
+    this.rows = this.rows.filter((r) => String(r[col] ?? "") < String(value));
     return this;
   }
 
@@ -483,4 +497,211 @@ test("results carry timestamps and counts only - no user content", async () => {
   for (const value of Object.values(result.metrics)) {
     assert.equal(typeof value, "number", "metrics must be counts, never content");
   }
+});
+
+// ---------------------------------------------------------------------------
+// ESTIMATED SPEND GUARD (Phase 15-B/2, behaviourally proven in 15-B/3)
+// ---------------------------------------------------------------------------
+
+/**
+ * These exercise the REAL operational entry point end to end.
+ *
+ * 15-B/2 shipped with only a source-regex assertion that
+ * `runEstimatedSpendGuard` existed, which proves the function is declared and
+ * nothing about whether it works. The registry join, the pricing pre-fetch,
+ * the window resolution and the status mapping were all unexecuted. These
+ * tests run the function, through the same injected `OperationalDeps` seam the
+ * other seven services use.
+ *
+ * Still zero-cost: no Supabase, no Redis, no provider, no credits, no routing
+ * write, no Trigger SDK.
+ */
+
+const SPEND_WINDOW = { windowStart: "2026-08-15T00:00:00.000Z", windowEnd: "2026-08-16T00:00:00.000Z" };
+
+/** One attempt row inside the window, with explicit evidence. */
+function attemptRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    provider: "fal",
+    provider_model: "fal-ai/flux-schnell",
+    status: "succeeded",
+    submission_evidence: "job",
+    created_at: "2026-08-15T12:00:00.000Z",
+    ...over,
+  };
+}
+
+/** A priced model, matching the catalogue entry `depsFor` already declares. */
+const FLUX_PRICING = {
+  platformModelId: "fal-flux-schnell",
+  provider: "fal",
+  providerModelId: "fal-ai/flux-schnell",
+  pricingVersion: 1,
+  providerBillingUnit: "per_request" as const,
+  providerUnitCost: 0.01,
+  providerCurrency: "USD",
+  creditPricePerUnit: 100,
+  sourceType: "official_docs" as const,
+  sourceReference: "https://example.test/pricing",
+  verifiedAt: "2026-08-01T00:00:00.000Z",
+  effectiveFrom: "2026-01-01T00:00:00.000Z",
+};
+
+function spendDeps(db: FakeDb, overrides: Partial<OperationalDeps> = {}): OperationalDeps {
+  return depsFor(db, {
+    listModels: () =>
+      [
+        { id: "fal-flux-schnell", providerId: "fal", providerModelId: "fal-ai/flux-schnell", isMock: false },
+      ] as never,
+    getActivePricing: async (id: string) => (id === "fal-flux-schnell" ? (FLUX_PRICING as never) : null),
+    ...overrides,
+  });
+}
+
+test("spend guard: an unconfigured admin reports unavailable, never a zero-spend success", async () => {
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(new FakeDb(), { isAdminConfigured: () => false }));
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "supabase_admin_not_configured");
+});
+
+test("spend guard: an invalid window is refused rather than silently widened", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow()] });
+  for (const bad of [
+    { windowStart: "2026-08-16T00:00:00.000Z", windowEnd: "2026-08-15T00:00:00.000Z" },
+    { windowStart: "not-a-date", windowEnd: "2026-08-16T00:00:00.000Z" },
+    { lookbackHours: 0 },
+    { lookbackHours: 24 * 400 },
+  ]) {
+    const result = await runEstimatedSpendGuard(bad as never, spendDeps(db));
+    assert.equal(result.status, "unavailable", JSON.stringify(bad));
+    assert.equal(result.reasonCode, "invalid_spend_window");
+  }
+});
+
+test("spend guard: a readable window with no attempts is no_work, not a breach", async () => {
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(new FakeDb({ generation_attempts: [] })));
+  assert.equal(result.status, "no_work");
+  assert.equal(result.reasonCode, "empty_window");
+  assert.equal(result.metrics.attempts, 0);
+  assert.equal(result.metrics.estimatedSpendMicros, 0);
+});
+
+test("spend guard: a failed attempt query is unavailable, never zero spend", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow()] });
+  db.failTable = "generation_attempts";
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "attempt_query_failed");
+  // No spend figure is reported at all — absence, not zero.
+  assert.equal(result.metrics.estimatedSpendMicros, undefined);
+});
+
+test("spend guard: a priced window succeeds and reports real estimated spend", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow(), attemptRow(), attemptRow()] });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+
+  // Three attempts x USD 0.01 per request = 0.03, in micro-units.
+  assert.equal(result.status, "success");
+  assert.equal(result.metrics.attempts, 3);
+  assert.equal(result.metrics.lines, 1);
+  assert.equal(result.metrics.unpriceableLines, 0);
+  assert.equal(result.metrics.estimatedSpendMicros, 30_000);
+  // No budget is configured, so nothing is breached and nothing is alerted.
+  assert.equal(result.metrics.alertsRaised, 0);
+});
+
+test("spend guard: cancelled attempts are counted by evidence, through the real path", async () => {
+  const db = new FakeDb({
+    generation_attempts: [
+      attemptRow({ status: "cancelled", submission_evidence: "none" }),
+      attemptRow({ status: "cancelled", submission_evidence: "ambiguous" }),
+      attemptRow({ status: "cancelled", submission_evidence: "job" }),
+      attemptRow({ status: "pending", submission_evidence: "none" }),
+    ],
+  });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+
+  // Two cancelled attempts crossed the boundary. The locally-cancelled one and
+  // the pending one did not.
+  assert.equal(result.metrics.attempts, 2);
+  assert.equal(result.metrics.estimatedSpendMicros, 20_000);
+});
+
+test("spend guard: attempts outside the window are excluded", async () => {
+  const db = new FakeDb({
+    generation_attempts: [
+      attemptRow({ created_at: "2026-08-14T23:59:59.000Z" }),
+      attemptRow({ created_at: "2026-08-15T12:00:00.000Z" }),
+      attemptRow({ created_at: "2026-08-16T00:00:00.000Z" }),
+    ],
+  });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+  // Half-open [start, end): only the middle row is inside.
+  assert.equal(result.metrics.attempts, 1);
+});
+
+test("spend guard: an unpriced model reports partial, never success", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow()] });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db, { getActivePricing: async () => null }));
+
+  // A window that could not be fully priced must not read as "within budget".
+  assert.equal(result.status, "partial");
+  assert.equal(result.metrics.unpriceableLines, 1);
+  assert.equal(result.metrics.estimatedSpendMicros, undefined);
+});
+
+test("spend guard: a pricing read failure is unavailable, distinct from unpriced", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow()] });
+  const result = await runEstimatedSpendGuard(
+    SPEND_WINDOW,
+    spendDeps(db, {
+      getActivePricing: async () => {
+        throw new Error("pricing store down");
+      },
+    })
+  );
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.reasonCode, "pricing_source_unavailable");
+});
+
+test("spend guard: routed traffic resolves through the canonical join", async () => {
+  // The attempt carries a provider model the static catalogue has never heard
+  // of, because a Phase 7 route override chose it.
+  const db = new FakeDb({
+    generation_attempts: [attemptRow({ provider_model: "fal-ai/routed-variant" })],
+    provider_models: [
+      {
+        provider_id: "fal",
+        provider_model_id: "fal-ai/routed-variant",
+        model_routes: [{ model_id: "fal-flux-schnell" }],
+      },
+    ],
+  });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+
+  assert.equal(result.status, "success", "routed traffic must be priceable");
+  assert.equal(result.metrics.unpriceableLines, 0);
+  assert.equal(result.metrics.estimatedSpendMicros, 10_000);
+});
+
+test("spend guard: routed traffic with no canonical route stays unpriceable", async () => {
+  const db = new FakeDb({
+    generation_attempts: [attemptRow({ provider_model: "fal-ai/orphan" })],
+    provider_models: [],
+  });
+  const result = await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+
+  assert.equal(result.status, "partial");
+  assert.equal(result.metrics.unpriceableLines, 1);
+  assert.equal(result.metrics.estimatedSpendMicros, undefined, "unresolved identity is not free");
+});
+
+test("spend guard: the operational path performs no write of any kind", async () => {
+  const db = new FakeDb({ generation_attempts: [attemptRow(), attemptRow()] });
+  await runEstimatedSpendGuard(SPEND_WINDOW, spendDeps(db));
+
+  // No RPC, no delete. Cost observation reads; it never changes the numbers
+  // it is meant to be reporting, and never touches Phase 10 or Phase 7 state.
+  assert.deepEqual(db.rpcCalls, []);
+  assert.equal(db.deletes, 0);
 });

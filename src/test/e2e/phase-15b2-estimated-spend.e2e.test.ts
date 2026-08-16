@@ -4,9 +4,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import {
+  countsAsSpend,
   COUNTED_STATUSES,
   MAX_SCANNED_ATTEMPTS,
+  QUERIED_STATUSES,
   readAttemptVolumes,
+  resolvePlatformModelIds,
   type AttemptVolume,
   type AttemptVolumeResult,
 } from "@/lib/finops/estimated-spend-repository";
@@ -92,6 +95,7 @@ function volumes(over: Partial<AttemptVolumeResult> = {}): AttemptVolumeResult {
     sourceAvailable: true,
     reasonCode: "attempt_volumes_read",
     scannedRows: 10,
+    excludedRows: 0,
     ...over,
   };
 }
@@ -122,20 +126,40 @@ function guardInput(over: Partial<SpendGuardInput> = {}): SpendGuardInput {
   };
 }
 
-/** A fake Supabase query chain that records what was asked for. */
+/**
+ * A fake Supabase query chain that records what was asked for.
+ *
+ * THENABLE, like the real builder: `readAttemptVolumes` terminates with
+ * `.limit()`, but `resolvePlatformModelIds` awaits the builder directly. A
+ * fake that only resolved on `.limit()` would hang or return undefined for
+ * the second query, which is a property of the harness rather than of the
+ * code under test.
+ */
 function fakeAdmin(result: { data?: unknown[]; error?: unknown; throws?: boolean }) {
   const calls: Record<string, unknown> = {};
-  const chain: Record<string, (...args: unknown[]) => unknown> = {};
-  for (const method of ["select", "gte", "lt", "in", "limit"]) {
+  const settle = () => {
+    if (result.throws) throw new Error("driver exploded");
+    return Promise.resolve({ data: result.data ?? null, error: result.error ?? null });
+  };
+  const chain: Record<string, unknown> = {
+    then: (onfulfilled?: (v: unknown) => unknown, onrejected?: (e: unknown) => unknown) => {
+      try {
+        return settle().then(onfulfilled, onrejected);
+      } catch (e) {
+        return Promise.reject(e).catch(onrejected ?? ((err) => Promise.reject(err)));
+      }
+    },
+  };
+  for (const method of ["select", "gte", "lt", "in"]) {
     chain[method] = (...args: unknown[]) => {
       calls[method] = args;
-      if (method === "limit") {
-        if (result.throws) throw new Error("driver exploded");
-        return Promise.resolve({ data: result.data ?? null, error: result.error ?? null });
-      }
       return chain;
     };
   }
+  chain.limit = (...args: unknown[]) => {
+    calls.limit = args;
+    return settle();
+  };
   return { admin: { from: () => chain } as never, calls };
 }
 
@@ -159,9 +183,9 @@ function captureAlerts(): AlertEnvelope[] {
 test("S15B2-1  a real repository read path exists and queries only bounded columns", async () => {
   const { admin, calls } = fakeAdmin({
     data: [
-      { provider: "fal", provider_model: "fal-ai/test", status: "succeeded" },
-      { provider: "fal", provider_model: "fal-ai/test", status: "failed" },
-      { provider: "fal", provider_model: "fal-ai/other", status: "submitted" },
+      { provider: "fal", provider_model: "fal-ai/test", status: "succeeded", submission_evidence: "job" },
+      { provider: "fal", provider_model: "fal-ai/test", status: "failed", submission_evidence: "job" },
+      { provider: "fal", provider_model: "fal-ai/other", status: "submitted", submission_evidence: "job" },
     ],
   });
   const result = await readAttemptVolumes(admin, WINDOW);
@@ -171,16 +195,21 @@ test("S15B2-1  a real repository read path exists and queries only bounded colum
   assert.deepEqual(result.volumes[0], { provider: "fal", providerModelId: "fal-ai/other", attemptCount: 1 });
   assert.deepEqual(result.volumes[1], { provider: "fal", providerModelId: "fal-ai/test", attemptCount: 2 });
 
-  // Three columns, and none of them can carry user content.
-  assert.deepEqual(calls.select, ["provider, provider_model, status"]);
+  // Four columns, and none of them can carry user content: two catalogue
+  // identifiers and two state labels from closed sets.
+  assert.deepEqual(calls.select, ["provider, provider_model, status, submission_evidence"]);
   const selected = String(calls.select).split(",").map((c) => c.trim());
-  for (const forbidden of ["prompt", "clerk_user_id", "id", "error_code", "metadata"]) {
+  for (const forbidden of ["prompt", "clerk_user_id", "id", "error_code", "metadata", "provider_job_id"]) {
     assert.ok(!selected.includes(forbidden), `${forbidden} must not be selected`);
   }
-  // Only attempts that actually reached a provider are counted.
-  assert.deepEqual(calls.in, ["status", [...COUNTED_STATUSES]]);
-  assert.equal(COUNTED_STATUSES.includes("pending"), false, "a pending attempt cost nothing");
-  assert.equal(COUNTED_STATUSES.includes("claimed"), false, "a claimed attempt cost nothing");
+
+  // The query asks for cancelled too — the row is fetched so the evidence can
+  // be inspected. Excluding it at the SQL level would make the F1 rule
+  // unenforceable, because the rows that need judging would never arrive.
+  assert.deepEqual(calls.in, ["status", [...QUERIED_STATUSES]]);
+  assert.ok(QUERIED_STATUSES.includes("cancelled"), "cancelled must be fetched, then judged");
+  assert.equal(QUERIED_STATUSES.includes("pending"), false, "a pending attempt cost nothing");
+  assert.equal(QUERIED_STATUSES.includes("claimed"), false, "a claimed attempt cost nothing");
   assert.ok(COUNTED_STATUSES.includes("submitting"), "an in-flight attempt may already have been charged");
 });
 
@@ -567,4 +596,191 @@ test("S15B2-32  the telemetry that is actually emitted survives the Sensitive Da
     assert.ok(Number.isFinite(value) && value >= 0, `${key} must be a finite magnitude`);
   }
   assert.equal(metrics.estimatedSpendMicros, 400_000);
+});
+
+// ---------------------------------------------------------------------------
+// 33–46  PHASE 15-B/3 DEFECT CLOSURE
+//        F1 cancelled accounting · F2 behavioural production path
+//        F3 NUL hygiene · F4 routed-traffic identity
+// ---------------------------------------------------------------------------
+
+/**
+ * The complete attempt-status accounting table, pinned.
+ *
+ * Every status the schema permits appears here with an explicit expectation.
+ * A new status added to `GenerationAttemptStatus` without a decision recorded
+ * in this table is a silent accounting change, which is how spend goes missing.
+ */
+const STATUS_ACCOUNTING: ReadonlyArray<{
+  status: string;
+  evidence: string;
+  counted: boolean;
+  why: string;
+}> = [
+  { status: "pending", evidence: "none", counted: false, why: "the request never left Cinefield" },
+  { status: "claimed", evidence: "none", counted: false, why: "claimed for submission, not yet sent" },
+  { status: "submitting", evidence: "none", counted: true, why: "in flight; money may already be spent" },
+  { status: "submitting", evidence: "ambiguous", counted: true, why: "in flight and unprovable" },
+  { status: "submitted", evidence: "job", counted: true, why: "a provider job exists" },
+  { status: "processing", evidence: "job", counted: true, why: "the provider is working on it" },
+  { status: "succeeded", evidence: "job", counted: true, why: "completed and billable" },
+  { status: "failed", evidence: "job", counted: true, why: "a failed provider call is still a call" },
+  { status: "failed", evidence: "none", counted: true, why: "status alone is decisive for failed" },
+  // F1 — the three that depend on evidence rather than on the status.
+  { status: "cancelled", evidence: "none", counted: false, why: "provably never crossed the boundary" },
+  { status: "cancelled", evidence: "ambiguous", counted: true, why: "cannot prove it did not leave" },
+  { status: "cancelled", evidence: "job", counted: true, why: "a provider job id exists" },
+];
+
+test("S15B2-33  F1: every attempt status has a pinned accounting decision", () => {
+  for (const row of STATUS_ACCOUNTING) {
+    assert.equal(
+      countsAsSpend(row.status, row.evidence),
+      row.counted,
+      `${row.status}/${row.evidence} should be ${row.counted ? "COUNTED" : "NOT_COUNTED"}: ${row.why}`
+    );
+  }
+
+  // Statuses the schema allows but the DB type does not (defensive): an
+  // unrecognised status must not silently count as spend.
+  for (const unknown of ["completed", "expired", "ambiguous", ""]) {
+    assert.equal(countsAsSpend(unknown, "job"), false, `unrecognised status ${unknown} must not count`);
+  }
+
+  // And the table covers the whole schema vocabulary, so a new status cannot
+  // be added without appearing here.
+  const schema = read("supabase/migrations/20260810120000_generation_attempts.sql");
+  const declared = [...schema.matchAll(/'(pending|claimed|submitting|submitted|processing|succeeded|failed|cancelled)'::/g)]
+    .map((m) => m[1]);
+  const pinned = new Set(STATUS_ACCOUNTING.map((r) => r.status));
+  for (const status of new Set(declared)) {
+    assert.ok(pinned.has(status as string), `schema status ${status} is not pinned in the accounting table`);
+  }
+});
+
+test("S15B2-34  F1: a cancelled attempt that crossed the provider boundary is counted", async () => {
+  const { admin } = fakeAdmin({
+    data: [
+      { provider: "fal", provider_model: "fal-ai/test", status: "cancelled", submission_evidence: "none" },
+      { provider: "fal", provider_model: "fal-ai/test", status: "cancelled", submission_evidence: "ambiguous" },
+      { provider: "fal", provider_model: "fal-ai/test", status: "cancelled", submission_evidence: "job" },
+    ],
+  });
+  const result = await readAttemptVolumes(admin, WINDOW);
+
+  // Two of the three crossed the boundary. The third provably did not.
+  assert.equal(result.volumes[0]?.attemptCount, 2);
+  assert.equal(result.excludedRows, 1);
+  assert.equal(result.scannedRows, 3);
+});
+
+test("S15B2-35  F1: the fail-open is closed — cancelled spend reaches the budget", () => {
+  // Before the fix, all three rows above were dropped and this window priced
+  // at zero. Two counted attempts at USD 0.04 is 0.08, and against a 0.05
+  // ceiling that is a breach the guard must now see.
+  const withCancelled = runSpendGuard(
+    guardInput({
+      volumes: volumes({ volumes: [{ provider: "fal", providerModelId: "fal-ai/test", attemptCount: 2 }] }),
+      budgets: [budget({ limit: 0.05 })],
+    })
+  );
+  assert.equal(withCancelled.spend.estimatedSpend, 0.08);
+  assert.equal(withCancelled.guard.decision, "BUDGET_EXHAUSTED");
+
+  // The locally-cancelled attempt must NOT inflate spend either. Counting all
+  // three would invent money nobody owed.
+  const inflated = runSpendGuard(
+    guardInput({
+      volumes: volumes({ volumes: [{ provider: "fal", providerModelId: "fal-ai/test", attemptCount: 3 }] }),
+      budgets: [budget({ limit: 0.05 })],
+    })
+  );
+  assert.notEqual(inflated.spend.estimatedSpend, withCancelled.spend.estimatedSpend);
+});
+
+test("S15B2-36  F3: no tracked TypeScript source carries a NUL byte", () => {
+  const offenders: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(entry.name)) {
+        if (readFileSync(full).includes(0x00)) offenders.push(path.relative(ROOT, full).replace(/\\/g, "/"));
+      }
+    }
+  };
+  walk(path.join(ROOT, "src", "lib"));
+  walk(path.join(ROOT, "src", "trigger"));
+  assert.deepEqual(offenders, [], "a NUL byte makes git treat a source file as binary and undiffable");
+
+  // The nested map replaced the NUL separator; no separator character is used
+  // at all, so no provider or model id can collide with one.
+  const repo = read("src/lib/finops/estimated-spend-repository.ts");
+  assert.match(repo, /Map<string, Map<string, number>>/, "counts are keyed by nesting, not by a joined string");
+});
+
+test("S15B2-37  F4: routed traffic resolves through the canonical Phase 7 join", async () => {
+  const { admin, calls } = fakeAdmin({
+    data: [
+      { provider_id: "fal", provider_model_id: "fal-ai/routed", model_routes: [{ model_id: "platform-x" }] },
+    ],
+  });
+  const resolution = await resolvePlatformModelIds(admin, [
+    { provider: "fal", providerModelId: "fal-ai/routed", attemptCount: 1 },
+  ]);
+
+  assert.equal(resolution.sourceAvailable, true);
+  assert.equal(resolution.byProviderModel.get("fal")?.get("fal-ai/routed"), "platform-x");
+  assert.equal(resolution.unresolvedCount, 0);
+
+  // It joins provider_models -> model_routes, the same rows the router used.
+  assert.deepEqual(calls.select, ["provider_id, provider_model_id, model_routes(model_id)"]);
+});
+
+test("S15B2-38  F4: an ambiguous or absent route stays UNKNOWN, never guessed", async () => {
+  // Two platform models share one provider model. They may be priced
+  // differently, so picking one would fabricate a price behind a lookup.
+  const ambiguous = await resolvePlatformModelIds(
+    fakeAdmin({
+      data: [
+        {
+          provider_id: "fal",
+          provider_model_id: "fal-ai/shared",
+          model_routes: [{ model_id: "platform-a" }, { model_id: "platform-b" }],
+        },
+      ],
+    }).admin,
+    [{ provider: "fal", providerModelId: "fal-ai/shared", attemptCount: 1 }]
+  );
+  assert.equal(ambiguous.byProviderModel.get("fal")?.get("fal-ai/shared"), undefined);
+  assert.equal(ambiguous.ambiguousCount, 1);
+  assert.equal(ambiguous.unresolvedCount, 1);
+
+  // No route at all.
+  const none = await resolvePlatformModelIds(
+    fakeAdmin({ data: [{ provider_id: "fal", provider_model_id: "fal-ai/orphan", model_routes: [] }] }).admin,
+    [{ provider: "fal", providerModelId: "fal-ai/orphan", attemptCount: 1 }]
+  );
+  assert.equal(none.unresolvedCount, 1);
+
+  // A failed join is not "nothing matched".
+  const failed = await resolvePlatformModelIds(fakeAdmin({ error: { message: "boom" } }).admin, [
+    { provider: "fal", providerModelId: "fal-ai/x", attemptCount: 1 },
+  ]);
+  assert.equal(failed.sourceAvailable, false);
+  assert.equal(failed.reasonCode, "route_join_failed");
+
+  // And an unresolved pair prices as UNKNOWN, never as free.
+  const outcome = runSpendGuard(guardInput({ platformModelIdFor: () => null }));
+  assert.equal(outcome.guard.decision, "UNKNOWN");
+  assert.notEqual(outcome.spend.estimatedSpend, 0);
+});
+
+test("S15B2-39  F4: no fabricated pricing fallback exists", () => {
+  for (const { file, text } of finopsCode) {
+    assert.ok(!/creditPricePerUnit|credit_price_per_unit/.test(text), `${file} falls back to the credit price`);
+    assert.ok(!/defaultPrice|fallbackPrice|DEFAULT_UNIT_COST/i.test(text), `${file} has a default price`);
+  }
 });

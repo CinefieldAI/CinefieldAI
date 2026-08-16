@@ -7,7 +7,9 @@ import { getActivePricing } from "@/lib/pricing/pricing-repository";
 import { listModels } from "@/lib/orchestration/model-registry";
 import { COST_BUDGETS } from "@/lib/finops/cost-budget";
 import {
+  emptyPlatformModelResolution,
   readAttemptVolumes,
+  resolvePlatformModelIds,
   type SpendWindow,
 } from "@/lib/finops/estimated-spend-repository";
 import { runSpendGuard, spendGuardMetrics } from "@/lib/finops/spend-guard-runner";
@@ -518,13 +520,33 @@ export async function runEstimatedSpendGuard(
   try {
     const volumes = await readAttemptVolumes(deps.getAdmin(), window, resolveLimit(input));
 
-    // Registry lookup, built once. A provider model id we do not recognise
-    // resolves to null, which becomes UNKNOWN downstream — never a skipped
-    // line, because a line quietly dropped is spend quietly ignored.
-    const registry = new Map<string, string>();
+    // ---- identity resolution: static catalogue first, canonical join second
+    //
+    // Nested maps rather than a joined string key: any separator character is
+    // one a provider id or a model id could legitimately contain, and that is
+    // a silent collision between two models' spend.
+    const registry = new Map<string, Map<string, string>>();
     for (const model of deps.listModels()) {
-      registry.set(`${model.providerId} ${model.providerModelId}`, model.id);
+      const models = registry.get(model.providerId) ?? new Map<string, string>();
+      models.set(model.providerModelId, model.id);
+      registry.set(model.providerId, models);
     }
+
+    // Phase 15-B/3, F4. An attempt records `routing?.providerId ?? providerId`,
+    // so a Phase 7 route override writes the ROUTE's identity — which need not
+    // appear in the static catalogue. Those pairs are resolved through the
+    // canonical tables the router itself used, and only those: the join is
+    // attempted for pairs the catalogue missed, never as a replacement for it.
+    const missing = volumes.volumes.filter((v) => !registry.get(v.provider)?.has(v.providerModelId));
+    const routed =
+      missing.length > 0
+        ? await resolvePlatformModelIds(deps.getAdmin(), missing)
+        : emptyPlatformModelResolution("no_unresolved_pairs");
+
+    const platformModelIdFor = (v: { provider: string; providerModelId: string }): string | null =>
+      registry.get(v.provider)?.get(v.providerModelId) ??
+      routed.byProviderModel.get(v.provider)?.get(v.providerModelId) ??
+      null;
 
     // Pricing is read here, up front, so `runSpendGuard` stays pure. A failed
     // read flips one flag for the whole pass rather than being mistaken for a
@@ -532,7 +554,7 @@ export async function runEstimatedSpendGuard(
     const pricing = new Map<string, PricingRecord | null>();
     let pricingSourceAvailable = true;
     for (const volume of volumes.volumes) {
-      const platformModelId = registry.get(`${volume.provider} ${volume.providerModelId}`);
+      const platformModelId = platformModelIdFor(volume);
       if (!platformModelId || pricing.has(platformModelId)) continue;
       try {
         pricing.set(platformModelId, await deps.getActivePricing(platformModelId));
@@ -544,7 +566,7 @@ export async function runEstimatedSpendGuard(
 
     const outcome = runSpendGuard({
       volumes,
-      platformModelIdFor: (v) => registry.get(`${v.provider} ${v.providerModelId}`) ?? null,
+      platformModelIdFor,
       pricingFor: (platformModelId) => pricing.get(platformModelId) ?? null,
       pricingSourceAvailable,
       budgets: COST_BUDGETS,

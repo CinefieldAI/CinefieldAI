@@ -531,12 +531,28 @@ test("S15B-27  neither cost alert is eligible for AI remediation", () => {
 
 test("S15B-28  no second alert router, severity table or dedupe store exists", () => {
   for (const { file, text } of finopsCode) {
-    assert.ok(!/dedupeKeyFor|ESCALATION|new Map\(/.test(text), `${file} keeps alert state`);
+    // Alert-router machinery by name. `new Map(` used to stand in for "keeps
+    // state", but 15-B/3's repository counts attempts in a map — a local
+    // tally inside a pure read, not a dedupe store. Naming the actual
+    // machinery is both narrower and more accurate than banning a data
+    // structure.
+    assert.ok(!/dedupeKeyFor|ESCALATION|CRITICAL_REEMIT|MAX_TRACKED_KEYS|resetAlertRouter/.test(text),
+      `${file} reimplements alert-router machinery`);
     assert.ok(!/"CRITICAL"|"WARNING"|severity:/.test(text), `${file} decides a severity`);
     assert.ok(!/telegram|slack|sendgrid|smtp|webhook/i.test(text), `${file} delivers directly`);
   }
+
   const bridge = read("src/lib/finops/cost-alert-bridge.ts");
   assert.match(bridge, /from "@\/lib\/alerts\/alert-router"/, "it uses the existing router");
+
+  // The compensating check, stronger than the one it replaces: the bridge
+  // holds NO module-level mutable state at all. Dedupe and escalation are
+  // memory that survives between calls, so a producer with no such memory
+  // cannot have quietly grown its own.
+  const bridgeCode = stripComments(bridge);
+  assert.ok(!/^(const|let|var)\s+\w+\s*=\s*new (Map|Set|WeakMap)\(/m.test(bridgeCode),
+    "the bridge holds module-level state");
+  assert.ok(!/^let\s/m.test(bridgeCode), "the bridge has a module-level mutable binding");
 });
 
 // ---------------------------------------------------------------------------
