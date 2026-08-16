@@ -461,10 +461,16 @@ test("S15A-28  telemetry fields a snapshot would emit are already 13-E allow-lis
   for (const f of ["result", "count", "reason", "reasonCode", "durationMs", "classification", "severity"]) {
     assert.ok(fieldRule(f), `${f} is not allow-listed`);
   }
-  // Phase 15-A added no telemetry field of its own.
+  // Phase 15-A added no telemetry field of its own. Matched as a FIELD KEY
+  // DECLARATION rather than a bare substring: Phase 15-B legitimately added
+  // `budgetRemainingMicros`, and a substring test would read that as a 15-A
+  // regression. The narrower form still catches a real 15-A field, and is
+  // strictly more precise about what it is claiming.
   const contractDiff = read("src/lib/observability/telemetry-contract.ts");
-  assert.ok(!/sliId|budgetRemaining|burnRate/.test(contractDiff),
-    "Phase 15-A added a new allow-list field; it should not need one");
+  for (const key of ["sliId", "budgetRemaining", "burnRate"]) {
+    assert.ok(!new RegExp(`^\\s*${key}\\s*:`, "m").test(contractDiff),
+      `Phase 15-A added the allow-list field ${key}; it should not need one`);
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -272,6 +272,10 @@ export const PRODUCED_ALERT_TYPES: readonly AlertType[] = [
   "provider_unhealthy",
   "slo_budget_low",
   "slo_budget_exhausted",
+  // Raised by src/lib/finops/cost-alert-bridge.ts (Phase 15-B), which owns the
+  // signal and depends on 13-D rather than the other way round.
+  "cost_budget_at_risk",
+  "cost_budget_exhausted",
 ];
 
 export type { AlertCandidate };

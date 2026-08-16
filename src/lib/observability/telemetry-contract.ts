@@ -190,6 +190,44 @@ export const TELEMETRY_ALLOWLIST: Readonly<Record<string, FieldRule>> = {
     why: "Phase 13-D. WHAT an alert is about, from a closed internal vocabulary: a dependency name, a runtime name, a provider id or a security event kind. The alert contract pattern-checks it before it can reach a dedupe key or a log line, so it cannot hold a URL, an address, an email or user text.",
   },
   retryable: { kind: "bool", why: "Whether the caller may retry. A boolean cannot carry content." },
+  // ---- Phase 15-B operational cost -----------------------------------------
+  // Money is new telemetry, so each field is justified individually rather
+  // than a blanket "cost" allowance. Amounts are INTEGER MICRO-UNITS, never
+  // floats: `coerce` validates a numeric field as `count` and rounds it, so a
+  // USD 0.04 provider call logged as a float would be recorded as `0` — a cost
+  // log claiming every request was free. Micro-units preserve the six decimal
+  // places `model_pricing.provider_unit_cost numeric(12,6)` actually stores.
+  //
+  // None of these can carry user content: three are numbers, and the two
+  // strings come from closed server-side vocabularies (ISO 4217, and the
+  // BudgetScope / CostBasis unions).
+  costMicros: {
+    kind: "count",
+    why: "Phase 15-B. ESTIMATED provider cost in integer micro-units of `currency` — what Cinefield expects to owe a provider, never what a customer is charged and never a payment amount. Derived from a price list times a unit count, so it reveals catalogue economics we already publish prices for, not anyone's balance.",
+  },
+  budgetLimitMicros: {
+    kind: "count",
+    why: "Phase 15-B. The configured operational budget ceiling in integer micro-units. Pure configuration written by an operator — it describes our own spending policy, not a transaction, an account or a customer.",
+  },
+  budgetRemainingMicros: {
+    kind: "count",
+    why: "Phase 15-B. Headroom left under the ceiling, in integer micro-units. The single most useful number when reading a cost alert, and arithmetic over two fields already allow-listed here.",
+  },
+  currency: {
+    kind: "name",
+    max: 3,
+    why: "Phase 15-B. ISO 4217 code such as USD. Three uppercase letters from a closed international standard — bounded to 3 characters so nothing else can be smuggled through the field, and meaningless without it because an unlabelled amount cannot be compared to a limit.",
+  },
+  budgetScope: {
+    kind: "code",
+    max: 32,
+    why: "Phase 15-B. Which budget applied: GLOBAL, PROVIDER or PROVIDER_MODEL. A three-value server-side enum, and the dimension that makes cost metrics groupable without reaching for a user or workspace id.",
+  },
+  costBasis: {
+    kind: "code",
+    max: 32,
+    why: "Phase 15-B. ESTIMATE_BASED or OBSERVED_ACTUAL. A two-value enum, and the field that stops a reader mistaking a forecast for a bill — no observed provider spend is recorded in this system today, so every cost number currently logged is an estimate and must say so.",
+  },
 
   // ---- where it happened -------------------------------------------------
   subsystem: { kind: "name", max: 64, why: "Which module emitted this. Replaces the '[cinefield:x]' prefix as a field." },

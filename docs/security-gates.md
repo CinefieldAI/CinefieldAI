@@ -2934,6 +2934,131 @@ Phase 15-A required **no new 13-E allow-list field**.
 
 ### Not in this batch
 
-15-B FinOps/Cost Guard, 15-C DR restore-verification, 15-D DLQ redrive /
-RTO-RPO / chaos. Live measurement, dashboards (Phase 16) and any external
-exporter remain deferred. **Phase 15 is not complete.**
+15-C DR restore-verification, 15-D DLQ redrive / RTO-RPO / chaos. Live
+measurement, dashboards (Phase 16) and any external exporter remain deferred.
+**Phase 15 is not complete.**
+
+## Phase 15-B/1 — FinOps cost observation + budget evaluation (code-only)
+
+Roadmap 15-B: *"provider cost + credits + Stripe + generation volume
+korelasyonu + provider hard budget cap + reversible route/kill-switch kur."*
+This batch is the first slice of it and does not close the package.
+
+`src/lib/finops/` — `cost-contract.ts`, `cost-budget.ts`, `cost-guard.ts`,
+`cost-alert-bridge.ts`. All pure: no I/O, no clock, no database, no network.
+
+### Every cost number here is an ESTIMATE
+
+`generation_attempts.cost_amount` and `cost_currency` exist in the schema, but
+**no production caller writes them**, so this system records no observed
+provider spend at all. Everything Phase 15-B/1 produces is derived from
+`model_pricing` — a price list — times a unit count. That is a forecast of
+what a provider will probably charge, not a record of what one did charge.
+
+`CostBasis` makes this a value (`ESTIMATE_BASED` / `OBSERVED_ACTUAL`) rather
+than a comment, and it is emitted with every cost log line. Nothing in this
+batch can produce `OBSERVED_ACTUAL`, and a test asserts no code path does.
+Writing `cost_amount` at settlement touches the Phase 10 settlement path and
+belongs in its own reviewed batch.
+
+### Three numbers that must never merge
+
+| number | meaning | owner |
+| --- | --- | --- |
+| `provider_unit_cost` | what a provider charges Cinefield | **Phase 15-B** |
+| `credit_price_per_unit` | what a customer is charged | **Phase 10** |
+| invoice total | what a bank statement says | **external — DEFERRED_EXTERNAL, not zero** |
+
+`model_pricing` carries the first two side by side. Only the first is an
+operational cost, and `src/lib/finops/` never reads the second — enforced
+structurally, because a guard computed from the credit price would grow *less*
+worried the more margin was charged. No Stripe, AWS Cost Explorer or provider
+invoice figure exists anywhere in the package; external billing truth is
+absent, and absent is represented as absent rather than as zero.
+
+### UNKNOWN is not free, and uncertainty is not headroom
+
+Missing pricing, an inactive row, a stale `verified_at`, an unknown model, a
+malformed numeric and a failed repository read each resolve to a **named
+non-numeric state** — never `estimatedCost: 0`. An aggregate containing one
+unpriced member is unknown in total, not a partial sum, because a partial sum
+understates spend by exactly the amount nobody could see.
+
+`ALLOW` is withheld for every one of them, including **STALE**, which carries a
+number but is not a basis for committing money. A currency mismatch fails
+closed; no exchange rate is ever applied, because nobody has set one and a
+guessed rate is a guessed spending limit. NaN and Infinity are impossible by
+construction: a NaN ratio compares false against every threshold, so a broken
+calculation would read as "under budget".
+
+The budget registry (`COST_BUDGETS`) ships **empty on purpose**. A limit is a
+business figure; inventing a plausible one would either throttle real traffic
+or sit so high it never fires while looking like protection. `defineCostBudget`
+validates any budget the moment one is added.
+
+### It recommends. It does not act.
+
+The guard returns a `decision` and, separately, a bounded `recommendation`
+naming a **Phase 7** target. It never calls `setRoutingControl`,
+`clearRoutingControl` or `setRuntimeRoutingControl`, never writes a runtime
+flag, and never disables a provider or model — all four enforced by test.
+
+**Phase 7 owns routing control.** The `provider-model` target id is Phase 7's
+own `providerModelId`, carried verbatim; composing one from provider + model
+would produce a string `findRuntimeExclusion` has never seen, so the
+recommendation would look actionable and do nothing. `CostState` is likewise
+built *from* Phase 7's union rather than copied beside it, and the unit and
+freshness arithmetic delegates to `normalizeRoutingCost` so the router and the
+guard cannot quote different numbers for the same request.
+
+**Phase 21 owns generic feature flags.** No percentage rollout, canary,
+segmentation or progressive delivery. The only thing borrowed is the target
+vocabulary, as a type.
+
+A `BUDGET_EXHAUSTED` recommendation follows the budget's **scope**, not the
+observation's identity: a provider-model overrun recommends excluding that one
+model, never the whole provider. A GLOBAL overrun recommends
+`HUMAN_REVIEW_REQUIRED`, because no single target can be excluded to fix an
+overrun caused by everything at once.
+
+**No automatic provider disable exists yet.** Whether an automated cost signal
+may take a provider offline unattended has not been decided by anyone, and
+wiring the mutation now would answer it by accident — on the strength of an
+estimate.
+
+### Alerting and telemetry stay where they belong
+
+**Phase 13-D** owns routing. Two new catalogued types, `cost_budget_at_risk`
+(WARNING) and `cost_budget_exhausted` (ERROR), both `userVisible: false` —
+what Cinefield pays a provider is commercial information, and publishing which
+provider became expensive would expose supplier economics on a public status
+page. Both are `remediationEligible: false` in Phase 14-A: cost pressure is a
+business threshold being met, not proof of a code defect, and an agent asked
+to "fix" it would patch the wrong system. An UNKNOWN decision raises nothing
+**and resolves nothing** — going blind must not clear a standing breach.
+
+**Phase 13-E** required six new allow-list fields, each justified individually
+rather than by a blanket "cost" allowance: `costMicros`, `budgetLimitMicros`,
+`budgetRemainingMicros`, `currency`, `budgetScope`, `costBasis`.
+
+Two boundary details worth knowing before adding a seventh:
+
+- **Money is emitted in integer micro-units.** The redactor validates numeric
+  fields as `count` and *rounds* them, so a USD 0.04 provider call logged as a
+  float becomes `0` — a cost log claiming every request was free. Micro-units
+  preserve the six decimals `numeric(12,6)` actually stores.
+- **Enum labels are lowercased at the boundary.** `CODE_PATTERN` is
+  lowercase-only, so `AT_RISK` would be **dropped**, not truncated, and the
+  alert would arrive with no decision in it. The domain types keep their
+  uppercase spelling; only the telemetry projection conforms.
+
+Metric dimensions are limited to provider, modelId, budgetScope, currency and
+classification. No user, workspace, generation, request or trace label.
+
+### Not in this batch
+
+Writing `cost_amount` at settlement; enabling any scheduled cadence
+(`providerCostReconcileTask` stays a manually-invokable `task()`); actually
+setting a routing control; real budget limits; Stripe / AWS / provider invoice
+correlation; any UI (Phase 16). **Phase 15-B is not complete, and Phase 15 is
+not complete.**

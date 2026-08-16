@@ -211,6 +211,20 @@ const ELIGIBILITY: Readonly<Record<AlertType, EligibilityRule>> = {
     candidateFilePaths: [],
     why: "The Risk Engine asked for human review by name; automating past that would defeat the request.",
   },
+  cost_budget_at_risk: {
+    category: "operational_backlog",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-B. Cost pressure is not proof of a code defect — the usual cause is legitimate traffic or a price change at the provider, and neither has a patch. An agent asked to fix it would edit whatever it could reach, which is worse than doing nothing.",
+  },
+  cost_budget_exhausted: {
+    category: "operational_backlog",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-B. A crossed budget is a business threshold being met, not a bug. The response is a routing or spending decision a human owns; automating a code change in reply would attack the wrong system entirely.",
+  },
   slo_budget_low: {
     category: "operational_backlog",
     confidence: "none",

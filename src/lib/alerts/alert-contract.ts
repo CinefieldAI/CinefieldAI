@@ -56,7 +56,14 @@ export const SEVERITY_ORDER: Readonly<Record<AlertSeverity, number>> = {
 export type AlertChannel = "TELEGRAM" | "DASHBOARD" | "STATUS_PAGE";
 
 /** Which subsystem observed the signal. */
-export type AlertSource = "security" | "health" | "debt" | "dispatcher" | "provider" | "reliability";
+export type AlertSource =
+  | "security"
+  | "health"
+  | "debt"
+  | "dispatcher"
+  | "provider"
+  | "reliability"
+  | "cost";
 
 /**
  * Alert lifecycle.
@@ -103,7 +110,10 @@ export type AlertType =
   | "provider_unhealthy"
   // ---- reliability (Phase 15-A SLO breach, evidence only) ----------------
   | "slo_budget_low"
-  | "slo_budget_exhausted";
+  | "slo_budget_exhausted"
+  // ---- cost (Phase 15-B FinOps budget pressure, estimate-based) -----------
+  | "cost_budget_at_risk"
+  | "cost_budget_exhausted";
 
 export interface AlertTypeRule {
   readonly source: AlertSource;
@@ -211,6 +221,20 @@ export const ALERT_CATALOGUE: Readonly<Record<AlertType, AlertTypeRule>> = {
     dedupeWindowSeconds: 1_800,
     userVisible: false,
     why: "Phase 15-A. A service level objective is breached for this window. Not user-visible: an SLO is an internal commitment, and publishing which objective slipped tells an outsider where the system is weakest.",
+  },
+  cost_budget_at_risk: {
+    source: "cost",
+    severity: "WARNING",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 15-B. Estimated provider spend is approaching a configured operational budget. Worth knowing while there is still time to react, not worth waking someone: nothing has been exceeded and no request has been refused.",
+  },
+  cost_budget_exhausted: {
+    source: "cost",
+    severity: "ERROR",
+    dedupeWindowSeconds: 1_800,
+    userVisible: false,
+    why: "Phase 15-B. Estimated provider spend has crossed a configured operational budget. Never user-visible: what Cinefield pays a provider is commercial information, and publishing which provider became expensive would expose supplier economics to anyone reading the status page.",
   },
   provider_unhealthy: {
     source: "provider",
