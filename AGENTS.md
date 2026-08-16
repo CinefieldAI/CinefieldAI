@@ -18,17 +18,24 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `879400d` (2026-08-16).**
-The model entry in `cinemaStudioData.ts` (id `cinema-studio-4.0`), the new
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `e9e1dcf` (2026-08-16).**
+The model entry in `cinemaStudioData.ts` (id `cinema-studio-4.0`), the
 `CinemaStudio40CreativeControls.tsx` component (the References/Film
-setup/Camera/Color palette/Lighting pill row), and every `isCinema40`-gated
-block added to `CinemaStudioWorkspace.tsx` and `PromptBar.tsx` are frozen at
-that commit. It was built to mirror a specific reference (higgsfield.ai's
-Cinema Studio 4.0 creative-controls panel, inspected live) and verified
-end-to-end in-browser before landing — do not restyle, re-scope, or "clean
-up" its option lists (Genre reuses the existing `GENRES` array; Era, Tempo,
-Camera/Lens, and the Camera Movement tag list are new arrays in
-`cinemaStudioData.ts`) without an explicit user request naming this feature.
+setup/Camera/Color palette/Lighting pill row and its four dialogs), and
+every `isCinema40`-gated block in `CinemaStudioWorkspace.tsx` and
+`PromptBar.tsx` are frozen at that commit. First built at `879400d` from a
+prose description; then fully rewritten at `e9e1dcf` against the reference's
+actual DOM markup (Genre arc, Era ruler, Tempo carousel, Camera Setup
+wheels, Movement grid, Color palette grid, Lighting grid all use its real
+geometry/formulas/option lists — none of it invented). All option arrays
+now live in `cinemaStudioData.ts` as `CINEMA40_*` (no longer sharing the
+generic `GENRES`/`COLOR_PALETTES`/`LIGHTING`). Colour tokens and the accent
+(#D97757) are this project's own, not the reference's; the reference's real
+photography/video was deliberately not downloaded — gradient swatches stand
+in. Pointer-drag on the arc/ruler/carousel/wheels is not implemented yet
+(Prev/Next click stepping works). Do not restyle, re-scope, "clean up", or
+add drag/real-media support without an explicit user request naming this
+feature.
 
 # More than one agent works in this repo
 
