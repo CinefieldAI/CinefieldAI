@@ -18,7 +18,13 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `fdfff92` (2026-08-16).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `85d752e` (2026-08-16).**
+The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
+items by their own identity (name), not by slot position, with each
+item's offset from the selected index recomputed via shortest-path
+wraparound every render and a CSS transition on transform+opacity — this
+is what makes the whole assembly spin smoothly on Next/Prev instead of
+instantly swapping content in place. Don't revert to slot-keyed rendering.
 The model entry in `cinemaStudioData.ts` (id `cinema-studio-4.0`), the
 `CinemaStudio40CreativeControls.tsx` component (the References/Film
 setup/Camera/Color palette/Lighting pill row and its four dialogs),
