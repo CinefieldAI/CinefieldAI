@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -42,7 +42,8 @@ import type { ReadinessReport } from "@/lib/health/health-contract";
  * several tests below exist specifically to prove it is not built.
  */
 
-const ALERTS_DIR = join(process.cwd(), "src", "lib", "alerts");
+const ROOT = process.cwd();
+const ALERTS_DIR = join(ROOT, "src", "lib", "alerts");
 
 /** Captures envelopes without a network call, for routing assertions. */
 class CapturingSink implements AlertDeliverySink {
@@ -643,10 +644,27 @@ test("S13D-27  every catalogued type has a producer, and every producer type is 
   assert.deepEqual(produced, catalogued, "catalogue and producers must match exactly, both directions");
 
   // And the claimed producer list is not just a hand-written duplicate: every
-  // name in it appears in an actual raiseAlert call in the producers file.
-  const sources = stripComments(readFileSync(join(ALERTS_DIR, "alert-sources.ts"), "utf8"));
-  const raised = new Set([...sources.matchAll(/type:\s*"([a-z_]+)"/g)].map((m) => m[1]));
-  const resolved = new Set([...sources.matchAll(/resolveAlert\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
+  // name in it appears in an actual raiseAlert call in a real producer module.
+  //
+  // Producers are scanned WHEREVER THEY LIVE, not only in alert-sources.ts.
+  // A producer belongs to the phase that owns the signal: Phase 15-A owns the
+  // SLO breach mapping, so its bridge sits in src/lib/slo/ and depends on
+  // 13-D — the correct direction. Requiring the raise site to be inside the
+  // alerts module would have forced 13-D to import Phase 15 types, inverting
+  // that dependency. The guarantee is unchanged and the scope is wider: every
+  // catalogued type must have a real raise or resolve site SOMEWHERE in
+  // production code.
+  const producerFiles = [
+    join(ALERTS_DIR, "alert-sources.ts"),
+    join(ROOT, "src", "lib", "slo", "slo-alert-bridge.ts"),
+  ];
+  const producerCode = producerFiles
+    .filter((f) => existsSync(f))
+    .map((f) => stripComments(readFileSync(f, "utf8")))
+    .join("\n");
+
+  const raised = new Set([...producerCode.matchAll(/type:\s*"([a-z_]+)"/g)].map((m) => m[1]));
+  const resolved = new Set([...producerCode.matchAll(/resolveAlert\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
   for (const type of catalogued) {
     assert.ok(raised.has(type) || resolved.has(type), `${type} has no raise site`);
   }

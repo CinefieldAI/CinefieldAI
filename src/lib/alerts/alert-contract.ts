@@ -56,7 +56,7 @@ export const SEVERITY_ORDER: Readonly<Record<AlertSeverity, number>> = {
 export type AlertChannel = "TELEGRAM" | "DASHBOARD" | "STATUS_PAGE";
 
 /** Which subsystem observed the signal. */
-export type AlertSource = "security" | "health" | "debt" | "dispatcher" | "provider";
+export type AlertSource = "security" | "health" | "debt" | "dispatcher" | "provider" | "reliability";
 
 /**
  * Alert lifecycle.
@@ -100,7 +100,10 @@ export type AlertType =
   | "dispatcher_pass_failing"
   // ---- provider health ----------------------------------------------------
   | "provider_degraded"
-  | "provider_unhealthy";
+  | "provider_unhealthy"
+  // ---- reliability (Phase 15-A SLO breach, evidence only) ----------------
+  | "slo_budget_low"
+  | "slo_budget_exhausted";
 
 export interface AlertTypeRule {
   readonly source: AlertSource;
@@ -194,6 +197,20 @@ export const ALERT_CATALOGUE: Readonly<Record<AlertType, AlertTypeRule>> = {
     dedupeWindowSeconds: 900,
     userVisible: false,
     why: "A provider is failing intermittently. Routing can still avoid it, so this informs rather than escalates.",
+  },
+  slo_budget_low: {
+    source: "reliability",
+    severity: "WARNING",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 15-A. An error budget is being consumed faster than allocated. Worth knowing, not worth waking someone: the objective is still being met.",
+  },
+  slo_budget_exhausted: {
+    source: "reliability",
+    severity: "ERROR",
+    dedupeWindowSeconds: 1_800,
+    userVisible: false,
+    why: "Phase 15-A. A service level objective is breached for this window. Not user-visible: an SLO is an internal commitment, and publishing which objective slipped tells an outsider where the system is weakest.",
   },
   provider_unhealthy: {
     source: "provider",

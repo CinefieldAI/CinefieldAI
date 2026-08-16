@@ -211,6 +211,20 @@ const ELIGIBILITY: Readonly<Record<AlertType, EligibilityRule>> = {
     candidateFilePaths: [],
     why: "The Risk Engine asked for human review by name; automating past that would defeat the request.",
   },
+  slo_budget_low: {
+    category: "operational_backlog",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-A. A burn rate says an objective is under pressure, not WHERE the fault is — there is no code surface to attribute it to, and guessing one would produce a patch aimed at a symptom.",
+  },
+  slo_budget_exhausted: {
+    category: "operational_backlog",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-A. A breached objective is an aggregate over many requests; the underlying cause already alerts separately through its own health, debt or provider signal, which is the alert an agent could act on.",
+  },
 };
 
 /**

@@ -270,6 +270,8 @@ export const PRODUCED_ALERT_TYPES: readonly AlertType[] = [
   "dispatcher_pass_failing",
   "provider_degraded",
   "provider_unhealthy",
+  "slo_budget_low",
+  "slo_budget_exhausted",
 ];
 
 export type { AlertCandidate };

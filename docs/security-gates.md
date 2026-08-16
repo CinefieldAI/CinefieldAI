@@ -2840,3 +2840,100 @@ GitHub App/token, branch protection, Dependabot, real branch/commit/PR
 creation; Sentry Seer; Vercel project, Preview and deployment checks; real
 production deploy and rollback execution; Telegram and status page; custom
 domain. **Phase 14 is not production-complete** — its decision layer is.
+
+## Phase 15-A — SLI / SLO + error budget (code-only)
+
+Roadmap 15-A: *"SLO/Error Budget metriklerini ve alert eşiklerini tanımla."*
+Done-criterion: availability / success / p95 / timeout / queue-age targets are
+measurable.
+
+Turkish, because the roadmap is: **SLI** = ölçülen hizmet göstergesi ·
+**SLO** = hedeflenen hizmet seviyesi · **error budget** = kabul edilen hata
+payı · **burn rate** = hata payının ne hızla tüketildiği.
+
+### Definitions, not proof of compliance
+
+`SLO_TARGETS` is a **policy statement**. Nothing in Phase 15-A asserts that
+production meets any objective — live measurement needs an external metrics
+backend (Datadog / Better Stack / Sentry), all of which remain **deferred**.
+No number in this phase may be read as "the SLO is being met".
+
+### Phase 15-A owns definitions and arithmetic. Nothing else.
+
+Every SLI names ONE canonical source that already exists and is owned
+elsewhere:
+
+| SLI | Source | Owner |
+|---|---|---|
+| `app_availability`, `dependency_readiness` | readiness reports | **Phase 13 Health** |
+| `generation_success_ratio`, `generation_latency_p95`, `generation_timeout_ratio` | `generation_attempts` | Temporal / durable attempt evidence |
+| `realtime_debt_age` | `realtime_outbox_debt()` | existing debt aggregate |
+| `provider_reliability` | provider health store | **Phase 7** |
+
+It computes no second opinion about any of them. A second provider-health
+score would eventually disagree with the router's own, and then "is this
+provider healthy?" would have two answers depending on who was asked.
+
+### UNKNOWN is never HEALTHY
+
+Five states — `HEALTHY`, `AT_RISK`, `BREACHED`, `INSUFFICIENT_DATA`,
+`UNAVAILABLE`. `sourceAvailable` is checked **first** and is separate from the
+counts, because a failed query and a genuinely empty window both produce zero
+rows; collapsing them would turn a broken database connection into a perfect
+score. A perfect ratio over three samples is `INSUFFICIENT_DATA`, not 100%. A
+failed debt RPC is `UNAVAILABLE`, not "zero debt". This is the same rule Phase
+13 applies to dependency health and 14-E to artifacts.
+
+### NaN and Infinity are impossible by construction
+
+Every division guards its denominator; every input is validated; every return
+is a finite number or an explicit "cannot compute". This matters more than it
+sounds: **a NaN burn rate compares false against every threshold**, so a broken
+calculation would silently read as "not breaching" — failing open on exactly
+the signal meant to say something is wrong.
+
+The **100% target is a real case, not an edge case**: `dependency_readiness`
+targets 1.0, making `allowed_bad` exactly zero. It is handled explicitly —
+with no budget to spend, any bad observation is total exhaustion — rather than
+computing 0/0. Burn rate for that case returns `not_applicable`, never
+`Infinity`, because "infinitely fast" is not a number a threshold can be
+written against.
+
+### It is not an alert router
+
+`slo-alert-bridge.ts` has no dedupe state, no severity table, no channel
+logic, no escalation ladder and no delivery. It converts a snapshot into a
+candidate and hands it to **13-D's** `raiseAlert`. Severity lives in 13-D's
+catalogue (`slo_budget_low` = WARNING, `slo_budget_exhausted` = ERROR); this
+file chooses which catalogued type applies and cannot make one louder.
+
+An SLO breach is `userVisible: false` — an SLO is an internal commitment, and
+publishing which objective slipped tells an outsider where the system is
+weakest.
+
+`INSUFFICIENT_DATA` and `UNAVAILABLE` raise **nothing** and resolve
+**nothing**: "we could not measure" is neither a breach nor a recovery.
+
+The producer lives in `src/lib/slo/` rather than `alert-sources.ts` because
+Phase 15-A owns the SLO signal and depends on 13-D — the correct direction.
+13-D's producer-coverage guard was widened to scan producers wherever they
+live; the guarantee is unchanged and its scope is larger.
+
+### Cardinality is bounded
+
+Allowed dimensions are `provider`, `modelId`, `dependency` — closed catalogues
+that already exist. There is deliberately **no** user, workspace, tenant,
+request, generation or error-message dimension. That is not a storage
+optimisation: a per-user metric label is both an unbounded series count and a
+way for identity to reach a metrics backend. A dimension outside an SLI's
+allow-list, or a value that does not match the bounded pattern, is **dropped**
+rather than honoured. Correlation ids belong in traces and logs, where they
+are already allow-listed — not in metric labels.
+
+Phase 15-A required **no new 13-E allow-list field**.
+
+### Not in this batch
+
+15-B FinOps/Cost Guard, 15-C DR restore-verification, 15-D DLQ redrive /
+RTO-RPO / chaos. Live measurement, dashboards (Phase 16) and any external
+exporter remain deferred. **Phase 15 is not complete.**
