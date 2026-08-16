@@ -3611,3 +3611,105 @@ imply otherwise. S3→R2 restore-back stays a defined, unimplemented contract
 (Phase 9-D ownership, untouched). Production restore cadence remains
 undefined — `restoreVerificationTask` is still a plain `task()`, no
 `schedules.task()` anywhere.
+
+## Phase 15-D/1 — DLQ redrive decision engine + evidence contract (code-only)
+
+Roadmap 15-D: DLQ redrive / RTO-RPO / region outage / recovery game-day. This
+batch is the first slice: a deterministic, fail-closed decision of whether one
+message parked in `cinefield-provider-dlq.fifo` (Phase 6R.4's real,
+production-provisioned topology; see `docs/operations/AWS_PROVIDER_RUNTIME.md`)
+is safe to move back onto `cinefield-provider.fifo` — never whether it would
+succeed. `src/lib/aws/dlq-redrive/` does not call AWS. It does not redrive a
+real message. It does not add a second DLQ, a second CloudWatch alarm, or a
+second SNS topic — `cinefield-provider-dlq-messages` already alarms on depth,
+and this batch does not touch it.
+
+### Scope: the provider queue only
+
+Six of `sqs-topology.ts`'s seven queues have no wire-format schema, and per
+that file's own comment several have no consumer at all yet. A redrive
+decision for a message shape that does not exist would mean inventing one.
+This engine decides `cinefield-provider.fifo` / `cinefield-provider-dlq.fifo`
+only — the one queue with a real wire contract (`command-wire.ts`) and a real
+safety story (the B3 atomic claim). The other queues' redrive decisions are
+future work, once each has a consumer and a wire format to validate against.
+
+### What `SAFE_TO_REDRIVE` means, precisely
+
+It is a SAFETY proof, not a SUCCESS prediction. It means the durable evidence
+proves no submission was ever attempted for this attempt
+(`status = 'pending'`, `submission_evidence = 'none'`) and the generation can
+still legally accept one (`status` in `queued`/`processing`) — so a redrive
+cannot cause a double submission, cannot bypass `claimAttemptForSubmission`
+(the B3 gate, unchanged, untouched), and cannot fabricate provider or billing
+evidence. The real worker (`provider-command-handler.ts`) still re-runs its
+own full re-validation — model registry, provider registry, generation
+state — the moment a redriven message actually arrives, exactly as it does
+for every other delivery; a message this engine calls safe can still be
+safely retained again if that re-check disagrees. A real redrive call itself
+is not built in this batch — see "Not in this slice".
+
+### Six states, one positive path
+
+`SAFE_TO_REDRIVE`, `REFUSE_AMBIGUOUS_PROVIDER_STATE`,
+`REFUSE_TERMINAL_GENERATION`, `REFUSE_INSUFFICIENT_EVIDENCE`,
+`REFUSE_INVALID_MESSAGE`, `UNAVAILABLE`. `SAFE_TO_REDRIVE` is reachable
+through exactly one branch in `dlq-redrive-decision-engine.ts` — pending
+attempt, no submission evidence, submittable generation — and every other
+combination, including any status the closed `GenerationAttemptStatus` union
+does not yet name, refuses rather than falls through. A pinned array
+(`DLQ_REDRIVE_DECISION_STATES`) and a `REDRIVE_PERMITTED_STATES` set of
+exactly one member are both tested directly, so a future status added to the
+union without a corresponding branch fails loudly instead of silently
+inheriting safe behaviour.
+
+### Reused, not re-derived
+
+The evidence source (`DlqRedriveEvidenceSource`, modelled directly on Phase
+15-C/1's `RestoreEvidenceSource`) is a two-method, read-only interface. The
+real adapter (`createSupabaseDlqRedriveSource`) reads attempt truth through
+`readAttempt` — the SAME function `provider-command-handler.ts` and
+`attempt-submission-service.ts` already trust — and reads the generation
+through a `select("status")` query narrower than any other generation read in
+the codebase, so there is nothing for a future edit to accidentally leak into
+evidence. `CommandClassification` (safe/ambiguous/retryable/non_retryable) is
+a different question asked from inside the worker mid-delivery; this engine
+answers a later, outside question from the same underlying evidence, and does
+not claim the two classifications are the same thing. A structural test
+cross-checks this engine's terminal/submittable literals against
+`provider-command-handler.ts`'s own source text so the two vocabularies
+cannot silently diverge.
+
+### Structural safety, not just inspection
+
+A test scans every file in `src/lib/aws/dlq-redrive/` (comments stripped) for
+`submitAttempt(`, `executeGeneration(`, credit/reservation identifiers,
+`cost_amount`/`cost_currency`, `credit_ledger`/`credit_wallets`, any attempt
+claim mutator, `StartMessageMoveTask`/`@aws-sdk`/`new SQSClient`, and any
+`.insert(`/`.update(`/`.upsert(`/`.delete(` call — none exist anywhere in the
+package. A second test asserts the adapter's only `select()` call is
+literally `"status"`. A third asserts no sensitive field name (prompt,
+`input_url`, `output_url`, `apiKey`, `signedUrl`, `authorization`, …) appears
+anywhere in the package's source.
+
+### Phase 13-D — deliberately not touched
+
+`ALERT_CATALOGUE`'s own standing rule (Phase 15-C/1 already states it) is
+that a type with no real producer is a fake alert. Nothing in this batch
+schedules or polls, so there is no live caller that could raise a new alert
+from a proven `REFUSE_*`/`UNAVAILABLE` outcome — adding one now would be
+exactly that fake-alert shape. DLQ depth already alerts today through the
+existing, external CloudWatch `cinefield-provider-dlq-messages` alarm and its
+SNS subscription (`AWS_PROVIDER_RUNTIME.md`); this batch does not duplicate
+it and does not fake a correlation with it.
+
+### Not in this slice
+
+Any real AWS redrive call (`StartMessageMoveTask` or otherwise); any
+scheduled/automatic invoker (`evaluateProviderDlqMessage` is a real,
+production-shaped function with no live caller yet, the same shape
+`runRestoreVerification` had before anything scheduled called it); a new
+Phase 13-D alert type; RTO/RPO numeric targets (still
+`UNDEFINED_BUSINESS_DECISION`, per the Phase 15-D master audit); a region
+outage runbook; any chaos/game-day infrastructure; any UI; any migration.
+**Phase 15-D is not complete.**
