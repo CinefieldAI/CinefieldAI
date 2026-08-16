@@ -18,24 +18,28 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `e9e1dcf` (2026-08-16).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `fdfff92` (2026-08-16).**
 The model entry in `cinemaStudioData.ts` (id `cinema-studio-4.0`), the
 `CinemaStudio40CreativeControls.tsx` component (the References/Film
-setup/Camera/Color palette/Lighting pill row and its four dialogs), and
-every `isCinema40`-gated block in `CinemaStudioWorkspace.tsx` and
-`PromptBar.tsx` are frozen at that commit. First built at `879400d` from a
-prose description; then fully rewritten at `e9e1dcf` against the reference's
-actual DOM markup (Genre arc, Era ruler, Tempo carousel, Camera Setup
-wheels, Movement grid, Color palette grid, Lighting grid all use its real
-geometry/formulas/option lists — none of it invented). All option arrays
-now live in `cinemaStudioData.ts` as `CINEMA40_*` (no longer sharing the
-generic `GENRES`/`COLOR_PALETTES`/`LIGHTING`). Colour tokens and the accent
-(#D97757) are this project's own, not the reference's; the reference's real
-photography/video was deliberately not downloaded — gradient swatches stand
-in. Pointer-drag on the arc/ruler/carousel/wheels is not implemented yet
-(Prev/Next click stepping works). Do not restyle, re-scope, "clean up", or
-add drag/real-media support without an explicit user request naming this
-feature.
+setup/Camera/Color palette/Lighting pill row and its four dialogs),
+`Cinema40AssetsPicker.tsx` (the References chip's own two-tier Assets
+picker), and every `isCinema40`-gated block in `CinemaStudioWorkspace.tsx`
+and `PromptBar.tsx` are frozen at that commit. First built at `879400d`
+from a prose description; fully rewritten at `e9e1dcf` against the
+reference's actual DOM markup (Genre arc, Era ruler, Tempo carousel,
+Camera Setup wheels, Movement grid, Color palette grid, Lighting grid all
+use its real geometry/formulas/option lists — none of it invented); then
+`Cinema40AssetsPicker.tsx` added at `fdfff92` matching the reference's
+separate "Assets v2" dialog (References/Elements/Generations/Liked ×
+Recent/All/Images/Videos/Audio tab tiers, multiple-file upload, stays
+open after upload). All option arrays live in `cinemaStudioData.ts` as
+`CINEMA40_*` (not shared with the generic `GENRES`/`COLOR_PALETTES`/
+`LIGHTING`). Colour tokens and the accent (#D97757) are this project's
+own, not the reference's; the reference's real photography/video was
+deliberately not downloaded — gradient swatches stand in. Pointer-drag on
+the arc/ruler/carousel/wheels is not implemented yet (Prev/Next click
+stepping works). Do not restyle, re-scope, "clean up", or add drag/
+real-media support without an explicit user request naming this feature.
 
 # More than one agent works in this repo
 
