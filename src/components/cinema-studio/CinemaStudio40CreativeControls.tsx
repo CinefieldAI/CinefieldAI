@@ -233,7 +233,15 @@ function Cinema40Dialog({
                 </Dialog.Close>
               </div>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col gap-px overflow-clip rounded-[20px] md:h-[452px] md:flex-none">
+            {/* Row, not column: Film setup/Camera render a fixed-width
+                sidebar + flex-1 content side by side; Color palette/
+                Lighting render a single child that fills the row either
+                way. (Previously wrote flex-col here by mistake — stacked
+                the sidebar+content vertically instead of side by side,
+                which pushed Genre's absolutely-positioned arc container
+                to 0 height since its flex parent chain never resolved a
+                usable height.) */}
+            <div className="flex min-h-0 flex-1 gap-px overflow-clip rounded-[20px] md:h-[452px] md:flex-none">
               {children}
             </div>
           </div>
