@@ -18,7 +18,7 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `85d752e` (2026-08-16).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `82f1594` (2026-08-16).**
 The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
 items by their own identity (name), not by slot position, with each
 item's offset from the selected index recomputed via shortest-path
