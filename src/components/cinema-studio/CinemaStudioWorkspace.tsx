@@ -166,14 +166,14 @@ export default function CinemaStudioWorkspace() {
   const [cinema40AssetsPickerTab, setCinema40AssetsPickerTab] = useState<"uploads" | "elements">("uploads");
   const [cinema40References, setCinema40References] = useState<string[]>([]);
   const [cinema40FilmSetup, setCinema40FilmSetup] = useState({ genre: "General", era: "Auto", tempo: "Auto" });
-  const [cinema40Camera, setCinema40Camera] = useState({ camera: "Auto", lens: "Auto" });
+  const [cinema40Camera, setCinema40Camera] = useState({ body: "Auto", lens: "Auto", aperture: "Auto" });
   const [cinema40ColorPalette, setCinema40ColorPalette] = useState("Auto");
   const [cinema40Lighting, setCinema40Lighting] = useState("Auto");
 
   const resetCinema40Controls = () => {
     setCinema40References([]);
     setCinema40FilmSetup({ genre: "General", era: "Auto", tempo: "Auto" });
-    setCinema40Camera({ camera: "Auto", lens: "Auto" });
+    setCinema40Camera({ body: "Auto", lens: "Auto", aperture: "Auto" });
     setCinema40ColorPalette("Auto");
     setCinema40Lighting("Auto");
   };
@@ -181,15 +181,6 @@ export default function CinemaStudioWorkspace() {
   const appendCinema40MovementTag = (tag: string) => {
     setPrompt((p) => (p.trim() ? `${p.trim()} #${tag}` : `#${tag}`));
   };
-
-  // Mirrors PromptBar's own portalRoot pattern (set after mount so
-  // document.body exists) — CinemaStudio40CreativeControls renders its
-  // popovers via this container since it is a sibling of PromptBar, not a
-  // child, so it cannot reach PromptBar's own "prompt-popover-root" div.
-  const [cinema40PortalRoot, setCinema40PortalRoot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setCinema40PortalRoot(document.body);
-  }, []);
 
   // UI
   const [modal, setModal] = useState<ModalKey>(null);
@@ -725,7 +716,6 @@ export default function CinemaStudioWorkspace() {
                   onAssetsPickerOpenChange={setCinema40AssetsPickerOpen}
                   assetsPickerTab={cinema40AssetsPickerTab}
                   onAssetsPickerTabChange={setCinema40AssetsPickerTab}
-                  portalContainer={cinema40PortalRoot}
                 />
                 <PromptBar
                   prompt={prompt}

@@ -523,68 +523,125 @@ export const APERTURES = ["Auto", "f/1.4", "f/2.8", "f/4", "f/8"];
 
 /* ------------------------------------------------------------------ */
 /* Cinema Studio 4.0 — Creative Controls option sets                   */
+/*                                                                      */
+/* Every array below (names, order, colour values) is transcribed      */
+/* verbatim from the reference's live DOM markup — none of it is       */
+/* invented. Only the actual photography/video that accompanied each   */
+/* item in that markup is intentionally NOT reproduced (that would be  */
+/* copying another product's media assets into this one); gradient/    */
+/* colour swatches derived from the same real data stand in for it.    */
 /* ------------------------------------------------------------------ */
 
+/** Film setup → Genre tab. Cyclic arc order. */
+export const CINEMA40_GENRES = ["Epic", "Drama", "Noir", "Comedy", "Horror", "Action", "General"];
+
 /** Film setup → Era tab. */
-export const CINEMA40_ERAS = ["Auto", "1960s", "1980s", "1990s", "2000s", "2020s"];
+export const CINEMA40_ERAS = ["1960s", "1980s", "1990s", "2000s", "2020s", "Auto"];
+
+export interface Cinema40TempoOption {
+  name: string;
+  /** Cut-length bar pattern (flex-grow values) shown under the card. */
+  bars: number[];
+}
 
 /** Film setup → Tempo tab (pacing of the montage). */
-export const CINEMA40_TEMPO = ["Auto", "Slow Burn", "Steady", "Building", "Frenetic", "Whiplash"];
+export const CINEMA40_TEMPO: Cinema40TempoOption[] = [
+  { name: "Single shot", bars: [10.042] },
+  { name: "Auto", bars: [] },
+  { name: "Chaotic", bars: [0.875, 0.708, 1.25, 0.709, 1.208, 0.708, 1.042, 1.542, 0.666, 1.334, 0.041] },
+  { name: "Dynamic", bars: [1.5, 0.667, 1.541, 1.084, 1.416, 0.875, 0.917, 0.708, 1.334, 0.041] },
+  { name: "Calm", bars: [2.833, 3.875, 3.334] },
+];
 
-/** Camera → Setup tab, CAMERA group. */
-export const CINEMA40_CAMERAS = ["Auto", "Modern", "35mm Film", "8mm Film", "DV Camcorder"];
+/** Camera → Setup tab, CAMERA wheel. */
+export const CINEMA40_CAMERA_BODY = ["35mm Film", "8mm Film", "DV Camcorder", "Auto", "Modern"];
 
-/** Camera → Setup tab, LENS group. */
-export const CINEMA40_LENSES = [
-  "Auto",
-  "Clean Sharp",
-  "Anamorphic",
+/** Camera → Setup tab, LENS wheel. */
+export const CINEMA40_LENS = [
   "Vintage Anamorphic",
   "Warm Vintage",
   "Halation Vintage",
+  "Auto",
+  "Clean Sharp",
+  "Anamorphic",
 ];
+
+/** Camera → Setup tab, APERTURE wheel. */
+export const CINEMA40_APERTURE = ["f/11 Deep Focus", "Auto", "f/1.4 Wide Open", "f/4 Moderate"];
 
 /**
  * Camera → Movement tab. Each entry inserts a `#Tag` into the prompt rather
  * than being "selected" — there is no active/inactive state, clicking one
  * just appends it (matching the reference: "Adds to the prompt box, or type
- * # there").
+ * # there"). Grid order matches the reference exactly.
  */
 export const CINEMA40_MOVEMENT_TAGS = [
-  "Static shot",
-  "Handheld",
-  "Tracking",
-  "POV",
-  "Pan left",
-  "Pan right",
-  "Tilt up",
-  "Tilt down",
-  "Crane up",
-  "Crane down",
-  "Pedestal up",
-  "Pedestal down",
-  "Dolly in",
-  "Dolly out",
-  "Dolly zoom",
-  "Truck left",
-  "Truck right",
-  "Slider left",
-  "Slider right",
-  "Arc left",
-  "Arc right",
-  "Side tracking",
-  "Whip pan",
-  "Slow zoom in",
-  "Slow zoom out",
-  "Crush zoom",
-  "Rack focus",
-  "Drone orbit",
-  "Aerial pullback",
-  "Helicopter shot",
   "Snorricam",
   "Robot arm",
+  "Tilt up",
+  "Rack focus",
+  "Tilt down",
+  "POV",
+  "Pan left",
+  "Crane up",
+  "Pan right",
+  "Crane down",
+  "Side tracking",
+  "Pedestal up",
+  "Pedestal down",
+  "Handheld",
+  "Tracking",
+  "Drone orbit",
+  "Dolly zoom",
+  "Aerial pullback",
+  "Static shot",
   "Bullet time",
+  "Whip pan",
+  "Slow zoom in",
+  "Arc left",
+  "Slow zoom out",
+  "Arc right",
+  "Truck right",
+  "Dolly in",
+  "Truck left",
+  "Dolly out",
+  "Slider right",
+  "Crush zoom",
+  "Slider left",
+  "Helicopter shot",
 ];
+
+export interface Cinema40Palette {
+  name: string;
+  colors: string[];
+}
+
+/** Color palette panel. RGB values transcribed verbatim from the reference. */
+export const CINEMA40_COLOR_PALETTES: Cinema40Palette[] = [
+  { name: "Film colors", colors: ["rgb(67,74,51)", "rgb(34,28,17)", "rgb(97,108,82)", "rgb(146,157,143)", "rgb(219,219,223)", "rgb(176,152,108)", "rgb(132,132,101)", "rgb(114,155,206)", "rgb(65,100,149)", "rgb(107,159,150)", "rgb(207,190,128)", "rgb(157,99,55)", "rgb(154,179,173)", "rgb(197,172,157)", "rgb(47,72,102)"] },
+  { name: "Lime Jam", colors: ["rgb(59,92,134)", "rgb(76,109,146)", "rgb(46,76,118)", "rgb(47,50,20)", "rgb(71,72,30)", "rgb(99,98,36)", "rgb(135,119,92)", "rgb(25,27,11)", "rgb(101,132,160)", "rgb(88,88,78)", "rgb(126,130,48)", "rgb(169,142,113)", "rgb(195,181,152)", "rgb(233,217,215)", "rgb(159,170,72)"] },
+  { name: "Candy pink", colors: ["rgb(238,185,209)", "rgb(143,132,125)", "rgb(33,26,28)", "rgb(213,116,121)", "rgb(189,151,158)", "rgb(132,102,114)", "rgb(112,85,79)", "rgb(172,124,130)", "rgb(75,45,44)", "rgb(87,66,63)", "rgb(236,186,182)", "rgb(222,166,180)", "rgb(163,94,93)", "rgb(129,58,44)", "rgb(140,29,83)"] },
+  { name: "Nostalgic blue", colors: ["rgb(32,69,135)", "rgb(29,60,125)", "rgb(35,79,152)", "rgb(30,27,29)", "rgb(169,50,50)", "rgb(31,48,97)", "rgb(102,124,162)", "rgb(174,108,97)", "rgb(236,225,230)", "rgb(135,54,51)", "rgb(199,150,144)", "rgb(74,100,144)"] },
+  { name: "Black gloss", colors: ["rgb(4,3,2)", "rgb(117,107,96)", "rgb(14,12,9)", "rgb(71,65,60)", "rgb(61,53,47)", "rgb(181,165,148)", "rgb(131,124,117)", "rgb(105,93,80)", "rgb(28,25,21)", "rgb(45,40,35)", "rgb(88,77,67)", "rgb(137,117,91)", "rgb(160,142,125)"] },
+  { name: "Static Noon", colors: ["rgb(12,12,12)", "rgb(40,41,42)", "rgb(78,79,81)", "rgb(98,98,99)", "rgb(162,89,85)", "rgb(123,123,123)", "rgb(147,149,72)", "rgb(167,167,166)", "rgb(193,194,194)", "rgb(182,198,183)", "rgb(237,237,237)", "rgb(105,72,59)"] },
+  { name: "Twilight Fable", colors: ["rgb(4,6,5)", "rgb(30,79,89)", "rgb(93,70,35)", "rgb(123,93,53)", "rgb(54,121,127)", "rgb(148,128,82)", "rgb(178,162,74)", "rgb(86,175,174)", "rgb(136,178,201)", "rgb(218,197,147)", "rgb(243,244,234)", "rgb(118,64,25)"] },
+  { name: "Back Row Kissing Seats", colors: ["rgb(7,4,5)", "rgb(78,19,17)", "rgb(26,67,136)", "rgb(135,80,70)", "rgb(178,106,56)", "rgb(96,121,195)", "rgb(45,167,68)", "rgb(184,152,146)", "rgb(132,110,105)", "rgb(156,205,138)", "rgb(196,199,210)", "rgb(136,25,19)"] },
+  { name: "On the Other Side of the Porthole", colors: ["rgb(9,7,9)", "rgb(114,11,17)", "rgb(71,69,72)", "rgb(61,83,125)", "rgb(147,53,66)", "rgb(119,99,67)", "rgb(113,114,110)", "rgb(150,156,158)", "rgb(157,187,216)", "rgb(198,191,181)", "rgb(163,203,169)", "rgb(184,45,28)"] },
+  { name: "The Emerald Ambush", colors: ["rgb(16,18,16)", "rgb(75,77,45)", "rgb(60,76,123)", "rgb(100,87,75)", "rgb(61,112,59)", "rgb(105,134,167)", "rgb(149,155,135)", "rgb(202,158,128)", "rgb(190,190,193)", "rgb(152,208,213)", "rgb(240,247,240)", "rgb(29,72,27)"] },
+  { name: "Highway Standoff", colors: ["rgb(13,17,12)", "rgb(54,70,63)", "rgb(105,53,26)", "rgb(99,90,57)", "rgb(33,92,167)", "rgb(96,119,101)", "rgb(134,118,96)", "rgb(155,156,133)", "rgb(190,179,137)", "rgb(173,199,174)", "rgb(238,230,194)", "rgb(15,28,121)"] },
+  { name: "The Faded Fresco", colors: ["rgb(20,18,14)", "rgb(75,69,54)", "rgb(109,68,62)", "rgb(91,84,77)", "rgb(100,104,100)", "rgb(122,107,98)", "rgb(140,135,125)", "rgb(162,149,127)", "rgb(180,184,161)", "rgb(203,209,150)", "rgb(201,225,199)", "rgb(184,181,146)"] },
+  { name: "Oil & Ochre", colors: ["rgb(13,13,10)", "rgb(52,38,25)", "rgb(82,70,40)", "rgb(101,78,56)", "rgb(109,105,50)", "rgb(99,105,98)", "rgb(147,137,111)", "rgb(174,164,131)", "rgb(208,166,129)", "rgb(224,208,167)", "rgb(225,220,200)", "rgb(141,121,65)"] },
+  { name: "The Mountain Convent", colors: ["rgb(10,10,7)", "rgb(52,47,31)", "rgb(70,77,71)", "rgb(105,80,55)", "rgb(64,94,45)", "rgb(100,98,87)", "rgb(126,128,121)", "rgb(126,161,199)", "rgb(178,158,115)", "rgb(177,183,185)", "rgb(198,215,222)", "rgb(148,36,23)"] },
+  { name: "Ghost in the Code", colors: ["rgb(4,6,5)", "rgb(27,51,29)", "rgb(102,72,54)", "rgb(60,96,82)", "rgb(105,103,71)", "rgb(129,131,128)", "rgb(146,131,99)", "rgb(106,147,135)", "rgb(184,173,154)", "rgb(191,225,200)", "rgb(230,235,233)", "rgb(99,138,99)"] },
+  { name: "Pink Velvet", colors: ["rgb(13,12,15)", "rgb(104,47,29)", "rgb(32,82,121)", "rgb(124,81,68)", "rgb(48,120,163)", "rgb(153,109,115)", "rgb(127,129,141)", "rgb(210,157,159)", "rgb(221,167,128)", "rgb(215,197,200)", "rgb(239,220,213)", "rgb(159,20,11)"] },
+  { name: "Two Days to the Horizon", colors: ["rgb(6,8,5)", "rgb(37,72,80)", "rgb(85,72,44)", "rgb(119,76,24)", "rgb(105,108,83)", "rgb(85,128,133)", "rgb(130,135,103)", "rgb(192,168,117)", "rgb(167,186,166)", "rgb(204,201,164)", "rgb(226,229,203)", "rgb(152,131,87)"] },
+  { name: "Industrial Fog", colors: ["rgb(18,16,18)", "rgb(48,13,11)", "rgb(77,72,64)", "rgb(110,79,66)", "rgb(93,88,87)", "rgb(110,110,112)", "rgb(127,129,128)", "rgb(152,154,153)", "rgb(173,178,177)", "rgb(196,176,154)", "rgb(204,206,208)", "rgb(86,27,17)"] },
+  { name: "Stairs Go Up", colors: ["rgb(5,11,14)", "rgb(61,48,31)", "rgb(55,81,51)", "rgb(80,87,77)", "rgb(112,91,68)", "rgb(85,124,118)", "rgb(159,136,101)", "rgb(135,162,144)", "rgb(76,185,163)", "rgb(190,190,155)", "rgb(178,208,181)", "rgb(129,79,33)"] },
+  { name: "Field Post", colors: ["rgb(4,5,5)", "rgb(81,78,40)", "rgb(41,88,96)", "rgb(62,91,70)", "rgb(113,101,56)", "rgb(95,134,129)", "rgb(101,161,210)", "rgb(169,166,104)", "rgb(217,179,136)", "rgb(227,227,159)", "rgb(248,250,244)", "rgb(10,90,14)"] },
+];
+
+/** Lighting panel. */
+export const CINEMA40_LIGHTING = ["Auto", "Silhouette", "Practicals", "Window", "Overhead fall", "Contre jour", "Soft cross"];
 
 /* ------------------------------------------------------------------ */
 /* Prompt-bar option sets                                              */
