@@ -218,6 +218,27 @@ const ELIGIBILITY: Readonly<Record<AlertType, EligibilityRule>> = {
     candidateFilePaths: [],
     why: "Phase 15-C. A restore validation failure means backed-up data or its restore path is unreliable — the fix is a DR/infrastructure investigation, never a source-code patch. An agent asked to remediate it would have nothing to change and no way to verify a fix.",
   },
+  recovery_rto_breached: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-D/2. A recovery took longer than its configured target — the fix is faster infrastructure recovery (queue redrive, dependency restoration, region failover), never a source-code patch. Keeps the Phase 14-D boundary intact: bad-release rollback is a different question from infrastructure recovery duration.",
+  },
+  recovery_rpo_breached: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-D/2. A recovery lost more data than its configured window allows — a durability/backup-cadence question, never something a code patch remediates after the fact.",
+  },
+  recovery_evidence_unavailable: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 15-D/2. Required Phase 15-C restore-validation evidence could not be obtained for an active recovery — an investigation into the evidence source, never a source-code remediation.",
+  },
   cost_budget_at_risk: {
     category: "operational_backlog",
     confidence: "none",

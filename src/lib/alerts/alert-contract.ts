@@ -64,7 +64,8 @@ export type AlertSource =
   | "provider"
   | "reliability"
   | "cost"
-  | "dr";
+  | "dr"
+  | "recovery";
 
 /**
  * Alert lifecycle.
@@ -116,7 +117,11 @@ export type AlertType =
   | "cost_budget_at_risk"
   | "cost_budget_exhausted"
   // ---- dr (Phase 15-C restore verification, proven failure only) ---------
-  | "dr_restore_validation_failed";
+  | "dr_restore_validation_failed"
+  // ---- recovery (Phase 15-D/2 RTO/RPO measurement, proven breach only) ---
+  | "recovery_rto_breached"
+  | "recovery_rpo_breached"
+  | "recovery_evidence_unavailable";
 
 export interface AlertTypeRule {
   readonly source: AlertSource;
@@ -252,6 +257,27 @@ export const ALERT_CATALOGUE: Readonly<Record<AlertType, AlertTypeRule>> = {
     dedupeWindowSeconds: 600,
     userVisible: false,
     why: "A provider is failing consistently. Which provider is in trouble is commercially sensitive, so it never reaches the public status page.",
+  },
+  recovery_rto_breached: {
+    source: "recovery",
+    severity: "ERROR",
+    dedupeWindowSeconds: 1_800,
+    userVisible: false,
+    why: "Phase 15-D/2. A configured recovery-time target was measured and proven exceeded for a real incident. Never user-visible: which components have configured RTO commitments, and by how much one slipped, is internal operational posture.",
+  },
+  recovery_rpo_breached: {
+    source: "recovery",
+    severity: "ERROR",
+    dedupeWindowSeconds: 1_800,
+    userVisible: false,
+    why: "Phase 15-D/2. A configured data-loss-window target was measured and proven exceeded for a real incident. Never user-visible for the same reason a restore-validation failure is not: publishing exposes exactly how fragile a component's durability posture is.",
+  },
+  recovery_evidence_unavailable: {
+    source: "recovery",
+    severity: "ERROR",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 15-D/2. A recovery that required restore-validation evidence (database/media) could not obtain it at all. Distinct from RECOVERED_NO_TARGET, which is an ordinary, expected, non-alerting state — this is a recovery that was actively measured and whose required evidence could not be determined, which is itself worth a human looking at.",
   },
 };
 

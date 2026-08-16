@@ -3713,3 +3713,90 @@ Phase 13-D alert type; RTO/RPO numeric targets (still
 `UNDEFINED_BUSINESS_DECISION`, per the Phase 15-D master audit); a region
 outage runbook; any chaos/game-day infrastructure; any UI; any migration.
 **Phase 15-D is not complete.**
+
+## Phase 15-D/2 — recovery contract, RTO/RPO model, deterministic measurement (code-only)
+
+`src/lib/recovery/` classifies whether a real recovery met its (possibly
+nonexistent) time and data-loss commitments. It does not detect incidents, does
+not execute a redrive, does not run chaos, and does not touch AWS, a provider,
+or money — every method in the package is pure arithmetic over caller-supplied
+evidence.
+
+### No RTO/RPO numbers invented; the registries ship empty
+
+`RTO_TARGETS` and `RPO_TARGETS` (`recovery-target-registry.ts`) are both `{}`.
+Setting a recovery-time or data-loss commitment is a business decision no
+approval for exists in this repository, exactly as the Phase 15-D master audit
+established. `resolveRtoTargetMs`/`resolveRpoTargetSeconds` return `null` for
+anything not explicitly and validly configured — never a fabricated number,
+never zero.
+
+### NO_TARGET != MET
+
+`RECOVERED_NO_TARGET` is its own state in the six-member
+`RecoveryResultState` union, precisely so an empty registry can never be read
+as "everything met its target." `rtoMet`/`rpoMet` are `undefined`, never
+`true`, when no target resolves; a test (`RTO_TARGETS`/`RPO_TARGETS` asserted
+`{}` directly, and `resolveRtoTargetMs`/`resolveRpoTargetSeconds` asserted
+`null`) pins this so populating either registry later cannot silently change
+the meaning of "no target."
+
+### Deterministic measurement — `now` is always an input
+
+`measureRecovery` never calls `Date.now()` or `new Date()` internally; the
+evaluation instant is a required parameter, so the same input always produces
+byte-identical output. Timestamps are validated in order — unparseable, then
+out-of-chronological-order, then a malformed (`NaN`/negative/`Infinity`)
+data-loss observation — before any duration is computed, so a negative or
+fabricated duration is structurally impossible rather than merely unlikely.
+`RECOVERY_INCOMPLETE` covers both "not yet restored" and "restored but
+required validation did not pass"; `EVIDENCE_UNAVAILABLE` is reserved for
+required evidence that could not be OBTAINED at all — the same
+known-negative-fact-vs-missing-fact distinction `dlq-redrive-decision-engine.ts`
+already draws between `REFUSE_INSUFFICIENT_EVIDENCE` and `UNAVAILABLE`. A
+proven breach on either the RTO or the RPO axis always wins over a met target
+on the other — `RECOVERED_OUTSIDE_TARGET` is never hidden behind a "within
+target" headline, the same ordering discipline `runRestoreValidation`'s
+MISMATCH-beats-UNAVAILABLE-beats-MATCH already established.
+
+### Ownership boundaries preserved, not re-derived
+
+Health truth remains Phase 13: `recovery-health-bridge.ts`'s
+`isRuntimeConsideredRecovered` is a one-line predicate over an
+already-obtained `ReadinessReport` (`status === "HEALTHY"`, DEGRADED is
+deliberately NOT recovered) — it does not track transitions, does not poll,
+and does not redefine `HealthStatus`. Restore truth remains Phase 15-C: for
+`database_recovery`/`media_recovery` (`CLASSES_REQUIRING_RESTORE_VALIDATION`),
+the engine consumes an already-computed `RestoreValidationState` and gates on
+it being exactly `VALIDATION_PASSED` — it does not recompute checksum,
+row-count, or referential-integrity logic, proven by a structural test that
+the package never mentions `checksum_sha256`/`pg_constraint`/`convalidated`.
+Rollback authority remains Phase 14-D: nothing here evaluates deployment
+eligibility or proposes a rollback; a bad-release decision and a
+recovery-time measurement stay two separate questions with two separate
+files. AWS redrive execution and chaos/game-day infrastructure both remain
+exactly as deferred as Phase 15-D/1 left them — this batch adds no new AWS
+call and no failure-injection of any kind.
+
+### 13-D integration — only a proven breach or proven missing evidence alerts
+
+Three new catalogued types (`recovery_rto_breached`, `recovery_rpo_breached`,
+`recovery_evidence_unavailable`; source `"recovery"`, all `ERROR`, none
+user-visible) with a real producer, `recovery-alert-bridge.ts`, registered in
+the S13D-27 catalogue-coverage scan alongside `dr-alert-bridge.ts` and
+`cost-alert-bridge.ts`. `RECOVERED_NO_TARGET`, `RECOVERY_INCOMPLETE`, and
+`INVALID_EVIDENCE` all raise nothing — an absent business-approved target, an
+in-progress recovery, and a caller bug are not incidents. All three new
+alert types are `remediationEligible: false` in Phase 14-D's own
+`incident-diagnosis.ts` eligibility table: an infrastructure recovery-time or
+data-loss breach has no source-code fix, the same reasoning already applied
+to `dr_restore_validation_failed`.
+
+### Not in this slice
+
+Any incident detection (nothing populates a `RecoveryIncidentEvidence` from a
+live signal yet); a live wiring from `isRuntimeConsideredRecovered` to a
+`serviceRestoredAt` stamp; a region-outage runbook; RTO/RPO numeric targets
+(still `UNDEFINED_BUSINESS_DECISION`); any chaos/game-day infrastructure; any
+UI; any migration (`RecoveryIncidentEvidence` has no persistence — no
+recovery-history table was created). **Phase 15-D is not complete.**

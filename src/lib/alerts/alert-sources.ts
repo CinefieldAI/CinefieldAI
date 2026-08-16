@@ -279,6 +279,12 @@ export const PRODUCED_ALERT_TYPES: readonly AlertType[] = [
   // Raised by src/lib/dr/dr-alert-bridge.ts (Phase 15-C), which owns the
   // signal and depends on 13-D rather than the other way round.
   "dr_restore_validation_failed",
+  // Raised by src/lib/recovery/recovery-alert-bridge.ts (Phase 15-D/2),
+  // which owns the signal and depends on 13-D rather than the other way
+  // round.
+  "recovery_rto_breached",
+  "recovery_rpo_breached",
+  "recovery_evidence_unavailable",
 ];
 
 export type { AlertCandidate };

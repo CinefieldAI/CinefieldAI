@@ -256,7 +256,7 @@ test("D3: an unknown field refuses as invalid message (secrets cannot ride along
     generationId: GENERATION_ID,
     attemptId: ATTEMPT_ID,
     issuedAt: new Date().toISOString(),
-    apiKey: "sk-should-never-be-here",
+    apiKey: "should-never-be-here",
   });
   const decision = await evaluateDlqRedriveDecision({ rawMessageBody: body, source: fakeSource() });
   assert.equal(decision.state, "REFUSE_INVALID_MESSAGE");
