@@ -232,6 +232,25 @@ test("5: RTO target met => RECOVERED_WITHIN_TARGET", () => {
   assert.equal(evidence.result, "RECOVERED_WITHIN_TARGET");
 });
 
+test("5b (Phase 15-D/3 audit finding): recoveryDurationMs exactly equal to the RTO target counts as met", () => {
+  // The fixture's own duration is exactly 20 minutes (T0 -> T2). Pinning the
+  // registry to that same value exercises the `<=` boundary directly rather
+  // than only bracketing it from either side (tests 5 and 6 above/below).
+  // This is a regression test for a documented convention, not a fix: the
+  // production comparison in recovery-measurement-engine.ts already reads
+  // `recoveryDurationMs <= targetRtoMs`, so equality was always "met" by
+  // implementation — it simply had no direct assertion until now.
+  const evidence = measureRecovery({
+    incident: incident(),
+    now: NOW,
+    rtoRegistry: { queue_recovery: 20 * 60 * 1000 },
+  });
+  assert.equal(evidence.recoveryDurationMs, 20 * 60 * 1000);
+  assert.equal(evidence.targetRtoMs, 20 * 60 * 1000);
+  assert.equal(evidence.rtoMet, true, "duration == target must count as met, per the documented <= convention");
+  assert.equal(evidence.result, "RECOVERED_WITHIN_TARGET");
+});
+
 test("6: RTO target breached => RECOVERED_OUTSIDE_TARGET", () => {
   const evidence = measureRecovery({
     incident: incident(),

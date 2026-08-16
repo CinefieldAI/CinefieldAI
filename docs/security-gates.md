@@ -3800,3 +3800,78 @@ live signal yet); a live wiring from `isRuntimeConsideredRecovered` to a
 (still `UNDEFINED_BUSINESS_DECISION`); any chaos/game-day infrastructure; any
 UI; any migration (`RecoveryIncidentEvidence` has no persistence — no
 recovery-history table was created). **Phase 15-D is not complete.**
+
+## Phase 15-D/3 — manual DLQ investigation entrypoint (code-only)
+
+A read-only, operator-invoked path that peeks at most one message from the
+real `cinefield-provider-dlq.fifo`, evaluates it through the UNMODIFIED
+Phase 15-D/1 decision engine, and returns a bounded verdict. It never
+redrives, deletes, or mutates anything.
+
+### SAFE_TO_REDRIVE is authorization evidence, not execution
+
+This batch adds a real, read-only AWS SQS adapter
+(`src/lib/aws/dlq-redrive/adapters/sqs-dlq-message-source.ts`) to the same
+package Phase 15-D/1 built — the FIRST real AWS integration point in the
+package — but its only method is a peek: `ReceiveMessageCommand` with
+`VisibilityTimeout: 0`, so the message is immediately visible again to any
+other reader the instant the call returns. There is no visibility window
+opened here to later restore, because none is ever opened. No
+`DeleteMessageCommand`, `ChangeMessageVisibilityCommand`,
+`StartMessageMoveTaskCommand`, `SendMessageCommand`, `PurgeQueueCommand` or
+`SetQueueAttributes` import exists anywhere in the file — an investigation
+cannot mutate the queue, structurally, because the SDK command needed to do
+so is never imported. Real AWS redrive execution remains exactly as
+unimplemented as Phase 15-D/1 left it.
+
+### Phase 15-D/1 remains sole decision authority
+
+`dlq-investigation-service.ts`'s `investigateProviderDlq` calls
+`evaluateDlqRedriveDecision` — the SAME pure engine `evaluateProviderDlqMessage`
+already calls in production — and passes its verdict through verbatim. A
+structural test asserts the literals `"SAFE_TO_REDRIVE"`/`"REFUSE_..."`
+appear nowhere in the investigation service outside that one import, so a
+future edit cannot quietly grow a second, competing classification. Four
+outcomes only: `NOT_CONFIGURED` (no DLQ source wired), `SOURCE_UNAVAILABLE`
+(the queue could not be read), `NO_MESSAGE` (the DLQ is empty right now —
+ordinary, not an error), and `DECIDED` (the engine's own six-state verdict).
+
+### Entrypoint shape: a manual script, not a route
+
+`scripts/dlq-investigate.ts` — run as `npx tsx scripts/dlq-investigate.ts`,
+the same manual-invocation shape `scripts/dr-restore-proof-verify.ts`
+(Phase 15-C/2) already uses. No HTTP route, no scheduler, no cron, no
+polling loop — a structural test confirms no file under `src/app/api/`
+references any part of this path. The AWS and Supabase service-role
+credentials the script already requires to do anything at all ARE the
+access control; no new admin-auth system was built. Deliberately does not
+call `assertStartupConfiguration` — that gate exists to refuse an invalid
+PRODUCTION RUNTIME at process start for a long-lived worker, and forcing it
+here could make a narrow investigation tool refuse to run during exactly
+the messy-production-config moment it exists to help diagnose.
+
+### New configuration, registered
+
+`CINEFIELD_SQS_PROVIDER_DLQ_URL` (optional, identifier-class, not a secret —
+authority is IAM, same as the existing provider queue URL) is registered in
+`secret-registry.ts` and documented in `.env.example`; an unmodified
+deployment leaves it unset and `createSqsDlqMessageSource()` returns `null`,
+so the investigation path honestly reports `NOT_CONFIGURED` rather than
+guessing a URL.
+
+### RTO equality boundary — pinned, not redesigned
+
+The Phase 15-D/2 post-implementation audit found one minor test-coverage
+gap: `recoveryDurationMs == targetRtoMs` was never directly asserted, though
+the production comparison (`<=`) already treats equality as met. A single
+regression test was added to `phase-15d2-recovery-rto-rpo.e2e.test.ts`
+pinning that exact convention; no production arithmetic changed, because
+none needed to.
+
+### Not in this slice
+
+Real AWS redrive execution (`StartMessageMoveTask` or otherwise); any
+scheduled/automatic invocation of the investigation path; RTO/RPO numeric
+targets (still `UNDEFINED_BUSINESS_DECISION`); a region-outage runbook; any
+chaos/game-day infrastructure; any UI; any migration. **Phase 15-D is not
+complete.**

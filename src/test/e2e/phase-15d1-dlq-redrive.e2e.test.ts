@@ -481,11 +481,23 @@ const BANNED_IDENTIFIERS: { pattern: RegExp; why: string }[] = [
   { pattern: /cost_amount|cost_currency/, why: "must never write billing fields" },
   { pattern: /credit_ledger|credit_wallets/, why: "must never touch the money ledger" },
   { pattern: /claimAttemptForSubmission|markAttemptSubmitting|recordProviderJob|markAttemptTerminal/, why: "must never mutate an attempt's claim" },
-  { pattern: /StartMessageMoveTask|@aws-sdk|new\s+SQSClient/, why: "must never call a real AWS redrive API" },
+  // Phase 15-D/3 added a real, read-only cinefield-provider-dlq.fifo peek
+  // adapter to this same package (adapters/sqs-dlq-message-source.ts), so a
+  // blanket ban on "@aws-sdk" / "new SQSClient" would now be wrong — that
+  // adapter legitimately imports both. What must actually never appear is
+  // any AWS SDK command capable of MUTATING a queue or message; banning
+  // those specific command names is a stronger, more accurate guarantee
+  // than banning the SDK import wholesale ever was.
+  { pattern: /StartMessageMoveTask/, why: "must never call the real AWS redrive API" },
+  { pattern: /SendMessageCommand/, why: "must never send/redrive a message" },
+  { pattern: /DeleteMessageCommand/, why: "must never delete a message" },
+  { pattern: /ChangeMessageVisibility/, why: "must never take exclusive ownership of a message" },
+  { pattern: /PurgeQueueCommand/, why: "must never purge a queue" },
+  { pattern: /SetQueueAttributes|CreateQueueCommand|DeleteQueueCommand/, why: "must never mutate queue configuration" },
   { pattern: /\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/, why: "must never write to the database" },
 ];
 
-test("I1: no file in the dlq-redrive package can execute a provider, spend money, or call AWS", () => {
+test("I1: no file in the dlq-redrive package can execute a provider, spend money, or call a mutating AWS API", () => {
   for (const { file, text } of packageCode) {
     for (const banned of BANNED_IDENTIFIERS) {
       assert.doesNotMatch(text, banned.pattern, `${file}: ${banned.why}`);
