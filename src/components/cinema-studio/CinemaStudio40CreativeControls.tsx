@@ -353,17 +353,23 @@ function GenreArc({ value, onChange }: { value: string; onChange: (v: string) =>
         }}
       />
       <div className="absolute left-1/2 size-0" style={{ top: "min(619.5px, 45% + 497px)" }}>
-        {Array.from({ length: 7 }, (_, slot) => {
-          const offset = slot - 3;
-          const itemIndex = (selectedIndex + offset + count * 100) % count;
-          const name = CINEMA40_GENRES[itemIndex];
+        {CINEMA40_GENRES.map((name, itemIndex) => {
+          // Offset by shortest path from the selected index (wrapping through
+          // whichever side is closer), NOT by fixed slot position. Keying each
+          // card by its own genre identity (below) means React keeps the same
+          // DOM node across renders and only its transform/opacity change —
+          // that's what lets the CSS transition animate the whole arc as one
+          // spinning wheel instead of an instant content swap.
+          let offset = itemIndex - selectedIndex;
+          if (offset > count / 2) offset -= count;
+          if (offset < -count / 2) offset += count;
           const isSelected = offset === 0;
           const isNeighbor = Math.abs(offset) === 1;
           const opacity = isSelected ? 1 : isNeighbor ? 0.55 : 0;
           return (
             <div
-              key={slot}
-              className="absolute"
+              key={name}
+              className="absolute transition-[transform,opacity] duration-[400ms] ease-out"
               style={{
                 width: 230,
                 height: 129,
@@ -515,28 +521,39 @@ function TempoCarousel({ value, onChange }: { value: string; onChange: (v: strin
   const count = CINEMA40_TEMPO.length;
   const selectedIndex = Math.max(0, CINEMA40_TEMPO.findIndex((t) => t.name === value));
   const step = (delta: number) => onChange(CINEMA40_TEMPO[(selectedIndex + delta + count * 100) % count].name);
+  const STEP_PX = 362; // 330px card + 16px margin on each side
 
   return (
     <div className="flex min-h-0 flex-1 flex-col select-none">
       <div className="relative -mx-3 min-h-0 flex-1 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative flex items-center" style={{ gap: 0 }}>
-            {Array.from({ length: 3 }, (_, slot) => {
-              const offset = slot - 1;
-              const itemIndex = (selectedIndex + offset + count * 100) % count;
-              const tempo = CINEMA40_TEMPO[itemIndex];
+          <div className="relative" style={{ width: 330, height: 190 }}>
+            {CINEMA40_TEMPO.map((tempo, itemIndex) => {
+              // Same identity-keyed, shortest-path-offset approach as
+              // GenreArc — the card for each tempo keeps its own DOM node
+              // across renders, so the CSS transition below slides the
+              // whole strip sideways instead of swapping content in place.
+              let offset = itemIndex - selectedIndex;
+              if (offset > count / 2) offset -= count;
+              if (offset < -count / 2) offset += count;
               const isSelected = offset === 0;
               const absDistance = Math.min(Math.abs(offset), 1);
               const scale = 1 - 0.32 * absDistance;
-              const opacity = 1 - 0.25 * absDistance;
+              const opacity = Math.abs(offset) > 1 ? 0 : 1 - 0.25 * absDistance;
               return (
                 <button
-                  key={slot}
+                  key={tempo.name}
                   type="button"
                   onClick={() => (isSelected ? undefined : step(offset))}
                   aria-label={tempo.name}
-                  className="relative mx-4 shrink-0 cursor-pointer rounded-[24px] bg-[#0f0f10] p-1 shadow-[0_-2.6px_5.2px_0_rgba(0,0,0,0.08),inset_0_-1.3px_1.3px_0_rgba(255,255,255,0.12),inset_0_1.3px_2.6px_0_rgba(0,0,0,0.04)]"
-                  style={{ width: 330, height: 190, transform: `scale(${scale})`, opacity }}
+                  className="absolute left-0 top-0 cursor-pointer rounded-[24px] bg-[#0f0f10] p-1 shadow-[0_-2.6px_5.2px_0_rgba(0,0,0,0.08),inset_0_-1.3px_1.3px_0_rgba(255,255,255,0.12),inset_0_1.3px_2.6px_0_rgba(0,0,0,0.04)] transition-[transform,opacity] duration-[400ms] ease-out"
+                  style={{
+                    width: 330,
+                    height: 190,
+                    transform: `translateX(${offset * STEP_PX}px) scale(${scale})`,
+                    opacity,
+                    pointerEvents: Math.abs(offset) <= 1 ? "auto" : "none",
+                  }}
                 >
                   <span
                     aria-hidden
@@ -651,22 +668,30 @@ function SetupWheel({
     <div className="group/wheel relative flex min-w-0 flex-col items-center pt-2">
       <span className="relative z-10 text-[10px] font-bold uppercase tracking-wide text-white/50">{label}</span>
       <div className="relative min-h-0 w-full flex-1">
-        <div className="relative flex size-full flex-col items-center justify-center gap-1.5 overflow-hidden py-1">
-          {Array.from({ length: 5 }, (_, slot) => {
-            const offset = slot - 2;
-            const itemIndex = (selectedIndex + offset + count * 100) % count;
-            const name = options[itemIndex];
+        <div className="relative size-full overflow-hidden">
+          {options.map((name, itemIndex) => {
+            // Identity-keyed with a shortest-path offset (same pattern as
+            // GenreArc/TempoCarousel) so the CSS transition slides the
+            // whole column instead of swapping content at a fixed slot.
+            let offset = itemIndex - selectedIndex;
+            if (offset > count / 2) offset -= count;
+            if (offset < -count / 2) offset += count;
             const isSelected = offset === 0;
             const isAuto = name === "Auto";
+            const visible = Math.abs(offset) <= 2;
             return (
               <button
-                key={slot}
+                key={name}
                 type="button"
                 onClick={() => (isSelected ? undefined : step(offset))}
-                className={`relative flex h-[100px] w-[156px] max-w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-full transition-opacity duration-150 ${
+                className={`absolute left-1/2 top-1/2 flex h-[100px] w-[156px] max-w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-full transition-[transform,opacity] duration-[400ms] ease-out ${
                   isSelected ? "opacity-100 ring-2 ring-white" : "opacity-60 ring-[1.5px] ring-white/30"
                 }`}
-                style={{ ringOffset: 0 } as React.CSSProperties}
+                style={{
+                  transform: `translate(-50%, calc(-50% + ${offset * 120}px))`,
+                  opacity: visible ? undefined : 0,
+                  pointerEvents: visible ? "auto" : "none",
+                }}
               >
                 {isAuto ? (
                   <>
