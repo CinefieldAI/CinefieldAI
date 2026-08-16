@@ -103,7 +103,7 @@ export function costTelemetryFields(result: CostGuardResult): Record<string, str
 
   if (result.projectedSpend !== undefined) {
     const projected = toCostMicros(result.projectedSpend);
-    if (projected !== null) fields.costMicros = projected;
+    if (projected !== null) fields.projectedSpendMicros = projected;
   }
   if (result.remaining !== undefined) {
     const remaining = toCostMicros(result.remaining);

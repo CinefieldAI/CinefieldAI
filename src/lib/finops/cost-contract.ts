@@ -30,6 +30,28 @@ import type { PricingRecord } from "@/lib/pricing/pricing-types";
  * justify it.
  *
  * ---------------------------------------------------------------------------
+ * `generation_attempts.cost_amount` STAYS NULL UNTIL REAL EVIDENCE EXISTS
+ * ---------------------------------------------------------------------------
+ * The column is not merely unwritten — it must NOT be written from anything
+ * this module produces. Not from `model_pricing`, not from an estimated output
+ * count, not from a projected window spend, not from a credit amount, and not
+ * from a customer price. `markAttemptTerminal` already states the rule for its
+ * own half ("an unknown value stays NULL rather than being estimated"), and
+ * this is the same rule seen from the cost side.
+ *
+ * The reason is not tidiness. A column called `cost_amount` holding an
+ * estimate is indistinguishable, to every future reader, from one holding a
+ * bill — and the readers that matter are invoice reconciliation and any later
+ * observed-spend guard. Populating it with a forecast would not add data; it
+ * would destroy the ability to ever tell forecast from fact, permanently and
+ * silently.
+ *
+ * As of this batch the evidence does not exist: `OrchestrationResult` carries
+ * no cost field and no provider adapter returns usage or cost, so at
+ * settlement the only knowable quantities are the very inputs to the estimate.
+ * NULL is the correct value, and it is correct on purpose.
+ *
+ * ---------------------------------------------------------------------------
  * THREE SEPARATE NUMBERS THAT MUST NEVER MERGE
  * ---------------------------------------------------------------------------
  *   provider cost   what a provider charges Cinefield   <- THIS MODULE
@@ -238,12 +260,41 @@ export interface CostAggregate {
   readonly reasonCode: string;
 }
 
-export function aggregateCost(observations: readonly CostObservation[]): CostAggregate {
+/**
+ * What `aggregateCost` needs.
+ *
+ * `sourceAvailable` is a REQUIRED field rather than an optional one, because
+ * the whole point is that a caller cannot reach a zero by omission. See the
+ * note on the function below.
+ */
+export interface CostAggregateInput {
+  readonly observations: readonly CostObservation[];
+  /**
+   * FALSE when the spend read itself failed.
+   *
+   * A window query that threw and a window in which nothing ran both produce
+   * an empty list. Only the caller knows which happened, and the difference is
+   * the difference between "we spent nothing" and "we cannot see what we
+   * spent" — which, against a budget, is the difference between full headroom
+   * and no answer at all.
+   */
+  readonly sourceAvailable: boolean;
+}
+
+export function aggregateCost(input: CostAggregateInput): CostAggregate {
+  const observations = input.observations ?? [];
   const base = { basis: "ESTIMATE_BASED" as const, observationCount: observations.length };
 
-  // An empty window is a real, priced zero: nothing ran, so nothing was spent.
-  // This is the one place a zero is honest, and it stays distinguishable from
-  // "unpriced" because the observation count says how it was reached.
+  // Checked FIRST, before the empty-window shortcut below could turn a failed
+  // read into a priced zero. A caller whose query threw naturally has nothing
+  // to pass, so `[]` must not be the thing that decides the answer.
+  if (!input.sourceAvailable) {
+    return { ...base, state: "unavailable", reasonCode: "spend_source_unavailable" };
+  }
+
+  // An empty window is a real, priced zero: the source was readable and
+  // nothing ran, so nothing was spent. This is the one place a zero is honest,
+  // and it is now honest by evidence rather than by absence of evidence.
   if (observations.length === 0) {
     return { ...base, state: "known", estimatedSpend: 0, reasonCode: "no_observations" };
   }

@@ -3038,8 +3038,8 @@ to "fix" it would patch the wrong system. An UNKNOWN decision raises nothing
 **and resolves nothing** — going blind must not clear a standing breach.
 
 **Phase 13-E** required six new allow-list fields, each justified individually
-rather than by a blanket "cost" allowance: `costMicros`, `budgetLimitMicros`,
-`budgetRemainingMicros`, `currency`, `budgetScope`, `costBasis`.
+rather than by a blanket "cost" allowance: `projectedSpendMicros`,
+`budgetLimitMicros`, `budgetRemainingMicros`, `currency`, `budgetScope`, `costBasis`.
 
 Two boundary details worth knowing before adding a seventh:
 
@@ -3055,10 +3055,71 @@ Two boundary details worth knowing before adding a seventh:
 Metric dimensions are limited to provider, modelId, budgetScope, currency and
 classification. No user, workspace, generation, request or trace label.
 
+### Budget precedence: the strictest verdict wins
+
+GLOBAL, PROVIDER and PROVIDER_MODEL budgets can all govern one request.
+`resolveApplicableBudgets` evaluates every applicable budget and returns **one**
+verdict, so no caller is ever handed competing answers to choose between — the
+combining rule is the entire safety property, and a caller that took the first
+or the most permissive would let a healthy global budget overrule an exhausted
+provider-model one.
+
+Canonical strictness, lowest to highest:
+
+```
+ALLOW < AT_RISK < BUDGET_EXHAUSTED < UNKNOWN_COST < UNAVAILABLE < INVALID
+```
+
+Uncertainty outranks a **measured** overrun deliberately. BUDGET_EXHAUSTED is
+bounded — the ceiling and the spend are both known. The three uncertainty
+verdicts are not: the guard cannot say how far past a limit the traffic already
+is, or whether a limit was evaluated at all. This is the only ordering under
+which adding a budget can never make the system more permissive than it was
+without one. Ordering *within* the three changes no permission; it exists so a
+tie reports the same reason every time. `strictestVerdict` is commutative, so
+registry order cannot change the answer.
+
+A configured budget with no measured spend is **UNAVAILABLE**, never zero — an
+unevaluated ceiling is not a satisfied one. A request that **no** budget
+governs is ALLOW with `applicableCount: 0` and reason `no_applicable_budget`:
+absence of a constraint is not a violation of one, and refusing traffic nobody
+wrote a budget for would halt generation against today's empty registry, which
+guarantees the guard gets bypassed rather than fixed. That case stays visible
+in the result, so "within budget" and "no budget exists" are never confused —
+it is a POLICY GAP, unlike an unreadable price, which is missing EVIDENCE and
+does withhold permission.
+
+### `generation_attempts.cost_amount` stays NULL until real evidence exists
+
+The column must not be written from anything this package produces: not from
+`model_pricing`, not from an estimated output count, not from a projected
+window spend, not from a credit amount, not from a customer price.
+
+The reason is not tidiness. A column named `cost_amount` holding an estimate is
+indistinguishable, to every future reader, from one holding a bill — and the
+readers that matter are invoice reconciliation and any later observed-spend
+guard. Populating it with a forecast would not add data; it would permanently
+and silently destroy the ability to tell forecast from fact.
+
+The evidence does not exist today: `OrchestrationResult` carries no cost field
+and no provider adapter returns usage or cost, so at settlement the only
+knowable quantities are the inputs to the estimate. NULL is correct, and it is
+correct on purpose. `markAttemptTerminal` already states the same rule from the
+write side.
+
+### Defects closed after the 15-B/1 post-implementation audit
+
+| id | defect | resolution |
+| --- | --- | --- |
+| D1 | `tsc` failed — a test fixture used `state: "ACTIVE"`, not an `AlertState` | fixture corrected to `OPEN`; the assertion is unchanged, and `typecheck` (a required check) is green again |
+| D2 | `aggregateCost([])` returned a priced zero, so a **failed** spend read looked like an empty window and reached ALLOW | `aggregateCost` now takes `{ observations, sourceAvailable }`, with `sourceAvailable` **required** and checked first; false yields UNAVAILABLE and no spend figure |
+| D3 | no canonical precedence when several budgets applied; a caller could pick the most permissive | `resolveApplicableBudgets` + `VERDICT_STRICTNESS` + `strictestVerdict`, documented above |
+| D4 | `costMicros` carried a projected window total but was named and documented as a per-request cost | renamed `projectedSpendMicros` across types, allow-list, tests and docs; the justification now describes a window projection |
+
 ### Not in this batch
 
 Writing `cost_amount` at settlement; enabling any scheduled cadence
 (`providerCostReconcileTask` stays a manually-invokable `task()`); actually
 setting a routing control; real budget limits; Stripe / AWS / provider invoice
-correlation; any UI (Phase 16). **Phase 15-B is not complete, and Phase 15 is
-not complete.**
+correlation; any UI (Phase 16). 15-B/2 will aggregate **estimated** spend only.
+**Phase 15-B is not complete, and Phase 15 is not complete.**

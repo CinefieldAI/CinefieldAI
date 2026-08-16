@@ -201,9 +201,9 @@ export const TELEMETRY_ALLOWLIST: Readonly<Record<string, FieldRule>> = {
   // None of these can carry user content: three are numbers, and the two
   // strings come from closed server-side vocabularies (ISO 4217, and the
   // BudgetScope / CostBasis unions).
-  costMicros: {
+  projectedSpendMicros: {
     kind: "count",
-    why: "Phase 15-B. ESTIMATED provider cost in integer micro-units of `currency` — what Cinefield expects to owe a provider, never what a customer is charged and never a payment amount. Derived from a price list times a unit count, so it reveals catalogue economics we already publish prices for, not anyone's balance.",
+    why: "Phase 15-B. PROJECTED estimated provider spend for a budget window — spend already incurred in the window PLUS the request under consideration — in integer micro-units of `currency`. Named for what it holds: an earlier spelling implied a single request's price, which would have had a reader comparing a window total against a per-call figure. It is what Cinefield expects to owe a provider, never what a customer is charged and never a payment amount, and it is derived from a price list we already publish, not from anyone's balance.",
   },
   budgetLimitMicros: {
     kind: "count",

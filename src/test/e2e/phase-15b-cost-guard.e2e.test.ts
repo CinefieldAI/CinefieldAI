@@ -15,13 +15,18 @@ import {
   defineCostBudget,
   budgetApplies,
   evaluateCostBudget,
+  resolveApplicableBudgets,
+  strictestVerdict,
   NON_ALLOW_VERDICTS,
   RATIO_CAP,
+  VERDICT_STRICTNESS,
+  type BudgetVerdict,
   type CostBudget,
 } from "@/lib/finops/cost-budget";
 import {
   COST_RECOMMENDATIONS,
   evaluateCostGuard,
+  evaluateResolvedCostGuard,
   mayIncurCost,
   type CostGuardResult,
 } from "@/lib/finops/cost-guard";
@@ -116,7 +121,7 @@ function budget(over: Partial<CostBudget> = {}): CostBudget {
 /** Builds a spend aggregate at an exact amount, without faking the state. */
 function spendOf(amount: number) {
   const per = observe({ providerUnitCost: amount });
-  return aggregateCost(amount === 0 ? [] : [per]);
+  return aggregateCost({ observations: amount === 0 ? [] : [per], sourceAvailable: true });
 }
 
 function guard(b: CostBudget, spendAmount: number, next?: CostObservation): CostGuardResult {
@@ -221,12 +226,12 @@ test("S15B-9  Infinity is rejected", () => {
 });
 
 test("S15B-9b  an unpriced member poisons an aggregate rather than being skipped", () => {
-  const mixed = aggregateCost([observe({}), observe(null)]);
+  const mixed = aggregateCost({ observations: [observe({}), observe(null)], sourceAvailable: true });
   assert.equal(mixed.state, "unknown");
   assert.equal(mixed.estimatedSpend, undefined, "a partial sum understates spend");
 
   // An empty window is the one honest zero, and it stays distinguishable.
-  const empty = aggregateCost([]);
+  const empty = aggregateCost({ observations: [], sourceAvailable: true });
   assert.equal(empty.state, "known");
   assert.equal(empty.estimatedSpend, 0);
   assert.equal(empty.observationCount, 0);
@@ -245,7 +250,8 @@ test("S15B-10  a currency mismatch fails closed and is never converted", () => {
   assert.equal(e.reasonCode, "next_cost_currency_mismatch");
 
   // And a mixed-currency window cannot be summed at all.
-  assert.equal(aggregateCost([observe({}), eur]).reasonCode, "mixed_currency_observations");
+  assert.equal(aggregateCost({ observations: [observe({}), eur], sourceAvailable: true }).reasonCode,
+    "mixed_currency_observations");
 
   // No exchange rate exists anywhere in the package.
   for (const { file, text } of finopsCode) {
@@ -492,7 +498,11 @@ test("S15B-27  neither cost alert is eligible for AI remediation", () => {
     const d = analyzeIncident({
       alertId: "a1", type, source: "cost", severity: "ERROR", resource: "provider_fal_24h",
       reasonCode: "projected_spend_over_limit", dedupeKey: `cost:${type}:provider_fal_24h`,
-      state: "ACTIVE", firstSeen: NOW.toISOString(), lastSeen: NOW.toISOString(),
+      // OPEN, not "ACTIVE": AlertState is OPEN | ACKNOWLEDGED | RESOLVED |
+      // SUPPRESSED. OPEN is the live-and-unhandled state this test means, so
+      // the fixture now describes a real envelope rather than one the router
+      // could never produce.
+      state: "OPEN", firstSeen: NOW.toISOString(), lastSeen: NOW.toISOString(),
       occurrenceCount: 1, channels: [], correlation: {},
     });
     assert.equal(d.outcome, "HUMAN_INVESTIGATION_REQUIRED", `${type} must not be auto-remediated`);
@@ -542,15 +552,15 @@ test("S15B-30  money is emitted as integer micro-units, so small costs are not r
   // The hazard this exists for: the redactor rounds `count` fields, so a raw
   // float of 0.04 would be recorded as 0 — a cost log claiming it was free.
   const raw = sanitizeTelemetry({
-    level: "info", event: "x", subsystem: "finops", fields: { costMicros: 0.04 },
+    level: "info", event: "x", subsystem: "finops", fields: { projectedSpendMicros: 0.04 },
   });
-  assert.equal(raw.fields.costMicros, 0, "the rounding hazard is real");
+  assert.equal(raw.fields.projectedSpendMicros, 0, "the rounding hazard is real");
 
   const cheap = guard(budget({ limit: 10 }), 0, observe({ providerUnitCost: 0.04 }));
   const out = sanitizeTelemetry({
     level: "info", event: "x", subsystem: "finops", fields: costTelemetryFields(cheap),
   });
-  assert.equal(out.fields.costMicros, 40_000, "and micro-units avoid it");
+  assert.equal(out.fields.projectedSpendMicros, 40_000, "and micro-units avoid it");
 
   // Nothing unbounded reaches telemetry.
   for (const value of Object.values(costTelemetryFields(cheap))) {
@@ -603,7 +613,7 @@ test("S15B-36  no AWS or provider invoice figure is fabricated", () => {
   }
   // Every cost this batch can produce declares itself an estimate.
   assert.equal(observe({}).basis, "ESTIMATE_BASED");
-  assert.equal(aggregateCost([observe({})]).basis, "ESTIMATE_BASED");
+  assert.equal(aggregateCost({ observations: [observe({})], sourceAvailable: true }).basis, "ESTIMATE_BASED");
   const contract = stripComments(read("src/lib/finops/cost-contract.ts"));
   assert.ok(!/"OBSERVED_ACTUAL" as const|basis: "OBSERVED_ACTUAL"/.test(contract),
     "no code path produces OBSERVED_ACTUAL");
@@ -646,4 +656,205 @@ test("S15B-40  the production registry defines no invented limits, and validates
   assert.equal(defineCostBudget(budget({ atRiskRatio: 1 })).ok, false);
   assert.equal(defineCostBudget(budget({ windowSeconds: 0 })).ok, false);
   assert.equal(defineCostBudget(budget({ currency: "US" })).ok, false);
+});
+
+// ---------------------------------------------------------------------------
+// 41–48  DEFECT CLOSURE — D1 typecheck, D2 source availability,
+//        D3 budget precedence, D4 projected-spend naming
+// ---------------------------------------------------------------------------
+
+test("S15B-41  D2: an unavailable spend source is not an empty window, and not zero", () => {
+  const failed = aggregateCost({ observations: [], sourceAvailable: false });
+  assert.equal(failed.state, "unavailable");
+  assert.equal(failed.reasonCode, "spend_source_unavailable");
+  assert.equal(failed.estimatedSpend, undefined, "a failed read has no spend, not zero spend");
+
+  const genuine = aggregateCost({ observations: [], sourceAvailable: true });
+  assert.equal(genuine.state, "known");
+  assert.equal(genuine.estimatedSpend, 0);
+  assert.notEqual(failed.state, genuine.state, "the two must not collapse to one answer");
+
+  // sourceAvailable:false wins even when observations were somehow supplied —
+  // it is checked before anything else can produce a number.
+  const contradictory = aggregateCost({ observations: [observe({})], sourceAvailable: false });
+  assert.equal(contradictory.state, "unavailable");
+});
+
+test("S15B-42  D2: an unavailable spend source can never reach ALLOW", () => {
+  const e = evaluateCostBudget({
+    budget: budget(),
+    spend: aggregateCost({ observations: [], sourceAvailable: false }),
+  });
+  assert.equal(e.verdict, "UNAVAILABLE");
+  assert.notEqual(e.verdict, "ALLOW");
+  assert.equal(e.currentSpend, undefined, "no spend figure is invented");
+
+  const g = evaluateCostGuard({ budget: budget(), evaluation: e, observation: observe({}) });
+  assert.equal(g.decision, "UNKNOWN");
+  assert.equal(mayIncurCost(g), false);
+
+  // The empty-window path stays usable: a readable window with no traffic
+  // really is zero, and really does allow.
+  const ok = evaluateCostBudget({
+    budget: budget(),
+    spend: aggregateCost({ observations: [], sourceAvailable: true }),
+  });
+  assert.equal(ok.verdict, "ALLOW");
+  assert.equal(ok.currentSpend, 0);
+});
+
+test("S15B-43  D2: the caller cannot reach a zero by omission", () => {
+  // `sourceAvailable` is required, not optional — a caller that forgets it
+  // fails to compile rather than silently getting the permissive answer.
+  const contract = read("src/lib/finops/cost-contract.ts");
+  assert.match(contract, /readonly sourceAvailable: boolean;/);
+  assert.ok(!/sourceAvailable\?:/.test(contract), "an optional flag would default to the unsafe side");
+
+  // And no caller needs to fabricate an observation to express unavailability.
+  assert.equal(aggregateCost({ observations: [], sourceAvailable: false }).observationCount, 0);
+});
+
+test("S15B-44  D3: the strictness order is total, and uncertainty outranks a measured overrun", () => {
+  const all: BudgetVerdict[] = [
+    "ALLOW",
+    "AT_RISK",
+    "BUDGET_EXHAUSTED",
+    "UNKNOWN_COST",
+    "UNAVAILABLE",
+    "INVALID",
+  ];
+  for (const v of all) assert.equal(typeof VERDICT_STRICTNESS[v], "number", `${v} unranked`);
+  assert.equal(new Set(Object.values(VERDICT_STRICTNESS)).size, all.length, "ranks must be distinct");
+
+  assert.ok(VERDICT_STRICTNESS.AT_RISK > VERDICT_STRICTNESS.ALLOW);
+  assert.ok(VERDICT_STRICTNESS.BUDGET_EXHAUSTED > VERDICT_STRICTNESS.AT_RISK);
+  for (const u of ["UNKNOWN_COST", "UNAVAILABLE", "INVALID"] as const) {
+    assert.ok(
+      VERDICT_STRICTNESS[u] > VERDICT_STRICTNESS.BUDGET_EXHAUSTED,
+      `${u} must outrank a known overrun`
+    );
+  }
+
+  // Commutative, so the answer cannot depend on evaluation order.
+  for (const a of all) {
+    for (const b of all) assert.equal(strictestVerdict(a, b), strictestVerdict(b, a), `${a}/${b}`);
+  }
+  assert.equal(strictestVerdict("ALLOW", "UNAVAILABLE"), "UNAVAILABLE");
+  assert.equal(strictestVerdict("BUDGET_EXHAUSTED", "ALLOW"), "BUDGET_EXHAUSTED");
+});
+
+test("S15B-45  D3: when several budgets apply, the strictest wins", () => {
+  const global = budget({ id: "global_usd_24h", scope: "GLOBAL", provider: undefined, limit: 1_000 });
+  const provider = budget({ id: "provider_fal_24h", limit: 1_000 });
+  const pm = budget({
+    id: "pm_fal_test_24h",
+    scope: "PROVIDER_MODEL",
+    modelId: "test-model",
+    providerModelId: "fal-ai/test",
+    limit: 1_000,
+  });
+  const observation = observe({});
+  const roomy = spendOf(1);
+  const blown = spendOf(999);
+  const next = observe({ providerUnitCost: 500 });
+
+  // GLOBAL healthy + PROVIDER exhausted -> exhausted.
+  const a = resolveApplicableBudgets({
+    budgets: [global, provider],
+    observation,
+    spendByBudgetId: { global_usd_24h: roomy, provider_fal_24h: blown },
+    nextCost: next,
+  });
+  assert.equal(a.verdict, "BUDGET_EXHAUSTED");
+  assert.equal(a.decisive?.budget.id, "provider_fal_24h", "the alert must name the ceiling that stopped it");
+  assert.equal(a.applicableCount, 2);
+
+  // PROVIDER healthy + PROVIDER_MODEL exhausted -> exhausted.
+  const b = resolveApplicableBudgets({
+    budgets: [provider, pm],
+    observation,
+    spendByBudgetId: { provider_fal_24h: roomy, pm_fal_test_24h: blown },
+    nextCost: next,
+  });
+  assert.equal(b.verdict, "BUDGET_EXHAUSTED");
+  assert.equal(b.decisive?.budget.id, "pm_fal_test_24h");
+
+  // All three, one unreadable -> uncertainty outranks both the healthy
+  // budgets AND the measured overrun.
+  const c = resolveApplicableBudgets({
+    budgets: [global, provider, pm],
+    observation,
+    spendByBudgetId: {
+      global_usd_24h: roomy,
+      provider_fal_24h: blown,
+      pm_fal_test_24h: aggregateCost({ observations: [], sourceAvailable: false }),
+    },
+    nextCost: next,
+  });
+  assert.equal(c.verdict, "UNAVAILABLE");
+  assert.equal(c.applicableCount, 3);
+  assert.equal(c.evaluations.length, 3, "every applicable budget is still evaluated and visible");
+});
+
+test("S15B-46  D3: a configured budget with no measured spend is UNAVAILABLE, never zero", () => {
+  const r = resolveApplicableBudgets({
+    budgets: [budget()],
+    observation: observe({}),
+    spendByBudgetId: {},
+  });
+  assert.equal(r.verdict, "UNAVAILABLE");
+  assert.equal(r.reasonCode, "spend_source_unavailable");
+  assert.equal(mayIncurCost(evaluateResolvedCostGuard(r, observe({}))), false);
+});
+
+test("S15B-47  D3: the caller is never handed competing verdicts to choose between", () => {
+  // One function, one verdict — and the guard consumes the resolution whole.
+  const r = resolveApplicableBudgets({
+    budgets: [budget({ id: "global_usd_24h", scope: "GLOBAL", provider: undefined })],
+    observation: observe({}),
+    spendByBudgetId: { global_usd_24h: spendOf(1) },
+  });
+  assert.equal(typeof r.verdict, "string");
+  assert.equal(evaluateResolvedCostGuard(r, observe({})).decision, "ALLOW");
+
+  // Order independence: the same budgets in any order give the same verdict.
+  const g = budget({ id: "global_usd_24h", scope: "GLOBAL", provider: undefined, limit: 1_000 });
+  const p = budget({ limit: 1 });
+  const spends = { global_usd_24h: spendOf(1), provider_fal_24h: spendOf(999) };
+  const forward = resolveApplicableBudgets({ budgets: [g, p], observation: observe({}), spendByBudgetId: spends });
+  const reverse = resolveApplicableBudgets({ budgets: [p, g], observation: observe({}), spendByBudgetId: spends });
+  assert.equal(forward.verdict, reverse.verdict);
+  assert.equal(forward.verdict, "BUDGET_EXHAUSTED");
+
+  // No configured budget is a POLICY GAP, and it stays visible as one rather
+  // than reading like a budget that was checked and passed.
+  const none = resolveApplicableBudgets({ budgets: [], observation: observe({}), spendByBudgetId: {} });
+  assert.equal(none.verdict, "ALLOW");
+  assert.equal(none.applicableCount, 0);
+  assert.equal(none.reasonCode, "no_applicable_budget");
+  assert.equal(evaluateResolvedCostGuard(none, observe({})).budgetId, "no_budget");
+});
+
+test("S15B-48  D4: the projected-spend field is named for what it carries", () => {
+  // 8.5 already spent in the window + 1 for the next request = 9.5 projected,
+  // against a limit of 10. A window total, which is why it is not a "cost".
+  const g = guard(budget({ limit: 10 }), 8.5, observe({ providerUnitCost: 1 }));
+  const fields = costTelemetryFields(g);
+  assert.equal(g.projectedSpend, 9.5);
+  assert.equal(fields.projectedSpendMicros, 9_500_000);
+  assert.equal(fields.budgetLimitMicros, 10_000_000);
+  assert.equal(fields.budgetRemainingMicros, 500_000);
+
+  // The old spelling is gone everywhere, including the allow-list.
+  assert.equal("costMicros" in fields, false);
+  const contract = read("src/lib/observability/telemetry-contract.ts");
+  assert.ok(!/^\s*costMicros\s*:/m.test(contract), "the stale allow-list entry still exists");
+  assert.match(contract, /^\s*projectedSpendMicros\s*:/m);
+  // And the justification describes a window projection, not a per-call price.
+  assert.match(contract, /PROJECTED estimated provider spend for a budget window/);
+
+  // Still survives 13-E under the new name.
+  const out = sanitizeTelemetry({ level: "warn", event: "cost.budget", subsystem: "finops", fields });
+  assert.equal(out.droppedFieldCount, 0);
+  assert.equal(out.fields.projectedSpendMicros, 9_500_000);
 });

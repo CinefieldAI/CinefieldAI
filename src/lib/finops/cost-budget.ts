@@ -238,6 +238,39 @@ export interface BudgetEvaluation {
  */
 export const RATIO_CAP = 1_000;
 
+/**
+ * Canonical strictness ordering. Higher wins when several budgets apply.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY "I DON'T KNOW" OUTRANKS "STOP"
+ * ---------------------------------------------------------------------------
+ * BUDGET_EXHAUSTED is a bounded fact: the ceiling is known, the spend is
+ * known, and the overrun can be measured. The three uncertainty verdicts are
+ * unbounded — the guard cannot say how far past the limit the traffic already
+ * is, or whether a limit was ever evaluated at all. Ranking them above a
+ * measured overrun means the least-informed budget decides, which is the only
+ * ordering under which adding a budget can never make the system more
+ * permissive than it was without it.
+ *
+ * The order WITHIN the three uncertainty verdicts changes no permission — all
+ * three withhold ALLOW identically. It exists so that a tie reports the same
+ * reason every time rather than depending on which budget happened to be
+ * listed first.
+ */
+export const VERDICT_STRICTNESS: Readonly<Record<BudgetVerdict, number>> = {
+  ALLOW: 0,
+  AT_RISK: 1,
+  BUDGET_EXHAUSTED: 2,
+  UNKNOWN_COST: 3,
+  UNAVAILABLE: 4,
+  INVALID: 5,
+};
+
+/** The more restrictive of two verdicts. Total, deterministic, commutative. */
+export function strictestVerdict(a: BudgetVerdict, b: BudgetVerdict): BudgetVerdict {
+  return VERDICT_STRICTNESS[b] > VERDICT_STRICTNESS[a] ? b : a;
+}
+
 export interface BudgetEvaluationInput {
   readonly budget: CostBudget;
   /** Spend already incurred in this window, from `aggregateCost`. */
@@ -348,4 +381,111 @@ export function evaluateCostBudget(input: BudgetEvaluationInput): BudgetEvaluati
     return { ...measured, verdict: "AT_RISK", reasonCode: "projected_spend_near_limit" };
   }
   return { ...measured, verdict: "ALLOW", reasonCode: "within_budget" };
+}
+
+/**
+ * The outcome of evaluating every budget that governs one request.
+ *
+ * `verdict` is the answer. `decisive` names the budget that produced it, so an
+ * operator reading a refusal can see WHICH ceiling stopped the request rather
+ * than being told only that one did.
+ */
+export interface BudgetResolution {
+  readonly verdict: BudgetVerdict;
+  readonly reasonCode: string;
+  /** Absent only when no configured budget governs this request. */
+  readonly decisive?: { readonly budget: CostBudget; readonly evaluation: BudgetEvaluation };
+  /** Every applicable budget's evaluation, in registry order. */
+  readonly evaluations: readonly BudgetEvaluation[];
+  readonly applicableCount: number;
+}
+
+export interface BudgetResolutionInput {
+  /** Candidate budgets, normally the registry. */
+  readonly budgets: readonly CostBudget[];
+  /** The request being considered; decides which budgets apply. */
+  readonly observation: CostObservation;
+  /**
+   * Spend so far, PER BUDGET, keyed by budget id.
+   *
+   * Per budget rather than one figure, because each budget has its own window
+   * and its own scope — a 24-hour provider total is not the same number as a
+   * 30-day global total, and sharing one aggregate between them would compare
+   * spend against a ceiling it was never measured for.
+   *
+   * A budget with no entry here is treated as UNAVAILABLE, never as zero: a
+   * configured ceiling nobody measured is an unevaluated ceiling.
+   */
+  readonly spendByBudgetId: Readonly<Record<string, CostAggregate>>;
+  readonly nextCost?: CostObservation;
+}
+
+/**
+ * Evaluates every applicable budget and returns ONE verdict.
+ *
+ * ---------------------------------------------------------------------------
+ * THE CALLER DOES NOT GET TO CHOOSE
+ * ---------------------------------------------------------------------------
+ * GLOBAL, PROVIDER and PROVIDER_MODEL budgets can all govern the same request.
+ * If each were evaluated separately and handed to a caller as a list, the
+ * caller would have to combine them — and the combining rule is the entire
+ * safety property. A caller that took the first result, or the most
+ * permissive, would let a healthy global budget overrule an exhausted
+ * provider-model one. So the combination happens here, once, and the least
+ * permissive verdict wins.
+ *
+ * ---------------------------------------------------------------------------
+ * NO APPLICABLE BUDGET IS NOT A BREACH
+ * ---------------------------------------------------------------------------
+ * When nothing governs the request, the verdict is ALLOW with
+ * `applicableCount: 0`. Absence of a constraint is not a violation of one, and
+ * the alternative — refusing traffic nobody wrote a budget for — would halt
+ * generation the moment this is wired against today's empty registry, which
+ * guarantees the guard gets bypassed rather than fixed.
+ *
+ * This is deliberately visible rather than silent: `applicableCount` is on the
+ * result, so "allowed because it is within budget" and "allowed because no
+ * budget exists" are distinguishable by any reader. An unconfigured budget is
+ * a POLICY GAP, and it is reported as one — unlike an unreadable price, which
+ * is missing EVIDENCE and does withhold permission.
+ */
+export function resolveApplicableBudgets(input: BudgetResolutionInput): BudgetResolution {
+  const applicable = input.budgets.filter((b) => budgetApplies(b, input.observation));
+
+  if (applicable.length === 0) {
+    return { verdict: "ALLOW", reasonCode: "no_applicable_budget", evaluations: [], applicableCount: 0 };
+  }
+
+  const evaluations: BudgetEvaluation[] = [];
+  let decisive: { budget: CostBudget; evaluation: BudgetEvaluation } | undefined;
+
+  for (const budget of applicable) {
+    // A configured budget whose spend was never measured cannot be evaluated,
+    // and an unevaluated ceiling is not a satisfied one.
+    const spend: CostAggregate = input.spendByBudgetId[budget.id] ?? {
+      state: "unavailable",
+      basis: "ESTIMATE_BASED",
+      observationCount: 0,
+      reasonCode: "spend_not_measured_for_budget",
+    };
+
+    const evaluation = evaluateCostBudget({ budget, spend, ...(input.nextCost ? { nextCost: input.nextCost } : {}) });
+    evaluations.push(evaluation);
+
+    // Strictly greater, so the FIRST budget at the winning strictness stays
+    // decisive. Registry order is stable, so the same inputs always name the
+    // same budget in the alert.
+    if (!decisive || VERDICT_STRICTNESS[evaluation.verdict] > VERDICT_STRICTNESS[decisive.evaluation.verdict]) {
+      decisive = { budget, evaluation };
+    }
+  }
+
+  const winner = decisive!;
+  return {
+    verdict: winner.evaluation.verdict,
+    reasonCode: winner.evaluation.reasonCode,
+    decisive: winner,
+    evaluations,
+    applicableCount: applicable.length,
+  };
 }

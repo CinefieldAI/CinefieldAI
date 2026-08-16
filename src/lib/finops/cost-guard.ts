@@ -1,6 +1,6 @@
 import type { FlagTargetKind } from "@/lib/routing/runtime-flags";
 import type { CostObservation } from "./cost-contract";
-import type { BudgetEvaluation, BudgetScope, CostBudget } from "./cost-budget";
+import type { BudgetEvaluation, BudgetResolution, BudgetScope, CostBudget } from "./cost-budget";
 
 /**
  * Cost guard decision and protection recommendation (Phase 15-B/1).
@@ -203,4 +203,43 @@ function exhaustedResponse(
  */
 export function mayIncurCost(result: CostGuardResult): boolean {
   return result.decision === "ALLOW";
+}
+
+/**
+ * The caller-facing entry point: a resolved multi-budget verdict -> a decision.
+ *
+ * This exists so that the complete path from "here is a request" to "here is a
+ * decision" never asks the caller to pick between competing budget verdicts.
+ * `evaluateCostGuard` above remains the single-budget primitive the resolver
+ * is built on; this is what production code should call.
+ *
+ * When no configured budget governs the request, the decision is ALLOW with
+ * `budgetId: "no_budget"` — a bounded slug, since the field doubles as an
+ * alert resource. That case is a POLICY GAP, not a measurement failure, and it
+ * stays visible: the reason code says so rather than reading like a budget
+ * that was checked and passed.
+ */
+export function evaluateResolvedCostGuard(
+  resolution: BudgetResolution,
+  observation: CostObservation
+): CostGuardResult {
+  if (!resolution.decisive) {
+    return {
+      budgetId: "no_budget",
+      scope: "GLOBAL",
+      decision: "ALLOW",
+      recommendation: "NONE",
+      reasonCode: resolution.reasonCode,
+      basis: observation.basis,
+      provider: observation.provider,
+      modelId: observation.modelId,
+      currency: observation.currency ?? "XXX",
+      limit: 0,
+    };
+  }
+  return evaluateCostGuard({
+    budget: resolution.decisive.budget,
+    evaluation: resolution.decisive.evaluation,
+    observation,
+  });
 }
