@@ -3489,3 +3489,125 @@ today); any Trigger.dev schedule; any UI (Phase 16 will surface last-restore
 age, checksum/row-count/integrity summaries, and RPO/RTO status). Phase 26/28
 own cross-region failover, chaos testing, and enterprise DR — nothing here
 claims any of that. **Phase 15-C is not complete.**
+
+## Phase 15-C/2 — real local pg_dump/pg_restore round trip
+
+15-C/1 proved the validation ENGINE was correct against synthetic fixtures.
+It could not prove a RESTORE was correct, because nothing had ever actually
+been restored. This batch closes that gap locally: `migration replay`
+(what `run_pg_tests.sh` has always done — rebuild a database FROM
+MIGRATIONS) and `backup restore` (take a REAL `pg_dump` of a populated
+database, `pg_restore` it into a SEPARATE database, and validate the copy)
+are different claims, and only the second is what "isolated restore
+doğrulanıyor" actually means.
+
+`supabase/tests/run_pg_restore_proof.sh` — Docker-required, manually
+invoked, exactly like `run_pg_tests.sh` — performs the real round trip:
+
+```
+SOURCE throwaway Postgres
+  -> apply_all_migrations() (shared with run_pg_tests.sh)
+  -> fixtures_restore_proof.sql (real functions: create_generation_tx,
+     reserve_credits, settle_reservation, record_media_ingest,
+     finalize_media_asset, record_media_backup, record_security_event)
+  -> capture EXPECTED evidence (row counts + checksum), read from the
+     SOURCE, before anything is dumped
+  -> pg_dump -Fc --no-privileges --no-owner
+  -> source container destroyed
+  -> TARGET throwaway Postgres (a SEPARATE container)
+  -> pg_restore
+  -> RestoreEvidenceSource (createThrowawayPostgresSource) reads ACTUAL
+     evidence from the TARGET only
+  -> runRestoreValidation (the same production validation core
+     runRestoreVerification delegates to)
+  -> teardown, on success or failure
+```
+
+### The harness drift this batch fixed first
+
+An earlier audit found `run_pg_tests.sh` had fallen one migration behind:
+`20260828000000_rls_grant_hardening.sql` was never added to its hard-coded
+per-line file list. `supabase/tests/lib_pg_migrations.sh` is now the ONE
+place both harnesses get their migration list from, and it does not hold a
+list at all — it globs `supabase/migrations/*.sql` (excluding only
+`20260805132704_remote_schema.sql`, which `bootstrap_test_schema.sql`
+substitutes for, by design). A new migration is picked up the moment the
+file exists; there is no list to remember to update, which is what made the
+original drift possible.
+
+Found and fixed while building this: the glob must be NUL-delimited
+(`find ... -print0` / `read -r -d ''`), not `for f in $(find ...)` — this
+repository's own path contains a space ("Wep sitem"), and unquoted command
+substitution word-splits on it, corrupting every filename after the first
+space. That is the exact bug class a naive glob-to-list conversion would
+have reintroduced.
+
+### `--no-privileges` — a scope boundary, not a shortcut
+
+`pg_dump`'s `GRANT` statements target `anon`/`authenticated`/`service_role`,
+cluster-wide roles a plain `pg_dump` of one database never carries — a fresh
+target container has none of them, so a restored `GRANT` to a role that does
+not exist fails the restore outright. Row-count, checksum and
+referential-integrity evidence do not depend on grants, and
+`bootstrap_test_schema.sql`'s own header already states no proof in this
+harness makes a claim about RLS/privilege behaviour — excluding privileges
+from the dump gives up nothing this batch verifies. `CREATE POLICY`
+statements are a SEPARATE `pg_dump` object class `--no-privileges` does not
+touch, so the target still gets the same three placeholder roles
+`bootstrap_test_schema.sql` creates on the source, created fresh before
+`pg_restore` runs.
+
+### Expected vs. actual: physically separate code paths
+
+`scripts/dr-restore-proof-capture-expected.ts` runs BEFORE `pg_dump`,
+against the SOURCE only, and does not trust the fixture script's own printed
+identifiers — it queries `media_assets.checksum_sha256` back out of the
+database rather than assuming an insert did what it was supposed to.
+`scripts/dr-restore-proof-verify.ts` runs AFTER `pg_restore`, and its
+`RestoreEvidenceSource` (`createThrowawayPostgresSource`) has no field,
+parameter, or closure capable of holding a source-side value — every method
+issues a fresh query against the TARGET via an injected `exec` function.
+There is no `matches: boolean` shortcut anywhere in the interface for an
+adapter to exploit.
+
+This was proven, not just asserted: the real round trip mutates the
+RESTORED target's `checksum_sha256` after `pg_restore` completes and reruns
+validation. The adapter reported the mutated value (`actualDigest:
+"ffff…"`), not the source's original — proof the digest is re-read from the
+restored state, not echoed.
+
+### Real, Docker-executed proofs — the actual results
+
+One golden round trip, then three isolated, sequential corruptions on the
+TARGET only, in the order referential-integrity → checksum → row-count, so
+each corruption's `reasonCode` is unambiguous at the moment it is
+introduced (the engine's own priority — MISMATCH beats UNAVAILABLE beats
+MATCH, row-count checked before checksum before referential integrity —
+means a later corruption's reason masks an earlier one, which is expected
+and itself confirms the priority ordering documented in 15-C/1):
+
+| proof | state | reasonCode |
+| --- | --- | --- |
+| golden round trip | VALIDATION_PASSED | restore_validation_passed |
+| `ADD CONSTRAINT ... NOT VALID` on the target | VALIDATION_FAILED | referential_integrity_invalid |
+| `UPDATE media_assets SET checksum_sha256 = ...` on the target | VALIDATION_FAILED | checksum_mismatch |
+| `DELETE FROM generation_attempts` on the target | VALIDATION_FAILED | row_count_mismatch |
+| target pointed at a nonexistent database | RESTORE_NOT_READY | restore_not_ready |
+
+All sixteen `DURABLE_TABLES` were read from both sides; the golden run's
+expected and actual row-count manifest digests were byte-identical. Cleanup
+(both containers, the temp dump file, the temp expected-evidence JSON) was
+verified on success and, separately, by deliberately injecting a failure
+mid-run — the `trap cleanup EXIT` fired in both cases.
+
+### What this does, and does not, prove
+
+`LOCAL_REAL_POSTGRES_BACKUP_RESTORE_ROUNDTRIP` — a real `pg_dump`/`pg_restore`
+cycle between two disposable, local, non-production Postgres containers,
+validated by the same engine production code calls. It does NOT prove Supabase
+PITR: live PITR requires Supabase plan/dashboard configuration this repository
+cannot reach, remains **DEFERRED_EXTERNAL**, and nothing here is renamed to
+imply otherwise. S3→R2 restore-back stays a defined, unimplemented contract
+(Phase 9-D ownership, untouched). Production restore cadence remains
+undefined — `restoreVerificationTask` is still a plain `task()`, no
+`schedules.task()` anywhere.

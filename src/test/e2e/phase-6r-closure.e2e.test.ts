@@ -47,16 +47,18 @@ test("G1: the real-PostgreSQL harness exists, applies the real migrations, and r
   assert.ok(/docker rm -f/.test(runner) && /trap cleanup EXIT/.test(runner), "it is destroyed after");
   assert.ok(!/supabase\.co|SUPABASE_/.test(runner), "the harness must never reach production Supabase");
 
-  // The REAL migrations, not copies.
-  for (const migration of [
-    "20260810120000_generation_attempts.sql",
-    "20260811120000_credit_system.sql",
-    "20260812130000_outbox_events.sql",
-    "20260813000000_cancellation_outbox.sql",
-    "20260814000000_finalization_outbox.sql",
-  ]) {
-    assert.ok(runner.includes(migration), `${migration} must be applied verbatim`);
-  }
+  // The REAL migrations, not copies. Phase 15-C/2 moved the apply routine
+  // into a shared library so both throwaway-Postgres harnesses discover
+  // every migration by reading the directory, rather than each naming a
+  // hand-typed subset — the exact hard-coded-list shape that once let
+  // 20260828000000_rls_grant_hardening.sql go silently unapplied. This is a
+  // STRONGER guarantee than a literal-filename check: it verifies ALL
+  // migrations apply, not just however many someone remembered to list.
+  assert.match(runner, /source .*lib_pg_migrations\.sh/, "must source the shared migration-apply library");
+  assert.match(runner, /apply_all_migrations/, "must call the shared routine, not a private list");
+  const lib = readSource("supabase/tests/lib_pg_migrations.sh");
+  assert.match(lib, /find\s+"\$root\/supabase\/migrations"/, "must discover migrations from the real directory");
+  assert.match(lib, /-name\s+'\*\.sql'/, "must glob for .sql files rather than naming them");
 
   // Genuinely parallel processes, joined with wait — not sequential calls.
   assert.ok(/race\(\)/.test(runner), "a parallel race helper exists");

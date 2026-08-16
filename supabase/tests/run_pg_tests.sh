@@ -20,6 +20,9 @@ PGPASS=throwaway-local-only
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# shellcheck source=./lib_pg_migrations.sh
+source "$ROOT/supabase/tests/lib_pg_migrations.sh"
+
 psql_run() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"; }
 
 cleanup() {
@@ -47,23 +50,7 @@ done
 docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null
 
 echo "==> applying schema and the REAL migrations"
-for f in \
-  "$ROOT/supabase/tests/bootstrap_test_schema.sql" \
-  "$ROOT/supabase/migrations/20260810120000_generation_attempts.sql" \
-  "$ROOT/supabase/migrations/20260812130000_outbox_events.sql" \
-  "$ROOT/supabase/migrations/20260811120000_credit_system.sql"   "$ROOT/supabase/migrations/20260813000000_cancellation_outbox.sql"   "$ROOT/supabase/migrations/20260814000000_finalization_outbox.sql" \
-  "$ROOT/supabase/migrations/20260815000000_fix_cancel_metadata_nesting.sql" \
-  "$ROOT/supabase/migrations/20260816000000_server_side_generation_create.sql"   "$ROOT/supabase/migrations/20260817000000_model_routing.sql" \
-  "$ROOT/supabase/migrations/20260818000000_workflow_start_outbox.sql" \
-  "$ROOT/supabase/migrations/20260818010000_retire_historical_start_intents.sql" \
-  "$ROOT/supabase/migrations/20260819000000_persist_cancel_reason.sql" \
-  "$ROOT/supabase/migrations/20260820000000_media_assets.sql" \
-  "$ROOT/supabase/migrations/20260821000000_media_ingest_gate.sql" \
-  "$ROOT/supabase/migrations/20260822000000_dr_backup_metadata.sql"   "$ROOT/supabase/migrations/20260823000000_quarantine_release_lane.sql"   "$ROOT/supabase/migrations/20260824000000_event_contract_and_tenant_routing.sql"   "$ROOT/supabase/migrations/20260825000000_outbox_realtime_delivery_lane.sql"   "$ROOT/supabase/migrations/20260825000100_retire_pre_realtime_outbox_debt.sql"   "$ROOT/supabase/migrations/20260826000000_security_events.sql"   "$ROOT/supabase/migrations/20260827000000_policy_decision_evidence.sql"
-do
-  psql_run -q < "$f" >/dev/null
-  echo "    applied $(basename "$f")"
-done
+apply_all_migrations "$CONTAINER" "$DB" "$ROOT"
 
 echo "==> transaction proofs (cancellation + outbox primitives)"
 psql_run < "$ROOT/supabase/tests/test_transactional_outbox.sql" 2>&1 | grep -E "NOTICE|ERROR|PASSED"
