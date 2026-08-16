@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
-import Cinema25AssetsPicker from "./Cinema25AssetsPicker";
+import Cinema40AssetsPicker from "./Cinema40AssetsPicker";
 import {
   CINEMA40_APERTURE,
   CINEMA40_CAMERA_BODY,
@@ -84,8 +84,8 @@ interface CinemaStudio40CreativeControlsProps {
 
   assetsPickerOpen: boolean;
   onAssetsPickerOpenChange: (open: boolean) => void;
-  assetsPickerTab: "uploads" | "elements";
-  onAssetsPickerTabChange: (tab: "uploads" | "elements") => void;
+  assetsPickerTab: "references" | "elements" | "generations" | "liked";
+  onAssetsPickerTabChange: (tab: "references" | "elements" | "generations" | "liked") => void;
 }
 
 const MAX_REFERENCES = 50;
@@ -1078,10 +1078,13 @@ export default function CinemaStudio40CreativeControls({
           label="References"
           value={`${settings.references.length}/${MAX_REFERENCES}`}
           icon={<ReferencesIcon />}
-          open={openPanel === "references"}
+          open={assetsPickerOpen}
           wide
           ariaLabel={`References, ${settings.references.length} of ${MAX_REFERENCES}`}
-          onClick={() => onOpenPanelChange(openPanel === "references" ? null : "references")}
+          onClick={() => {
+            onAssetsPickerTabChange("references");
+            onAssetsPickerOpenChange(!assetsPickerOpen);
+          }}
         />
         <ChipTrigger
           label="Film setup"
@@ -1159,15 +1162,13 @@ export default function CinemaStudio40CreativeControls({
         <LightingPanel value={settings.lighting} onChange={onLightingChange} />
       </Cinema40Dialog>
 
-      <Cinema25AssetsPicker
+      <Cinema40AssetsPicker
         isOpen={assetsPickerOpen}
         onClose={() => onAssetsPickerOpenChange(false)}
-        context="reference"
+        initialTab={assetsPickerTab}
         onSelectAsset={(url) => {
           if (settings.references.length < MAX_REFERENCES) onAddReference(url);
         }}
-        showElementsTab
-        initialTab={assetsPickerTab}
       />
     </section>
   );

@@ -163,7 +163,9 @@ export default function CinemaStudioWorkspace() {
   const [cinema40FilmSetupTab, setCinema40FilmSetupTab] = useState<"genre" | "era" | "tempo">("genre");
   const [cinema40CameraTab, setCinema40CameraTab] = useState<"setup" | "movement">("setup");
   const [cinema40AssetsPickerOpen, setCinema40AssetsPickerOpen] = useState(false);
-  const [cinema40AssetsPickerTab, setCinema40AssetsPickerTab] = useState<"uploads" | "elements">("uploads");
+  const [cinema40AssetsPickerTab, setCinema40AssetsPickerTab] = useState<
+    "references" | "elements" | "generations" | "liked"
+  >("references");
   const [cinema40References, setCinema40References] = useState<string[]>([]);
   const [cinema40FilmSetup, setCinema40FilmSetup] = useState({ genre: "General", era: "Auto", tempo: "Auto" });
   const [cinema40Camera, setCinema40Camera] = useState({ body: "Auto", lens: "Auto", aperture: "Auto" });
@@ -754,7 +756,7 @@ export default function CinemaStudioWorkspace() {
                   nanoBanana2LiteThinking={nanoBanana2LiteThinking}
                   onNanoBanana2LiteThinkingChange={setNanoBanana2LiteThinking}
                   onOpenCinema40References={() => {
-                    setCinema40AssetsPickerTab("uploads");
+                    setCinema40AssetsPickerTab("references");
                     setCinema40AssetsPickerOpen(true);
                   }}
                   onOpenCinema40Elements={() => {
