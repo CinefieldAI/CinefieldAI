@@ -18,7 +18,7 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `1ef4162` (2026-08-17).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `1147c60` (2026-08-17).**
 The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
 items by their own identity (name), not by slot position, with each
 item's offset from the selected index recomputed via shortest-path
@@ -70,15 +70,26 @@ or direct label clicks are silent — `RulerScrubber` only calls
 `playTick` from actual drag/wheel motion, never from `step()`/`jumpTo()`.
 Era is also cyclic like Genre/Tempo (dragging past "Auto" wraps to
 "1960s", confirmed against the reference), using the same shortest-path-
-wraparound-from-a-continuous-position technique, extended to a
-fractional live position so it tracks a continuous gesture rather than
-just discrete steps — this applies to both the selectable-item labels
-and the decorative tick marks (an earlier version kept the ticks as a
-fixed 81-tick window centered on index 0, which ran out of ticks and
-went blank once the wraparound let selection reach "Auto"; both now use
-the same per-slot wraparound math). Do not restyle, re-scope, "clean
-up", or add drag/real-media support to any other widget in this panel
-without an explicit user request naming this feature.
+wraparound-from-a-continuous-position technique for the 6 labels,
+extended to a fractional live position so it tracks a continuous gesture
+rather than just discrete steps. The decorative tick strip, by contrast,
+is NOT wraparound/count-tied — as of `1147c60` it's a fixed window of 81
+ticks regenerated every render around the current continuous position
+(matches the reference's own tick count exactly; confirmed against its
+captured DOM). Selected-label scaling uses two independent CSS
+properties on one element — `translate` for position, `transform:
+scale(...)` for size — since Tailwind v4 compiles translate utilities to
+the standalone `translate` property rather than folding into `transform`,
+so the two compose instead of clobbering each other (confirmed the
+reference's own DOM does the same split); combining both into one
+`transform: translate(...) scale(...)` value clipped the scaled-up
+selected label's top edge by ~11px. Prev/Next era buttons play the tick
+sound too (rate 1, base pitch) — an explicit deviation from the
+reference, which stays silent on any button click; direct label clicks
+remain silent, only Prev/Next and drag/wheel produce sound. Do not
+restyle, re-scope, "clean up", or add drag/real-media support to any
+other widget in this panel without an explicit user request naming this
+feature.
 
 # More than one agent works in this repo
 
