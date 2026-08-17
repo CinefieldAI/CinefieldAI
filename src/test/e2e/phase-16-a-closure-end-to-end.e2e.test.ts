@@ -316,8 +316,19 @@ test("sensitive-data boundary: no raw Clerk object, token, secret, or signed-URL
     "sessionclaims",
     "process\\.env\\.[a-z0-9_]*secret",
   ];
+  // Phase 16-E, one narrow, documented exception, the SAME pattern 16-D
+  // established above for `temporal-admin-service.ts`/`metadata`:
+  // `require-step-up.ts` is Phase 16-E's OWN file (not 16-A's), and its
+  // entire purpose — reading Clerk step-up/MFA assurance evidence for the
+  // Tier-0 authorization gate (Section 8 of the 16-E spec) — requires
+  // reading `sessionClaims`. It never forwards the raw claims object
+  // anywhere; `resolveAssuranceEvidence` (`step-up-auth.ts`) projects it to
+  // a bounded `{ state, verifiedAt }` shape before it leaves this file. See
+  // `phase-16e-admin-privilege.e2e.test.ts` for the pin on that projection.
+  const SESSIONCLAIMS_EXEMPT_FILES = new Set(["src/lib/admin/require-step-up.ts"]);
   for (const { file, text } of ALL_16A_FILES) {
     for (const word of forbidden) {
+      if (word === "sessionclaims" && SESSIONCLAIMS_EXEMPT_FILES.has(file)) continue;
       assert.doesNotMatch(text.toLowerCase(), new RegExp(word), `${file} mentions forbidden shape "${word}"`);
     }
   }
@@ -339,9 +350,17 @@ test("sensitive-data boundary: no raw Clerk object, token, secret, or signed-URL
  * 16-A itself promised, the same "narrowed, not weakened" pattern already
  * used for the Phase 15-D SQS-call structural bans.
  */
+// Phase 16-E adds its own real (and clearly out-of-16-A-scope) mutation:
+// durable privileged-action audit writes (`privileged-action-audit.ts`'s
+// `.insert()`/RPC calls), which are exactly what Section 11/12/14 of the
+// 16-E spec require and prove in their OWN closure suite
+// (`phase-16e-*.e2e.test.ts`). `security-center-service.ts`/
+// `incidents-admin-service.ts` (16-D, already excluded above by directory)
+// establish the precedent that a later Phase 16 package's read/write
+// surface is proven in its own closure test, not this one.
 const SIXTEEN_A_OWNED_FILES = ALL_16A_FILES.filter(
   (f) =>
-    !/asset-admin|billing-admin|bullmq-admin|dlq-admin|model-provider-admin|moderation-admin|queue-health|router-admin|temporal-admin|\/assets\/|\/billing\/|\/dlq\/|\/models-providers\/|\/moderation\/|\/queue-health\/|\/router\/|\/temporal\/|AssetsStoragePanel|BillingCreditsPanel|DlqInvestigationPanel|ModelsProvidersPanel|ModerationPanel|QueueHealthPanel|RouterControlsPanel|TemporalInvestigationPanel|AdminOperationalEntryPoints/i.test(
+    !/asset-admin|billing-admin|bullmq-admin|dlq-admin|model-provider-admin|moderation-admin|queue-health|router-admin|temporal-admin|admin-privilege|tier0-|step-up-auth|require-step-up|privileged-a(ction|udit)|\/assets\/|\/billing\/|\/dlq\/|\/models-providers\/|\/moderation\/|\/queue-health\/|\/router\/|\/temporal\/|\/privileged-audit\/|AssetsStoragePanel|BillingCreditsPanel|DlqInvestigationPanel|ModelsProvidersPanel|ModerationPanel|QueueHealthPanel|RouterControlsPanel|TemporalInvestigationPanel|AdminOperationalEntryPoints|PrivilegedActionAuditPanel/i.test(
       f.file
     )
 );

@@ -63,6 +63,12 @@ const ENTRY_POINTS: { href: string; label: string; description: string }[] = [
     label: "Deploy / Restore Health",
     description: "Rollback signal, restore verification, and recovery RTO/RPO evidence — no execution reachable here.",
   },
+  {
+    href: "/admin/privileged-audit",
+    label: "Privileged Action Audit",
+    description:
+      "Durable, append-only Tier-0 evidence: who requested or performed which privileged action, against what target, when.",
+  },
 ];
 
 export default function AdminInvestigationEntryPoints() {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/admin/require-admin-access";
 import { setAdminRouteEnabled } from "@/lib/admin/router-admin-service";
+import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/admin/require-step-up";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
 
@@ -38,12 +39,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     return privateJson({ outcome: "SOURCE_UNAVAILABLE", reasonCode: "not_configured" });
   }
 
+  const [assurance, elevation] = await Promise.all([
+    getCurrentAssuranceEvidence(),
+    getCurrentElevationVerdict(access.clerkUserId),
+  ]);
+
   const result = await setAdminRouteEnabled(
     getSupabaseAdminClient(),
     access.clerkUserId as string,
     routeId,
     enabled,
-    typeof reason === "string" ? reason.trim() : ""
+    typeof reason === "string" ? reason.trim() : "",
+    { assurance, elevation }
   );
   return privateJson(result);
 }

@@ -75,4 +75,6 @@ export type TemporalAdminCancelResult =
       readonly generationId: string;
       readonly alreadyRequested: boolean;
       readonly workflowSignalled: boolean;
-    };
+    }
+  /** Phase 16-E. Only reachable under `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce` — see `tier0-authorization.ts`. */
+  | { readonly outcome: "TIER0_AUTHORIZATION_REQUIRED"; readonly reasonCode: string };

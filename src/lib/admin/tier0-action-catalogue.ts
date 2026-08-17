@@ -1,0 +1,176 @@
+/**
+ * Phase 16-E — the Tier-0 privileged action catalogue.
+ *
+ * ---------------------------------------------------------------------------
+ * CLASSIFIES AUTHORITY ONLY. NEVER A SECOND ACTION OWNER.
+ * ---------------------------------------------------------------------------
+ * This module is a lookup table, nothing else: no I/O, no Supabase, no
+ * Clerk, no mutation of anything. It answers "how risky is this action, and
+ * what does Phase 16-E require before it may proceed?" — the canonical
+ * OWNER of each action (Phase 7 routing, Phase 9-E quarantine, Phase 15-D
+ * DLQ redrive, BullMQ, Temporal) is completely unchanged and is never
+ * imported here. `tier0-authorization.ts` reads this catalogue as ONE input
+ * among several (alongside `admin-privilege.ts`'s role resolution and
+ * `step-up-auth.ts`'s assurance evidence) and composes a decision; it never
+ * invokes the action itself.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY NOT `policies/data/actions.json`
+ * ---------------------------------------------------------------------------
+ * That registry is Phase 12-E's OPA-mirrored embedded policy engine's own
+ * vocabulary, bound line-for-line to `policies/cinefield/policy.rego` and
+ * `policies/conformance/cases.json` — extending it means deciding a new
+ * action's `requiredRoles`/`requiresHumanApproval` under the SAME ladder
+ * every other critical action uses (AI-write-authority-off, risk state,
+ * environment, origin class) and keeping three files in lockstep. Step-up
+ * assurance is a DIFFERENT concern from that ladder — it is about Clerk
+ * session assurance level, not action policy — and folding it into the OPA
+ * mirror would make Phase 12/19's policy engine also the owner of MFA
+ * state, which Section 2 of the 16-E spec forbids ("must NOT become... a
+ * second policy owner"). This catalogue is Phase 16-E's OWN, narrower
+ * concern: privileged-admin surface authority. Where an action IS already
+ * registered in `policies/data/actions.json` (`media.quarantine.release`,
+ * `routing.control.set`/`.clear`), that registry's gate keeps running,
+ * completely unmodified, inside its own canonical owner — this catalogue's
+ * classification is an ADDITIONAL, composed condition, never a replacement.
+ *
+ * ---------------------------------------------------------------------------
+ * CLASSIFICATION IS EVIDENCE, ENFORCEMENT IS A SEPARATE DECISION
+ * ---------------------------------------------------------------------------
+ * `requiresTwoPerson`/`requiresStepUp` describe what Phase 16-E has decided
+ * an action SHOULD require. Whether that requirement is currently
+ * hard-enforced (denies) or shadow-evaluated (recorded but non-blocking) at
+ * a given call site is `tier0-authorization.ts`'s / the enforcement mode's
+ * concern (`CINEFIELD_TIER0_ENFORCEMENT_MODE`) — see that file's header for
+ * exactly why blanket hard-enforcement is not switched on by this batch.
+ */
+
+export type Tier0SecurityClassification = "READ_ONLY" | "OPERATOR_MUTATION" | "HIGH_RISK_TIER0";
+
+export interface Tier0ActionEntry {
+  readonly classification: Tier0SecurityClassification;
+  /** The minimum `AdminPrivilegeRole` (admin-privilege.ts) required. */
+  readonly minimumRole: "viewer" | "operator" | "tier0_admin";
+  readonly requiresStepUp: boolean;
+  /**
+   * Whether a SECOND, distinct human must approve before execution. `false`
+   * here does not mean "no dual control exists" — `media.quarantine.release`
+   * already has real, structural two-person enforcement inside its own
+   * canonical owner (Phase 9-E); this catalogue does not duplicate that
+   * mechanism, only records that it exists elsewhere.
+   */
+  readonly requiresTwoPerson: boolean;
+  /** Free-text ONLY here — documentation for operators reading the catalogue, never persisted verbatim as a reason_code. */
+  readonly owner: string;
+  readonly note: string;
+}
+
+/**
+ * Every mutation Phase 16-A/B/C/D actually exposes, classified. Read actions
+ * (investigation panels, health, security-center reads) are uniformly
+ * READ_ONLY and are not enumerated individually — none of them mutates
+ * anything, and Section 6 of the spec asks for the MUTATION surface to be
+ * catalogued, not a duplicate of the admin nav.
+ *
+ * `deploy.rollback.execute` / `restore.execute` are deliberately ABSENT:
+ * `deploy-restore-admin-service.ts` (16-D) is READ-ONLY — `evaluateRollback`
+ * and `runRestoreVerification` are evaluations, not mutations, and no
+ * execute action exists yet anywhere in this repository to classify. Adding
+ * a catalogue entry for an action that cannot be invoked would be exactly
+ * the "invent policy" Section 10 warns against.
+ */
+export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> = {
+  "media.quarantine.request": {
+    classification: "OPERATOR_MUTATION",
+    minimumRole: "operator",
+    requiresStepUp: false,
+    requiresTwoPerson: false,
+    owner: "phase-9e (src/lib/media/quarantine-release.ts) via phase-16c (moderation-admin-service.ts)",
+    note: "Records one admin's request. Does not release anything on its own.",
+  },
+  "media.quarantine.release": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    // Already real, structural, SQL-enforced two-person control in
+    // approve_media_release() (media_release_approvals PK). Not duplicated
+    // here — see this file's header.
+    requiresTwoPerson: false,
+    owner: "phase-9e (src/lib/media/quarantine-release.ts) via phase-16c (moderation-admin-service.ts)",
+    note: "Irreversibly exposes quarantined media. Two-person control already structural in Phase 9-E's own SQL.",
+  },
+  "media.quarantine.reject": {
+    classification: "OPERATOR_MUTATION",
+    minimumRole: "operator",
+    requiresStepUp: false,
+    requiresTwoPerson: false,
+    owner: "phase-9e (src/lib/media/quarantine-release.ts) via phase-16c (moderation-admin-service.ts)",
+    note: "The safe direction (keeps media out of circulation) — single-admin by Phase 9-E's own design.",
+  },
+  "routing.control.set": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: false,
+    owner: "phase-7e (src/lib/routing/admin-route-service.ts, setRuntimeRoutingControl)",
+    note:
+      "Roadmap-named for two-person control (docs/security-gates.md, admin-route-service.ts header, cites roadmap ¶2284) " +
+      "but not currently reachable from any Phase 16 admin route (16-B wired setRouteEnabled instead — see route.disable " +
+      "below). Classified for completeness; BUSINESS_DECISION_REQUIRED before wiring an admin UI to it.",
+  },
+  "routing.control.clear": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: false,
+    owner: "phase-7e (src/lib/routing/admin-route-service.ts, clearRuntimeRoutingControl)",
+    note: "Same as routing.control.set — restoring traffic is the riskier direction, not the safer one.",
+  },
+  "route.disable": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    // No explicit roadmap text mandates two-person specifically for THIS
+    // mutation path (setRouteEnabled, distinct from routing.control.set/
+    // clear above) — see BUSINESS_DECISION_REQUIRED in the 16-E report.
+    requiresTwoPerson: false,
+    owner: "phase-7b (src/lib/routing/admin-route-service.ts, setRouteEnabled) via phase-16b (router-admin-service.ts)",
+    note: "Reversible (same function re-enables), but redirects production traffic — named explicitly in the 16-B/16-E handoff.",
+  },
+  "queue.dlq.redrive": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: false,
+    owner: "phase-15d (src/lib/aws/dlq-redrive/) via phase-16b (dlq-admin-service.ts)",
+    note: "Re-submits a message to a live provider queue. Named explicitly in the 16-B/16-E handoff.",
+  },
+  "queue.bullmq.retry": {
+    classification: "OPERATOR_MUTATION",
+    minimumRole: "operator",
+    requiresStepUp: false,
+    requiresTwoPerson: false,
+    owner: "phase-6r8 (BullMQ foundation) via phase-16b (bullmq-admin-service.ts)",
+    note: "Auxiliary-queue retry, not a production provider dispatch — lower severity than DLQ redrive by design.",
+  },
+  "temporal.workflow.cancel": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: false,
+    owner: "phase-6rh (cancel-intent.ts, generation-starter.ts) via phase-16d (temporal-admin-service.ts)",
+    note: "Stops a running generation on an admin's own initiative, distinct from the owner's cancel path.",
+  },
+} as const;
+
+export type Tier0ActionName = keyof typeof TIER0_ACTION_CATALOGUE;
+
+export function tier0ActionEntry(action: string): Tier0ActionEntry | null {
+  return Object.prototype.hasOwnProperty.call(TIER0_ACTION_CATALOGUE, action)
+    ? TIER0_ACTION_CATALOGUE[action as Tier0ActionName]
+    : null;
+}
+
+export function registeredTier0Actions(): string[] {
+  return Object.keys(TIER0_ACTION_CATALOGUE).sort();
+}

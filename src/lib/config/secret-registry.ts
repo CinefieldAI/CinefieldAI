@@ -216,6 +216,9 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
   // ---- security / policy -------------------------------------------------
   { name: "ROUTE_ADMIN_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "An allowlist of user ids. Empty means nobody is an admin." },
   { name: "CINEFIELD_ADMIN_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16/1. Bootstrap allowlist for the Admin Operations Center (/admin). Separate from ROUTE_ADMIN_CLERK_USER_IDS, which stays scoped to Phase 7-B route mutations. Empty means nobody is an admin." },
+  { name: "CINEFIELD_ADMIN_OPERATOR_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. Role-separation allowlist for OPERATOR_MUTATION-tier Phase 16 actions. Empty means no one holds operator authority (viewer only)." },
+  { name: "CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. The narrowest allowlist — Tier-0/HIGH_RISK_TIER0 admin action eligibility. Empty (its default state) means no one may perform a Tier-0 action, which is the deliberate, honest default while Clerk step-up assurance is unconfigured." },
+  { name: "CINEFIELD_TIER0_ENFORCEMENT_MODE", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. Unset/anything but the literal 'enforce' = shadow mode (decision recorded, never blocks). 'enforce' = a Tier-0 DENY actually refuses the caller. See tier0-authorization.ts's header." },
 ] as const;
 
 const BY_NAME = new Map(SECRET_REGISTRY.map((e) => [e.name, e]));

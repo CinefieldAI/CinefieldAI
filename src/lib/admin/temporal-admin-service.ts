@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { GENERATION_ID_PATTERN } from "@/lib/orchestration/generation-api-contract";
 import { readCancelIntent, recordCancelIntent } from "@/lib/orchestration/cancel-intent";
@@ -7,6 +8,8 @@ import { requestGenerationCancellation } from "@/lib/temporal/generation-starter
 import { isTemporalGenerationEnabled } from "@/lib/temporal/config";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { createLogger } from "@/lib/observability/logger";
+import { authorizeTier0Action, recordTier0Execution } from "./tier0-authorization";
+import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import {
   ADMIN_CANCEL_REASON_PATTERN,
   CANCELLABLE_GENERATION_STATES,
@@ -114,9 +117,22 @@ export async function getAdminTemporalInspection(
  */
 export async function performAdminTemporalCancel(
   admin: SupabaseClient,
-  params: { generationId: string; adminActorId: string; reasonCode: string }
+  params: {
+    generationId: string;
+    adminActorId: string;
+    reasonCode: string;
+    // Phase 16-E. Resolved by the route layer (`require-step-up.ts`) and
+    // passed in — see `dlq-admin-service.ts`'s identical comment for why
+    // this file never imports `require-step-up.ts` directly. Omitted (the
+    // pre-16-E test calls) defaults to the honest fail-closed state.
+    stepUp?: { assurance: AssuranceEvidence; elevation: ElevationVerdict };
+  }
 ): Promise<TemporalAdminCancelResult> {
   const { generationId, adminActorId, reasonCode } = params;
+  const stepUp = params.stepUp ?? {
+    assurance: { state: "NOT_CONFIGURED" as const, verifiedAt: null },
+    elevation: { elevated: false as const, reasonCode: "no_elevation" as const },
+  };
 
   if (
     !GENERATION_ID_PATTERN.test(generationId) ||
@@ -125,6 +141,22 @@ export async function performAdminTemporalCancel(
     adminActorId.length === 0
   ) {
     return { outcome: "INVALID_INPUT" };
+  }
+
+  const requestId = randomUUID();
+  const decision = await authorizeTier0Action(admin, {
+    requestId,
+    action: "temporal.workflow.cancel",
+    actorClerkUserId: adminActorId,
+    target: { type: "generation", id: generationId },
+    reasonCode: null,
+    correlationId: null,
+    assurance: stepUp.assurance,
+    elevation: stepUp.elevation,
+  });
+  if (!decision.allowed) {
+    auditLog.info("admin_temporal_cancel_attempted", { adminActorId, generationId, reasonCode, outcome: "TIER0_AUTHORIZATION_REQUIRED", tier0ReasonCode: decision.reasonCode });
+    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode };
   }
 
   let row: GenerationRow | null;
@@ -173,6 +205,15 @@ export async function performAdminTemporalCancel(
     reasonCode,
     outcome: "cancel_requested",
     workflowSignalled: signalled,
+  });
+
+  await recordTier0Execution(admin, {
+    requestId,
+    action: "temporal.workflow.cancel",
+    actorClerkUserId: adminActorId,
+    target: { type: "generation", id: generationId },
+    outcome: "executed",
+    outcomeDetail: signalled ? "workflow_signalled" : "workflow_not_signalled",
   });
 
   return {

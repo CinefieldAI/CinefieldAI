@@ -1,8 +1,11 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listRoutesForAdmin, setRouteEnabled } from "@/lib/routing/admin-route-service";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { createLogger } from "@/lib/observability/logger";
+import { authorizeTier0Action, recordTier0Execution } from "./tier0-authorization";
+import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import {
   isValidRouteActionReason,
   ROUTE_ID_PATTERN,
@@ -62,15 +65,43 @@ export async function getAdminRouterView(
   }
 }
 
+/**
+ * Phase 16-E. `route.disable` is catalogued `HIGH_RISK_TIER0` +
+ * step-up-required — named explicitly in the 16-B/16-E handoff
+ * (`docs/security-gates.md`'s "The minimum safe action gate (Phase 16-B,
+ * not 16-E)" section). See `tier0-authorization.ts`'s header for the
+ * shadow/enforce mode split; `setRouteEnabled` (Phase 7-B) is called
+ * completely unmodified either way.
+ */
 export async function setAdminRouteEnabled(
   admin: SupabaseClient,
   actorClerkUserId: string,
   routeId: string,
   enabled: boolean,
-  reason: string
+  reason: string,
+  stepUp: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
+    assurance: { state: "NOT_CONFIGURED", verifiedAt: null },
+    elevation: { elevated: false, reasonCode: "no_elevation" },
+  }
 ): Promise<RouterAdminSetEnabledResult> {
   if (!ROUTE_ID_PATTERN.test(routeId) || !isValidRouteActionReason(reason)) {
     return { outcome: "INVALID_TARGET" };
+  }
+
+  const requestId = randomUUID();
+  const decision = await authorizeTier0Action(admin, {
+    requestId,
+    action: "route.disable",
+    actorClerkUserId,
+    target: { type: "model_route", id: routeId },
+    reasonCode: null,
+    correlationId: null,
+    assurance: stepUp.assurance,
+    elevation: stepUp.elevation,
+  });
+  if (!decision.allowed) {
+    auditLog.info("route_enabled_set_attempted", { actorClerkUserId, routeId, enabled, reason, outcome: "TIER0_AUTHORIZATION_REQUIRED", tier0ReasonCode: decision.reasonCode });
+    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode };
   }
 
   let applied: boolean;
@@ -85,6 +116,14 @@ export async function setAdminRouteEnabled(
       reason,
       outcome,
     });
+    await recordTier0Execution(admin, {
+      requestId,
+      action: "route.disable",
+      actorClerkUserId,
+      target: { type: "model_route", id: routeId },
+      outcome: "execution_failed",
+      outcomeDetail: outcome.toLowerCase(),
+    });
     return outcome === "ROUTE_AUTHORITY_DENIED"
       ? { outcome }
       : { outcome, reasonCode: "route_update_failed" };
@@ -92,6 +131,14 @@ export async function setAdminRouteEnabled(
 
   const outcome = applied ? "APPLIED" : "ROUTE_NOT_FOUND";
   auditLog.info("route_enabled_set_attempted", { actorClerkUserId, routeId, enabled, reason, outcome });
+  await recordTier0Execution(admin, {
+    requestId,
+    action: "route.disable",
+    actorClerkUserId,
+    target: { type: "model_route", id: routeId },
+    outcome: applied ? "executed" : "execution_failed",
+    outcomeDetail: outcome.toLowerCase(),
+  });
 
   return applied ? { outcome: "APPLIED", routeId, enabled } : { outcome: "ROUTE_NOT_FOUND" };
 }

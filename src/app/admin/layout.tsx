@@ -120,6 +120,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/deploy-restore" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Deploy / Restore Health
           </Link>
+          <Link href="/admin/privileged-audit" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Privileged Action Audit
+          </Link>
         </nav>
       </aside>
       <main className="flex-1 p-6">{children}</main>

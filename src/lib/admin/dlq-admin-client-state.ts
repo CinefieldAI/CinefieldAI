@@ -24,7 +24,8 @@ export type DlqRedrivePanelState =
   | { readonly kind: "unavailable"; readonly reasonCode: string }
   | { readonly kind: "no_message" }
   | { readonly kind: "refused"; readonly result: Extract<DlqAdminRedriveResult, { outcome: "REFUSED" }> }
-  | { readonly kind: "redriven"; readonly result: Extract<DlqAdminRedriveResult, { outcome: "REDRIVEN" }> };
+  | { readonly kind: "redriven"; readonly result: Extract<DlqAdminRedriveResult, { outcome: "REDRIVEN" }> }
+  | { readonly kind: "tier0_authorization_required"; readonly reasonCode: string };
 
 function isDeniedBody(value: unknown): boolean {
   return typeof value === "object" && value !== null && (value as Record<string, unknown>).error === "not_found";
@@ -59,6 +60,9 @@ export function interpretDlqRedriveResponse(status: number, body: unknown): DlqR
   if (outcome === "NO_MESSAGE") return { kind: "no_message" };
   if (outcome === "REFUSED") return { kind: "refused", result: body as Extract<DlqAdminRedriveResult, { outcome: "REFUSED" }> };
   if (outcome === "REDRIVEN") return { kind: "redriven", result: body as Extract<DlqAdminRedriveResult, { outcome: "REDRIVEN" }> };
+  if (outcome === "TIER0_AUTHORIZATION_REQUIRED") {
+    return { kind: "tier0_authorization_required", reasonCode: (body as { reasonCode?: string }).reasonCode ?? "step_up_required" };
+  }
   return { kind: "unavailable", reasonCode: "malformed_response" };
 }
 

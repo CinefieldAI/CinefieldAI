@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/admin/require-admin-access";
 import { performAdminTemporalCancel } from "@/lib/admin/temporal-admin-service";
+import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/admin/require-step-up";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
 
@@ -45,10 +46,15 @@ export async function POST(
   }
 
   const { generationId } = await params;
+  const [assurance, elevation] = await Promise.all([
+    getCurrentAssuranceEvidence(),
+    getCurrentElevationVerdict(access.clerkUserId),
+  ]);
   const result = await performAdminTemporalCancel(getSupabaseAdminClient(), {
     generationId,
     adminActorId: access.clerkUserId as string,
     reasonCode,
+    stepUp: { assurance, elevation },
   });
   return privateJson(result);
 }

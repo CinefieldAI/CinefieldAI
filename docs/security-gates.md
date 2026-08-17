@@ -4833,3 +4833,174 @@ already-durable stores this batch combines; RTO/RPO numeric targets (still
 `UNDEFINED_BUSINESS_DECISION`); any live CI/artifact/Vercel/GitHub
 integration; passkeys/MFA/step-up auth/OPA/dual-control (Phase 16-E's
 territory). **Phase 16-D does not start 16-E.**
+
+## Phase 16-E — Tier-0 admin security hardening
+
+Official done criterion: an admin attempting a Tier-0 action has that
+action's risk identified, their privilege tier checked, Clerk step-up
+assurance checked, dual control checked where required, current state
+re-read, the canonical action owner invoked only on ALLOW, and bounded
+durable audit evidence produced — for both allowed and denied attempts.
+Normal admin session compromise alone must not silently grant Tier-0
+authority. Closes the exact gap 16-B/16-C/16-D each named by handoff text
+("passkeys/MFA/step-up auth/dual-control/OPA — Phase 16-E's territory";
+"a durable, immutable audit store — the natural shape of Phase 16-E
+hardening").
+
+### Role separation, additive to the Phase 16/1 bootstrap, not a replacement of it
+
+`requireAdminAccess()`/`decideAdminAccess()` (Phase 16/1) are UNCHANGED —
+49 existing call sites still ask exactly the question they always asked
+("is this identity an admin at all?"). `src/lib/admin/admin-privilege.ts`
+adds a NEW, finer question next to it: `resolveAdminPrivilegeRole()`
+resolves `viewer` / `operator` / `tier0_admin` from three INDEPENDENT
+env-var allowlists — the existing `CINEFIELD_ADMIN_CLERK_USER_IDS` now
+means `viewer` only, plus two new, narrower lists
+(`CINEFIELD_ADMIN_OPERATOR_CLERK_USER_IDS`,
+`CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS`). This is the "bootstrap admin,
+bounded" the spec asks for: Tier-0 authority no longer flows implicitly
+from the one legacy list. Still a bootstrap (no Clerk org role/custom
+claim exists in this repository — verified structurally), still
+server-only, still default-deny, still no role a client can assert.
+
+### The Tier-0 catalogue classifies authority; it never acts
+
+`src/lib/admin/tier0-action-catalogue.ts` is a pure, zero-import data
+module (structurally pinned) classifying every mutation Phase 16-A/B/C/D
+actually exposes: `READ_ONLY` / `OPERATOR_MUTATION` / `HIGH_RISK_TIER0`,
+a minimum role, whether step-up is required, whether dual control is
+required, and the canonical owner. `queue.dlq.redrive`, `route.disable`,
+`temporal.workflow.cancel`, `routing.control.set`/`.clear` and
+`media.quarantine.release` are `HIGH_RISK_TIER0`; `queue.bullmq.retry`
+and the quarantine request/reject actions are `OPERATOR_MUTATION` (lower
+severity — BullMQ has no real backing infrastructure in any environment
+today, per its own Phase 16-B contract). Deliberately does NOT extend
+`policies/data/actions.json` (Phase 12-E's OPA-mirrored registry, bound
+line-for-line to Rego + conformance cases) — step-up assurance is a
+different concern from that action-policy ladder, and folding it in would
+make Phase 12/19 the owner of MFA state too. Where an action IS already
+registered there (`media.quarantine.release`, `routing.control.set/clear`),
+that gate keeps running, completely unmodified, as an ADDITIONAL
+condition, never replaced.
+
+### Step-up assurance — honestly `NOT_CONFIGURED`, never fabricated
+
+`src/lib/admin/step-up-auth.ts` (Clerk-free, mirrors `admin-auth.ts`'s
+split) defines `resolveAssuranceEvidence()`: reads a documented
+`cinefieldStepUp.verifiedAt` session claim, and returns `VERIFIED` only
+for a fresh (≤5 minute) timestamp — `NOT_CONFIGURED` for everything else,
+including every real request in this repository today, because no Clerk
+MFA/passkey/custom-claim configuration exists anywhere (verified
+structurally; this repository provisions no such Clerk feature and this
+phase is not permitted to). `src/lib/admin/require-step-up.ts` is the
+thin, Clerk-importing real caller (`auth().sessionClaims`), the one
+documented exception to 16-A's "no `sessionClaims` anywhere" sweep.
+`ElevatedSessionRecord` (short-TTL, actor-bound, Redis A-backed via
+`src/lib/redis/admin-elevation-store.ts`) can ONLY be built from `VERIFIED`
+evidence (`buildElevatedSession` refuses otherwise) — no custom MFA flow,
+no password re-entry, no client-settable boolean anywhere in this chain.
+
+### Dual control — one generic, reusable mechanism, reusing 9-E's PATTERN not its table
+
+`admin_privileged_action_events` (new migration, see below) makes dual
+control fall out of the SAME append-only event log the durable audit uses:
+an `'approved'` event IS the approval, `actor_clerk_user_id` is the
+approver, and the threshold is `COUNT(DISTINCT actor_clerk_user_id)` —
+mirroring `media_release_approvals`' PK-based "approving twice is still
+one approval" discipline without a second approvals table.
+`record_admin_privileged_action_approval()` (SQL, `SECURITY DEFINER`)
+structurally blocks the requester from approving their own request — not
+an application-layer `if` a future call site could forget, a fact the
+function itself enforces before any row is written. Phase 9-E's own
+quarantine-release two-person mechanism is completely untouched and
+remains the canonical dual-control owner for that one action; this
+mechanism exists for actions that have no domain table of their own.
+
+### The durable audit — one append-only event log, closes the named 16-B/C/D gap
+
+New migration `20260829000000_tier0_admin_action_audit.sql`:
+`admin_privileged_action_events`, service_role-only, RLS-revoked from
+anon/authenticated, trigger-enforced append-only (identical mechanism to
+`security_events`). NOT a widening of `security_events` — that table has
+no request-lifecycle or dual-control concept and mixing a generic signal
+feed with a privileged-action ledger would corrupt both taxonomies (the
+same reasoning 12-E used in the other direction to justify widening
+12-C instead of creating a third table). NOT a reuse of
+`media_safety_audit`/`media_release_approvals` — asset-shaped tables
+Phase 9-E explicitly built "for Phase 16 to adopt" as a PATTERN, not to
+widen. Every lifecycle transition (requested/denied/
+awaiting_second_approval/approved/rejected/executed/execution_failed/
+expired) is its OWN immutable row correlated by `request_id` — never a
+mutable "current state" row updated in place, so Section 13's
+immutability requirement is structural, not a convention. Bounded fields
+only: actor, action type, target type/id, reason code, correlation id,
+security classification, a short outcome-detail code, timestamp. No
+prompt, payload, secret, token, signed URL, or raw stack — enforced both
+by CHECK constraints and by a structural test scanning the migration's
+executable SQL. `src/lib/admin/privileged-action-audit.ts` is the only
+writer/reader; `GET /api/admin/privileged-audit`
+(`src/app/admin/privileged-audit`) is the bounded, filter-only (actor/
+action/target/event/time-window) query UI Section 14 asks for — no
+arbitrary SQL, no unbounded history (`PRIVILEGED_AUDIT_MAX_ROWS`).
+
+### Enforcement mode — why hard-enforcement is not flipped on for already-shipped actions in this batch
+
+`authorizeTier0Action()` (`src/lib/admin/tier0-authorization.ts`) is the
+decision point implementing the done criterion's chain. It is wired into
+the four actions the 16-B/16-D handoff text names by name — DLQ redrive,
+route disable (`setAdminRouteEnabled`), Temporal cancel — and ALWAYS
+evaluates the real decision and ALWAYS writes real durable evidence.
+Whether a `false` decision actually blocks the caller is gated by
+`CINEFIELD_TIER0_ENFORCEMENT_MODE` (default unset = **shadow**: the
+decision and its real reason are durably recorded, but the caller
+proceeds exactly as it did before this batch; `enforce`: a Tier-0 DENY
+genuinely refuses, returning a new, additive `TIER0_AUTHORIZATION_REQUIRED`
+outcome). This is a deliberate, honest choice, not a shortcut: step-up
+assurance is `NOT_CONFIGURED` in every environment today, so
+hard-enforcing immediately would make DLQ redrive, route disable and
+Temporal cancel permanently unusable until an operator configures Clerk
+assurance externally — arguably the CORRECT end-state for Tier-0
+hardening, but a consequential operational decision this batch does not
+make unilaterally on four already-shipped, already-audited (16-B/16-D)
+actions. `phase-16e-wired-actions.e2e.test.ts` proves BOTH modes against
+the exact production functions Phase 16-B's/16-D's own closure tests
+exercise: shadow mode is byte-identical to their pre-existing assertions;
+enforce mode genuinely refuses without step-up and genuinely proceeds
+with it. `BullMQ retry` is catalogued (`OPERATOR_MUTATION`, no step-up)
+but not wired to the audit trail in this batch — lower severity, no
+production backing infra in any environment.
+
+### CSRF, canonical owners, AI reachability
+
+No new CSRF mechanism was invented: every privileged admin mutation route
+is POST-only, JSON-body-only (a plain HTML form cannot construct a
+matching request without triggering a CORS preflight this repository
+grants to no origin), and no admin route or `next.config.*` sets
+`Access-Control-Allow-Origin` — all three verified structurally
+(`phase-16e-boundaries.e2e.test.ts`). Canonical action owners are
+UNCHANGED: `setRouteEnabled` (7-B), `redriveOneProviderDlqMessage`
+(15-D/16-B), `recordCancelIntent`/`requestGenerationCancellation`
+(6R-H/6R.3), `requestMediaRelease`/`approveMediaRelease`/
+`rejectMediaAsset` (9-E) are all still called, unmodified, and this is
+pinned structurally too. `tier0-authorization.ts` itself imports none of
+them — it decides, it never acts. No MCP/AI-agent-facing module imports
+any Phase 16-E file (`AI_REACHABLE_TIER0_ACTION = NO`); no code in this
+repository calls `requireAiWritePolicy` (Phase 12-E's own AI write
+boundary) at all, and no Phase 16-E file does either.
+
+### Not in this batch
+
+A live Clerk MFA/passkey production configuration (external, Section 25);
+hard-enforcement flipped on by default for already-shipped actions
+(a scoped, honest choice — see above); dual control extended to DLQ
+redrive/route disable/Temporal cancel beyond the generic mechanism this
+batch builds (no explicit roadmap mandate found for these three beyond
+quarantine release and `routing.control.set/clear`'s own — unreached —
+comment; `BUSINESS_DECISION_REQUIRED`); OPA runtime/sidecar (still
+`CODE_CONTRACT_ONLY`, Phase 19's territory, unchanged by this batch);
+persistent alert history (still Phase 13-D's ephemeral state — ownership
+handoff unchanged, ephemeral-vs-durable is a separate concern from this
+batch's privileged-ACTION audit); break-glass (not required — no hidden
+super-admin bypass exists or was added); a second rate limiter (existing
+`guardRoute({ routeClass: "durable_write" })` reused unchanged on every
+wired route). **Phase 16-E does not start Phase 17.**

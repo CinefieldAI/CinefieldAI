@@ -23,7 +23,15 @@ export type DlqAdminRedriveResult =
   | { readonly outcome: "SOURCE_UNAVAILABLE"; readonly reasonCode: string }
   | { readonly outcome: "NO_MESSAGE" }
   | { readonly outcome: "REFUSED"; readonly decision: DlqRedriveDecision }
-  | { readonly outcome: "REDRIVEN"; readonly decision: DlqRedriveDecision; readonly messageId: string };
+  | { readonly outcome: "REDRIVEN"; readonly decision: DlqRedriveDecision; readonly messageId: string }
+  /**
+   * Phase 16-E. Only reachable when `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce`
+   * — see `tier0-authorization.ts`'s header. `queue.dlq.redrive` is
+   * catalogued `HIGH_RISK_TIER0` + step-up-required; in the default "shadow"
+   * mode this branch is never returned (the redrive proceeds and the real
+   * decision is only recorded to the durable audit trail).
+   */
+  | { readonly outcome: "TIER0_AUTHORIZATION_REQUIRED"; readonly reasonCode: string };
 
 /** Bounded operator-supplied intent. Never prose long enough to become a second free-text field to guard. */
 export const DLQ_REDRIVE_REASON_MAX_LENGTH = 500;

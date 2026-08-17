@@ -28,7 +28,9 @@ export type RouterAdminSetEnabledResult =
   | { readonly outcome: "INVALID_TARGET" }
   | { readonly outcome: "SOURCE_UNAVAILABLE"; readonly reasonCode: string }
   | { readonly outcome: "ROUTE_NOT_FOUND" }
-  | { readonly outcome: "APPLIED"; readonly routeId: string; readonly enabled: boolean };
+  | { readonly outcome: "APPLIED"; readonly routeId: string; readonly enabled: boolean }
+  /** Phase 16-E. Only reachable under `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce` — see `tier0-authorization.ts`. */
+  | { readonly outcome: "TIER0_AUTHORIZATION_REQUIRED"; readonly reasonCode: string };
 
 export const ROUTE_DISABLE_REASON_MAX_LENGTH = 500;
 

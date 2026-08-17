@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/admin/require-admin-access";
 import { executeAdminDlqRedrive } from "@/lib/admin/dlq-admin-service";
+import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/admin/require-step-up";
 import { isValidDlqRedriveReason } from "@/lib/admin/dlq-admin-contract";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
@@ -49,6 +50,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return privateJson({ outcome: "SOURCE_UNAVAILABLE", reasonCode: "not_configured" });
   }
 
-  const result = await executeAdminDlqRedrive(getSupabaseAdminClient(), access.clerkUserId as string, reason.trim());
+  // Phase 16-E: resolved from the LIVE Clerk session, never a client claim.
+  const [assurance, elevation] = await Promise.all([
+    getCurrentAssuranceEvidence(),
+    getCurrentElevationVerdict(access.clerkUserId),
+  ]);
+
+  const result = await executeAdminDlqRedrive(getSupabaseAdminClient(), access.clerkUserId as string, reason.trim(), {
+    assurance,
+    elevation,
+  });
   return privateJson(result);
 }

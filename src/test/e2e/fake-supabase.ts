@@ -217,7 +217,56 @@ export class FakeSupabaseClient {
     if (fn === "record_media_ingest") {
       return { data: this.recordMediaIngest(args ?? {}), error: null };
     }
+    if (fn === "record_admin_privileged_action_approval") {
+      return { data: this.recordAdminPrivilegedActionApproval(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /**
+   * Mirrors record_admin_privileged_action_approval() (Phase 16-E,
+   * 20260829000000_tier0_admin_action_audit.sql): the requester of a
+   * `request_id` (its earliest 'requested' event's actor) can never satisfy
+   * their own approval — inserting an 'approved' event only for a DISTINCT
+   * actor, then counting distinct approvers. No advisory lock is needed
+   * here: this harness runs single-threaded, so the concurrency the real
+   * `pg_advisory_xact_lock` protects against cannot occur in a fake.
+   */
+  private recordAdminPrivilegedActionApproval(args: Record<string, unknown>) {
+    const requestId = args.p_request_id as string;
+    const actor = args.p_actor as string;
+    const table = (this.state.admin_privileged_action_events ?? []) as Row[];
+    this.state.admin_privileged_action_events = table;
+
+    const requested = table
+      .filter((row) => row.request_id === requestId && row.event === "requested")
+      .sort((a, b) => String(a.occurred_at ?? "").localeCompare(String(b.occurred_at ?? "")))[0];
+
+    if (!requested) return { recorded: false, reason: "no_matching_request" };
+    if (requested.actor_clerk_user_id === actor) return { recorded: false, reason: "self_approval_blocked" };
+
+    table.push({
+      id: randomUUID(),
+      request_id: requestId,
+      event: "approved",
+      actor_clerk_user_id: actor,
+      action_type: args.p_action_type as string,
+      target_type: args.p_target_type as string,
+      target_id: (args.p_target_id as string | null) ?? null,
+      reason_code: (args.p_reason_code as string | null) ?? null,
+      correlation_id: (args.p_correlation_id as string | null) ?? null,
+      security_classification: (args.p_security_classification as string) ?? "HIGH_RISK_TIER0",
+      outcome_detail: null,
+      occurred_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    const approvers = new Set(
+      table.filter((row) => row.request_id === requestId && row.event === "approved").map((row) => row.actor_clerk_user_id)
+    );
+    const required = (args.p_required_approvals as number) ?? 2;
+
+    return { recorded: true, approvals: approvers.size, required, satisfied: approvers.size >= required };
   }
 
   /** Outbox rows the emulated RPCs wrote. Asserted on; never a real table. */

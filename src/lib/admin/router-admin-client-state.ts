@@ -16,7 +16,8 @@ export type RouterActionPanelState =
   | { readonly kind: "invalid_target" }
   | { readonly kind: "unavailable"; readonly reasonCode: string }
   | { readonly kind: "route_not_found" }
-  | { readonly kind: "applied"; readonly result: Extract<RouterAdminSetEnabledResult, { outcome: "APPLIED" }> };
+  | { readonly kind: "applied"; readonly result: Extract<RouterAdminSetEnabledResult, { outcome: "APPLIED" }> }
+  | { readonly kind: "tier0_authorization_required"; readonly reasonCode: string };
 
 function isDeniedBody(value: unknown): boolean {
   return typeof value === "object" && value !== null && (value as Record<string, unknown>).error === "not_found";
@@ -51,6 +52,9 @@ export function interpretRouterActionResponse(status: number, body: unknown): Ro
     return { kind: "unavailable", reasonCode: (body as { reasonCode?: string }).reasonCode ?? "unavailable" };
   }
   if (outcome === "APPLIED") return { kind: "applied", result: body as Extract<RouterAdminSetEnabledResult, { outcome: "APPLIED" }> };
+  if (outcome === "TIER0_AUTHORIZATION_REQUIRED") {
+    return { kind: "tier0_authorization_required", reasonCode: (body as { reasonCode?: string }).reasonCode ?? "step_up_required" };
+  }
   return { kind: "unavailable", reasonCode: "malformed_response" };
 }
 
