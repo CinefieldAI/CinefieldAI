@@ -33,6 +33,16 @@ const ENTRY_POINTS: { href: string; label: string; description: string }[] = [
     label: "Generations",
     description: "Start from a generation id → see its attempts, trace correlation, and linked media.",
   },
+  {
+    href: "/admin/billing",
+    label: "Billing / Credits",
+    description: "Look up a user's wallet, ledger, and reservations by Clerk user id or generation id.",
+  },
+  {
+    href: "/admin/assets",
+    label: "Assets / Storage",
+    description: "Look up an asset's storage and backup evidence by asset id or generation id.",
+  },
 ];
 
 export default function AdminInvestigationEntryPoints() {

@@ -33,6 +33,11 @@ const OPERATIONAL_ENTRY_POINTS: { href: string; label: string; description: stri
     label: "Router Controls",
     description: "Which routes are active, and can an authorized operator disable one?",
   },
+  {
+    href: "/admin/moderation",
+    label: "Moderation",
+    description: "Is this media quarantined or released, and why? Release requires two different admins' approval.",
+  },
 ];
 
 export default function AdminOperationalEntryPoints() {

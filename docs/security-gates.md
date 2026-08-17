@@ -4498,3 +4498,118 @@ roadmap's explicit boundary); a second, generic runtime-flag system (Phase
 21's territory); passkeys/MFA/step-up auth/dual-control/OPA (Phase 16-E's
 territory); provisioning AWS or Redis B infrastructure. **Phase 16-B does
 not start 16-C.**
+
+## Phase 16-C — Billing/Credits + Assets/Storage/Moderation
+
+Official done criterion: admin can inspect financial state and
+media/storage/moderation state from the same Operations Center, without
+creating a second billing or media authority. Scope: Billing/Credits +
+Assets/Storage/Moderation only — no new mutation surface beyond the
+already-built Phase 9-E quarantine release action.
+
+### Economic truth separation — three things that must never merge
+
+Phase 10's `credit_wallets`/`credit_ledger`/`credit_reservations` (plus the
+`credit_reconciliation` view) are the ONE economic ledger truth in this
+schema. `billing-admin-service.ts` is its first TypeScript reader —
+`src/lib/credits.ts` is write/reserve-only and its own header says "NOT
+WIRED IN YET." Three things this surface deliberately keeps apart, all
+documented in `billing-admin-contract.ts`'s header:
+
+1. **Phase 10's ledger truth** (what this surface reads) — real money
+   owed/spent, `credit_wallets`/`credit_ledger`/`credit_reservations`.
+2. **Phase 15-B's cost ESTIMATE** (`cost-contract.ts`: "THIS IS AN
+   ESTIMATE. IT IS NOT SPEND, AND IT IS NOT MONEY OWED") — never fetched
+   here, not even side by side. A structural test bans
+   `credit_price_per_unit` reads and any `finops/cost-contract` import
+   anywhere in the new files, mirroring Phase 15-B's own ban in the other
+   direction.
+3. **Stripe** — zero integration in this repository (no `stripe`
+   dependency, no webhook, no customer/subscription table). The panel
+   renders the static constant `STRIPE_INTEGRATION_STATE =
+   "STRIPE_NOT_CONFIGURED"`, never a live probe.
+
+`getAdminBillingView` runs four INDEPENDENT fallible reads
+(wallet/reconciliation/ledger/reservations) and combines them into
+`NO_ACCOUNT` (all succeed, zero evidence) / `LEDGER_UNAVAILABLE` (all
+fail) / `PARTIAL_DATA` (mixed) / `FOUND` — the same defensive discipline
+16-A/16-B's admin services already use, so a transient failure on one
+table degrades rather than discards real evidence from the others. No
+`.rpc(` call exists anywhere in `billing-admin-service.ts` —
+`reserve_credits`/`settle_reservation`/`refund_reservation`/
+`grant_credits` remain Phase 10's own mutation surface, untouched.
+
+### Assets / Storage / Moderation — one canonical table, one service, two pages
+
+`public.media_assets` (Phase 9) is the one asset/storage/moderation truth
+in this schema. `asset-admin-service.ts` is the ONLY new read of it, reused
+by BOTH the Assets/Storage and Moderation pages (same bounded view,
+different field emphasis) rather than building two competing reads —
+`generation-investigation-service.ts` (16-A) and
+`risk-investigation-service.ts` (16-A closure) already read narrower
+slices of the same table for their own purposes; this contract's view is a
+superset, not a competing definition.
+
+Deliberately excluded from `AssetDetailView` and `ASSET_COLUMNS`:
+`bucket`/`object_key`/`backup_bucket`/`backup_key`/`backup_version_id`/
+`backup_etag` (real storage locations/credentials-adjacent identifiers —
+`storage_backend`/`backup_backend`/`backup_status` answer "where and in
+what state" without leaking the path); `declared_content_type`/
+`original_filename` (provider/browser-declared, untrusted);
+`legal_hold`/`retention_policy`/`data_class` (Phase 23 hooks with no real
+values yet). `storageBackend` (the live/delivery location) and the
+`backup*` fields (the DR/S3 evidence) are kept as clearly separate fields,
+never merged into one "storage state" — R2 stays canonical, S3 stays
+DR-only, and the view never implies otherwise.
+
+### Moderation's release action is REUSED, not reinvented
+
+`moderation-admin-service.ts` wraps Phase 9-E's
+`requestMediaRelease`/`approveMediaRelease`/`rejectMediaAsset`/
+`readSafetyAudit` (`src/lib/media/quarantine-release.ts`) UNMODIFIED. That
+file already has real, tested, database-enforced two-person approval
+(`media_release_approvals` PK on `(asset_id, approver_clerk_user_id)`),
+`assertRouteAdmin` gating (the same separate `ROUTE_ADMIN_CLERK_USER_IDS`
+authority `router-admin-service.ts` already distinguishes from Phase 16's
+`requireAdminAccess()`), and a Phase 12-E policy gate
+(`media.quarantine.request`/`.release`/`.reject`) called INSIDE those
+three functions. `moderation-admin-service.ts` adds only: input validation
+before either function is called, and catching the `FORBIDDEN`
+`OrchestrationError` into a bounded `ROUTE_AUTHORITY_DENIED` outcome — the
+same pattern `router-admin-service.ts` established for the identical
+authority layer. No new authorization layer, no new policy gate
+registration (`policies/data/actions.json` is unchanged by this batch —
+verified structurally), and no new two-person mechanism was built. This is
+"expose the smallest safe admin action" territory (explicitly permitted by
+the phase brief), not Phase 16-E's dual-control/passkey/step-up-auth
+territory.
+
+`readSafetyAudit` reads `media_safety_audit` (Phase 9-E), a REAL,
+already-durable, append-only (trigger-enforced) audit table — stronger
+evidence than Phase 16-B's `createLogger()`-only action logging, exposed
+here read-only rather than duplicated.
+
+### Testability difference from Phase 16-B
+
+Unlike 16-B's DLQ redrive/BullMQ retry (real AWS/real Redis B, correctly
+classified `DEFERRED_EXTERNAL`), the moderation release action is
+Supabase-RPC-based and fully testable offline: `FakeSupabaseClient` (the
+zero-cost E2E harness) already supports `.rpc()`, and
+`phase-16c-moderation.e2e.test.ts` exercises `performModerationAction`'s
+request/approve/reject paths — including the "two approvals of an
+unmoderated asset still fail" and "awaiting second approval" cases —
+end to end against real production code. `QUARANTINE_RELEASE` is `PASS`,
+not `DEFERRED_EXTERNAL`.
+
+### Not in this batch
+
+FinOps/cost-estimate display of any kind (deliberately, to avoid the
+conflation Phase 15-B's own contract forbids); a live Stripe integration
+or check (none exists in this repository); any new mutation beyond the
+already-built quarantine release action (no wallet adjustment, no ledger
+correction, no asset deletion/restore); a durable admin-action audit table
+for Billing/Assets reads (same named gap as 16-B — `security_events`'
+`kind` taxonomy is DB-CHECK-constrained, no migration by default this
+batch); passkeys/MFA/step-up auth/OPA integration (Phase 16-E's
+territory). **Phase 16-C does not start 16-D, and does not implement
+16-E early.**

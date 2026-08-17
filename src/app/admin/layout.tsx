@@ -33,8 +33,14 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * screen the official 16-A package names (Dashboard, Users, Workspace/
  * Project, Risk, Generations/Attempts/Traces) is a real link — 16-A itself
  * is done. Phase 16-B adds "Failed Jobs / DLQ", "Queue Health", "Models /
- * Providers", and "Router Controls" as real links too; everything below
- * remains labels only for later Phase 16 packages (16-C/D/E).
+ * Providers", and "Router Controls" as real links. Phase 16-C adds
+ * "Billing / Credits", "Assets / Storage", and "Moderation" — deliberately
+ * NOT "Cost / FinOps": that label names Phase 15-B's operational cost
+ * ESTIMATE, which 16-C intentionally never merges with Phase 10's economic
+ * ledger truth (see `billing-admin-contract.ts`'s header), so it stays a
+ * label until a future slice builds it as its own, clearly-separate
+ * screen. Everything below remains labels only for later Phase 16
+ * packages (16-D/E).
  */
 
 const FUTURE_SECTIONS = ["Incidents", "Cost / FinOps", "Restore", "Recovery"] as const;
@@ -81,6 +87,15 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           <Link href="/admin/router" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Router Controls
+          </Link>
+          <Link href="/admin/billing" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Billing / Credits
+          </Link>
+          <Link href="/admin/assets" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Assets / Storage
+          </Link>
+          <Link href="/admin/moderation" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Moderation
           </Link>
           {FUTURE_SECTIONS.map((label) => (
             <span key={label} className="cursor-not-allowed rounded px-2 py-1.5 text-neutral-600">

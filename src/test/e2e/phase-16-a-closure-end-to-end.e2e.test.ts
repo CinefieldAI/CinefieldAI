@@ -311,7 +311,28 @@ test("sensitive-data boundary: no raw Clerk object, token, secret, or signed-URL
   }
 });
 
-test("read-only guarantee: zero mutation authority anywhere across every 16-A lib/api file", () => {
+/**
+ * Files actually owned by 16-A itself — excludes every later Phase 16
+ * package's own admin files, each of which proves its OWN read-only-vs-
+ * mutation boundary in its own closure test (16-B:
+ * `phase-16b-closure-end-to-end.e2e.test.ts`'s "exactly the four documented
+ * mutation call sites" test; 16-C: `phase-16c-closure-end-to-end.e2e.test.ts`'s
+ * cross-phase ownership sweeps). 16-A's own promise was "investigation
+ * only, zero mutation" — 16-B and 16-C were explicitly authorized to add
+ * real, narrow mutations on top of that (route disable, BullMQ retry, DLQ
+ * redrive, the already-built Phase 9-E quarantine release action), so this
+ * sweep is narrowed — not weakened — to keep checking exactly what 16-A
+ * itself promised, the same "narrowed, not weakened" pattern already used
+ * for the Phase 15-D SQS-call structural bans.
+ */
+const SIXTEEN_A_OWNED_FILES = ALL_16A_FILES.filter(
+  (f) =>
+    !/asset-admin|billing-admin|bullmq-admin|dlq-admin|model-provider-admin|moderation-admin|queue-health|router-admin|\/assets\/|\/billing\/|\/dlq\/|\/models-providers\/|\/moderation\/|\/queue-health\/|\/router\/|AssetsStoragePanel|BillingCreditsPanel|DlqInvestigationPanel|ModelsProvidersPanel|ModerationPanel|QueueHealthPanel|RouterControlsPanel|AdminOperationalEntryPoints/i.test(
+      f.file
+    )
+);
+
+test("read-only guarantee: zero mutation authority anywhere across every 16-A-owned lib/api file", () => {
   const banned = [
     { pattern: /\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/, why: "no database write" },
     { pattern: /submitAttempt\s*\(|executeGeneration\s*\(|claimAttemptForSubmission/, why: "no provider execution" },
@@ -325,7 +346,7 @@ test("read-only guarantee: zero mutation authority anywhere across every 16-A li
     { pattern: /suspendUser|deleteUser|banUser|disableUser|changeUserRole|setUserRole|applyTemporaryBlock/i, why: "no user/enforcement mutation" },
     { pattern: /recordSecurityEvent\s*\(|assessRisk\s*\(/, why: "no writing new evidence, no re-scoring" },
   ];
-  for (const { file, text } of ALL_16A_FILES) {
+  for (const { file, text } of SIXTEEN_A_OWNED_FILES) {
     for (const rule of banned) {
       assert.doesNotMatch(text, rule.pattern, `${file}: ${rule.why}`);
     }
