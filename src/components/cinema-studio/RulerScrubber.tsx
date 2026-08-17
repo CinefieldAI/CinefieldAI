@@ -101,6 +101,7 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
   const lastTickUnitRef = useRef(0);
   const lastMoveRef = useRef<{ t: number; px: number } | null>(null);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sweepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const setDrag = (px: number) => {
     dragPxRef.current = px;
@@ -141,14 +142,31 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
   };
 
   // Unlike drag/wheel, Prev/Next (and the keyboard arrows that share this
-  // function) has no velocity to derive a rate from — a neutral rate (1,
-  // i.e. the reference's un-sped-up base pitch) keeps it consistent with
-  // the tick heard mid-drag rather than always landing on one of the
-  // clamp extremes.
+  // function) has no continuous position to derive per-tick timing from —
+  // instead of one instant tick, this schedules one tick per tick-boundary
+  // the CSS transition visually sweeps through, evenly spaced across the
+  // same SNAP_MS duration, so the sound tracks the animated snap instead
+  // of landing all at once before it. All at rate 1 (no velocity to vary
+  // it by). Skipped (single immediate tick) under prefers-reduced-motion,
+  // matching the instant (transition: none) visual in that case.
+  const scheduleTickSweep = (tickCount: number) => {
+    sweepTimersRef.current.forEach(clearTimeout);
+    sweepTimersRef.current = [];
+    if (prefersReducedMotion()) {
+      playTick(1);
+      return;
+    }
+    const n = Math.max(1, Math.round(tickCount));
+    const intervalMs = SNAP_MS / n;
+    for (let i = 0; i < n; i++) {
+      sweepTimersRef.current.push(setTimeout(() => playTick(1), i * intervalMs));
+    }
+  };
+
   const step = (delta: number) => {
     const next = ((selectedIndex + delta) % count + count) % count;
     if (items[next] !== value) onChange(items[next]);
-    playTick(1);
+    scheduleTickSweep(Math.abs(delta) * TICKS_PER_ITEM);
   };
 
   const jumpTo = (index: number) => {
@@ -218,6 +236,7 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
   useEffect(
     () => () => {
       if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+      sweepTimersRef.current.forEach(clearTimeout);
     },
     [],
   );
