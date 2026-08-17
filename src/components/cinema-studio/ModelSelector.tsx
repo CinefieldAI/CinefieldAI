@@ -38,6 +38,37 @@ function selectorAvailability(
     runtime,
   });
 }
+
+/**
+ * TEMPORARY, PICKER-ONLY EXCEPTION — requested explicitly by the site owner
+ * while Cinefield has no real users yet, so these three no longer read
+ * "Unavailable" or block selection here.
+ *
+ * This does NOT touch `productionExecutionDurability` in gemini-provider.ts
+ * or the server's Phase 8 eligibility gate in model-router.ts — both stay
+ * honest: Gemini genuinely has no crash-recovery path yet (interactions.create
+ * hands back no job handle to reconcile after a worker dies mid-generation),
+ * and closing that gap is real Phase-9-media-plane work, not a flag flip. So
+ * pressing Generate on one of these can still be refused server-side with
+ * `provider_execution_not_restart_safe` until that work exists — this only
+ * changes what the picker itself shows and allows.
+ *
+ * Remove this exception once these three either have a proven durable
+ * execution path, or the decision is made not to ship them.
+ */
+const PICKER_UNLOCKED_MODEL_IDS = new Set<string>([
+  "nano-banana-pro",
+  "nano-banana-2",
+  "nano-banana-2-lite",
+]);
+
+function pickerAvailability(
+  modelId: string,
+  runtime: Map<string, boolean> | null
+): RuntimeAvailability {
+  if (PICKER_UNLOCKED_MODEL_IDS.has(modelId)) return "available";
+  return selectorAvailability(modelId, runtime);
+}
 import {
   Check,
   ChevronDown,
@@ -567,7 +598,7 @@ export default function ModelSelector({
     // A model the server will refuse must not become the active selection —
     // otherwise Generate looks normal and fails at the boundary. "checking"
     // is not permission: unresolved runtime data means we have not heard yes.
-    if (!canOfferForGeneration(selectorAvailability(id, runtimeAvailability))) return;
+    if (!canOfferForGeneration(pickerAvailability(id, runtimeAvailability))) return;
     onChange(id);
     setOpen(false);
     setQuery("");
@@ -941,7 +972,7 @@ export default function ModelSelector({
                               key={key}
                               model={m}
                               unavailableLabel={availabilityLabel(
-                                selectorAvailability(m.id, runtimeAvailability)
+                                pickerAvailability(m.id, runtimeAvailability)
                               )}
                               value={value}
                               onSelect={select}
