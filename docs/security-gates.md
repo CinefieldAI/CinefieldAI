@@ -3951,3 +3951,60 @@ route-admin screens (named in the shell's navigation as inactive labels
 only); alert-history or recovery-incident persistence (both remain
 unpersisted, exactly as the Phase 16 master audit found); addition to product
 navigation. **Phase 16 is not complete.**
+
+## Phase 16-A/2 — read-only generation investigation (code-only)
+
+Answers one operator question: "what happened to this generation?" —
+Generation summary, its attempts in order, and whatever trace/correlation
+evidence was actually persisted. No operational action of any kind.
+
+### The real trace chain, verified against schema — not the roadmap's guess
+
+`generations` and `generation_attempts` have no `trace_id` column. The only
+persisted trace correlation for a generation is `outbox_events` rows where
+`aggregate_type = 'generation'` and `aggregate_id` is the generation id —
+and `trace_id` there is nullable: `claim_generation_tx` writes
+`p_trace_id: null` unconditionally, while `complete_generation_tx` and the
+cancel/failure paths pass a real one only when available at that moment.
+"provider_request_id" maps to the real `generation_attempts.provider_job_id`
+column; "media_id" maps to `media_assets.id`, joinable by both
+`generation_id` and the narrower `generation_attempt_id`. No distinct
+"artifact" concept exists anywhere in this schema — `media_assets` already
+IS the artifact record, so "artifact_id" is classified `NOT_APPLICABLE`
+rather than invented. `buildTraceChain()` (pure, in
+`generation-investigation-contract.ts`) derives every link's status from
+what was actually queried for that one generation; a link with no evidence
+renders `NOT_PERSISTED`, never a silently-dropped field.
+
+### Four narrow, concurrent, explicit-column reads — nothing else
+
+`generation-investigation-service.ts`'s `getGenerationInvestigation` reads
+`generations`, `generation_attempts`, `outbox_events`, and `media_assets`,
+each filtered by the one generation id, each with an explicit column list
+(never `*`), each bounded with `LIMIT 50`. Deliberately excluded from every
+select even though the columns exist: `generations.prompt`/
+`negative_prompt`/`input_url`/`output_url`/`thumbnail_url`/`error_message`/
+`metadata`; `generation_attempts.cost_amount`/`cost_currency` (Phase 10
+boundary — a future, separately reviewed admin billing slice, not this
+one); `outbox_events.payload`; `media_assets.object_key`/`bucket`/
+`declared_*`. A malformed generation id (reusing the existing
+`GENERATION_ID_PATTERN` from `generation-api-contract.ts`, not a new one)
+never reaches the database at all.
+
+### Same admin boundary, same opaque-404 convention
+
+`/api/admin/generations/[generationId]` calls `requireAdminAccess()` —
+the identical Phase 16/1 boundary, never `ROUTE_ADMIN_CLERK_USER_IDS`.
+Denial and a genuine missing generation both answer 404; they are
+distinguished only by response body shape (`{error:"not_found"}` vs. the
+full `{outcome:"GENERATION_NOT_FOUND"}` result), and a non-admin caller can
+never reach the code path that produces the second shape, so nothing leaks.
+
+### Not in this slice
+
+Users, Workspaces, and Risk screens (16-A's official package still needs
+all three); alert-history/recovery-incident persistence; any operational
+action (retry, cancel, redrive, route/provider mutation, billing); Phase
+16-A's own done criterion ("admin can trace a user/generation event
+end-to-end") is now reachable for the generation half but not yet for a
+user- or workspace-scoped starting point. **Phase 16-A is not complete.**

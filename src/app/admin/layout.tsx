@@ -22,13 +22,24 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * ---------------------------------------------------------------------------
  * NAVIGATION IS LABELS, NOT ROUTES, FOR EVERYTHING NOT BUILT YET
  * ---------------------------------------------------------------------------
- * Incidents / Cost / Restore / Recovery / DLQ / Providers are named here so
- * the shell's shape is future-proof, but none of them is a working link —
- * building the nav entry is not building the screen, and this batch builds
- * exactly one screen.
+ * Users / Workspaces / Risk / Incidents / Cost / Restore / Recovery / DLQ /
+ * Providers are named here so the shell's shape is future-proof, but none
+ * of them is a working link — building the nav entry is not building the
+ * screen. "Generations" became a real link in Phase 16-A/2; the rest of
+ * 16-A (Users/Workspaces/Risk) remains labels only.
  */
 
-const FUTURE_SECTIONS = ["Incidents", "Cost / FinOps", "Restore", "Recovery", "DLQ", "Providers / Routes"] as const;
+const FUTURE_SECTIONS = [
+  "Users",
+  "Workspaces",
+  "Risk",
+  "Incidents",
+  "Cost / FinOps",
+  "Restore",
+  "Recovery",
+  "DLQ",
+  "Providers / Routes",
+] as const;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const access = await requireAdminAccess();
@@ -48,6 +59,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <nav className="mt-6 flex flex-col gap-1 text-sm">
           <Link href="/admin" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             System Health
+          </Link>
+          <Link href="/admin/generations" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Generations
           </Link>
           {FUTURE_SECTIONS.map((label) => (
             <span key={label} className="cursor-not-allowed rounded px-2 py-1.5 text-neutral-600">
