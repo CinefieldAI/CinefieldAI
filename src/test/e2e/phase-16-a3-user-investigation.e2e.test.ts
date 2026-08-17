@@ -226,7 +226,11 @@ test("PARTIAL_DATA: profile read failure with real generation evidence is report
   const clerkUserId = "user_partial_case";
   seedGenerationForUser(db, clerkUserId);
 
-  // Simulate the documented grant asymmetry: profiles read fails, generations succeeds.
+  // Simulate a profiles-read failure (whatever the cause) with the
+  // generations read still succeeding — the defensive independent-read
+  // split this service keeps regardless of live grant state (see
+  // user-investigation-service.ts's header; the Phase 16-A/3 audit found
+  // repository evidence actually grants service_role SELECT on profiles).
   const originalFrom = db.from.bind(db);
   const admin = {
     from: (table: string) => {

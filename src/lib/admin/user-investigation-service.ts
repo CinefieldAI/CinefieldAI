@@ -34,14 +34,17 @@ import {
  * ---------------------------------------------------------------------------
  * WHY THE TWO READS ARE INDEPENDENT, NOT ONE Promise.all + ONE catch
  * ---------------------------------------------------------------------------
- * See `user-investigation-contract.ts`'s header: `profiles`' committed
- * `service_role` grant is missing `SELECT` (unlike `generations`, which has
- * `GRANT ALL`). If that is the live grant, every `profiles` read here fails
- * with a permission error while the `generations` read still succeeds. Each
- * read is caught on its own so that a `profiles`-only failure degrades to
- * `PARTIAL_DATA` (recent-generation evidence still shown, honestly labelled
- * as missing identity enrichment) instead of discarding real generation
- * evidence just because an unrelated table's grant is wrong.
+ * See `user-investigation-contract.ts`'s header: repository evidence, once
+ * every migration is considered (not just the first one that defines
+ * `profiles`), shows `service_role` DOES have `SELECT` on `profiles` — a
+ * later migration grants it and nothing ever revokes it. This split is kept
+ * anyway, as defensive discipline rather than a workaround for a known gap:
+ * if a `profiles` read ever fails for any reason (a future grant change, a
+ * transient error, an RLS regression), it is caught on its own so the
+ * failure degrades to `PARTIAL_DATA` (recent-generation evidence still
+ * shown, honestly labelled as missing identity enrichment) instead of
+ * discarding real generation evidence just because an unrelated read had a
+ * bad moment.
  */
 
 /** A real user has few enough recent generations that this is generous, not limiting. */
@@ -149,8 +152,9 @@ export async function getAdminUserInvestigation(
     return { outcome: "FOUND", user, recentGenerations };
   }
 
-  // profileResult failed (e.g. the missing-SELECT-grant scenario this
-  // service's header documents) but generationsResult succeeded.
+  // profileResult failed for some reason (see this service's header for why
+  // that is treated as a real, anticipated shape rather than assumed away)
+  // but generationsResult succeeded.
   const recentGenerations = projectGenerations(generationsResult.data ?? []);
   if (recentGenerations.length === 0) {
     // No generation evidence either — cannot confirm existence one way or

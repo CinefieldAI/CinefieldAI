@@ -4016,7 +4016,7 @@ and which generation can I inspect end-to-end?" — a user summary plus its
 recent generations, each linking into the existing 16-A/2 generation
 investigation surface by id. No operational action of any kind.
 
-### The canonical user owner, and a real grant asymmetry surfaced (not invented)
+### The canonical user owner, and a defensive read split (not a grant workaround)
 
 `public.profiles` (`clerk_user_id` primary key,
 `supabase/migrations/20260805132704_remote_schema.sql`) is the one
@@ -4025,25 +4025,35 @@ user-identity table in this schema. `generations.clerk_user_id` and
 DELETE CASCADE`, so `generations.clerk_user_id` — the same ownership column
 16-A/2 already trusts — is a safe, existing ownership relation for "this
 user's recent generations." No workspace table exists in this schema at
-all; "workspace" only ever means `projects` here, and this slice does not
-build a Workspaces screen.
+all; "workspace" only ever means `projects` here (Phase 16-A/4 reconciles
+the roadmap's "Workspaces" label to this table — see that section below).
 
-The same migration's own `GRANT` statements are NOT symmetric across the
-three tables: `generations` gets `GRANT ALL ... TO service_role` and
-`projects` gets an explicit `SELECT` grant, but `profiles` grants
-`service_role` only `REFERENCES,TRIGGER,TRUNCATE,MAINTAIN` — no `SELECT`.
-This batch cannot connect to production Postgres to confirm whether that
-reflects the live grants, and adding a migration to fix it is out of scope
-for a read-only slice (Phase 16-A/3 creates no migration, per its own
-constraint). `user-investigation-service.ts` is written to degrade
-honestly if the grant is real: the `profiles` read and the `generations`
-read run as two INDEPENDENT fallible reads, and a `profiles` failure with
-real generation evidence still present reports `PARTIAL_DATA` — never
-discarding the generation evidence, never fabricating a profile. If both
-reads fail, or the `profiles` read fails and no generation evidence exists
-either, the result is `EVIDENCE_UNAVAILABLE` — existence is never guessed.
-An operator (or a future migration, out of scope here) should verify and,
-if needed, grant `SELECT` on `public.profiles` to `service_role`.
+**Correction (Phase 16-A/3 post-implementation audit, carried forward in
+Phase 16-A/4):** the original version of this section claimed `profiles`
+grants `service_role` only `REFERENCES,TRIGGER,TRUNCATE,MAINTAIN` — no
+`SELECT` — citing only `20260805132704_remote_schema.sql`. That was an
+incomplete read of the migration history. A later migration,
+`20260811120000_credit_system.sql` (line 127), issues `GRANT ALL ON TABLE
+"public"."profiles" TO "service_role"`, and no migration anywhere in this
+repository ever revokes anything from `service_role` on any table.
+Repository evidence, taken as a whole, is
+`PROFILE_SERVICE_ROLE_SELECT_REPOSITORY_STATUS: CONFIRMED_PRESENT`. Live
+database state was not independently queried and stays a separate,
+`NOT_VERIFIED` question. **`PROFILE_GRANT_GAP: NONE`; no migration is
+required or was created for this.**
+
+`user-investigation-service.ts` still runs the `profiles` read and the
+`generations` read as two INDEPENDENT fallible reads rather than one
+combined `Promise.all` + single catch — kept as ordinary defensive
+discipline, not because a grant gap is expected. It costs nothing, it is
+correct under either grant state, and it means a `profiles`-specific
+failure of any kind (a future grant change, a transient error, an RLS
+regression) degrades to `PARTIAL_DATA` — real generation evidence still
+shown, honestly labelled as missing identity enrichment — instead of
+discarding real evidence because an unrelated read had a bad moment. If
+both reads fail, or the `profiles` read fails and no generation evidence
+exists either, the result is `EVIDENCE_UNAVAILABLE` — existence is never
+guessed.
 
 ### Two narrow, independent, explicit-column reads — nothing else
 
@@ -4084,10 +4094,113 @@ trace-chain logic: a structural test asserts the new files never re-declare
 
 ### Not in this slice
 
-Workspaces and Risk screens (16-A's official package still needs both); any
-operational action (suspend, delete, role change, workspace-membership
-mutation, billing); a fix for the `profiles`/`service_role` grant asymmetry
-(flagged above, requires a migration this batch does not create). Phase
-16-A's done criterion ("admin can trace a user/generation event
+Workspaces and Risk screens (16-A's official package still needed both, as
+of this slice — Phase 16-A/4 adds Workspaces). Any operational action
+(suspend, delete, role change, workspace-membership mutation, billing).
+Phase 16-A's done criterion ("admin can trace a user/generation event
 end-to-end") is now reachable starting from either a generation id (16-A/2)
 or a user id (16-A/3). **Phase 16-A is not complete.**
+
+## Phase 16-A/4 — read-only workspace/project investigation, and the 16-A/3 correction (code-only)
+
+Two things in one batch: a read-only investigation surface answering "what
+belongs to this project/workspace, who owns it, and which generations can I
+inspect end-to-end?", and a correction of the stale profile-grant claim the
+16-A/3 post-implementation audit found in that slice's commentary.
+
+### The 16-A/3 correction
+
+The 16-A/3 implementation claimed `profiles` grants `service_role` only
+`REFERENCES,TRIGGER,TRUNCATE,MAINTAIN` — no `SELECT` — citing only
+`20260805132704_remote_schema.sql`. The 16-A/3 post-implementation audit
+found this incomplete: `20260811120000_credit_system.sql` (line 127) issues
+`GRANT ALL ON TABLE "public"."profiles" TO "service_role"`, six days after
+the narrower grant, and no migration anywhere in this repository ever
+revokes anything from `service_role` on any table. Taken as a whole,
+repository evidence is `PROFILE_SERVICE_ROLE_SELECT_REPOSITORY_STATUS:
+CONFIRMED_PRESENT`; live database state was not independently queried and
+stays `NOT_VERIFIED` as a separate question. `PROFILE_GRANT_GAP: NONE`;
+**no migration was created for this, in 16-A/3 or here.** The stale claim is
+removed from `user-investigation-contract.ts`, `user-investigation-
+service.ts`, and the 16-A/3 test's rationale comment (the behavioral
+assertion — `profiles` and `generations` reads stay independent, a
+`profiles` failure with real generation evidence still reports
+`PARTIAL_DATA` — is unchanged and re-verified by this batch's own regression
+run). The independent-read split itself is kept, reframed as ordinary
+defensive discipline rather than a workaround for a documented gap: it costs
+nothing, it is correct under either grant state, and it means any future
+`profiles`-specific failure (a grant change, a transient error, an RLS
+regression) still degrades honestly instead of discarding real evidence.
+
+### "Workspace" reconciled to `projects`, not invented
+
+The roadmap names a "Workspaces" screen; no `workspaces` or
+`workspace_members` table exists anywhere in this schema, and this batch
+does not create one. The closest and only canonical concept is
+`public.projects` (`id` uuid PK, `clerk_user_id NOT NULL REFERENCES
+profiles(clerk_user_id)`, `title` 1–150 chars, `status` enum, timestamps),
+with `generations.project_id REFERENCES projects(id) ON DELETE CASCADE`. The
+screen and its nav entry are labelled "Workspace / Project" throughout, not
+bare "Workspaces" — naming the roadmap concept honestly without pretending a
+separate entity exists.
+
+### Two narrow, independent, explicit-column reads — nothing else
+
+`getAdminWorkspaceInvestigation()` (`workspace-investigation-service.ts`)
+reads `projects` (one row, `id, title, status, clerk_user_id, created_at,
+updated_at`) and `generations` (≤20 rows, `id, status, generation_type,
+created_at, updated_at, completed_at`, filtered by `project_id`, ordered
+`created_at desc`), each with an explicit column list. Deliberately
+excluded: `projects.description` (free-form user prose) and
+`projects.thumbnail_url` (points at rendered media); every `generations`
+column 16-A/2 already excludes, plus `provider`/`model`/`clerk_user_id`
+(the workspace's own `ownerClerkUserId` already carries the owner
+reference). The two reads are independent for the same reason 16-A/3's are:
+a `projects`-only failure with real generation evidence present degrades to
+`PARTIAL_DATA` rather than discarding it — ordinary defensive discipline,
+not a response to a known `projects` grant issue (repository evidence
+already shows `service_role` has `SELECT` on `projects`,
+`20260805132704_remote_schema.sql`). Outcomes: `WORKSPACE_NOT_FOUND`,
+`EVIDENCE_UNAVAILABLE`, `PARTIAL_DATA`, `NO_GENERATIONS`, `FOUND` — the same
+shape 16-A/3 established. There is deliberately no `OWNER_NOT_AVAILABLE`
+outcome: `projects.clerk_user_id` is `NOT NULL` on the row that establishes
+the workspace's own existence, so it cannot independently fail once the
+workspace is found — the same "`NOT_APPLICABLE`, not invented" standard
+16-A/2 applies to `artifact_id`.
+
+### Owner and generation linkage — reused, not duplicated
+
+The owner is exposed as a bare `clerk_user_id` reference, never enriched by
+a `profiles` read in this service — it links to `/admin/users?clerkUserId=
+<id>` (16-A/3), the same "link by id, don't re-implement" precedent 16-A/3
+itself set by linking to `/admin/generations?generationId=<id>` (that query
+param is not yet consumed by either target page — an existing, accepted gap
+this batch does not change). Each recent-generation row links to
+`/admin/generations?generationId=<id>` (16-A/2). A structural test asserts
+the new files never re-declare `buildTraceChain`/`TraceChainLink`, never
+re-query 16-A/2's tables, never re-implement `getAdminUserInvestigation`,
+and never query `profiles`.
+
+### Deliberately deferred: by-owner project listing
+
+`projects.clerk_user_id` ownership is unambiguous (`NOT NULL`, FK-backed),
+so listing a user's projects would be safe to build. It is left for a future
+slice anyway: the brief asked for the narrowest service, and a by-owner list
+is a second query shape (bounding, ordering, its own UI) this slice's
+primary question — investigate one project id — does not need.
+
+### Same admin boundary, same opaque-404 convention
+
+`/api/admin/workspaces/[projectId]` calls `requireAdminAccess()` — the
+identical boundary every Phase 16 admin route reuses, never
+`ROUTE_ADMIN_CLERK_USER_IDS`. Denial and a genuine missing workspace both
+answer 404, distinguished only by response body shape.
+
+### Not in this slice
+
+Risk screen (16-A's last remaining official package item) and Dashboard
+completion. Any operational action (edit, delete, rename, transfer
+ownership, member management, generation mutation). By-owner project
+listing (see above). Phase 16-A's done criterion is now reachable starting
+from a generation id (16-A/2), a user id (16-A/3), or a project id
+(16-A/4). **Phase 16-A is not complete.**

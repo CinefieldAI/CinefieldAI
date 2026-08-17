@@ -22,25 +22,33 @@
  * exposes per generation, never expanded into its own view.
  *
  * ---------------------------------------------------------------------------
- * A REAL GRANT ASYMMETRY, NOT ASSUMED AWAY
+ * TWO INDEPENDENT READS — DEFENSIVE ARCHITECTURE, NOT A WORKAROUND FOR A GAP
  * ---------------------------------------------------------------------------
- * The same migration that defines `profiles` also states its live grants,
- * and they are NOT symmetric with `generations` (`GRANT ALL ... TO
- * service_role`) or `projects` (`GRANT SELECT, ... TO service_role`):
- * `profiles` grants `service_role` only `REFERENCES,TRIGGER,TRUNCATE,
- * MAINTAIN` — no `SELECT`. If that reflects the live database (this batch
- * cannot connect to production Postgres to confirm either way, and adding a
- * migration to fix it is explicitly out of scope for this slice), a read of
- * `profiles` through the admin service-role client fails with a real
- * Postgres permission error, not an empty result. `user-investigation-
- * service.ts` therefore treats the `profiles` read and the `generations`
- * read as two INDEPENDENT fallible reads rather than one combined
- * `Promise.all` + single catch — the pattern `generation-investigation-
- * service.ts` uses is safe there because all four of its reads share one
- * `service_role`-granted table family; it is not safe to copy here verbatim.
- * `PARTIAL_DATA` exists specifically to name "we have generation evidence
- * for this identity but the profile enrichment could not be read" — a real,
- * anticipated shape, not a hypothetical.
+ * Phase 16-A/3 originally claimed `profiles` grants `service_role` only
+ * `REFERENCES,TRIGGER,TRUNCATE,MAINTAIN` — no `SELECT` — citing only
+ * `20260805132704_remote_schema.sql`. The Phase 16-A/3 post-implementation
+ * audit corrected this: a LATER migration, `20260811120000_credit_system.sql`
+ * (line 127), issues `GRANT ALL ON TABLE "public"."profiles" TO
+ * "service_role"`, and no migration anywhere in this repository ever revokes
+ * anything from `service_role` on any table. Per full repository evidence,
+ * `service_role` DOES have `SELECT` on `profiles`
+ * (`PROFILE_SERVICE_ROLE_SELECT_REPOSITORY_STATUS: CONFIRMED_PRESENT`). Live
+ * database state was not independently verified by that audit and remains
+ * `NOT_VERIFIED` as a separate question from repository evidence.
+ *
+ * `user-investigation-service.ts` still treats the `profiles` read and the
+ * `generations` read as two INDEPENDENT fallible reads rather than one
+ * combined `Promise.all` + single catch. That split is kept deliberately,
+ * not because a grant gap is expected: it costs nothing at runtime, it is
+ * correct regardless of which grant state turns out to be true, and it means
+ * a `profiles`-specific failure of ANY kind (a future grant change, a
+ * transient error, an RLS regression) degrades to `PARTIAL_DATA` — real
+ * generation evidence still shown, honestly labelled as missing identity
+ * enrichment — instead of discarding real evidence because an unrelated
+ * table had a bad moment. `PARTIAL_DATA` exists to name "we have generation
+ * evidence for this identity but the profile enrichment could not be read" —
+ * a real, anticipated shape under normal fallible-read discipline, not
+ * evidence of a known gap.
  */
 
 export type UserAccountLifecycleStatus = "unknown";
