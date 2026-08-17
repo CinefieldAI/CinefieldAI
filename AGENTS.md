@@ -18,7 +18,7 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `1147c60` (2026-08-17).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `e33ce4e` (2026-08-17).**
 The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
 items by their own identity (name), not by slot position, with each
 item's offset from the selected index recomputed via shortest-path
@@ -84,9 +84,16 @@ so the two compose instead of clobbering each other (confirmed the
 reference's own DOM does the same split); combining both into one
 `transform: translate(...) scale(...)` value clipped the scaled-up
 selected label's top edge by ~11px. Prev/Next era buttons play the tick
-sound too (rate 1, base pitch) — an explicit deviation from the
-reference, which stays silent on any button click; direct label clicks
-remain silent, only Prev/Next and drag/wheel produce sound. Do not
+sound too — an explicit deviation from the reference, which stays silent
+on any button click. As of `e33ce4e`, a Prev/Next press (or the keyboard
+arrows, which share the same `step()`) schedules 10 ticks (one per tick-
+boundary crossed for a one-item step) evenly spaced across the same
+180ms the CSS snap transition takes, rather than one instant tick —
+matches feedback from a standalone prototype the user tested, which had
+a separate "landing" beep removed in favor of just the sweep-through
+ticks. Falls back to one immediate tick under prefers-reduced-motion.
+Direct label clicks remain silent, only Prev/Next and drag/wheel produce
+sound. Do not
 restyle, re-scope, "clean up", or add drag/real-media support to any
 other widget in this panel without an explicit user request naming this
 feature.
