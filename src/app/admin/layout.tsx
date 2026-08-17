@@ -26,13 +26,16 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * are named here so the shell's shape is future-proof, but none of them is a
  * working link — building the nav entry is not building the screen.
  * "Generations" became a real link in Phase 16-A/2, "Users" in Phase 16-A/3,
- * "Workspace / Project" in Phase 16-A/4 (labelled that way, not bare
- * "Workspaces" — the roadmap concept reconciles to `public.projects`, see
- * `workspace-investigation-contract.ts`'s header); Risk remains a label only.
+ * "Workspace / Project" in Phase 16-A/4, "Risk" in the Phase 16-A closure
+ * batch (labelled that way, not bare "Workspaces" for the projects screen —
+ * the roadmap concept reconciles to `public.projects`, see
+ * `workspace-investigation-contract.ts`'s header). With Risk added, every
+ * screen the official 16-A package names (Dashboard, Users, Workspace/
+ * Project, Risk, Generations/Attempts/Traces) is a real link — 16-A itself
+ * is done; everything below remains labels only for later Phase 16 packages.
  */
 
 const FUTURE_SECTIONS = [
-  "Risk",
   "Incidents",
   "Cost / FinOps",
   "Restore",
@@ -68,6 +71,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           <Link href="/admin/workspaces" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Workspace / Project
+          </Link>
+          <Link href="/admin/risk" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Risk
           </Link>
           {FUTURE_SECTIONS.map((label) => (
             <span key={label} className="cursor-not-allowed rounded px-2 py-1.5 text-neutral-600">

@@ -18,7 +18,7 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `27920ba` (2026-08-17).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `1ef4162` (2026-08-17).**
 The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
 items by their own identity (name), not by slot position, with each
 item's offset from the selected index recomputed via shortest-path
@@ -42,22 +42,43 @@ open after upload). All option arrays live in `cinemaStudioData.ts` as
 `CINEMA40_*` (not shared with the generic `GENRES`/`COLOR_PALETTES`/
 `LIGHTING`). Colour tokens and the accent (#D97757) are this project's
 own, not the reference's; the reference's real photography/video was
-deliberately not downloaded — gradient swatches stand in. Pointer-drag on
-the arc/ruler/carousel/wheels is still not implemented. Prev/Next click
-stepping and mouse-wheel stepping both work: wheel handling is a shared
-`useWheelStep` hook (gated by a delta threshold and a 220ms cooldown so
-one swipe advances one step), used by `StepperNav`'s own pill (Genre,
-Tempo) and, as of `27920ba`, by `GenreArc`'s whole root div too, so
-scrolling anywhere over the genre arc — not just the small pill — steps
-it; `StepperNav`'s handler calls `stopPropagation` so the nested pill
-doesn't double-step. `439d1d9` fixed `GenreArc`'s root div missing
-`flex flex-col`, which had left its pill sitting above the card instead
-of below it like `TempoCarousel`; `27920ba` also removed the selected
-genre card's static `cursor-pointer` (its click is a no-op when already
-selected) in favor of `cursor-default`, leaving neighbor cards
-`cursor-pointer` since clicking them does select. Do not restyle,
-re-scope, "clean up", or add drag/real-media support without an explicit
-user request naming this feature.
+deliberately not downloaded — gradient swatches stand in. Prev/Next click
+stepping and mouse-wheel stepping both work on Genre/Tempo/Camera: wheel
+handling is a shared `useWheelStep` hook (gated by a delta threshold and
+a 220ms cooldown so one swipe advances one step), used by `StepperNav`'s
+own pill (Genre, Tempo) and, as of `27920ba`, by `GenreArc`'s whole root
+div too, so scrolling anywhere over the genre arc — not just the small
+pill — steps it; `StepperNav`'s handler calls `stopPropagation` so the
+nested pill doesn't double-step. `439d1d9` fixed `GenreArc`'s root div
+missing `flex flex-col`, which had left its pill sitting above the card
+instead of below it like `TempoCarousel`; `27920ba` also removed the
+selected genre card's static `cursor-pointer` (its click is a no-op when
+already selected) in favor of `cursor-default`, leaving neighbor cards
+`cursor-pointer` since clicking them does select.
+
+Era (Film setup tab) is the one exception to "no pointer-drag yet": as of
+`1ef4162` it has its own `RulerScrubber.tsx` component with real
+pointer-drag, wheel, and keyboard (Left/Right/Home/End) scrubbing, plus a
+synthesized tick sound (`src/lib/cinema-studio-4/tick-sound.ts`,
+`playTick(rate)` — a Web Audio click whose pitch is driven by a
+velocity-derived `rate` multiplier clamped to ~0.85–1.5, not a random
+jitter or a fixed per-tick-type preset). Both were reverse-engineered by
+instrumenting the reference site's own Web Audio calls live: every tick
+plays an identical short sample with only `playbackRate` varying with
+drag speed, there is no separate "major"/"settle" sound, and Prev/Next
+or direct label clicks are silent — `RulerScrubber` only calls
+`playTick` from actual drag/wheel motion, never from `step()`/`jumpTo()`.
+Era is also cyclic like Genre/Tempo (dragging past "Auto" wraps to
+"1960s", confirmed against the reference), using the same shortest-path-
+wraparound-from-a-continuous-position technique, extended to a
+fractional live position so it tracks a continuous gesture rather than
+just discrete steps — this applies to both the selectable-item labels
+and the decorative tick marks (an earlier version kept the ticks as a
+fixed 81-tick window centered on index 0, which ran out of ticks and
+went blank once the wraparound let selection reach "Auto"; both now use
+the same per-slot wraparound math). Do not restyle, re-scope, "clean
+up", or add drag/real-media support to any other widget in this panel
+without an explicit user request naming this feature.
 
 # More than one agent works in this repo
 

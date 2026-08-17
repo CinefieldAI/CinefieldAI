@@ -4203,4 +4203,127 @@ completion. Any operational action (edit, delete, rename, transfer
 ownership, member management, generation mutation). By-owner project
 listing (see above). Phase 16-A's done criterion is now reachable starting
 from a generation id (16-A/2), a user id (16-A/3), or a project id
-(16-A/4). **Phase 16-A is not complete.**
+(16-A/4).
+
+## Phase 16-A closure — Risk investigation + Dashboard completion (code-only)
+
+The last two items of the official 16-A package (`Dashboard, Users,
+Workspace/Project, Risk, Generations, Attempts, Traces`): a read-only Risk
+investigation surface, and a dashboard that links out to every real 16-A
+screen. With this batch, **every name in the official 16-A package is a real
+screen** and the done criterion — "admin can follow a user/generation event
+end-to-end" — is proven by an explicit integration test, not just asserted.
+
+### Risk — the canonical evidence, not a second one
+
+`public.security_events` (Phase 12-C, `supabase/migrations/
+20260826000000_security_events.sql`, extended — not duplicated — by
+`20260827000000_policy_decision_evidence.sql`) is the one append-only
+security/risk evidence log in this repository, and the one this surface
+reads. It already carries `risk_score` and `recommended_action` per row,
+written at record time by the Risk Engine (`src/lib/security/
+risk-engine.ts`, pure `assessRisk()`) — `risk-investigation-service.ts` reads
+those STORED columns verbatim and never calls `assessRisk()` itself, which
+would double-count recurrence and silently disagree with the row's own
+score. `service_role` has had `SELECT` on `security_events` since
+`20260826000000_security_events.sql` line 212 (`GRANT SELECT, INSERT`),
+unchanged by every later migration. No TypeScript anywhere else in this
+repository reads `security_events` back — this admin surface is its first
+reader, exactly the design the migration's own comment anticipates ("Raw
+security evidence is operator data").
+
+Secondary, supporting evidence: `media_assets`' `quarantine_status`/
+`moderation_status`/`moderation_engine`/`moderated_at`/`ingest_status`
+columns — real per-asset safety state, not previously surfaced by any admin
+read (16-A/2 reads `media_assets` but never selected these columns).
+
+### Three lookup axes, each backed by a real column
+
+`clerk_user_id` → `security_events.actor_clerk_user_id` (the verified actor)
++ `media_assets.clerk_user_id`. `generation_id` → `security_events.
+resource_type = 'generation' AND resource_id = <id>` (a real but generic
+text reference, not a dedicated FK) + `media_assets.generation_id` (an
+actual FK). `trace_id` → `security_events.trace_id` only —
+`media_assets` has no `trace_id` column, so a trace lookup never attempts a
+`media_assets` read at all (not an omission; a real schema boundary).
+`project_id` is deliberately NOT a lookup axis: `security_events` has no
+`project_id` column, and joining through a project's owner would silently
+answer "does this project's OWNER have risk evidence" while labelled as a
+project lookup — a fabricated correlation this contract refuses to make.
+`subject_hash` is also not a lookup axis: it is a one-way hash, and
+re-deriving it from an operator-supplied value would mean guessing or
+reimplementing the write-time hash function.
+
+### Primary/secondary asymmetry, degrading honestly in both directions
+
+`security_events` and `media_assets` are read as two independent fallible
+reads (the trace_id axis only ever attempts the first). Because
+`security_events` is the primary/canonical source: a `security_events`
+success — even with genuinely zero rows — combined with a `media_assets`
+failure is `PARTIAL_RISK_EVIDENCE` (the confirmed-empty primary result is
+never discarded, and it is never silently upgraded to `NO_RISK_EVIDENCE`
+either, since the secondary picture is still unknown). A `security_events`
+failure combined with a `media_assets` success is `PARTIAL_RISK_EVIDENCE`
+only when real secondary evidence exists; if the secondary is also empty,
+the result is `RISK_SOURCE_UNAVAILABLE` — an empty secondary cannot stand in
+for a primary source that was never actually read. `NO_RISK_EVIDENCE` fires
+only when both applicable sources were successfully read and both are
+genuinely empty. No risk evidence is never presented as "safe"; the panel
+says so explicitly.
+
+### Observational only
+
+No quarantine release, no user suspension, no provider/route mutation, no
+kill switch, no billing action, no `recordSecurityEvent`/`assessRisk` call
+anywhere in the new files — a structural test bans every one of these
+identifiers by name, plus the generic `.insert/.update/.upsert/.delete`
+sweep every 16-A surface already uses.
+
+### Dashboard completion
+
+`/admin` (Phase 16/1's System Health page) gains a static "Start an
+investigation" section (`AdminInvestigationEntryPoints.tsx`, a server
+component with no fetch) linking to Users, Workspace/Project, Risk, and
+Generations, each with a one-line description of the flow it starts. No
+fake metric, no decorative count, no duplicated detail-screen content — a
+structural test asserts the component never calls `fetch`/`useState`/
+`useEffect`. `admin/layout.tsx`'s nav gains a real `Risk` link; `Incidents`,
+`Cost / FinOps`, `Restore`, `Recovery`, `DLQ`, and `Providers / Routes`
+remain labels, not routes — later Phase 16 packages, not 16-A.
+
+### End-to-end proof of the done criterion
+
+`phase-16-a-closure-end-to-end.e2e.test.ts` seeds one real generation and
+walks it from three independent starting points — a user id, a project id,
+and a security event's own correlation ids — proving the user-path and the
+workspace-path arrive at the byte-identical `getGenerationInvestigation`
+result (`assert.deepEqual`, not just matching outcomes), and that Risk
+evidence joins the same real ids rather than being fabricated to make the
+flow look complete. A second test proves the negative: a generation with no
+`security_events` row reports `NO_RISK_EVIDENCE`, never an invented link.
+
+### Cross-16-A sweep
+
+One test file now walks every file under `src/lib/admin/`, `src/app/api/
+admin/`, `src/app/admin/`, and `src/components/admin/` in a single pass,
+asserting in one place: no `select()` anywhere names a forbidden column; no
+raw Clerk object, token, secret, or signed URL shape exists anywhere; zero
+mutation authority (database writes, provider execution, DLQ/queue
+mutation, routing mutation, kill switch, quarantine release, restore/
+remediation, billing, user/enforcement mutation, or re-scoring) exists
+anywhere; every `/api/admin/*` route calls `requireAdminAccess()` and never
+`ROUTE_ADMIN_CLERK_USER_IDS`; no page outside `layout.tsx` repeats the auth
+check; every `/api/admin/*` route responds through `privateJson` (private,
+no-store), never `NextResponse.json`; and `/api/health/live` remains
+untouched. This does not replace each surface's own dedicated test file —
+it is the belt to their suspenders, catching a regression that touches
+several surfaces at once.
+
+### Not in this batch
+
+Nothing outside 16-A: no 16-B/C/D/E screen, no operational action anywhere,
+no by-owner project listing (16-A/4's own deferred scope), no new admin
+role/claim system (still the Phase 16/1 bootstrap allowlist). **Phase 16-A
+is implementation-complete as of this batch** — Dashboard, Users, Workspace/
+Project, Risk, Generations, Attempts, and Traces are all real, read-only
+screens, and the done criterion is proven by an explicit end-to-end test.
