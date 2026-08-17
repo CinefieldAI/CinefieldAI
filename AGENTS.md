@@ -18,7 +18,7 @@ Only a user instruction that explicitly names /generate unlocks the specific
 change requested — everything else on the page stays as committed. Do not
 "improve", restyle, or clean it up in passing.
 
-**Cinema Studio 4.0 is FULLY LOCKED as of commit `439d1d9` (2026-08-16).**
+**Cinema Studio 4.0 is FULLY LOCKED as of commit `27920ba` (2026-08-17).**
 The Genre arc / Camera Setup wheels / Tempo carousel must key rendered
 items by their own identity (name), not by slot position, with each
 item's offset from the selected index recomputed via shortest-path
@@ -43,14 +43,21 @@ open after upload). All option arrays live in `cinemaStudioData.ts` as
 `LIGHTING`). Colour tokens and the accent (#D97757) are this project's
 own, not the reference's; the reference's real photography/video was
 deliberately not downloaded — gradient swatches stand in. Pointer-drag on
-the arc/ruler/carousel/wheels is still not implemented (Prev/Next click
-stepping and, as of `439d1d9`, mouse-wheel stepping on the Genre/Tempo
-pill both work — wheel handling lives in `StepperNav`, gated by a delta
-threshold and a 220ms cooldown so one swipe advances one step). That
-same commit also fixed `GenreArc`'s root div missing `flex flex-col`,
-which had left its pill sitting above the card instead of below it like
-`TempoCarousel`. Do not restyle, re-scope, "clean up", or add drag/
-real-media support without an explicit user request naming this feature.
+the arc/ruler/carousel/wheels is still not implemented. Prev/Next click
+stepping and mouse-wheel stepping both work: wheel handling is a shared
+`useWheelStep` hook (gated by a delta threshold and a 220ms cooldown so
+one swipe advances one step), used by `StepperNav`'s own pill (Genre,
+Tempo) and, as of `27920ba`, by `GenreArc`'s whole root div too, so
+scrolling anywhere over the genre arc — not just the small pill — steps
+it; `StepperNav`'s handler calls `stopPropagation` so the nested pill
+doesn't double-step. `439d1d9` fixed `GenreArc`'s root div missing
+`flex flex-col`, which had left its pill sitting above the card instead
+of below it like `TempoCarousel`; `27920ba` also removed the selected
+genre card's static `cursor-pointer` (its click is a no-op when already
+selected) in favor of `cursor-default`, leaving neighbor cards
+`cursor-pointer` since clicking them does select. Do not restyle,
+re-scope, "clean up", or add drag/real-media support without an explicit
+user request naming this feature.
 
 # More than one agent works in this repo
 
