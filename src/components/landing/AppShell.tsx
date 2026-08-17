@@ -6,6 +6,7 @@ import Navbar from "@/components/landing/Navbar";
 import SidePanel from "@/components/landing/SidePanel";
 import AudioCreateShell from "@/components/landing/createAudio/AudioCreateShell";
 import CreateImageWorkspace from "@/components/landing/createImage/CreateImageWorkspace";
+import ExploreHome from "@/components/landing/explore/ExploreHome";
 import { MASTER_IMAGE_MODELS } from "@/components/landing/createImage/createImageData";
 import type { ActiveView, PanelKey } from "@/components/landing/panelData";
 import {
@@ -117,6 +118,7 @@ export default function AppShell({ initialView = "default", initialPanel = null 
       <SidePanel activePanel={activePanel} onClose={() => setActivePanel(null)} />
 
       <main className="flex-1">
+        {activeView === "default" && <ExploreHome />}
         {activeView === "createImage" && (
           <CreateImageWorkspace
             onBack={() => setActiveView("default")}
