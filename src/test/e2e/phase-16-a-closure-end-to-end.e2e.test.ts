@@ -366,8 +366,12 @@ test("dashboard: /admin links to every 16-A screen, and future sections are labe
     assert.match(layoutText, new RegExp(href.replace(/\//g, "\\/")), `layout must link to ${href}`);
   }
   // FUTURE_SECTIONS entries render as <span>, never <Link>, and this test
-  // fails if any of them is accidentally turned into a real href.
-  for (const future of ["Incidents", "Cost / FinOps", "Restore", "Recovery", "DLQ", "Providers / Routes"]) {
+  // fails if any of them is accidentally turned into a real href. "DLQ" and
+  // "Providers / Routes" were removed from this list by Phase 16-B, which
+  // correctly promoted them to real links ("Failed Jobs / DLQ",
+  // "Router Controls") — see phase-16b-closure-end-to-end.e2e.test.ts for
+  // that batch's own version of this same assertion, updated for its scope.
+  for (const future of ["Incidents", "Cost / FinOps", "Restore", "Recovery"]) {
     assert.doesNotMatch(layoutText, new RegExp(`href=\\{?["'\`][^"'\`]*${future.split(" ")[0]}`, "i"));
   }
 });

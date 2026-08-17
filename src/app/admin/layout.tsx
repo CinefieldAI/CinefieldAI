@@ -32,17 +32,12 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * `workspace-investigation-contract.ts`'s header). With Risk added, every
  * screen the official 16-A package names (Dashboard, Users, Workspace/
  * Project, Risk, Generations/Attempts/Traces) is a real link — 16-A itself
- * is done; everything below remains labels only for later Phase 16 packages.
+ * is done. Phase 16-B adds "Failed Jobs / DLQ", "Queue Health", "Models /
+ * Providers", and "Router Controls" as real links too; everything below
+ * remains labels only for later Phase 16 packages (16-C/D/E).
  */
 
-const FUTURE_SECTIONS = [
-  "Incidents",
-  "Cost / FinOps",
-  "Restore",
-  "Recovery",
-  "DLQ",
-  "Providers / Routes",
-] as const;
+const FUTURE_SECTIONS = ["Incidents", "Cost / FinOps", "Restore", "Recovery"] as const;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const access = await requireAdminAccess();
@@ -74,6 +69,18 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           <Link href="/admin/risk" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Risk
+          </Link>
+          <Link href="/admin/dlq" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Failed Jobs / DLQ
+          </Link>
+          <Link href="/admin/queue-health" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Queue Health
+          </Link>
+          <Link href="/admin/models-providers" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Models / Providers
+          </Link>
+          <Link href="/admin/router" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Router Controls
           </Link>
           {FUTURE_SECTIONS.map((label) => (
             <span key={label} className="cursor-not-allowed rounded px-2 py-1.5 text-neutral-600">

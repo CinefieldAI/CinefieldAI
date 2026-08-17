@@ -4327,3 +4327,174 @@ role/claim system (still the Phase 16/1 bootstrap allowlist). **Phase 16-A
 is implementation-complete as of this batch** — Dashboard, Users, Workspace/
 Project, Risk, Generations, Attempts, and Traces are all real, read-only
 screens, and the done criterion is proven by an explicit end-to-end test.
+
+## Phase 16-B — Failed Jobs/DLQ, Queue Health, Models/Providers, Router Controls
+
+The first Phase 16 package with real operator MUTATIONS, not just
+investigation. Official done criterion: an authorized operator can inspect
+failed/DLQ work, safely redrive eligible SQS work, safely retry eligible
+BullMQ auxiliary work, and disable a route — all through existing owners,
+never a second implementation of any of them.
+
+### Binding ownership preserved
+
+Temporal remains generation-lifecycle authority; SQS remains critical
+command transport; Phase 15-D remains the sole redrive safety-decision
+authority; BullMQ/Redis B remains auxiliary-only (never lifecycle, never
+provider execution, never billing); Phase 7 remains
+models/providers/router mutation authority; Phase 13-D remains alert
+routing authority; Phase 13-E's sensitive-data boundary is unchanged;
+Phase 16 is presentation + an authorized, narrow action surface on top of
+all of the above — never a second queue engine, lifecycle owner, routing
+evaluator, or alert router.
+
+### Failed Jobs / DLQ — inspection reused verbatim, one new redrive executor
+
+`GET /api/admin/dlq` is `scripts/dlq-investigate.ts`'s exact wiring
+(`createSqsDlqMessageSource` + `createSupabaseDlqRedriveSource` +
+`investigateProviderDlq`, all Phase 15-D, unmodified), reused so the admin
+read and the manual script's read can never diverge.
+
+`POST /api/admin/dlq/redrive` is new: `sqs-dlq-redrive-executor.ts`
+(`src/lib/aws/dlq-redrive/adapters/`, the same package, not a new one).
+Standard SQS semantics mean a specific message can only be targeted by
+receiving it WITH a real visibility timeout (claiming it) — the existing
+Phase 15-D/3 investigation adapter's `VisibilityTimeout: 0` peek
+structurally cannot yield a usable receipt handle, by design. The executor
+receives with a real (short, 30s) claim window, evaluates through the
+UNMODIFIED `evaluateDlqRedriveDecision` (Phase 15-D/1) against the exact
+body it just received — never a client-supplied prior decision — and
+either sends+deletes (only on a fresh `SAFE_TO_REDRIVE`) or releases the
+message immediately via `ChangeMessageVisibility(0)` on any refusal, so a
+refused message is visible to the next reader right away rather than after
+the full claim window lapses. `StartMessageMoveTaskCommand` is deliberately
+never used — it moves an entire DLQ→queue task, with no per-message target,
+so it cannot express "redrive exactly the one message an operator just
+reviewed." The orchestration logic is split behind an injectable
+`DlqRedriveQueueClient` interface (mirroring `DlqMessageSource`'s existing
+split) so the full receive→decide→send/delete→release flow is tested with
+a fake at zero AWS cost — six real-behavior tests cover NO_MESSAGE, a
+receive failure, `UNAVAILABLE` (no evidence source), `REFUSE_INSUFFICIENT_
+EVIDENCE`, `REFUSE_TERMINAL_GENERATION`, and the successful `SAFE_TO_
+REDRIVE` path (verified send-before-delete, correct `MessageGroupId`/
+`MessageDeduplicationId`, no release on success). Two existing Phase 15-D
+package-wide structural tests (`phase-15d1-dlq-redrive.e2e.test.ts`,
+`phase-15d3-dlq-investigation.e2e.test.ts`) previously banned `SendMessage
+Command`/`DeleteMessageCommand`/`ChangeMessageVisibility` across the WHOLE
+package — both were narrowed (not weakened) to exclude exactly this one new
+file, with a new companion test re-asserting the ban holds everywhere else
+including any future file; `StartMessageMoveTask` stays banned with no
+exception, anywhere. The existing atomic attempt claim
+(`claimAttemptForSubmission`, inside `submitAttempt`) remains the sole,
+unduplicated protection against double execution once a redriven command
+is actually delivered — this executor is not a two-phase commit and does
+not need to be one.
+
+### Queue Health — SQS + BullMQ, combined, no duplicate truth
+
+`GET /api/admin/queue-health` reuses Phase 13's own `readiness("provider-
+worker")` for SQS status verbatim (that runtime's dependency matrix already
+marks `sqs` CRITICAL) plus the same DLQ presence peek the Failed Jobs page
+uses, plus real BullMQ per-queue job counts (`getJobCounts` against the
+existing `getQueue()` factory, Phase 6R.8) — not a second CloudWatch alarm,
+not a second queue-health truth, two already-real reads shown together.
+
+### BullMQ — real code, honestly `NOT_CONFIGURED` today
+
+`bullmq-admin-service.ts` calls the real, unmocked BullMQ `Queue`/`Job` API
+(`getJobCounts`, `getFailed`, `job.getState()`, `job.retry()`) against the
+existing Phase 6R.8 foundation — no second queue engine. Redis B is
+genuinely unprovisioned in every environment
+(`infra/modules/redis/main.tf`, `bullmq-foundation.test.ts`'s own header),
+and none of the four named queues (`media-short`, `notifications`,
+`cache-refresh`, `webhook-retry`) has a real job producer yet
+(`queue-names.ts`'s own header: "NONE OF THESE QUEUES HAVE A REAL JOB
+HANDLER YET"). Every BullMQ-touching test in this batch therefore exercises
+the real code path at zero cost and asserts the honest `NOT_CONFIGURED`
+outcome — this is `DEFERRED_EXTERNAL`, not a stub: the moment a future
+phase wires Redis B and a real producer, this surface is already correct
+against it, matching the same testing philosophy `bullmq-foundation.test.ts`
+already established (never fake a live connection, never issue a real
+command in a test). `job.data` and `job.stacktrace` are never read anywhere
+in this surface — only bounded id/name/count/timestamp fields and a
+300-char-truncated `failedReason`. Retry rechecks `job.getState()`
+server-side immediately before calling `job.retry()` — a client claim of
+"this job is failed" is never trusted.
+
+### Models / Providers — catalogue only, `model_routes` deliberately excluded
+
+`GET /api/admin/models-providers` reads `models`/`providers`/
+`provider_models` (Phase 7) — bounded, explicit-column, no `model_routes`.
+That table is the one existing read path (`listRoutesForAdmin`) gated by
+the SEPARATE `ROUTE_ADMIN_CLERK_USER_IDS` allowlist; reading it directly
+from this page, even read-only, would let any Phase 16 admin see
+route-level data by visiting Models/Providers instead of `/admin/router`,
+silently bypassing the boundary Phase 7-B deliberately drew. This surface
+also deliberately never calls `health-aware-router.ts`'s circuit-breaker
+snapshot to recompute live routing eligibility — doing so would mean a
+second place reimplementing the router's own runtime decision, exactly the
+"second routing evaluator" this phase must not become.
+
+### Router Controls — `setRouteEnabled` reused, two authority layers kept separate
+
+`GET /api/admin/router` / `POST /api/admin/router/disable` wrap
+`listRoutesForAdmin`/`setRouteEnabled` (Phase 7-B) UNMODIFIED —
+`router-admin-service.ts` adds only: catching the `FORBIDDEN`
+`OrchestrationError` `assertRouteAdmin` throws internally and turning it
+into a bounded `ROUTE_AUTHORITY_DENIED` outcome (never conflated with the
+Phase 16 `requireAdminAccess()` opaque-404 denial — a valid Phase 16 admin
+who is not also a Phase 7-B route admin gets an honest, distinct refusal,
+never fabricated route data), input validation before either function is
+ever called, and an audit log line. `setRouteEnabled` was chosen over
+`setRuntimeRoutingControl`/`clearRuntimeRoutingControl` (the OTHER existing
+Phase 7 mutation path, with its own built-in Phase 12-E policy gate and
+TTL) specifically because it is one function, literally named for this
+action, whose boolean parameter already gives a single reversible mutation
+for both disable (`false`) and re-enable (`true`) — matching "reversible
+enable/clear semantics" without adding a second mutation path. The runtime-
+control path remains real, unmodified Phase 7 capability, deliberately not
+wired into this UI to keep the action surface to exactly what the done
+criterion asks for.
+
+### The minimum safe action gate (Phase 16-B, not 16-E)
+
+Every mutation (DLQ redrive, BullMQ retry, route disable) requires: an
+authenticated Phase 16 admin (`requireAdminAccess()`), the resource
+owner's own authorization where one already exists (`assertRouteAdmin` for
+routes), a fresh server-side safety recheck immediately before acting
+(the DLQ decision recomputed on the just-received message; BullMQ job
+state rechecked via `job.getState()`), a required operator reason, and an
+audit log line via the existing `createLogger()` (Phase 13-E — every field
+passes through `sanitizeTelemetry` before being written). This is
+deliberately NOT dual-control/two-person approval, passkeys, step-up auth,
+or an OPA integration — those are Phase 16-E's to build. Extending Phase
+12-E's policy registry (`policies/data/actions.json`) with new action
+names for these three mutations was considered and deliberately NOT done:
+registering a new critical action means deciding its role/two-person/
+human-approval requirements, a real business decision this batch is not
+positioned to make unilaterally, and doing so would mean editing the
+shared Rego/conformance suite for a decision Phase 16-E should own.
+
+### Audit evidence — logged, not yet durably queryable
+
+Every mutation logs actor id, action type, target, reason, and outcome via
+`createLogger()` (Phase 13-E's structured logger, already
+`sanitizeTelemetry`-guarded). This is real, but it is NOT a durably
+queryable audit table: `security_events` (Phase 12-C) is the one existing
+durable evidence log, but its `kind` taxonomy is DB-CHECK-constrained —
+adding new admin-action kinds would require a migration, and this batch
+prefers no migration by default. No `admin_actions`/`dlq_history`/
+`bullmq_history`/`router_history` table was created. This is a genuine,
+named gap (`RISK_PERSISTENCE_GAP`-shaped, for actions rather than risk
+evidence) that a durable, immutable audit store — the natural shape of
+Phase 16-E hardening — should close; it is not silently invented here.
+
+### Not in this batch
+
+Route priority mutation (`setRoutePriority` — only enable/disable is
+wired); by-owner BullMQ job listing beyond the four named queues; any
+model/provider catalogue mutation (no CRUD console — inspect only, per the
+roadmap's explicit boundary); a second, generic runtime-flag system (Phase
+21's territory); passkeys/MFA/step-up auth/dual-control/OPA (Phase 16-E's
+territory); provisioning AWS or Redis B infrastructure. **Phase 16-B does
+not start 16-C.**

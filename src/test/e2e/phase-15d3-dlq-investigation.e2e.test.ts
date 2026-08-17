@@ -243,11 +243,8 @@ test("every reachable outcome across this file is one of the four documented sha
 // ===========================================================================
 
 const BANNED: { pattern: RegExp; why: string }[] = [
-  { pattern: /DeleteMessageCommand/, why: "must never delete a DLQ message" },
   { pattern: /PurgeQueueCommand/, why: "must never purge a queue" },
   { pattern: /StartMessageMoveTask/, why: "must never call the real AWS redrive API" },
-  { pattern: /SendMessageCommand/, why: "must never send/redrive a message" },
-  { pattern: /ChangeMessageVisibility/, why: "must never take exclusive ownership of a message" },
   { pattern: /SetQueueAttributes|CreateQueueCommand|DeleteQueueCommand/, why: "must never mutate queue configuration" },
   { pattern: /submitAttempt\s*\(/, why: "must never submit a provider" },
   { pattern: /executeGeneration\s*\(/, why: "must never execute a generation" },
@@ -257,19 +254,44 @@ const BANNED: { pattern: RegExp; why: string }[] = [
   { pattern: /\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/, why: "must never write to the database" },
 ];
 
+// Phase 16-B added the package's one legitimate redrive executor
+// (adapters/sqs-dlq-redrive-executor.ts) — it genuinely sends, deletes, and
+// changes the visibility of exactly one message it just received itself.
+// These three commands stay banned in every OTHER file this phase-15d3
+// batch's own read-only investigation surface touches; `StartMessageMoveTask`
+// (queue-wide, unbounded) stays banned everywhere including that file.
+const MUTATING_MESSAGE_COMMANDS: { pattern: RegExp; why: string }[] = [
+  { pattern: /DeleteMessageCommand/, why: "must never delete a DLQ message" },
+  { pattern: /SendMessageCommand/, why: "must never send/redrive a message" },
+  { pattern: /ChangeMessageVisibility/, why: "must never take exclusive ownership of a message" },
+];
+
 test("11-19: no AWS mutation, no provider execution, no billing mutation, no state mutation anywhere in the new files", () => {
   for (const { file, text } of allCode) {
     for (const banned of BANNED) {
       assert.doesNotMatch(text, banned.pattern, `${file}: ${banned.why}`);
     }
+    if (file.endsWith("adapters/sqs-dlq-redrive-executor.ts")) continue;
+    for (const banned of MUTATING_MESSAGE_COMMANDS) {
+      assert.doesNotMatch(text, banned.pattern, `${file}: ${banned.why}`);
+    }
   }
 });
 
-test("20: no public HTTP route references the investigation path", () => {
+test("20: no HTTP route reaches the investigation path except the one Phase 16-B admin route built for exactly that", () => {
+  // At Phase 15-D/3 time no HTTP route existed for this at all — the
+  // assertion was "none." Phase 16-B intentionally adds exactly one:
+  // /api/admin/dlq, authenticated, admin-only, read-only (see its own test
+  // file, phase-16b-dlq-redrive.e2e.test.ts, for its auth/read-only
+  // proof). Every OTHER route, admin or not, must still never reach this
+  // path directly — the admin service (`dlq-admin-service.ts`) is the one
+  // permitted caller.
   const apiDir = path.join(ROOT, "src", "app", "api");
   const apiFiles = readdirSync(apiDir, { recursive: true } as never) as string[];
+  const allowed = path.join("admin", "dlq", "route.ts");
   for (const rel of apiFiles) {
     if (!rel.toString().endsWith(".ts")) continue;
+    if (rel.toString().endsWith(allowed)) continue;
     const text = read(path.join("src", "app", "api", rel.toString()));
     assert.doesNotMatch(text, /dlq-investigate|dlq-investigation-service|sqs-dlq-message-source/, `src/app/api/${rel} must not reach the DLQ investigation path`);
   }

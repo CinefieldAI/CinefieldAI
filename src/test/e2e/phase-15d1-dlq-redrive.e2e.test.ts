@@ -488,18 +488,41 @@ const BANNED_IDENTIFIERS: { pattern: RegExp; why: string }[] = [
   // any AWS SDK command capable of MUTATING a queue or message; banning
   // those specific command names is a stronger, more accurate guarantee
   // than banning the SDK import wholesale ever was.
+  //
+  // Phase 16-B added a real, single-message-targeted redrive EXECUTOR to
+  // this same package (adapters/sqs-dlq-redrive-executor.ts) — the one
+  // file in the package genuinely permitted to send/delete/change the
+  // visibility of a message, because moving one specific investigated
+  // message IS the feature. `SendMessageCommand`/`DeleteMessageCommand`/
+  // `ChangeMessageVisibility` are therefore excluded from the ban for that
+  // one file only (see I1b below for what stays true about it) —
+  // `StartMessageMoveTask` (a queue-wide, unbounded operation) stays
+  // banned in every file without exception, including that one.
   { pattern: /StartMessageMoveTask/, why: "must never call the real AWS redrive API" },
-  { pattern: /SendMessageCommand/, why: "must never send/redrive a message" },
-  { pattern: /DeleteMessageCommand/, why: "must never delete a message" },
-  { pattern: /ChangeMessageVisibility/, why: "must never take exclusive ownership of a message" },
   { pattern: /PurgeQueueCommand/, why: "must never purge a queue" },
   { pattern: /SetQueueAttributes|CreateQueueCommand|DeleteQueueCommand/, why: "must never mutate queue configuration" },
   { pattern: /\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/, why: "must never write to the database" },
 ];
 
-test("I1: no file in the dlq-redrive package can execute a provider, spend money, or call a mutating AWS API", () => {
+const REDRIVE_EXECUTOR_FILE = "adapters/sqs-dlq-redrive-executor.ts";
+const MUTATING_MESSAGE_COMMANDS: { pattern: RegExp; why: string }[] = [
+  { pattern: /SendMessageCommand/, why: "must never send/redrive a message" },
+  { pattern: /DeleteMessageCommand/, why: "must never delete a message" },
+  { pattern: /ChangeMessageVisibility/, why: "must never take exclusive ownership of a message" },
+];
+
+test("I1: no file in the dlq-redrive package can execute a provider, spend money, or call StartMessageMoveTask/queue-config APIs", () => {
   for (const { file, text } of packageCode) {
     for (const banned of BANNED_IDENTIFIERS) {
+      assert.doesNotMatch(text, banned.pattern, `${file}: ${banned.why}`);
+    }
+  }
+});
+
+test("I1b: send/delete/change-visibility of a message is banned everywhere in the package except the one Phase 16-B redrive executor", () => {
+  for (const { file, text } of packageCode) {
+    if (file.endsWith(REDRIVE_EXECUTOR_FILE)) continue;
+    for (const banned of MUTATING_MESSAGE_COMMANDS) {
       assert.doesNotMatch(text, banned.pattern, `${file}: ${banned.why}`);
     }
   }

@@ -192,7 +192,7 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
   { name: "AWS_REGION", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "aws-sqs", rotation: "NOT_A_SECRET", note: "A region name." },
   { name: "SQS_COMMAND_BUS_ENABLED", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "aws-sqs", rotation: "NOT_A_SECRET", note: "Explicit operator intent." },
   { name: "CINEFIELD_SQS_PROVIDER_QUEUE_URL", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "aws-sqs", rotation: "NOT_A_SECRET", note: "A queue URL. Authority is IAM, not the URL." },
-  { name: "CINEFIELD_SQS_PROVIDER_DLQ_URL", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "aws-sqs", rotation: "NOT_A_SECRET", note: "Phase 15-D/3. The provider DLQ's URL, read only by the manual, read-only investigation entrypoint (scripts/dlq-investigate.ts). Authority is IAM, not the URL." },
+  { name: "CINEFIELD_SQS_PROVIDER_DLQ_URL", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "aws-sqs", rotation: "NOT_A_SECRET", note: "Phase 15-D/3. The provider DLQ's URL. Read by the manual read-only investigation entrypoint (scripts/dlq-investigate.ts) and, as of Phase 16-B, by the admin redrive executor (sqs-dlq-redrive-executor.ts) — same env var, both readers narrowly scoped. Authority is IAM, not the URL." },
 
   // ---- DR ----------------------------------------------------------------
   { name: "CINEFIELD_DR_S3_BUCKET", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "dr", rotation: "NOT_A_SECRET", note: "A bucket name." },
