@@ -4008,3 +4008,86 @@ action (retry, cancel, redrive, route/provider mutation, billing); Phase
 16-A's own done criterion ("admin can trace a user/generation event
 end-to-end") is now reachable for the generation half but not yet for a
 user- or workspace-scoped starting point. **Phase 16-A is not complete.**
+
+## Phase 16-A/3 — read-only user investigation (code-only)
+
+Answers one operator question: "what has happened for this user recently,
+and which generation can I inspect end-to-end?" — a user summary plus its
+recent generations, each linking into the existing 16-A/2 generation
+investigation surface by id. No operational action of any kind.
+
+### The canonical user owner, and a real grant asymmetry surfaced (not invented)
+
+`public.profiles` (`clerk_user_id` primary key,
+`supabase/migrations/20260805132704_remote_schema.sql`) is the one
+user-identity table in this schema. `generations.clerk_user_id` and
+`projects.clerk_user_id` both carry `REFERENCES profiles(clerk_user_id) ON
+DELETE CASCADE`, so `generations.clerk_user_id` — the same ownership column
+16-A/2 already trusts — is a safe, existing ownership relation for "this
+user's recent generations." No workspace table exists in this schema at
+all; "workspace" only ever means `projects` here, and this slice does not
+build a Workspaces screen.
+
+The same migration's own `GRANT` statements are NOT symmetric across the
+three tables: `generations` gets `GRANT ALL ... TO service_role` and
+`projects` gets an explicit `SELECT` grant, but `profiles` grants
+`service_role` only `REFERENCES,TRIGGER,TRUNCATE,MAINTAIN` — no `SELECT`.
+This batch cannot connect to production Postgres to confirm whether that
+reflects the live grants, and adding a migration to fix it is out of scope
+for a read-only slice (Phase 16-A/3 creates no migration, per its own
+constraint). `user-investigation-service.ts` is written to degrade
+honestly if the grant is real: the `profiles` read and the `generations`
+read run as two INDEPENDENT fallible reads, and a `profiles` failure with
+real generation evidence still present reports `PARTIAL_DATA` — never
+discarding the generation evidence, never fabricating a profile. If both
+reads fail, or the `profiles` read fails and no generation evidence exists
+either, the result is `EVIDENCE_UNAVAILABLE` — existence is never guessed.
+An operator (or a future migration, out of scope here) should verify and,
+if needed, grant `SELECT` on `public.profiles` to `service_role`.
+
+### Two narrow, independent, explicit-column reads — nothing else
+
+`getAdminUserInvestigation` reads `profiles` (one row, `clerk_user_id,
+display_name, created_at, updated_at`) and `generations` (up to 20 rows,
+`id, status, generation_type, created_at, updated_at, completed_at,
+project_id`, ordered `created_at desc`), each filtered by the requested
+`clerk_user_id`, each with an explicit column list (never `*`). Deliberately
+excluded even though the columns exist: `profiles.email`/`username`/
+`avatar_url` (PII this slice minimizes away entirely) and
+`profiles.credits`/`plan` (the same Phase 10 economic-truth boundary 16-A/2
+already draws around `cost_amount`/`cost_currency` — a future, separately
+reviewed admin billing slice, not this one); every `generations` column
+16-A/2 already excludes (`prompt`, `negative_prompt`, `input_url`,
+`output_url`, `thumbnail_url`, `error_message`, `metadata`) plus
+`provider`/`model`, which belong to the per-generation view, not this
+user-level list. A malformed Clerk user id (`CLERK_USER_ID_PATTERN`, this
+slice's own pattern, matching the `user_<id>` shape every Clerk identity in
+this codebase already uses) never reaches the database at all.
+
+### Same admin boundary, same opaque-404 convention
+
+`/api/admin/users/[clerkUserId]` calls `requireAdminAccess()` — the
+identical Phase 16/1 boundary, never `ROUTE_ADMIN_CLERK_USER_IDS`. Denial
+and a genuine missing user both answer 404; they are distinguished only by
+response body shape (`{error:"not_found"}` vs. the full
+`{outcome:"USER_NOT_FOUND"}` result), and a non-admin caller can never
+reach the code path that produces the second shape, so nothing leaks.
+
+### Generation linkage — reused, not duplicated
+
+Each recent-generation row links to
+`/admin/generations?generationId=<id>` — the existing 16-A/2 investigation
+surface. `user-investigation-service.ts` never re-implements attempt or
+trace-chain logic: a structural test asserts the new files never re-declare
+`buildTraceChain`/`TraceChainLink` and never re-query 16-A/2's own tables
+(`outbox_events`, `generation_attempts`, `media_assets`).
+
+### Not in this slice
+
+Workspaces and Risk screens (16-A's official package still needs both); any
+operational action (suspend, delete, role change, workspace-membership
+mutation, billing); a fix for the `profiles`/`service_role` grant asymmetry
+(flagged above, requires a migration this batch does not create). Phase
+16-A's done criterion ("admin can trace a user/generation event
+end-to-end") is now reachable starting from either a generation id (16-A/2)
+or a user id (16-A/3). **Phase 16-A is not complete.**

@@ -241,14 +241,15 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // route was committed; a guard blind to untracked files is blind to
   // exactly the code most likely to need checking.
   //
-  // 17 = the 16 pre-existing API routes plus
-  // `/api/admin/generations/[generationId]` (Phase 16-A/2), which takes no
+  // 18 = the 17 pre-existing API routes (16 originals plus
+  // `/api/admin/generations/[generationId]`, Phase 16-A/2) plus
+  // `/api/admin/users/[clerkUserId]` (Phase 16-A/3), which takes no
   // exemption from `guardRoute` either — it just adds `requireAdminAccess()`
   // as an earlier, stricter check before the shared rate-limit boundary runs.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 17, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 18, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {
