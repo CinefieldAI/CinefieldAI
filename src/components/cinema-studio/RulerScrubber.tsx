@@ -36,12 +36,29 @@ import { playTick } from "@/lib/cinema-studio-4/tick-sound";
  * to playTick() only from actual drag/wheel motion; step()/jumpTo() (and
  * therefore Prev/Next, label clicks, keyboard, and the release/settle
  * moment itself) stay silent to match.
+ *
+ * Two more details confirmed against the reference's own captured DOM
+ * (resting-state and mid-drag snapshots) and reproduced here:
+ * - The decorative tick strip is a fixed window of 81 ticks (40 each side
+ *   of center), regenerated every render around the current continuous
+ *   position — not modulo-wrapped over the item count like the labels.
+ *   That's *why* it never runs dry regardless of how far the drag/selection
+ *   has moved: it isn't tied to the 6-item cycle at all, it just always
+ *   shows what's near "now".
+ * - Selected-label scaling uses two independent CSS properties — Tailwind
+ *   v4 (this project's version) compiles `-translate-x-1/2 -translate-y-1/2`
+ *   to the standalone `translate` property, not into `transform`, so an
+ *   inline `transform: scale(...)` composes with it instead of clobbering
+ *   it. Position is set via the CSS `translate` property (not `transform:
+ *   translate(...)`), scale via `transform: scale(...)` — both inline, on
+ *   one element, no nested wrapper needed.
  */
 
 const ACCENT = "#D97757";
 const TICK_GAP = 16.8; // px between minor ticks
 const TICKS_PER_ITEM = 10; // = 168px / 16.8px
 const ITEM_GAP = TICK_GAP * TICKS_PER_ITEM; // 168px between selectable items
+const TICK_WINDOW = 81; // fixed decorative window (40 each side of center), matches the reference exactly
 const SNAP_MS = 180;
 const MASK = "linear-gradient(90deg,transparent 0%,black 18%,black 82%,transparent 100%)";
 const WHEEL_SETTLE_MS = 150;
@@ -92,7 +109,8 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
 
   const baseOffset = -selectedIndex * ITEM_GAP;
   const livePosition = selectedIndex - dragPx / ITEM_GAP; // continuous fractional index, unbounded
-  const totalTickSlots = count * TICKS_PER_ITEM;
+  const liveTickPosition = livePosition * TICKS_PER_ITEM; // same, in tick units
+  const centerTickIndex = Math.round(liveTickPosition);
 
   // Velocity (px/ms) → a playbackRate-style pitch multiplier, matching the
   // ~0.85–1.5 range observed on the reference; playTick() clamps too, this
@@ -122,9 +140,15 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
     if (items[nearest] !== value) onChange(items[nearest]);
   };
 
+  // Unlike drag/wheel, Prev/Next (and the keyboard arrows that share this
+  // function) has no velocity to derive a rate from — a neutral rate (1,
+  // i.e. the reference's un-sped-up base pitch) keeps it consistent with
+  // the tick heard mid-drag rather than always landing on one of the
+  // clamp extremes.
   const step = (delta: number) => {
     const next = ((selectedIndex + delta) % count + count) % count;
     if (items[next] !== value) onChange(items[next]);
+    playTick(1);
   };
 
   const jumpTo = (index: number) => {
@@ -224,24 +248,30 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
           className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{ width: 4, height: 32, background: ACCENT }}
         />
-        {Array.from({ length: totalTickSlots }, (_, s) => {
-          // Cyclic like the labels below — a fixed-window tick strip ran out
-          // of decoration once selectedIndex got far enough from 0 (e.g. at
-          // "Auto", the last item) and rendered a blank stretch of ruler.
-          // Every tick is instead positioned every render via the same
-          // shortest-path-wraparound-from-a-continuous-position technique.
-          const d = wrapDistance(s - livePosition * TICKS_PER_ITEM, totalTickSlots);
-          const big = s % TICKS_PER_ITEM === 0;
+        {Array.from({ length: TICK_WINDOW }, (_, i) => {
+          // Fixed window of 81 ticks (i-40 .. i+40 relative to whichever
+          // world-tick-index is currently nearest center), regenerated every
+          // render — not tied to the item count or wrapped through it. This
+          // is why it never runs dry: a modulo-wrapped strip sized to the
+          // item cycle went blank once the selection got far enough from
+          // index 0 (e.g. "Auto") that the wrap math and the tick window
+          // stopped overlapping. Keying by world tick index (not slot i)
+          // keeps each tick's own DOM node stable while dragging, the same
+          // identity-keying GenreArc/TempoCarousel rely on for their CSS
+          // transition to animate smoothly instead of swapping in place.
+          const worldTickIndex = centerTickIndex + (i - 40);
+          const d = worldTickIndex - liveTickPosition;
+          const big = ((worldTickIndex % TICKS_PER_ITEM) + TICKS_PER_ITEM) % TICKS_PER_ITEM === 0;
           return (
             <span
-              key={s}
+              key={worldTickIndex}
               aria-hidden
               className="pointer-events-none absolute left-1/2 top-1/2 w-[2px] rounded-full bg-white/10"
               style={{
-                transform: `translate(calc(-50% + ${d * TICK_GAP}px), -50%)`,
-                transition: transition === "none" ? "none" : `transform ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1)`,
+                translate: `calc(-50% + ${d * TICK_GAP}px) -50%`,
+                transition: transition === "none" ? "none" : `translate ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1)`,
                 height: big ? 24 : 16,
-              }}
+              } as React.CSSProperties}
             />
           );
         })}
@@ -258,30 +288,32 @@ export default function RulerScrubber({ items, value, onChange, label }: RulerSc
                 type="button"
                 onClick={() => jumpTo(i)}
                 className="absolute left-1/2 top-1/2 cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-lg font-semibold leading-6"
-                style={{
-                  // Position and scale are kept as two separate transforms on
-                  // two nested elements rather than combined in one
-                  // translate(...) scale(...) value — composing both on the
-                  // same element clipped the scaled-up selected label's top
-                  // against the mask/overflow wrapper (measured ~11px of
-                  // real clipping live), because the translate-then-scale
-                  // composition doesn't keep the box centered on itself the
-                  // way two independent transforms do.
-                  transform: `translate(calc(-50% + ${d * ITEM_GAP}px), -50%)`,
-                  transition: transition === "none" ? "none" : `transform ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1)`,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
+                style={
+                  {
+                    // Position via the CSS `translate` property, scale via
+                    // `transform` — two independent properties (confirmed
+                    // against the reference's own DOM: it does the same,
+                    // position via Tailwind's translate utilities, scale via
+                    // an inline `transform`), so they compose instead of one
+                    // clobbering the other. Combining both into a single
+                    // `transform: translate(...) scale(...)` value (the
+                    // earlier version of this file) clipped the scaled-up
+                    // selected label's top edge against the mask/overflow
+                    // wrapper (measured ~11px of real clipping live) because
+                    // that composition doesn't keep the box centered on
+                    // itself the way two independent properties do.
+                    translate: `calc(-50% + ${d * ITEM_GAP}px) -50%`,
                     transform: `scale(${isSelected ? 1.55556 : 1})`,
-                    transition: transition === "none" ? "none" : `transform ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1), color ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1)`,
+                    transition:
+                      transition === "none"
+                        ? "none"
+                        : `translate ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1), transform ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1), color ${SNAP_MS}ms cubic-bezier(0.22,1,0.36,1)`,
                     opacity: isSelected ? 1 : 0.7,
                     color: isSelected ? ACCENT : "rgb(130,130,130)",
-                  }}
-                >
-                  {item}
-                </span>
+                  } as React.CSSProperties
+                }
+              >
+                {item}
               </button>
             );
           })}
