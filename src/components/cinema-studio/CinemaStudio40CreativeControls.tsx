@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import Cinema40AssetsPicker from "./Cinema40AssetsPicker";
@@ -306,8 +307,22 @@ function StepperNav({
 }) {
   const pill =
     "flex items-center justify-center rounded-full border border-white/15 bg-white/5 shadow-[inset_0_-0.3px_5.4px_0_rgba(185,185,185,0.2),0_20.5px_10.3px_rgba(0,0,0,0.09)] transition-[background-color,scale] duration-150 ease-out hover:bg-white/10 active:scale-[0.96]";
+
+  // Trackpads fire many small wheel events per gesture — gate on both a
+  // minimum delta and a cooldown so one swipe advances one step, not ten.
+  const lastStepAtRef = useRef(0);
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (Math.abs(delta) < 10) return;
+    const now = Date.now();
+    if (now - lastStepAtRef.current < 220) return;
+    lastStepAtRef.current = now;
+    if (delta > 0) onNext();
+    else onPrev();
+  };
+
   return (
-    <div className="isolate flex shrink-0 items-center justify-center gap-1.5 pb-4 pt-3">
+    <div className="isolate flex shrink-0 items-center justify-center gap-1.5 pb-4 pt-3" onWheel={handleWheel}>
       <button type="button" aria-label={`Previous ${label}`} onClick={onPrev} className={`${pill} size-8 cursor-pointer`}>
         <ChevronLeft className="size-5 text-white" strokeWidth={1.5} />
       </button>
@@ -347,7 +362,7 @@ function GenreArc({ value, onChange }: { value: string; onChange: (v: string) =>
   const step = (delta: number) => onChange(CINEMA40_GENRES[(selectedIndex + delta + count * 100) % count]);
 
   return (
-    <div className="relative min-h-0 flex-1 select-none">
+    <div className="relative flex min-h-0 flex-1 flex-col select-none">
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 rounded-full border-[0.86px] border-white/20"
@@ -417,7 +432,9 @@ function GenreArc({ value, onChange }: { value: string; onChange: (v: string) =>
           );
         })}
       </div>
-      <StepperNav label="genre" value={value} onPrev={() => step(-1)} onNext={() => step(1)} />
+      <div className="mt-auto">
+        <StepperNav label="genre" value={value} onPrev={() => step(-1)} onNext={() => step(1)} />
+      </div>
     </div>
   );
 }
