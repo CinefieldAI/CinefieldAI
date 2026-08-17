@@ -33,6 +33,28 @@ export interface CancelIntentRecord {
   requestedAt: string;
   /** Short reason code only — never user prose. */
   reason: string;
+  /**
+   * Phase 16-D. Present only when an admin operator recorded this intent on
+   * the owner's behalf (`recordCancelIntent`'s `adminActorId` option) —
+   * absent for the ordinary owner-initiated path, so a reader can tell the
+   * two apart without a second field to keep in sync.
+   */
+  actorClerkUserId?: string;
+}
+
+export interface RecordCancelIntentOptions {
+  /**
+   * Phase 16-D admin-initiated cancel (`src/lib/admin/temporal-admin-service.ts`).
+   *
+   * The ownership check below is UNCHANGED — the caller still passes the
+   * generation's REAL owner as `clerkUserId` (looked up fresh, the same
+   * re-read every admin mutation in this codebase already does before
+   * acting). This option only ADDS the admin's own id to the durable
+   * record, so the trail can tell "the owner cancelled their own
+   * generation" from "an operator cancelled it for them" without a second
+   * cancellation model, a second table, or a relaxed ownership check.
+   */
+  adminActorId?: string;
 }
 
 /**
@@ -48,7 +70,8 @@ export async function recordCancelIntent(
   admin: SupabaseClient,
   generationId: string,
   clerkUserId: string,
-  reason = "user_requested"
+  reason = "user_requested",
+  options: RecordCancelIntentOptions = {}
 ): Promise<CancelIntentOutcome & { alreadyRequested?: boolean }> {
   const { data, error } = await admin
     .from("generations")
@@ -63,7 +86,9 @@ export async function recordCancelIntent(
   }
 
   // FORBIDDEN and GENERATION_NOT_FOUND both surface as 404 so the API does
-  // not confirm the existence of another user's generation.
+  // not confirm the existence of another user's generation. Unchanged for
+  // the admin path too: the admin caller is required to pass the real owner
+  // id it already looked up, never its own — see `RecordCancelIntentOptions`.
   if (!data || (data as { clerk_user_id: string }).clerk_user_id !== clerkUserId) {
     throw new OrchestrationError("GENERATION_NOT_FOUND", { context: { generationId } });
   }
@@ -86,7 +111,11 @@ export async function recordCancelIntent(
     return { outcome: "cancelled", generationId, alreadyRequested: true };
   }
 
-  const intent: CancelIntentRecord = { requestedAt: new Date().toISOString(), reason };
+  const intent: CancelIntentRecord = {
+    requestedAt: new Date().toISOString(),
+    reason,
+    ...(options.adminActorId ? { actorClerkUserId: options.adminActorId } : {}),
+  };
 
   // Compare-and-set on a non-terminal status, so a generation that reaches a
   // terminal state between the read above and this write does not acquire a
@@ -132,7 +161,10 @@ export function readCancelIntent(
   const intent = (orchestration as Record<string, unknown>).cancelRequested;
   if (!intent || typeof intent !== "object") return null;
   const record = intent as Partial<CancelIntentRecord>;
-  return typeof record.requestedAt === "string"
-    ? { requestedAt: record.requestedAt, reason: record.reason ?? "user_requested" }
-    : null;
+  if (typeof record.requestedAt !== "string") return null;
+  return {
+    requestedAt: record.requestedAt,
+    reason: record.reason ?? "user_requested",
+    ...(typeof record.actorClerkUserId === "string" ? { actorClerkUserId: record.actorClerkUserId } : {}),
+  };
 }

@@ -281,10 +281,22 @@ test("sensitive-data boundary: no admin surface's select() ever names a forbidde
     "subject_hash",
     "dedupe_key",
   ];
+  // Phase 16-D, one narrow, documented exception: `temporal-admin-service.ts`
+  // is the first (and only) admin file that selects `generations.metadata`,
+  // because the durable Phase 6R-H cancel intent
+  // (`metadata.orchestration.cancelRequested`) has no other column to live
+  // in — unlike prompt/negative_prompt/input_url/output_url/error_message,
+  // which the 16-A/2 investigation surface can simply omit because it never
+  // needs them. The file still forwards only a bounded projection
+  // (`requestedAt`/`reason`/`actorClerkUserId` via `readCancelIntent` +
+  // `projectCancelIntent`) — see `phase-16d-temporal.e2e.test.ts` for the
+  // pin proving no other field of `metadata` ever reaches the response.
+  const METADATA_EXEMPT_FILES = new Set(["src/lib/admin/temporal-admin-service.ts"]);
   for (const { file, text } of ALL_16A_FILES) {
     const selects = [...text.matchAll(/\.select\(\s*"([^"]*)"/g)].map((m) => m[1]);
     for (const cols of selects) {
       for (const word of forbidden) {
+        if (word === "metadata" && METADATA_EXEMPT_FILES.has(file)) continue;
         assert.doesNotMatch(cols, new RegExp(word), `${file}: select() must not include forbidden column "${word}": ${cols}`);
       }
     }
@@ -317,17 +329,19 @@ test("sensitive-data boundary: no raw Clerk object, token, secret, or signed-URL
  * mutation boundary in its own closure test (16-B:
  * `phase-16b-closure-end-to-end.e2e.test.ts`'s "exactly the four documented
  * mutation call sites" test; 16-C: `phase-16c-closure-end-to-end.e2e.test.ts`'s
- * cross-phase ownership sweeps). 16-A's own promise was "investigation
- * only, zero mutation" — 16-B and 16-C were explicitly authorized to add
- * real, narrow mutations on top of that (route disable, BullMQ retry, DLQ
- * redrive, the already-built Phase 9-E quarantine release action), so this
- * sweep is narrowed — not weakened — to keep checking exactly what 16-A
- * itself promised, the same "narrowed, not weakened" pattern already used
- * for the Phase 15-D SQS-call structural bans.
+ * cross-phase ownership sweeps; 16-D: `phase-16d-temporal.e2e.test.ts`'s
+ * "no second cancellation model" test). 16-A's own promise was
+ * "investigation only, zero mutation" — 16-B, 16-C and 16-D were each
+ * explicitly authorized to add real, narrow mutations on top of that (route
+ * disable, BullMQ retry, DLQ redrive, the already-built Phase 9-E
+ * quarantine release action, and 16-D's one guarded Temporal cancel), so
+ * this sweep is narrowed — not weakened — to keep checking exactly what
+ * 16-A itself promised, the same "narrowed, not weakened" pattern already
+ * used for the Phase 15-D SQS-call structural bans.
  */
 const SIXTEEN_A_OWNED_FILES = ALL_16A_FILES.filter(
   (f) =>
-    !/asset-admin|billing-admin|bullmq-admin|dlq-admin|model-provider-admin|moderation-admin|queue-health|router-admin|\/assets\/|\/billing\/|\/dlq\/|\/models-providers\/|\/moderation\/|\/queue-health\/|\/router\/|AssetsStoragePanel|BillingCreditsPanel|DlqInvestigationPanel|ModelsProvidersPanel|ModerationPanel|QueueHealthPanel|RouterControlsPanel|AdminOperationalEntryPoints/i.test(
+    !/asset-admin|billing-admin|bullmq-admin|dlq-admin|model-provider-admin|moderation-admin|queue-health|router-admin|temporal-admin|\/assets\/|\/billing\/|\/dlq\/|\/models-providers\/|\/moderation\/|\/queue-health\/|\/router\/|\/temporal\/|AssetsStoragePanel|BillingCreditsPanel|DlqInvestigationPanel|ModelsProvidersPanel|ModerationPanel|QueueHealthPanel|RouterControlsPanel|TemporalInvestigationPanel|AdminOperationalEntryPoints/i.test(
       f.file
     )
 );
@@ -381,20 +395,20 @@ test("cache/route security: the public liveness route is untouched by this batch
   assert.doesNotMatch(text, /requireAdminAccess|security_events|risk-investigation/i);
 });
 
-test("dashboard: /admin links to every 16-A screen, and future sections are labels, never routes", () => {
+test("dashboard: /admin links to every 16-A screen", () => {
   const layoutText = readFileSync(path.join(ROOT, "src/app/admin/layout.tsx"), "utf8");
   for (const href of ["/admin/generations", "/admin/users", "/admin/workspaces", "/admin/risk"]) {
     assert.match(layoutText, new RegExp(href.replace(/\//g, "\\/")), `layout must link to ${href}`);
   }
-  // FUTURE_SECTIONS entries render as <span>, never <Link>, and this test
-  // fails if any of them is accidentally turned into a real href. "DLQ" and
-  // "Providers / Routes" were removed from this list by Phase 16-B, which
-  // correctly promoted them to real links ("Failed Jobs / DLQ",
-  // "Router Controls") — see phase-16b-closure-end-to-end.e2e.test.ts for
-  // that batch's own version of this same assertion, updated for its scope.
-  for (const future of ["Incidents", "Cost / FinOps", "Restore", "Recovery"]) {
-    assert.doesNotMatch(layoutText, new RegExp(`href=\\{?["'\`][^"'\`]*${future.split(" ")[0]}`, "i"));
-  }
+  // This test USED TO also assert that "Incidents", "Cost / FinOps",
+  // "Restore" and "Recovery" stayed non-clickable <span> labels — the same
+  // negative check "DLQ" and "Providers / Routes" carried here until Phase
+  // 16-B promoted them to real links ("Failed Jobs / DLQ", "Router
+  // Controls") and removed them from that list. Phase 16-D closed out every
+  // remaining placeholder (Incidents -> "Incidents / Audit", Cost / FinOps
+  // -> "SLO / Cost Guard", Restore + Recovery -> "Deploy / Restore Health"),
+  // so `FUTURE_SECTIONS` no longer exists in the layout at all — there is
+  // nothing left for a negative assertion here to guard.
 });
 
 test("dashboard: the entry-points component links out only, never duplicates a detail screen's own rendering", () => {

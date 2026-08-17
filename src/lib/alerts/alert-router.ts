@@ -37,6 +37,10 @@ import { currentTraceId } from "@/lib/observability/trace-scope";
 
 interface DedupeEntry {
   alertId: string;
+  /** Phase 16-D. Recorded at creation so a bounded read view (below) does not
+   *  have to parse `type`/`resource` back out of the dedupe key string. */
+  type: AlertType;
+  resource: string;
   firstSeenMs: number;
   lastSeenMs: number;
   windowStartMs: number;
@@ -211,6 +215,8 @@ export function raiseAlert(candidate: AlertCandidate, nowMs: number = Date.now()
       // this is what stops suppression from becoming permanent silence.
       entry = {
         alertId: nextAlertId(dedupeKey),
+        type: candidate.type,
+        resource: candidate.resource,
         firstSeenMs: entry?.firstSeenMs ?? nowMs,
         lastSeenMs: nowMs,
         windowStartMs: nowMs,
@@ -280,6 +286,65 @@ export function resolveAlert(type: AlertType, resource: string): boolean {
 /** Test and diagnostic access. Never used to make a decision. */
 export function trackedAlertKeys(): string[] {
   return [...entries.keys()].sort();
+}
+
+/**
+ * Bounded read view of every currently-tracked (not yet resolved) dedupe
+ * entry — Phase 16-D's Incidents/Audit admin surface.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SAME STORE, NOT A SECOND ONE
+ * ---------------------------------------------------------------------------
+ * This reads the exact in-memory `entries` map `raiseAlert`/`resolveAlert`
+ * already maintain — it adds no persistence, no new field beyond `type` and
+ * `resource` (both already known at entry-creation time, now just kept
+ * instead of only living inside the dedupe key string), and no second
+ * router. Section 8 of the Phase 16-D spec is explicit that alert history
+ * here is honestly EPHEMERAL: this process's memory only, cleared on every
+ * restart/redeploy and never shared across instances — an admin reading
+ * this list is seeing "what this one process currently knows," not a durable
+ * incident timeline. `severity` is looked up from `ALERT_CATALOGUE` fresh
+ * rather than stored, so it can never drift from the one place severity is
+ * decided.
+ *
+ * `state` is inferred, not stored: every entry still in the map is
+ * un-resolved by definition (`resolveAlert` deletes the row), so every
+ * returned row reports `"OPEN"` — a resolved problem simply is not in this
+ * list anymore, which is the whole implementation of resolution here (see
+ * `resolveAlert`'s own doc comment). This is presentation only; it grants no
+ * new capability and mutates nothing.
+ */
+export interface TrackedAlertSnapshot {
+  readonly type: AlertType;
+  readonly source: AlertEnvelope["source"];
+  readonly severity: AlertEnvelope["severity"];
+  readonly resource: string;
+  readonly dedupeKey: string;
+  readonly state: "OPEN";
+  readonly firstSeen: string;
+  readonly lastSeen: string;
+  readonly occurrenceCount: number;
+  readonly correlation: AlertCorrelation;
+}
+
+export function listTrackedAlerts(): TrackedAlertSnapshot[] {
+  return [...entries.entries()]
+    .map(([dedupeKey, entry]) => {
+      const rule = ALERT_CATALOGUE[entry.type];
+      return {
+        type: entry.type,
+        source: rule.source,
+        severity: rule.severity,
+        resource: entry.resource,
+        dedupeKey,
+        state: "OPEN" as const,
+        firstSeen: new Date(entry.firstSeenMs).toISOString(),
+        lastSeen: new Date(entry.lastSeenMs).toISOString(),
+        occurrenceCount: entry.occurrenceCount,
+        correlation: entry.correlation,
+      };
+    })
+    .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
 }
 
 export function resetAlertRouter(): void {

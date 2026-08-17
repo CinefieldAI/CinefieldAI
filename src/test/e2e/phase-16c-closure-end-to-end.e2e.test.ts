@@ -307,13 +307,18 @@ test("read-only by default: only the moderation/release route can mutate; billin
   assert.doesNotMatch(releaseRoute, /export async function GET/);
 });
 
-test("dashboard: /admin links to Billing / Credits, Assets / Storage, and Moderation; Cost / FinOps remains a label, never a route", () => {
+test("dashboard: /admin links to Billing / Credits, Assets / Storage, and Moderation", () => {
   const layoutText = stripComments(read("src/app/admin/layout.tsx"));
   assert.match(layoutText, /href="\/admin\/billing"/);
   assert.match(layoutText, /href="\/admin\/assets"/);
   assert.match(layoutText, /href="\/admin\/moderation"/);
-  assert.match(layoutText, /"Cost \/ FinOps"/);
-  assert.doesNotMatch(layoutText, /href="\/admin\/cost"|href="\/admin\/finops"/);
+  // This test USED TO also assert the literal label "Cost / FinOps" stayed
+  // in the layout as a non-clickable placeholder, deliberately distinct
+  // from Phase 10's billing ledger. Phase 16-D built that screen — as "SLO /
+  // Cost Guard", still deliberately never merged with Phase 10 (see
+  // `slo-cost-admin-contract.ts`'s header) — so the placeholder label no
+  // longer exists to assert on.
+  assert.match(layoutText, /href="\/admin\/slo-cost"/);
 });
 
 test("no migration file was added anywhere in 16-C, and no locked product UI route is referenced", () => {

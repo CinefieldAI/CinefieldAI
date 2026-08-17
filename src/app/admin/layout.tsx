@@ -37,13 +37,21 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * "Billing / Credits", "Assets / Storage", and "Moderation" — deliberately
  * NOT "Cost / FinOps": that label names Phase 15-B's operational cost
  * ESTIMATE, which 16-C intentionally never merges with Phase 10's economic
- * ledger truth (see `billing-admin-contract.ts`'s header), so it stays a
- * label until a future slice builds it as its own, clearly-separate
- * screen. Everything below remains labels only for later Phase 16
- * packages (16-D/E).
+ * ledger truth (see `billing-admin-contract.ts`'s header), so it stayed a
+ * label until this batch built it as its own, clearly-separate screen.
+ *
+ * Phase 16-D adds five real links, matching the IA grouping in the 16-D
+ * spec section 4: "Temporal / Workflows" (inspect + the one guarded cancel
+ * action), "Security Center" (Phase 12/13 evidence, system-wide), "Incidents
+ * / Audit" (Phase 13-D's live alert state, honestly ephemeral, plus the
+ * Phase 12-E/9-E durable audit trails), "SLO / Cost Guard" (Phase 15-A/15-B
+ * reused, not reimplemented), and "Deploy / Restore Health" (Phase 14-D
+ * rollback signal + Phase 15-C restore verification + Phase 15-D RTO/RPO,
+ * each honestly scoped to what real evidence exists). No further
+ * placeholder labels remain — every screen the Phase 16-A/B/C/D packages
+ * name is now a real link. 16-E's own future sections are not anticipated
+ * here.
  */
-
-const FUTURE_SECTIONS = ["Incidents", "Cost / FinOps", "Restore", "Recovery"] as const;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const access = await requireAdminAccess();
@@ -97,11 +105,21 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/moderation" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Moderation
           </Link>
-          {FUTURE_SECTIONS.map((label) => (
-            <span key={label} className="cursor-not-allowed rounded px-2 py-1.5 text-neutral-600">
-              {label}
-            </span>
-          ))}
+          <Link href="/admin/temporal" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Temporal / Workflows
+          </Link>
+          <Link href="/admin/security-center" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Security Center
+          </Link>
+          <Link href="/admin/incidents" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Incidents / Audit
+          </Link>
+          <Link href="/admin/slo-cost" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            SLO / Cost Guard
+          </Link>
+          <Link href="/admin/deploy-restore" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Deploy / Restore Health
+          </Link>
         </nav>
       </aside>
       <main className="flex-1 p-6">{children}</main>

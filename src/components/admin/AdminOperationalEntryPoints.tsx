@@ -38,6 +38,11 @@ const OPERATIONAL_ENTRY_POINTS: { href: string; label: string; description: stri
     label: "Moderation",
     description: "Is this media quarantined or released, and why? Release requires two different admins' approval.",
   },
+  {
+    href: "/admin/temporal",
+    label: "Temporal / Workflows",
+    description: "Inspect a generation's workflow, and cancel it with a required reason — re-checked server-side.",
+  },
 ];
 
 export default function AdminOperationalEntryPoints() {

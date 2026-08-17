@@ -304,14 +304,16 @@ test("the public liveness route remains untouched by Phase 16-B", () => {
   assert.doesNotMatch(text, /requireAdminAccess|dlq-admin|bullmq-admin|router-admin|model-provider-admin/i);
 });
 
-test("dashboard: /admin links to every 16-B screen, and unbuilt sections remain labels, never routes", () => {
+test("dashboard: /admin links to every 16-B screen", () => {
   const layoutText = readFileSync(path.join(ROOT, "src/app/admin/layout.tsx"), "utf8");
   for (const href of ["/admin/dlq", "/admin/queue-health", "/admin/models-providers", "/admin/router"]) {
     assert.match(layoutText, new RegExp(href.replace(/\//g, "\\/")), `layout must link to ${href}`);
   }
-  for (const future of ["Incidents", "Cost / FinOps", "Restore", "Recovery"]) {
-    assert.doesNotMatch(layoutText, new RegExp(`href=\\{?["'\`][^"'\`]*${future.split(" ")[0]}`, "i"));
-  }
+  // This test USED TO also assert "Incidents"/"Cost / FinOps"/"Restore"/
+  // "Recovery" stayed non-clickable labels. Phase 16-D promoted all four to
+  // real screens and removed `FUTURE_SECTIONS` from the layout entirely —
+  // see `phase-16-a-closure-end-to-end.e2e.test.ts`'s own version of this
+  // update for the full history.
 });
 
 test("no migration file exists anywhere in the new 16-B surface", () => {

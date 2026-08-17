@@ -4613,3 +4613,223 @@ for Billing/Assets reads (same named gap as 16-B — `security_events`'
 batch); passkeys/MFA/step-up auth/OPA integration (Phase 16-E's
 territory). **Phase 16-C does not start 16-D, and does not implement
 16-E early.**
+
+## Phase 16-D — Temporal Inspect/Cancel + Security Center/Audit/Incidents + SLO/Cost Guard + Deploy/Restore Health
+
+Official done criterion: during an incident, the operator can see the
+relevant operational timeline, health, safety, and control evidence from
+one Phase 16 admin surface and can perform only those actions that already
+have a canonical owner and safe authorization path. Scope: Temporal
+inspect/cancel, Security Center, Incidents/Audit, SLO/Cost Guard,
+Deploy/Restore Health — five screens, matching the IA grouping the phase
+brief itself specifies, replacing every remaining `FUTURE_SECTIONS`
+placeholder label the layout carried since Phase 16/1.
+
+### Pre-implementation reality check (spec section 3), stated plainly
+
+| Item | Classification | What that meant for this batch |
+| --- | --- | --- |
+| A. Temporal workflow inspect | OWNER_EXISTS_NEEDS_ADMIN_ADAPTER | `WorkflowHandle.describe()` is a standard SDK call this repository had never made; built as a thin, bounded adapter over the existing client/id owner. |
+| B. Temporal cancel | ALREADY_EXISTS | Reused Phase 6R-H's `recordCancelIntent`/`requestGenerationCancellation` unmodified, wrapped Phase-9-E-style. |
+| C. Security Center evidence | ALREADY_EXISTS | `security_events`, same columns 16-A's Risk Investigation already reads. |
+| D. Audit evidence | ALREADY_EXISTS (two stores) | `security_events` policy-decision rows (12-E) + `media_safety_audit` (9-E). |
+| E. Incident/alert evidence | OWNER_EXISTS, EPHEMERAL | 13-D's live dedupe map, extended with one bounded read accessor; honestly not durable. |
+| F. SLO status | OWNER_EXISTS_NEEDS_ADMIN_ADAPTER | `evaluateSlo()` had no production caller anywhere in the repository before this batch. |
+| G. Error budget/burn state | ALREADY_EXISTS | Computed inside `evaluateSlo()` itself — no second formula. |
+| H. Cost Guard status | ALREADY_EXISTS | `runEstimatedSpendGuard()` is Phase 15-B's own real production entry point. |
+| I. Deploy eligibility/health | EXTERNAL_INFRA_REQUIRED (full eligibility); OWNER_EXISTS (rollback signal) | No live CI/artifact/Vercel integration exists to construct an honest `DeploymentCandidate`; `evaluateRollback()` needed only real Phase 13/13-D inputs plus an honestly-null deployment identity, so it IS answerable. |
+| J. Restore verification state | ALREADY_EXISTS | `runRestoreVerification()` is Phase 15-C's own real production entry point; its default restore target remains unconfigured, exactly as 15-C/1 shipped it. |
+| K. Recovery/RTO-RPO state | NOT_PERSISTED (business decision) | `RTO_TARGETS`/`RPO_TARGETS` remain the empty registries Phase 15-D/2 shipped; no live incident-evidence source exists to feed `measureRecovery()` honestly. |
+
+Two BLOCKED-adjacent findings, resolved without a migration: alert history
+has no durable store (represented honestly as ephemeral, not built as a
+new table — see Incidents/Audit below), and Deploy eligibility has no live
+external evidence (represented as `DEPLOY_EVIDENCE_UNAVAILABLE`, never fed
+a fabricated `DeploymentCandidate` just to get a verdict out of the
+engine).
+
+### Temporal Inspect — the first `describe()` call in this repository
+
+`src/lib/temporal/workflow-inspection.ts`'s `describeGenerationWorkflow()`
+uses the SAME cached `getTemporalClient()` (Phase 6R.2) and the SAME
+deterministic `generationWorkflowId()` (Phase 6R.2) every existing
+Temporal caller already uses — no second client, no second id scheme.
+`describe()` returns `WorkflowExecutionDescription`, which carries no
+workflow input/result payload by construction (those need a separate
+`fetchHistory()`/`result()` call this module never makes); the projected
+`WorkflowInspectionView` is a fixed allow-list — workflow id, run id,
+status NAME (not the raw enum), three timestamps, task queue, a history
+LENGTH count — explicitly dropping `memo`, `searchAttributes`, and the
+`raw` protobuf response on principle, not by omission. `TemporalNotConfiguredError`
+and `WorkflowNotFoundError` (both already-existing SDK/repository types)
+map to `TEMPORAL_NOT_CONFIGURED`/`WORKFLOW_NOT_FOUND`; anything else is
+`UNAVAILABLE` with a bounded reason code — never a silent empty result.
+`temporal-admin-service.ts`'s `getAdminTemporalInspection` combines this
+with the durable `generations` row (status) and the durable cancel intent
+— see below for why that one read needs `metadata`, and what stays
+bounded about it.
+
+### Temporal Cancel — the one guarded mutation in the whole package
+
+`performAdminTemporalCancel` follows Phase 9-E's quarantine-release
+pattern exactly: fresh server auth (`requireAdminAccess()` at the route,
+`durable_write` `guardRoute`), a current-state re-read immediately before
+acting (never trusting what the panel showed), fail closed on a terminal
+generation (`CANCEL_NOT_ALLOWED`, not an error), a required reason code,
+and only then the existing canonical mutation. The mutation itself is
+Phase 6R-H's `recordCancelIntent` — UNCHANGED authority, UNCHANGED
+ownership check — plus `requestGenerationCancellation` (Phase 6R.3, the
+same signal-based cancel the user-facing `/api/generations/[id]/cancel`
+route already sends; no hard Temporal `terminate()`, no direct
+`ProviderAdapter.cancel`, matching Phase 6R-H's own reasoning for why a
+signal — which lets the workflow run its own cleanup activity — is used
+instead).
+
+The one real code change this required: `CancelIntentRecord` and
+`recordCancelIntent` gained an ADDITIVE, backward-compatible extension —
+an optional `actorClerkUserId` field on the record, and an optional
+`{ adminActorId }` options parameter on the function. The ownership check
+is NOT relaxed: the admin service still looks up the generation's REAL
+owner and passes that as `clerkUserId` (satisfying the existing
+compare-and-set exactly as before); `adminActorId` only additionally
+stamps the record with who, distinct from the owner, initiated it, and
+`reason` is prefixed `admin_cancel:<code>` so the two paths are
+distinguishable in the durable row itself. Every existing caller of
+`recordCancelIntent` (the ordinary user-facing cancel route) is
+unaffected — a regression test in `phase-16d-temporal.e2e.test.ts` pins
+that the ordinary path never gains an `actorClerkUserId`.
+
+### Security Center + Incidents/Audit — one evidence table, one live alert map, two different questions
+
+Security Center answers "what is happening right now, system-wide?" — the
+same `security_events` columns 16-A's Risk Investigation already reads
+(`risk_score`/`recommended_action` forwarded verbatim, never re-scored),
+queried most-recent-first with an optional severity filter instead of
+requiring an identifier. Incidents/Audit answers "what does the operator
+need to see about ongoing incidents and past privileged actions?" — the
+alert router's own live tracked state, plus the two already-durable audit
+trails (`security_events`' `policy_decision_allowed`/`_denied` rows from
+Phase 12-E, and `media_safety_audit` from Phase 9-E). Neither screen
+invents a new evidence table.
+
+`alert-router.ts` (Phase 13-D) gained `listTrackedAlerts()`: a bounded
+read view of the SAME in-memory `entries` `Map` `raiseAlert`/`resolveAlert`
+already maintained since 13-D shipped. Two small additive fields
+(`type`/`resource`) were added directly to the existing `DedupeEntry` so
+the read view does not need to parse them back out of the dedupe-key
+string; nothing about `raiseAlert`'s or `resolveAlert`'s own behaviour
+changed, pinned by `phase-16d-security-audit.e2e.test.ts` (a resolved
+alert disappears from `listTrackedAlerts()`, exactly matching
+`resolveAlert`'s existing semantics). Per the spec's own instruction, this
+is represented HONESTLY as ephemeral — `alertHistoryPersisted: false` is a
+literal field in the Incidents/Audit contract, not a comment — because it
+is one process's memory, cleared on every restart or redeploy, never
+shared across instances, and never durably queryable beyond "what this
+process currently tracks." No second alert router, no new alert-history
+table.
+
+### SLO / Cost Guard — Phase 15-A finally gets a production caller; Phase 15-B's is reused verbatim
+
+Before this batch, `evaluateSlo()` (Phase 15-A) had NO production caller
+anywhere in this repository — a real gap Phase 15-A's own closure
+documented ("Phase 15-A owns definitions and arithmetic. Nothing else").
+`slo-cost-admin-service.ts` is the first one. It computes no second
+opinion about any SLI: `readGenerationAttemptWindow` (the one new read
+this batch added) counts terminal `generation_attempts` rows in a 1-hour
+window and hands the counts to Phase 15-A's own `observeGenerationSuccess`/
+`observeGenerationTimeouts`/`observeGenerationLatency` adapters;
+`dependency_readiness` merges every `RuntimeName`'s CRITICAL dependency
+probes from Phase 13's own `readiness()`; `realtime_debt_age` reuses the
+existing `readRealtimeDebt()` (the same RPC the dispatcher already calls);
+`provider_reliability` reuses Phase 7's own provider health store
+(`getProviderHealth`). Every one of these six observations is handed,
+unmodified, to `evaluateSlo()` — the arithmetic, the budget, the burn rate,
+all Phase 15-A's own. `app_availability` is the seventh SLI and is
+deliberately fed only a SINGLE current sample (well under the SLI's own
+`minimumSamples: 10`) rather than a fabricated rolling history — this
+repository persists no readiness-evaluation history, and adding one would
+be exactly the "no migration by default" this batch avoids; `evaluateSlo`
+reaches `INSUFFICIENT_DATA` on its own from that single sample, which is
+the honest answer, not a workaround.
+
+Cost Guard calls `runEstimatedSpendGuard()` (Phase 15-B/2's own real
+production entry point — the same function `estimatedSpendGuardTask`
+calls) verbatim, with its default 24-hour lookback. `COST_BUDGETS` remains
+the empty registry Phase 15-B shipped; a pass today resolves to
+`no_applicable_budget`, reported honestly rather than papered over. Never
+merged with Phase 10's billing ledger — a structural test bans
+`credit_price_per_unit`/`credit_ledger`/`credit_wallets`/`Stripe` anywhere
+in the new files, the same boundary 16-C already drew in the other
+direction.
+
+### Deploy / Restore Health — real rollback signal, honestly unavailable full eligibility, verbatim restore reuse
+
+The rollback half calls Phase 14-D's `evaluateRollback()` UNCHANGED, fed
+real Phase 13 readiness (via the existing `collectAdminHealth()`, Phase
+16/1's own projection) and real Phase 13-D open-CRITICAL-alert types
+(`listTrackedAlerts()`, filtered). Deployment identity (`current`/
+`previousGood`) is passed as `null` — honestly, not fabricated: this
+repository has no deployment-identity tracking anywhere (no GitHub/Vercel
+integration persists one), and `evaluateRollback()` already treats a
+missing identity as a first-class input (`deployment_identity_missing`/
+`unknown_previous_good`, both folding into `REVIEW_REQUIRED` rather than a
+guessed rollback target) — exactly Phase 14-D's own "no guessing at a
+target" rule, fed a real absence rather than worked around.
+
+Full deploy ELIGIBILITY (`evaluateDeployment()`, which needs a specific
+`DeploymentCandidate` — a risk class derived from a changed-file list, CI
+check outcomes, an artifact digest, a preview state) is DELIBERATELY NEVER
+CALLED. Constructing one from absent evidence — no live GitHub Actions/CI,
+Vercel, or artifact-provenance integration exists anywhere in this
+repository, matching Phase 14's own "no external integration is active" —
+would be exactly the "fake unified truth" the spec's done criterion
+forbids; `deployEligibility` instead reports
+`DEPLOY_EVIDENCE_UNAVAILABLE` with a named reason. A structural test
+(`phase-16d-deploy-restore.e2e.test.ts`) asserts `evaluateDeployment` is
+never referenced anywhere in the new files.
+
+Restore reuses `runRestoreVerification()` (Phase 15-C's own real
+production entry point) verbatim, including its default `getRestoreEvidenceSource:
+() => null` — an unmodified deployment therefore honestly reports
+`unavailable`/`restore_target_not_configured`, the same shape Phase
+15-C/1 shipped, not a fabricated pass. The panel text explicitly restates
+Phase 15-C/2's own boundary: at most a local pg_dump/pg_restore round trip
+between disposable containers is proven; live Supabase PITR remains
+`DEFERRED_EXTERNAL`.
+
+Recovery/RTO-RPO reports `RTO_TARGETS`/`RPO_TARGETS` (Phase 15-D/2) at
+their real, current size — both `{}` — rather than inventing a target or
+calling `measureRecovery()` with fabricated incident timestamps (no live
+incident-evidence source exists anywhere in this repository to feed it
+honestly). `RTO_RPO_NOT_CONFIGURED` is reported plainly; the panel states
+outright that no target configured is not the same as a target being met.
+
+### Structural proof, and the closure narrative
+
+`phase-16d-closure-end-to-end.e2e.test.ts` walks one realistic incident
+end to end through the REAL 16-D services (not a re-description of them):
+a security event fires → Security Center shows it → the alert router
+surfaces it as an open incident → the affected generation is inspected
+through Temporal → the operator cancels it with a reason, through the one
+canonical guarded action → the durable cancel intent attributes to the
+admin on re-inspection → the rollback signal reflects the same open
+CRITICAL alert. Cross-owner sweeps across every new file assert: no
+redeclared `entries`/`assessRisk`/`evaluateSlo`/`computeErrorBudget`/
+`evaluateCostGuard`/`evaluateDeployment`/`runRestoreValidation`; `COST_BUDGETS`
+and `RTO_TARGETS`/`RPO_TARGETS` untouched; exactly one admin auth boundary
+(`requireAdminAccess()`) reused everywhere, never
+`ROUTE_ADMIN_CLERK_USER_IDS`; exactly one `durable_write` route in the
+entire package (the Temporal cancel action); no locked product UI
+referenced; no migration added anywhere.
+
+### Not in this batch
+
+Deploy execution, rollback execution, restore execution, remediation
+execution (all remain exactly as unbuilt as their owning phases left
+them); arbitrary incident resolution or security-event deletion; a
+durable, queryable alert-history table (named as ephemeral, not built —
+16-E's territory); a durable `admin_actions`/audit table beyond the two
+already-durable stores this batch combines; RTO/RPO numeric targets (still
+`UNDEFINED_BUSINESS_DECISION`); any live CI/artifact/Vercel/GitHub
+integration; passkeys/MFA/step-up auth/OPA/dual-control (Phase 16-E's
+territory). **Phase 16-D does not start 16-E.**

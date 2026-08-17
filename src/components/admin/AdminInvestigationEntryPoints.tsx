@@ -43,6 +43,26 @@ const ENTRY_POINTS: { href: string; label: string; description: string }[] = [
     label: "Assets / Storage",
     description: "Look up an asset's storage and backup evidence by asset id or generation id.",
   },
+  {
+    href: "/admin/security-center",
+    label: "Security Center",
+    description: "Most recent security_events, system-wide, plus currently-open security alerts.",
+  },
+  {
+    href: "/admin/incidents",
+    label: "Incidents / Audit",
+    description: "Currently-tracked alerts (ephemeral) plus the durable policy-decision and media-safety audit trails.",
+  },
+  {
+    href: "/admin/slo-cost",
+    label: "SLO / Cost Guard",
+    description: "Service-level objective snapshots and estimated provider spend against configured budgets.",
+  },
+  {
+    href: "/admin/deploy-restore",
+    label: "Deploy / Restore Health",
+    description: "Rollback signal, restore verification, and recovery RTO/RPO evidence — no execution reachable here.",
+  },
 ];
 
 export default function AdminInvestigationEntryPoints() {
