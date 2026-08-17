@@ -4,6 +4,7 @@ import { useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
 import Cinema40AssetsPicker from "./Cinema40AssetsPicker";
+import RulerScrubber from "./RulerScrubber";
 import {
   CINEMA40_APERTURE,
   CINEMA40_CAMERA_BODY,
@@ -450,11 +451,6 @@ function GenreArc({ value, onChange }: { value: string; onChange: (v: string) =>
 }
 
 function EraRuler({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const count = CINEMA40_ERAS.length;
-  const selectedIndex = Math.max(0, CINEMA40_ERAS.indexOf(value));
-  const step = (delta: number) => onChange(CINEMA40_ERAS[(selectedIndex + delta + count * 100) % count]);
-  const offsetPx = -selectedIndex * 168;
-
   return (
     <>
       <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -472,82 +468,7 @@ function EraRuler({ value, onChange }: { value: string; onChange: (v: string) =>
         </div>
       </div>
 
-      {/* Tick ruler — 8 minor ticks per era gap, matching the reference's 16.8px spacing / larger tick every 10th. */}
-      <div className="shrink-0 pb-1">
-        <div
-          className="relative h-8 w-full overflow-hidden"
-          style={{ maskImage: "linear-gradient(90deg,transparent 0%,black 18%,black 82%,transparent 100%)" }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{ width: 4, height: 32, background: ACCENT }}
-          />
-          <div className="absolute left-1/2 top-0 h-full" style={{ transform: `translateX(${offsetPx}px)` }}>
-            {Array.from({ length: 81 }, (_, i) => {
-              const left = (i - 40) * 16.8 - 1;
-              const big = i % 10 === 0;
-              return (
-                <span
-                  key={i}
-                  className="absolute top-1/2 w-[2px] -translate-y-1/2 rounded-full bg-white/10"
-                  style={{ left, height: big ? 24 : 16 }}
-                />
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Era label ticker — synced to the same offset as the ruler above. */}
-      <div className="relative mt-3 h-10 w-full">
-        <div
-          className="absolute inset-0 overflow-hidden"
-          style={{ maskImage: "linear-gradient(90deg,transparent 0%,black 18%,black 82%,transparent 100%)" }}
-        >
-          <div className="absolute left-1/2 top-0 h-full" style={{ transform: `translateX(${offsetPx}px)` }}>
-            {CINEMA40_ERAS.map((era, i) => {
-              const isSelected = i === selectedIndex;
-              return (
-                <button
-                  key={era}
-                  type="button"
-                  onClick={() => onChange(era)}
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-lg font-semibold leading-6 transition-transform"
-                  style={{
-                    left: i * 168,
-                    opacity: isSelected ? 1 : 0.7,
-                    color: isSelected ? ACCENT : "rgb(130,130,130)",
-                    transform: isSelected ? "scale(1.55556)" : undefined,
-                  }}
-                >
-                  {era}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="absolute left-[calc(50%-76px)] top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-          <button
-            type="button"
-            aria-label="Previous era"
-            onClick={() => step(-1)}
-            className="flex size-7 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/5 shadow-[inset_0_-0.3px_5.4px_0_rgba(185,185,185,0.2)] transition-[background-color,scale] duration-150 hover:bg-white/10 active:scale-[0.96]"
-          >
-            <ChevronLeft className="size-3.5 text-white" strokeWidth={1.5} />
-          </button>
-        </div>
-        <div className="absolute left-[calc(50%+76px)] top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-          <button
-            type="button"
-            aria-label="Next era"
-            onClick={() => step(1)}
-            className="flex size-7 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/5 shadow-[inset_0_-0.3px_5.4px_0_rgba(185,185,185,0.2)] transition-[background-color,scale] duration-150 hover:bg-white/10 active:scale-[0.96]"
-          >
-            <ChevronRight className="size-3.5 text-white" strokeWidth={1.5} />
-          </button>
-        </div>
-      </div>
+      <RulerScrubber items={CINEMA40_ERAS} value={value} onChange={onChange} label="era" />
     </>
   );
 }
