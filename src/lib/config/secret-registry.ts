@@ -215,6 +215,7 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
 
   // ---- security / policy -------------------------------------------------
   { name: "ROUTE_ADMIN_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "An allowlist of user ids. Empty means nobody is an admin." },
+  { name: "CINEFIELD_ADMIN_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16/1. Bootstrap allowlist for the Admin Operations Center (/admin). Separate from ROUTE_ADMIN_CLERK_USER_IDS, which stays scoped to Phase 7-B route mutations. Empty means nobody is an admin." },
 ] as const;
 
 const BY_NAME = new Map(SECRET_REGISTRY.map((e) => [e.name, e]));

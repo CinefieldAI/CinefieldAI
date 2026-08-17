@@ -3875,3 +3875,79 @@ scheduled/automatic invocation of the investigation path; RTO/RPO numeric
 targets (still `UNDEFINED_BUSINESS_DECISION`); a region-outage runbook; any
 chaos/game-day infrastructure; any UI; any migration. **Phase 15-D is not
 complete.**
+
+## Phase 16/1 — read-only Admin Operations Center + System Health (code-only)
+
+The first Phase 16 vertical slice: an authorization boundary, a protected
+health read, and a `/admin` shell showing System Health — reusing Phase 13
+health truth verbatim, nothing else.
+
+### "apps/admin" reconciled to repository reality
+
+The roadmap phrase names a separate `apps/admin` application. This repository
+is a single Next.js app with no `apps/` directory, and this batch does not
+create one — Phase 16 lives at `src/app/admin/` inside the existing app. A
+structural test asserts no `apps/` directory exists after this batch. If a
+true monorepo split is ever wanted, that is its own deliberate, separately
+reviewed decision — not a side effect of building one health screen.
+
+### Admin authorization — bootstrap, deny-by-default, one canonical boundary
+
+`decideAdminAccess()` (`src/lib/admin/admin-auth.ts`) is the ONE decision
+core both `/admin`'s layout and `/api/admin/health` call, via the thin I/O
+wrapper `requireAdminAccess()` (`require-admin-access.ts`). No session -> deny.
+Session but not on the allowlist -> deny. The allowlist source itself
+unreadable -> deny. There is no branch, in either file, that resolves to
+`allowed: true` without both a real Clerk session and an explicit match.
+
+`CINEFIELD_ADMIN_CLERK_USER_IDS` is a bootstrap allowlist — the same shape
+`admin-route-service.ts`'s `ROUTE_ADMIN_CLERK_USER_IDS` already uses for
+Phase 7-B, but a SEPARATE variable: that older allowlist stays scoped to
+route mutations, and is never silently promoted into the universal Phase 16
+authority (a structural test asserts `admin-auth.ts` never references it).
+This is explicitly a bootstrap, not the intended end state — the repository
+has no admin role, no admin claim, and no org-based RBAC today. Splitting
+`decideAdminAccess` (pure, testable) from `requireAdminAccess` (the one place
+`@clerk/nextjs/server` is imported) means a future real role/claim system
+replaces only `isBootstrapAdmin`'s internals; every caller stays untouched.
+
+Both denial paths (no session, wrong session) return the SAME opaque 404 from
+`/api/admin/health` — the same choice `admin-route-service.ts`'s
+`assertRouteAdmin` already made, so a prober learns nothing about whether an
+admin surface exists at this URL.
+
+### Phase 13 remains health truth owner; Phase 16 is presentation only
+
+`admin-health-service.ts`'s `collectAdminHealth()` calls Phase 13's own
+`readiness()` once per `RuntimeName`, concurrently, and hands the results to
+`projectAdminHealth()` (`admin-health-projection.ts`) — a pure reshape, never
+a re-derivation. No `AdminHealthStatus`, no second `rollUp()`, no dependency
+evaluated by this code — `HealthStatus`/`HealthReason`/`Criticality` are
+imported from `health-contract.ts` unchanged. `UNKNOWN` stays `UNKNOWN`;
+`UNREADY` can never roll up to `HEALTHY` — the severity ordering used to pick
+`overallStatus` treats `UNREADY` as strictly the worst outcome.
+
+`/api/health/live` is untouched — still anonymous, still minimal, still no
+dependency detail. `/api/admin/health` is the opposite on every axis
+(admin-only, dependency-level detail) precisely because that disclosure risk
+is what `requireAdminAccess` exists to gate.
+
+### Read-only, structurally proven
+
+No file in `src/lib/admin/`, `src/app/admin/`, `src/app/api/admin/`, or
+`src/components/admin/` can redrive a DLQ message, mutate a route, trip a
+kill switch, release a quarantine, execute a restore, deploy, roll back,
+submit a provider, or write to the database — proven by a structural scan for
+each specific mutation identifier, not merely by inspection.
+`admin-route-service.ts` (Phase 7-B) was inspected for authorization
+precedent only; none of its mutations are wired into this UI.
+
+### Not in this slice
+
+Any operational action (DLQ redrive, route mutation, kill switch, quarantine
+release, restore execution, deploy/rollback, billing mutation); real Clerk
+org-role RBAC; alert/incident, cost, restore-evidence, recovery, or
+route-admin screens (named in the shell's navigation as inactive labels
+only); alert-history or recovery-incident persistence (both remain
+unpersisted, exactly as the Phase 16 master audit found); addition to product
+navigation. **Phase 16 is not complete.**
