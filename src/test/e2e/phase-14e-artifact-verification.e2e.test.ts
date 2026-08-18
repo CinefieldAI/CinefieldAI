@@ -159,14 +159,15 @@ test("S14E-8  AI cannot forge verified=true — the function derives it, never a
   assert.equal(verifyArtifact(artifact({ status: "UNVERIFIED" }), forged).verified, false);
 });
 
-test("S14E-9  no production deploy action was created or AI-allowlisted", () => {
+test("S14E-9  no production deploy action was AI-allowlisted by 14-E (Phase 19 registered one, human-approval-gated, never AI)", () => {
   const registry = JSON.parse(read("policies/data/actions.json")) as {
     aiWriteAllowlist: string[];
     actions: Record<string, unknown>;
   };
   assert.deepEqual(registry.aiWriteAllowlist, ["code.pr.create"]);
   for (const a of registeredActions()) {
-    assert.ok(!/deploy/i.test(a), `a deploy action exists in the registry: ${a}`);
+    if (!/deploy/i.test(a)) continue;
+    assert.ok(!registry.aiWriteAllowlist.includes(a), `${a} must never be AI-allowlisted`);
   }
 });
 

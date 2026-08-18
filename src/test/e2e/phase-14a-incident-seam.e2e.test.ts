@@ -338,8 +338,19 @@ test("S14A-24  Phase 12-E remains the sole policy engine; the seam defines no ev
 test("S14A-25  code.pr.create remains the only AI-allowlisted write action", () => {
   const registry = JSON.parse(read("policies/data/actions.json")) as { aiWriteAllowlist: string[] };
   assert.deepEqual(registry.aiWriteAllowlist, ["code.pr.create"]);
+  // PHASE 19 CORRECTION: this test used to assert no deploy/push/merge-
+  // shaped action existed in the registry AT ALL — correct for 14-A's own
+  // batch, which was not authorized to register one. Phase 19 IS
+  // authorized (the roadmap names "deployment gate" as an official wiring
+  // point) and added `deployment.production.apply` — human-approval-gated,
+  // requiredRoles route_admin/service, never AI. The invariant this test
+  // actually protects — no deploy-shaped action is AI-ALLOWLISTED — is
+  // already covered, more precisely, by the `aiWriteAllowlist` assertion
+  // above; this narrows to exactly that, rather than banning the concept
+  // outright.
   for (const a of registeredActions()) {
-    assert.ok(!/deploy|main\.push|merge/i.test(a), `a deploy/push/merge action exists: ${a}`);
+    if (!/deploy|main\.push|merge/i.test(a)) continue;
+    assert.ok(!registry.aiWriteAllowlist.includes(a), `${a} must never be AI-allowlisted`);
   }
 });
 

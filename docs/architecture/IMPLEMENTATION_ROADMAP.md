@@ -70,6 +70,38 @@ a second alert channel), and `docs/operations/INFRA_EMERGENCY_RUNBOOK.md`
 package: see `security-gates.md`'s "Phase 18 — Infrastructure as Code &
 Drift Management" section.
 
+**Phase 19 — Policy-as-Code & Automated Action Guardrails, official
+packages 19-A through 19-D (authoritative master roadmap v1.9.1 TEMIZ
+MASTER EK F, the same version already used for Phase 17):** this batch
+found and fixed a real, previously-undetected defect — the normative
+`policies/cinefield/policy.rego` referenced a data path real OPA never
+resolved, meaning the Rego suite had never actually passed under `opa
+test` since Phase 12-E. 19-A/19-B (real OPA tooling, Rego test suite,
+deterministic decisions, CI-required) are **code-complete**: OPA 1.19.1
+installed and run for real, `opa test` 13/13, `opa build -t wasm` compiles
+a real bundle, and `scripts/policy-wasm-parity.ts` proves the compiled
+WASM and the embedded TypeScript evaluator agree on all 49 conformance
+cases — this repository's second-ever `.github/workflows/`
+(`policy-ci.yml`) enforces all of it on every `policies/**` change. 19-C
+(wire deployment gate + admin/AI action points to policy, add decision
+log) is **partial** — the new `deployment.production.apply` registry
+entry and `src/lib/deployment/deployment-policy-gate.ts` wire the
+deployment gate additively (Phase 14-D's `deployment-guard.ts` itself
+untouched), and the decision log requirement is met by reusing the
+existing `security_events` RPC chain (no new table); the AI
+remediation/provider-disable/admin-sensitive-action points named in 19-C
+already call `requirePolicy()` from earlier phases (14-B/16), and were
+not modified further this batch. 19-D (fail-safe, TTL/reversible/
+idempotent bounds, policy-change PR governance) is **code-complete** for
+the fail-safe and CI-required-check halves; TTL/reversible/idempotent
+runbook bounds on high-risk automation remain the existing Phase 14/15
+mechanisms, not duplicated here. A live OPA sidecar/service (the literal
+text of 19-A) was deliberately **not** stood up — `PolicyDecision.engine`
+stays `"embedded"` in every production path; the WASM build is CI-proof
+only. Full detail, evidence, and file-by-file citations: see
+`security-gates.md`'s "Phase 19 — Policy-as-Code & Automated Action
+Guardrails" section.
+
 ---
 
 ## Completed Implementation Checkpoints

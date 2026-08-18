@@ -25,9 +25,17 @@ import rego.v1
 
 import data.cinefield.policy
 
-cases := data.cinefield.conformance.cases
+# DATA PATHS — real, verified against `opa test` (Phase 19). OPA's own
+# directory-based JSON loading puts policies/conformance/cases.json's
+# content at `data.conformance` (its own top-level keys `cases`/
+# `baseInput` land directly there — no extra segment from the filename)
+# and policies/data/actions.json's content at `data.data` (see
+# policy.rego's own header for why the file stays at that path rather than
+# being moved to chase a `data.cinefield.*` shape that was never actually
+# verified until now).
+cases := data.conformance.cases
 
-base := data.cinefield.conformance.baseInput
+base := data.conformance.baseInput
 
 # object.union is a shallow merge, which is exactly right here: every patch in
 # cases.json replaces a whole top-level field (the entire `actor`, the entire
@@ -89,7 +97,7 @@ test_decision_vocabulary_is_closed if {
 # production.
 
 test_every_action_is_fully_specified if {
-	every _, action in data.cinefield.actions.actions {
+	every _, action in data.data.actions {
 		is_boolean(action.critical)
 		is_boolean(action.implemented)
 		is_boolean(action.requiresTwoPerson)
@@ -103,25 +111,31 @@ test_every_action_is_fully_specified if {
 # Every role named by an action must exist in the role vocabulary, or that
 # action is unreachable and the registry is lying about who can perform it.
 test_every_required_role_exists if {
-	every _, action in data.cinefield.actions.actions {
+	every _, action in data.data.actions {
 		every role in action.requiredRoles {
-			role in data.cinefield.actions.roles
+			role in data.data.roles
 		}
 	}
 }
 
-# The AI write allowlist is empty. Roadmap ¶1856: MCP connections start
-# READ-ONLY. If a future change adds an entry, this test fails and forces the
-# change to be deliberate rather than incidental.
-test_ai_write_allowlist_is_empty if {
-	count(data.cinefield.actions.aiWriteAllowlist) == 0
+# The AI write allowlist is bounded to exactly the one entry Phase 14-B
+# deliberately reviewed and added (`code.pr.create`, still human-approval-
+# gated downstream — see ai-pr-authority.ts). Not empty: this Rego test was
+# never actually run by `opa test` until Phase 19 and had drifted from that
+# real, already-reviewed change — src/test/e2e/phase-14b-ai-pr-safety.e2e.
+# test.ts's own `assert.deepEqual(registry.aiWriteAllowlist, ["code.pr.
+# create"])` is the TypeScript side's matching, already-correct assertion.
+# Still bounded on purpose: a future, undeliberate addition fails this test
+# exactly as the original "must be empty" version intended to.
+test_ai_write_allowlist_is_bounded if {
+	data.data.aiWriteAllowlist == ["code.pr.create"]
 }
 
 # Everything in the registry is critical. The gate exists for critical actions
 # only; a non-critical entry here would mean an ordinary operation had been
 # quietly pulled behind a fail-closed boundary.
 test_registry_holds_only_critical_actions if {
-	every _, action in data.cinefield.actions.actions {
+	every _, action in data.data.actions {
 		action.critical == true
 	}
 }

@@ -42,6 +42,22 @@ package cinefield.policy
 
 import rego.v1
 
+# ACTION REGISTRY DATA PATH — real, verified against `opa test`.
+#
+# `policies/data/actions.json` loads under OPA's own directory-based JSON
+# data convention at `data.data` (the JSON's own top-level keys —
+# `actions`, `roles`, `environments`, `aiWriteAllowlist`, `policyVersion` —
+# land directly there; OPA does not also fold in the filename as a further
+# path segment). The file itself stays at `policies/data/actions.json` on
+# purpose — src/lib/policy/policy-engine.ts's ES import, and every test
+# that reads it as a literal Node path (change-risk.ts's classification,
+# the Phase 14/16-C conformance tests), all depend on that exact path; this
+# import is the one line that reconciles OPA's real load path with the
+# TypeScript side's real file path, rather than moving the file to chase a
+# `data.cinefield.actions` shape this repository's `opa test` had in fact
+# never verified until Phase 19.
+import data.data as action_registry
+
 # -----------------------------------------------------------------------------
 # The default. Reached whenever nothing else matched.
 # -----------------------------------------------------------------------------
@@ -77,14 +93,14 @@ exists_earlier(i) if {
 # Unknown action. The registry is the whole vocabulary; a typo is a denial,
 # never an unguarded call.
 candidates[0] := {"decision": "DENY", "reason": "unknown_action"} if {
-	not data.cinefield.actions.actions[input.action]
+	not action_registry.actions[input.action]
 }
 
 # An action nobody has built yet. The privacy actions (data.export,
 # data.delete, retention.override, legal_hold.*) live here: Phase 23 owns the
 # workflows, and until they exist the only correct answer is no.
 candidates[1] := {"decision": "DENY", "reason": "not_implemented"} if {
-	action := data.cinefield.actions.actions[input.action]
+	action := action_registry.actions[input.action]
 	action.implemented == false
 }
 
@@ -94,7 +110,7 @@ candidates[2] := {"decision": "DENY", "reason": "unknown_subject"} if {
 }
 
 candidates[3] := {"decision": "DENY", "reason": "unsupported_environment"} if {
-	not input.environment in data.cinefield.actions.environments
+	not input.environment in action_registry.environments
 }
 
 # A critical action may only be driven by the server. A request that came
@@ -121,7 +137,7 @@ candidates[4] := {"decision": "DENY", "reason": "untrusted_origin"} if {
 
 candidates[5] := {"decision": "DENY", "reason": "ai_write_authority_off"} if {
 	input.actor.kind == "ai_agent"
-	not input.action in data.cinefield.actions.aiWriteAllowlist
+	not input.action in action_registry.aiWriteAllowlist
 }
 
 # Even an allowlisted tool does not get to act on its own. The roadmap's
@@ -129,7 +145,7 @@ candidates[5] := {"decision": "DENY", "reason": "ai_write_authority_off"} if {
 # return for an agent is "a human must approve this".
 candidates[6] := {"decision": "REQUIRE_APPROVAL", "reason": "ai_write_needs_human_approval"} if {
 	input.actor.kind == "ai_agent"
-	input.action in data.cinefield.actions.aiWriteAllowlist
+	input.action in action_registry.aiWriteAllowlist
 	not approved
 }
 
@@ -138,7 +154,7 @@ candidates[6] := {"decision": "REQUIRE_APPROVAL", "reason": "ai_write_needs_huma
 # -----------------------------------------------------------------------------
 
 candidates[7] := {"decision": "DENY", "reason": "role_not_permitted"} if {
-	action := data.cinefield.actions.actions[input.action]
+	action := action_registry.actions[input.action]
 	not input.actor.role in action.requiredRoles
 }
 
@@ -169,7 +185,7 @@ candidates[10] := {"decision": "REQUIRE_CHALLENGE", "reason": "risk_challenge_re
 # durable state, and Phase 16 owns the workflow that produces it.
 
 candidates[11] := {"decision": "REQUIRE_APPROVAL", "reason": "human_approval_required"} if {
-	action := data.cinefield.actions.actions[input.action]
+	action := action_registry.actions[input.action]
 	action.requiresHumanApproval == true
 	not approved
 }
@@ -185,12 +201,12 @@ candidates[11] := {"decision": "REQUIRE_APPROVAL", "reason": "human_approval_req
 # a satisfied approval requirement.
 
 candidates[12] := {"decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream"} if {
-	action := data.cinefield.actions.actions[input.action]
+	action := action_registry.actions[input.action]
 	action.requiresTwoPerson == true
 }
 
 candidates[13] := {"decision": "ALLOW", "reason": "allowed"} if {
-	action := data.cinefield.actions.actions[input.action]
+	action := action_registry.actions[input.action]
 	action.requiresTwoPerson == false
 }
 
@@ -201,7 +217,7 @@ candidates[13] := {"decision": "ALLOW", "reason": "allowed"} if {
 valid_actor if {
 	is_string(input.actor.id)
 	count(input.actor.id) > 0
-	input.actor.role in data.cinefield.actions.roles
+	input.actor.role in action_registry.roles
 }
 
 approved if {

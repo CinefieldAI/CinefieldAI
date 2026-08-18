@@ -74,3 +74,8 @@ crash.log
 # not exist yet only because `init` has never been run here.
 override.tf
 override.tf.json
+
+# Phase 19 — OPA WASM build output. Reproducible from policies/ + `npm run
+# policy:build`; CI rebuilds it fresh rather than trusting a committed
+# binary blob that could silently drift from the Rego source.
+policies/bundle/

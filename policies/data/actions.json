@@ -131,6 +131,14 @@
       "requiresHumanApproval": true,
       "implemented": true,
       "owner": "phase-14"
+    },
+    "deployment.production.apply": {
+      "critical": true,
+      "requiredRoles": ["route_admin", "service"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": true,
+      "implemented": true,
+      "owner": "phase-19"
     }
   }
 }

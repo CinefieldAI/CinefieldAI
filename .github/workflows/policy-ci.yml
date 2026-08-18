@@ -1,0 +1,65 @@
+name: Policy CI (Phase 19-B/19-C)
+
+# Required check for every change to policies/ or the embedded TS engine.
+# Never applies/promotes anything — this is the "policy change PR/required
+# checks" gate 19-D names, proving a change before it can merge, not after.
+#
+# Four real, independent proofs, all of which must pass:
+#   1. `opa test policies/` — the Rego conformance suite itself.
+#   2. `opa build -t wasm` — the bundle actually compiles.
+#   3. `npm run policy:wasm-parity` — the compiled WASM bundle and the
+#      embedded TypeScript engine (production authority today) produce the
+#      IDENTICAL decision for every conformance case, evaluated for real,
+#      not assumed from sharing one JSON catalogue.
+#   4. The existing TS conformance suite (part of the full test run).
+
+on:
+  pull_request:
+    paths:
+      - "policies/**"
+      - "src/lib/policy/**"
+      - "src/lib/deployment/**"
+      - ".github/workflows/policy-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: opa test + wasm build + parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA
+        run: |
+          curl -sSL -o /usr/local/bin/opa "https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static"
+          chmod +x /usr/local/bin/opa
+          opa version
+
+      - name: opa test (the normative Rego suite)
+        run: opa test policies/ -v
+
+      - name: opa build -t wasm (bundle must compile)
+        run: |
+          mkdir -p policies/bundle
+          opa build -t wasm -e cinefield/policy/decision policies/ -o policies/bundle/policy.tar.gz
+
+      - name: Record bundle hash (integrity evidence, no external fetch involved)
+        run: |
+          sha256sum policies/bundle/policy.tar.gz | tee "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Real embedded-vs-WASM parity check
+        run: npm run policy:wasm-parity
+
+      - name: TypeScript conformance suite (embedded engine)
+        run: node --conditions=react-server --import tsx --test src/test/e2e/phase-12e-policy-gate.e2e.test.ts
+
+      - name: tsc
+        run: npx tsc --noEmit -p tsconfig.json

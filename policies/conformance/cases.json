@@ -270,6 +270,40 @@
         "risk": { "temporarilyBlocked": true, "adminReviewRequired": false, "challengeRequired": false }
       },
       "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 19: deployment.production.apply requires human approval evidence even for route_admin",
+      "patch": {
+        "action": "deployment.production.apply",
+        "actor": { "id": "user_admin_1", "role": "route_admin", "kind": "human" }
+      },
+      "expect": { "decision": "REQUIRE_APPROVAL", "reason": "human_approval_required" }
+    },
+    {
+      "name": "Phase 19: deployment.production.apply is allowed once approval evidence is attached",
+      "patch": {
+        "action": "deployment.production.apply",
+        "actor": { "id": "user_admin_1", "role": "route_admin", "kind": "human" },
+        "approvalEvidence": { "humanApproved": true }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "Phase 19: deployment.production.apply may also be driven by a service identity",
+      "patch": {
+        "action": "deployment.production.apply",
+        "actor": { "id": "cinefield-deploy-ci", "role": "service", "kind": "service" },
+        "approvalEvidence": { "humanApproved": true }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "Phase 19: deployment.production.apply refuses a member - only route_admin or service may trigger it",
+      "patch": {
+        "action": "deployment.production.apply",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
     }
   ]
 }

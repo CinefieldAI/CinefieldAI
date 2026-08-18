@@ -466,10 +466,12 @@ test("S14B-31  no AI action grants main push, structurally - the registry has no
   }
 });
 
-test("S14B-32  no production deploy action is allowed - none is registered at all", () => {
+test("S14B-32  no production deploy action is AI-allowlisted (Phase 19 registered deployment.production.apply, human-approval-gated, never AI)", () => {
+  const registry = JSON.parse(read("policies/data/actions.json")) as { aiWriteAllowlist: string[] };
   const actions = registeredActions();
   for (const a of actions) {
-    assert.ok(!/deploy/i.test(a), `a deploy-shaped action exists in the registry: ${a}`);
+    if (!/deploy/i.test(a)) continue;
+    assert.ok(!registry.aiWriteAllowlist.includes(a), `${a} must never be AI-allowlisted`);
   }
 });
 

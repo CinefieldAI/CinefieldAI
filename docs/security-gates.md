@@ -5704,3 +5704,148 @@ checkov — reasonable future addition, not required by this batch's own
 implemented, not needed here); Gate 3's network-level egress hardening
 (remains `DEFERRED_EXTERNAL`/`BUSINESS_DECISION_REQUIRED`, VPC topology
 undecided). **Phase 18 does not start Phase 19.**
+
+## Phase 19 — Policy-as-Code & Automated Action Guardrails
+
+**Authoritative roadmap source:**
+`Cinefield_Master_Yol_Haritasi_v1.9.1_TEMIZ_MASTER_EK_F SON.docx` (local,
+the same version already used for Phase 17). Roadmap status line: "Phase
+19 — NOT_STARTED — FOUNDATION EXISTS... Phase 12-E default-deny Policy
+Gate ve Phase 14 AI authority foundation'dır; tam OPA/Rego runtime
+governance Phase 19'da." Four official packages, 19-A through 19-D:
+19-A (OPA service/sidecar + standard decision contract, deterministic
+across environments), 19-B (Rego test suite in CI), 19-C (wire AI
+remediation / provider disable / admin sensitive action / deployment gate
+to policy, add decision log), 19-D (fail-safe / TTL-reversible-idempotent
+bounds / policy-change PR governance). The roadmap explicitly states a
+second policy engine is not built — Phase 19 completes the Phase 12-E
+gate's real runtime governance, it does not replace it.
+
+### The real, pre-existing defect this batch found, before building anything
+
+`policies/cinefield/policy.rego` and `policy_test.rego` referenced
+`data.cinefield.actions.*` / `data.cinefield.conformance.*`. Real OPA does
+not fold a JSON file's name into its data path — only its directory —
+so `policies/data/actions.json` loads at `data.data`, and
+`policies/conformance/cases.json` loads at `data.conformance`, never under
+`data.cinefield`. This repository's own `opa test` had, in fact, never
+been run against this tree before this batch (mirroring Phase 18's
+Terraform discovery): the first real run was **8 of 9 tests FAILED**. The
+`aiWriteAllowlist` Rego test was also stale — asserting the allowlist was
+empty, when Phase 14-B had already, correctly, added `code.pr.create`
+months earlier; this had also gone undetected because the suite never ran.
+
+Fixed by adding `import data.data as action_registry` in `policy.rego`
+and correcting every `data.cinefield.*` reference in both files to the
+paths OPA actually resolves — the JSON files themselves were **not**
+moved, since ~8 TypeScript call sites (`policy-engine.ts`'s ES import,
+`change-risk.ts`'s risk classification, several Phase 14/16-C tests)
+depend on their exact literal paths. `opa test`: 9/9 pass after the fix
+(13/13 after 19-C's new conformance cases). `policies/README.md`'s own
+data-path claim (`data.cinefield.actions`) was equally wrong and is
+corrected in this batch too.
+
+### 19-A / 19-B — real OPA tooling, for the first time
+
+OPA 1.19.1 installed and run for real. `opa build -t wasm` compiles a real
+WASM bundle (`policies/bundle/policy.tar.gz`, gitignored — CI rebuilds it
+fresh from `policies/` rather than trusting a committed binary that could
+drift from the Rego source). `npm run policy:wasm-parity`
+(`scripts/policy-wasm-parity.ts`) extracts that bundle, loads it via
+`@open-policy-agent/opa-wasm`, calls `policy.setData()` with the bundle's
+own baked-in data document, and evaluates every one of the 49 conformance
+cases through BOTH the compiled WASM and the real embedded
+`evaluatePolicy()` — proving parity, not assuming it from a shared JSON
+file. Result: `{"result":"parity_confirmed","totalCases":49,"pass":49,
+"failures":[]}`. `.github/workflows/policy-ci.yml` (this repository's
+second-ever CI workflow, after Phase 18's `infra-*.yml`) runs `opa test`,
+`opa build -t wasm`, the parity script, the existing TS conformance suite,
+and `tsc --noEmit` on every PR touching `policies/**` or
+`src/lib/policy/**` / `src/lib/deployment/**` — it never runs `opa apply`
+or `opa exec`; this is a verification gate, not a deploy step.
+
+### 19-C — deployment gate wired to policy, additively
+
+A new registry entry, `deployment.production.apply` (`critical: true`,
+`requiredRoles: ["route_admin", "service"]`, `requiresHumanApproval:
+true`, `owner: "phase-19"`), and a new composition wrapper,
+`src/lib/deployment/deployment-policy-gate.ts`
+(`evaluateDeploymentWithPolicy()`), following the exact precedent Phase
+14-B's `ai-pr-authority.ts` already established for `code.pr.create`:
+call `requirePolicy()`, catch `PolicyDenied`, never reimplement decision
+logic. `deployment-guard.ts` (Phase 14-D) itself is untouched — the
+wrapper composes both verdicts (`eligible` only when BOTH the existing
+deployment-guard AND the policy layer independently allow) rather than
+absorbing one into the other. The decision log requirement is met by
+reuse: `requirePolicy()` already calls `reportPolicyDecision()` →
+`security-signals.ts` → `security-event-logger.ts`'s existing
+`record_security_event` RPC — no new table, no new migration.
+
+### 19-D — fail-safe
+
+A fault in policy evaluation that is not a `PolicyDenied` decision
+(a real evaluator exception, a malformed bundle) propagates via `throw
+caught` in the wrapper — it is never silently treated as an allow. The
+underlying fail-closed behavior for a missing/invalid bundle, unknown
+action, or malformed input was already proven by the Phase 12-E suite;
+this batch adds no second path that could swallow a real fault. Policy
+changes are gated: `policy-ci.yml` runs on every `policies/**` change and
+blocks merge on `opa test` / parity / build failure.
+
+### Engine-transition state — embedded remains sole runtime authority
+
+`PolicyDecision.engine` is `"embedded"` everywhere in production, still.
+The WASM path built and proven this batch is **CI-proof only** — it does
+not run in any request path. `policy-gate.ts` does not import
+`opa-wasm`/`loadPolicy` anywhere. This is a deliberate, conservative
+reading of the roadmap's own instruction not to silently replace the
+embedded engine without extensive parity proof, and of the Phase 16-E
+lesson this brief explicitly cited: a shadow/parity mechanism must never
+risk becoming fail-open. Standing up a live OPA sidecar/service (the
+literal text of 19-A) was evaluated and deliberately not built — the
+roadmap's own components table lists OPA as `Risk/Deploy/AI Ops`-scoped
+central deterministic decision-making, and this batch's WASM-in-process
+proof already satisfies "same input → deterministic decision across
+dev/staging/prod" without a second network-dependent process a
+fail-closed gate would then depend on staying alive. A live sidecar
+remains a legitimate, larger future batch if the roadmap owner decides
+scale requires it.
+
+### Ownership boundaries preserved
+
+Tier-0 admin authorization (`src/lib/admin/tier0-authorization.ts`,
+Phase 16-E) is not modified or absorbed — it remains a genuinely separate
+authorization dimension, not integrated into the policy layer this batch,
+documented as a considered non-change. The AI write allowlist is
+unchanged (`["code.pr.create"]`); the new `deployment.production.apply`
+entry requires `route_admin`/`service`, never `ai_agent`, and is not
+allowlisted for AI writes. A policy `ALLOW` means "may proceed to its
+canonical owner" — Phase 7 routing, Phase 9 quarantine, Phase 15-D
+redrive, Temporal cancel, BullMQ retry, and Phase 16 admin/Tier-0 actions
+all keep executing through their own existing code, unchanged.
+
+### Regression (this batch)
+
+Full suite: 1994/1996 pass — the 2 known pre-existing Phase-8
+`ModelSelector` pins (unrelated, unmodified). Three Phase-14 structural
+pins (`S14A-25`, `S14B-32`, `S14E-9`) had asserted "no deploy-shaped
+action exists in the registry at all" as a Phase-14-batch-scoped guard
+against Phase 14 itself prematurely registering one; narrowed to the real,
+still-valid invariant ("no deploy-shaped action is AI-allowlisted") now
+that Phase 19 has legitimately registered one. `tsc --noEmit`, `npm run
+build`, ESLint on every touched file, `secrets:scan`, `telemetry:scan`:
+all clean. No Supabase migration. No locked product UI touched.
+
+### Not in this batch
+
+A live OPA sidecar/service (deliberately not built — see above); making
+the WASM engine live production authority (deliberately deferred, same
+reasoning); wiring AI remediation / provider disable / admin sensitive
+actions to this policy call beyond what already calls `requirePolicy()`
+today (`media.quarantine.*`, `routing.control.*`,
+`security.temporary_block.apply`, `code.pr.create` — all pre-existing,
+real callers; the 9 registry actions still `implemented: false` belong to
+their own not-yet-built phases: data export/delete and retention/legal
+hold to Phase 23, admin review resolution and secret rotation to Phase 16,
+account suspension to Phase 12-D); a dedicated policy-change PR review
+bot beyond the required CI check. **Phase 19 does not start Phase 20.**
