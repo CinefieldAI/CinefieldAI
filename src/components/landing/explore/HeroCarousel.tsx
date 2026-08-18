@@ -1,43 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-/**
- * Hero carousel — layout/interaction cloned from the reference site's own
- * markup (flex-basis card sizing, aspect-ratio figure, inset shadow), but
- * the CONTENT is Cinefield's own: real supported models/features, not the
- * reference's own product-announcement copy or named individuals. Media is
- * a placeholder gradient until real files land under `public/explore/`.
- */
-
-interface HeroCard {
-  title: string;
-  subtitle: string;
-  videoSrc?: string;
-  href?: string;
-}
-
-const HERO_CARDS: HeroCard[] = [
-  {
-    title: "Seedance 2.5",
-    subtitle: "Now generating in 1080p on Cinefield.",
-    videoSrc: "/Klon kopya fotos _videos/seedance_2_5_1080p.mp4",
-    href: "https://higgsfield.ai/ai/video?model=seedance_2_5&resolution=1080p",
-  },
-  { title: "Marketing Studio", subtitle: "Ad-ready shorts and product creatives." },
-  { title: "Create Image", subtitle: "Photoreal, illustrated, or stylized stills." },
-  { title: "Create Video", subtitle: "Motion generation across every model." },
-  { title: "Cinema Studio 4.0", subtitle: "More control. Longer scenes. Sharper quality." },
-  { title: "MCP & CLI", subtitle: "Bring Cinefield into Claude, ChatGPT, and your terminal." },
-  { title: "Layers", subtitle: "Decompose any image into editable layers." },
-  { title: "Audio Studio", subtitle: "Voiceover, change voice, translate." },
-  { title: "Supercomputer", subtitle: "Reasoning-first generation, beam by beam." },
-  { title: "Shorts Studio", subtitle: "Vertical stories, cut for the feed." },
-  { title: "Canvas", subtitle: "An infinite board for every generation." },
-  { title: "Viral Presets", subtitle: "Trend-ready templates, one click away." },
-  { title: "Explainer", subtitle: "Turn any idea into a narrated walkthrough." },
-  { title: "Community", subtitle: "See what everyone else is building." },
-];
+import { HERO_CARDS_DATA } from "./heroCardsData";
 
 export default function HeroCarousel() {
   // The DIV wrapping the <ul> is the actual scroll container
@@ -73,8 +37,8 @@ export default function HeroCarousel() {
     <div className="relative">
       <div ref={scrollerRef} onScroll={updateScrollState} className="hide-scrollbar grid min-w-0 overflow-x-scroll px-4">
         <ul className="flex min-w-0 gap-5 *:flex-[0_0_19.5rem] md:*:flex-[0_0_25rem] xl:*:flex-[0_0_32rem]">
-          {HERO_CARDS.map((card) => (
-            <li key={card.title}>
+          {HERO_CARDS_DATA.map((card) => (
+            <li key={card.id}>
               <div className="group relative grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
                 {card.href && (
                   <a
