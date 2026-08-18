@@ -288,10 +288,10 @@ export default function Navbar({
       style={{
         background: isExplorePage
           ? isScrolled
-            ? "rgba(10,10,12,0.96)"
-            : "rgba(10,10,12,0.85)"
+            ? "rgba(0,0,0,0.96)"
+            : "rgba(0,0,0,0.8)"
           : isScrolled
-          ? "rgba(10,10,12,0.96)"
+          ? "rgba(0,0,0,0.96)"
           : "rgba(35,38,42,0.75)",
         borderBottom: isScrolled
           ? "1px solid rgba(255,255,255,0.12)"
