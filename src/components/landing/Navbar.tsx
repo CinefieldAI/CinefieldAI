@@ -280,11 +280,19 @@ export default function Navbar({
     goToSection();
   };
 
+  const isExplorePage = pathname === "/" || pathname === "";
+
   return (
     <header
       className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 transition-all duration-300 md:grid-cols-[auto_1fr_auto]"
       style={{
-        background: isScrolled ? "rgba(10,10,12,0.96)" : "rgba(35,38,42,0.75)",
+        background: isExplorePage
+          ? isScrolled
+            ? "rgba(10,10,12,0.96)"
+            : "rgba(10,10,12,0.85)"
+          : isScrolled
+          ? "rgba(10,10,12,0.96)"
+          : "rgba(35,38,42,0.75)",
         borderBottom: isScrolled
           ? "1px solid rgba(255,255,255,0.12)"
           : "1px solid rgba(255,255,255,0.05)",
