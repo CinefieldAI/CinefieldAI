@@ -1,6 +1,6 @@
 export default function PromoBannerSection() {
   return (
-    <div className="w-full px-4 pt-4 md:px-6">
+    <div className="w-full pt-6">
       <section className="flex flex-col items-stretch gap-3 lg:flex-row lg:gap-5">
       {/* Left Big Promo Card */}
       <div className="grid w-full transition-[height,opacity] duration-200 ease-out lg:min-h-[264px] lg:w-[48%] lg:max-w-[40rem] lg:shrink-0 motion-reduce:transition-none">

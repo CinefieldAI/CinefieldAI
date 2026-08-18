@@ -1,6 +1,6 @@
 export default function FilmFestivalBannerSection() {
   return (
-    <div className="w-full px-4 pt-4 md:px-6">
+    <div className="w-full pt-6">
       {/* Main Banner Container */}
       <div className="relative z-20 flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-black transition-colors duration-200 ease-in-out md:rounded-3xl md:shadow-[0_0_2rem_rgba(0,0,0,0.8)]">
         {/* Background Gradients & Glows */}

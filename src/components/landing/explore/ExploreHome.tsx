@@ -36,7 +36,7 @@ const FOOTER_COLUMNS: FooterColumn[] = [
 
 export default function ExploreHome() {
   return (
-    <div className="w-full pb-24">
+    <div className="mx-auto max-w-[1400px] w-full px-4 pb-24 md:px-6">
       {/* Hero: 95 cards carousel */}
       <section className="pt-6">
         <HeroCarousel />

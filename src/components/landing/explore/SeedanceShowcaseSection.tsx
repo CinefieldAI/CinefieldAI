@@ -96,7 +96,7 @@ export const SHOWCASE_VIDEOS: ShowcaseVideo[] = [
 
 export default function SeedanceShowcaseSection() {
   return (
-    <div className="w-full px-4 pt-4 md:px-6">
+    <div className="w-full pt-6">
       <section
         className="relative mx-auto mb-6 w-full overflow-hidden rounded-3xl border border-[#9ce6f3]/20 bg-[#000019] p-4 md:p-8"
         style={{
