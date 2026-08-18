@@ -34,28 +34,28 @@ export default function HeroCarousel() {
   };
 
   return (
-    <div className="relative">
+    <div className="group relative">
       <div ref={scrollerRef} onScroll={updateScrollState} className="hide-scrollbar grid min-w-0 overflow-x-scroll px-4">
         <ul className="flex min-w-0 gap-5 *:flex-[0_0_19.5rem] md:*:flex-[0_0_25rem] xl:*:flex-[0_0_32rem]">
           {HERO_CARDS_DATA.map((card) => (
             <li key={card.id}>
-              <div className="group relative grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
+              <div className="group/card relative grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
                 {card.href && (
                   <a
                     href={card.href}
-                    aria-label={`Open ${card.title} in 1080p`}
+                    aria-label={`Open ${card.title}`}
                     className="absolute inset-0 z-10 hidden md:block"
                   >
-                    <span className="sr-only">Open {card.title} in 1080p</span>
+                    <span className="sr-only">Open {card.title}</span>
                   </a>
                 )}
                 {card.href && (
                   <a
                     href={card.href}
-                    aria-label={`Open ${card.title} in 1080p`}
+                    aria-label={`Open ${card.title}`}
                     className="absolute inset-0 z-10 md:hidden"
                   >
-                    <span className="sr-only">Open {card.title} in 1080p</span>
+                    <span className="sr-only">Open {card.title}</span>
                   </a>
                 )}
                 <figure
@@ -89,28 +89,46 @@ export default function HeroCarousel() {
         </ul>
       </div>
 
+      {/* Side gradient overlays */}
+      <div
+        className={`pointer-events-none absolute bottom-10 left-0 top-0 z-20 w-28 bg-gradient-to-r from-black/80 to-transparent transition-opacity duration-200 ${
+          canScrollLeft ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      <div
+        className={`pointer-events-none absolute bottom-10 right-0 top-0 z-20 w-28 bg-gradient-to-l from-black/80 to-transparent transition-opacity duration-200 ${
+          canScrollRight ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      {/* Left button */}
       <button
         type="button"
         aria-label="Scroll left"
         onClick={() => scrollByCard(-1)}
         disabled={!canScrollLeft}
-        className={`absolute left-0 top-0 z-30 flex h-[calc(100%-2.75rem)] w-14 cursor-pointer items-center justify-center bg-gradient-to-r from-black/80 to-transparent transition-all duration-150 ${
-          canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
+        className={`absolute left-3 top-[calc(50%-1.25rem)] z-30 -translate-y-1/2 cursor-pointer rounded-full border border-white/15 bg-white/10 p-2.5 text-white backdrop-blur-2xl transition-all duration-200 hover:bg-white/25 hover:scale-105 active:scale-95 ${
+          canScrollLeft ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-xl font-bold text-white shadow-md transition-transform hover:scale-110 active:scale-95">‹</span>
+        <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="size-6">
+          <path d="M13.7929 16L10.1464 12.3536C9.95118 12.1583 9.95118 11.8417 10.1464 11.6464L13.7929 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
+      {/* Right button */}
       <button
         type="button"
         aria-label="Scroll right"
         onClick={() => scrollByCard(1)}
         disabled={!canScrollRight}
-        className={`absolute right-0 top-0 z-30 flex h-[calc(100%-2.75rem)] w-14 cursor-pointer items-center justify-center bg-gradient-to-l from-black/80 to-transparent transition-all duration-150 ${
-          canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
+        className={`absolute right-3 top-[calc(50%-1.25rem)] z-30 -translate-y-1/2 cursor-pointer rounded-full border border-white/15 bg-white/10 p-2.5 text-white backdrop-blur-2xl transition-all duration-200 hover:bg-white/25 hover:scale-105 active:scale-95 ${
+          canScrollRight ? "opacity-0 group-hover:opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-xl font-bold text-white shadow-md transition-transform hover:scale-110 active:scale-95">›</span>
+        <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="size-6">
+          <path d="M10.2071 16L13.8536 12.3536C14.0488 12.1583 14.0488 11.8417 13.8536 11.6464L10.2071 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
     </div>
   );
