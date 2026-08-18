@@ -2283,7 +2283,7 @@ is listed with the reason it cannot become an unsafe default.
 | 1 | Cross-workspace isolation incl. assets and presigned URLs | 11-D / 12-B | SSE surface CLOSED (11-D); assets, reservations and ledger open (12-B) |
 | 2 | Provider webhook signature, replay, event-id uniqueness | 6R-B · 8-FRAMEWORK | EXTERNAL_PENDING — fal publishes no verifiable signing scheme |
 | 5 | Settlement uniqueness guaranteed at DB level | 10-B | Constraint exists (`PROOF S`/`PROOF T`); gate not formally claimed |
-| 6 | SQS IAM least privilege; worker distrusts queue messages | 6R-C · 18-A | NOT_STARTED |
+| 6 | SQS IAM least privilege; worker distrusts queue messages | 6R-C · 12-D | **CORRECTED, Phase 18 audit.** Both halves are done, under the phases that actually built them — this row previously said `NOT_STARTED` under a stale `18-A` label; direct code/test verification during a Phase 18 reality audit found neither claim true. IAM least privilege: `infra/modules/iam/main.tf` (per-runtime roles, no `Action`/`Resource` wildcards, DR backup role holds no `DeleteObject`, media worker role holds no `ListBucket`), proven by `phase-12d-secret-environment.e2e.test.ts` (26/26 passing) and documented in `docs/security/least-privilege.md` — not yet *applied* to a live AWS account (that adoption step is its own deliberate, unstarted change, per the production Terraform root's own header comment), but the least-privilege design itself is real and tested, not absent. Worker distrusts queue messages: `worker/provider-worker.ts` parses every message body through `parseCommand()` (`src/lib/contracts/command-wire.ts`) before acting on it — a schema-invalid body is classified `poison_message` and left for the DLQ, never handed to a provider — with the comment "a queue message is not an authority" attributing this discipline to Phase 6R-C. |
 | 7–10, 12 | — | — | NOT_STARTED |
 | 11 | AI/MCP write authority default-off; tool-level allowlist; production write only via policy + human approval | 14-x · 19-x | PARTIAL — the allowlist mechanism and its first entry (`code.pr.create`, PR-creation-scoped, still human-approval-gated) exist and are proven by conformance test as of Phase 14-B. No GitHub integration exists to actually open a PR, no production-write action is allow-listed, and 14-A/14-C/14-D/14-E/14-F remain unbuilt. |
 
@@ -5440,3 +5440,116 @@ Marketing Studio's default catalog wired to real generation (unauthorized UI
 change); any 17-C/17-D/17-E implementation (all genuinely absent or
 future-phase-gated, per the audits above); Phase 22 in any form. **Phase 17
 does not start Phase 18.**
+
+---
+
+## Phase 18 — Master Audit
+
+**No authoritative Phase 18 roadmap document exists, in-repo or externally
+supplied for this batch.** Unlike Phase 17, which eventually had an explicit
+external master roadmap named for it (v1.9.1 TEMIZ MASTER EK F), no such
+document was provided or found here. Per this batch's own operating rules
+("do not assume what Phase 18 means from memory... reconstruct the real
+Phase 18 contract from repository evidence... do not silently substitute an
+older roadmap as authoritative"), this section documents exactly what was
+searched, what was found, and why no new implementation followed from it —
+rather than guessing a scope from the Phase 16→17 conversational narrative,
+which would itself be exactly the "assume from memory" failure mode this
+batch was told to avoid.
+
+### What was searched
+
+`grep -rn "Phase 18\|Phase18\|18-A\|18-B\|18-C\|18-D\|18-E"` across `docs/`,
+`src/`, `supabase/migrations/`, `policies/`; `git log --all --grep="Phase
+18"`; a search for any Phase-18-named file. Also checked, and explicitly
+ruled out as a false match: `CINEFIELD_ARCHITECTURE_CONTRACT.md`'s own
+document section "## 18. Hero-Frame-First Workflow" — that file's 1–47
+numbering is an unrelated topic index (target architecture, not
+implemented), not the sequential implementation-phase numbering this
+project actually uses (which reaches at least Phase 25, per evidence below)
+— and the ORIGINAL source contract's "Faz 1–10" numbering (section 45),
+which stops at 10 and was superseded by `IMPLEMENTATION_ROADMAP.md`'s own
+phase order, so it cannot reach "18" either.
+
+### What was found
+
+Exactly one substantive hit, in this file's own pre-existing (not written
+this session) "Gates not yet addressed" table:
+
+- Gate 6, before this batch's correction: *"SQS IAM least privilege; worker
+  distrusts queue messages | 6R-C · 18-A | NOT_STARTED."*
+- Gate 3 (a separate table, "Phase 9 closure"): *"Production egress
+  hardening (Gate 3) | Phase 12/18 infra | The application-level gateway
+  blocks private, link-local, loopback and metadata addresses... the
+  missing piece is network-level enforcement."*
+
+Both references use the SAME sequential phase numbering still active
+throughout this repository today (6R-C, 12-D, 16, 19-x, 23, 25-A all appear
+consistently elsewhere in this exact file and in `CINEFIELD_ARCHITECTURE_
+CONTRACT.md`'s own Phase 17 bullet), so this is not a coincidental numeric
+collision from an unrelated old scheme — it is this project's own historical
+record of what "Phase 18" was scoped to mean: **AWS infrastructure security
+hardening** (SQS IAM policy tightening, worker-side message distrust, and
+network-level egress enforcement), not a continuation of the Phase 16/17
+product-intelligence work.
+
+### Verifying that evidence against current reality
+
+Both Gate 6 sub-items turned out to be **already complete, under different
+phase numbers, mis-documented as `NOT_STARTED`**:
+
+1. **SQS IAM least privilege** — `infra/modules/iam/main.tf` defines real,
+   narrow, per-runtime Terraform IAM roles (ECS execution, provider worker,
+   Temporal worker, realtime dispatcher, DR backup worker, media worker),
+   documented in `docs/security/least-privilege.md` (Phase 12-D) and proven
+   by `phase-12d-secret-environment.e2e.test.ts`, re-run fresh this batch:
+   **26/26 pass**, including assertions that no file grants an `Action`/
+   `Resource` wildcard, that the DR backup role has no `DeleteObject`, and
+   that the media worker role has no `ListBucket`. Only the *live
+   application* of this Terraform to a real AWS account remains undone —
+   the production root's own header comment says so explicitly ("NEVER
+   APPLIED... created by hand... Applying this root as-is would attempt to
+   CREATE them again and fail on name conflicts. Adoption... is a separate,
+   deliberate change.") — but that is a provisioning/business decision
+   requiring a live AWS account, not a missing design.
+2. **Worker distrusts queue messages** — `worker/provider-worker.ts`
+   (Phase 6R.5/6R-C) parses every SQS message body through `parseCommand()`
+   (`src/lib/contracts/command-wire.ts`) before acting on it; a
+   schema-invalid body is classified `poison_message` and left for
+   redelivery/DLQ, never handed to a provider — with the code's own comment
+   stating the exact principle the gate names: "a queue message is not an
+   authority." Verified by direct code read this batch, not by trusting the
+   stale table.
+
+The Gate 6 table row itself has been corrected in place (see above) to
+attribute this work to the phases that actually built it (`6R-C · 12-D`)
+rather than the `18-A` label under which it was apparently once planned and
+never updated once superseded.
+
+**Gate 3's network-level egress enforcement remains genuinely open and
+genuinely external.** Checked `infra/modules/ecs/main.tf` and
+`infra/environments/production/main.tf` directly: the ECS module only
+*references* `var.security_group_ids` / `var.worker_security_group_ids` —
+no `aws_security_group` (or NACL) resource exists anywhere in this
+repository's Terraform to harden. Building one from scratch would mean
+inventing VPC/subnet topology and CIDR decisions this repository has never
+made (the production root is explicitly "NEVER APPLIED," resources were
+"created by hand," and adopting them into Terraform is its own future,
+deliberate step) — fabricating that would be exactly the "invent missing
+roadmap requirements" / "provision paid infrastructure without explicit
+authorization" failure mode this batch was told to avoid. Left as
+`DEFERRED_EXTERNAL`, unchanged, correctly owned by "Phase 12/18 infra."
+
+### Conclusion
+
+The only in-repo evidence for "Phase 18" describes infrastructure-security
+work that is either already done (now correctly attributed) or requires
+live AWS provisioning this batch cannot fabricate. There is no discoverable,
+currently open, code-actionable Phase 18 scope in this repository as of
+this audit. **This batch's only change is the Gate 6 documentation
+correction above** — a real fix to a stale, incorrect status claim, not new
+production code, since nothing to implement was found. Should a canonical
+Phase 18 roadmap document (equivalent to Phase 17's externally-supplied
+master roadmap) surface later with a different scope, this section should
+be revisited rather than assumed superseded. **Phase 18 does not start
+Phase 19.**

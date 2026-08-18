@@ -39,6 +39,21 @@ name. 17-E (model/prompt promotion gated by a Phase 22 eval regression gate
 detail, evidence, and file-by-file citations for every package: see
 `security-gates.md`'s "Phase 17 Roadmap Reconciliation" section.
 
+**Phase 18 — no authoritative roadmap document exists for this phase, in
+this repository or supplied externally.** A dedicated audit searched this
+repository's own history and found exactly one pre-existing reference: an
+old security-gates.md gate-table row scoping "Phase 18" (jointly with
+6R-C/Phase 12) to AWS infrastructure security hardening — SQS IAM least
+privilege and network-level egress enforcement — not a continuation of the
+Phase 17 product-intelligence work. Both named sub-items of that gap were
+found already complete under the phases that actually built them (6R-C,
+12-D — the gate table's stale `NOT_STARTED` label has been corrected), and
+the one genuinely remaining piece (network-level egress/VPC hardening)
+requires live AWS provisioning this repository has never had and cannot
+fabricate. No new code was implemented for "Phase 18" as a result — see
+`security-gates.md`'s "Phase 18 — Master Audit" section for the full
+evidence trail.
+
 ---
 
 ## Completed Implementation Checkpoints
