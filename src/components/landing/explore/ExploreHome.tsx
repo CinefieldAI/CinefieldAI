@@ -1,6 +1,7 @@
 import HeroCarousel from "./HeroCarousel";
 import PromoBannerSection from "./PromoBannerSection";
 import FilmFestivalBannerSection from "./FilmFestivalBannerSection";
+import SeedanceShowcaseSection from "./SeedanceShowcaseSection";
 
 interface FooterColumn {
   heading: string;
@@ -46,6 +47,9 @@ export default function ExploreHome() {
 
       {/* Film Festival banner section: $1,000,000 festival banner with gold credits bar */}
       <FilmFestivalBannerSection />
+
+      {/* Seedance 2.5 Showcase section: cyan glow showcase with 12 community videos */}
+      <SeedanceShowcaseSection />
 
       {/* Footer mega-block — shell only, plain text, no links/routing yet */}
       <section className="mt-16 border-t border-white/10 bg-white/[0.02]">
