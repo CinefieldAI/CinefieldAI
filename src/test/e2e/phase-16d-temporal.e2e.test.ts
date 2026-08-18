@@ -16,7 +16,27 @@ import {
   networkErrorState,
 } from "@/lib/admin/temporal-admin-client-state";
 import { generationWorkflowId, generationIdFromWorkflowId } from "@/lib/temporal/workflow-ids";
+import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
 import { FakeSupabaseClient } from "./fake-supabase";
+
+// Phase 16-E: temporal.workflow.cancel is now Tier-0-gated (fail-closed,
+// see tier0-authorization.ts) IN FRONT OF the state/order checks this
+// file's own tests are about. Each cancel test below grants its actor
+// Tier-0 role + step-up evidence so it reaches — and still proves — the
+// SAME Phase 6R-H owner behavior it always asserted.
+const TIER0_STEP_UP: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
+  assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
+  elevation: { elevated: true, reasonCode: "verified" },
+};
+
+function withTier0<T>(actorIds: string, fn: () => Promise<T>): Promise<T> {
+  const original = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = actorIds;
+  return fn().finally(() => {
+    if (original !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = original;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  });
+}
 
 /**
  * Phase 16-D Temporal/Workflows — inspect (read-only) + the one guarded
@@ -174,59 +194,76 @@ test("cancel: invalid input (bad generation id, bad reason code, missing actor) 
 });
 
 test("cancel: unknown generation id is GENERATION_NOT_FOUND", async () => {
-  const db = new FakeSupabaseClient();
-  const result = await performAdminTemporalCancel(db as never, {
-    generationId: randomUUID(),
-    adminActorId: "admin_1",
-    reasonCode: "operator_investigation",
+  await withTier0("admin_1", async () => {
+    const db = new FakeSupabaseClient();
+    const result = await performAdminTemporalCancel(db as never, {
+      generationId: randomUUID(),
+      adminActorId: "admin_1",
+      reasonCode: "operator_investigation",
+      stepUp: TIER0_STEP_UP,
+    });
+    assert.deepEqual(result, { outcome: "GENERATION_NOT_FOUND" });
   });
-  assert.deepEqual(result, { outcome: "GENERATION_NOT_FOUND" });
 });
 
 test("cancel: a terminal generation fails closed as CANCEL_NOT_ALLOWED, never mutated", async () => {
-  const db = new FakeSupabaseClient();
-  const id = seedGeneration(db, { status: "completed" });
-  const result = await performAdminTemporalCancel(db as never, {
-    generationId: id,
-    adminActorId: "admin_1",
-    reasonCode: "operator_investigation",
+  await withTier0("admin_1", async () => {
+    const db = new FakeSupabaseClient();
+    const id = seedGeneration(db, { status: "completed" });
+    const result = await performAdminTemporalCancel(db as never, {
+      generationId: id,
+      adminActorId: "admin_1",
+      reasonCode: "operator_investigation",
+      stepUp: TIER0_STEP_UP,
+    });
+    assert.deepEqual(result, { outcome: "CANCEL_NOT_ALLOWED", status: "completed" });
+    const row = db.state.generations.find((r) => r.id === id) as { metadata: Record<string, unknown> | null };
+    assert.equal(row.metadata, null, "a refused cancel writes nothing");
   });
-  assert.deepEqual(result, { outcome: "CANCEL_NOT_ALLOWED", status: "completed" });
-  const row = db.state.generations.find((r) => r.id === id) as { metadata: Record<string, unknown> | null };
-  assert.equal(row.metadata, null, "a refused cancel writes nothing");
 });
 
 test("cancel: a non-terminal generation is cancelled, the real owner id is used (never the admin's), and Temporal signalling is honestly false when unconfigured", async () => {
-  const db = new FakeSupabaseClient();
-  const id = seedGeneration(db, { status: "queued", clerk_user_id: "user_owner" });
-  const result = await performAdminTemporalCancel(db as never, {
-    generationId: id,
-    adminActorId: "admin_1",
-    reasonCode: "operator_investigation",
-  });
-  assert.equal(result.outcome, "CANCEL_REQUESTED");
-  if (result.outcome !== "CANCEL_REQUESTED") return;
-  assert.equal(result.alreadyRequested, false);
-  assert.equal(result.workflowSignalled, false, "no Temporal config in this test process");
+  await withTier0("admin_1", async () => {
+    const db = new FakeSupabaseClient();
+    const id = seedGeneration(db, { status: "queued", clerk_user_id: "user_owner" });
+    const result = await performAdminTemporalCancel(db as never, {
+      generationId: id,
+      adminActorId: "admin_1",
+      reasonCode: "operator_investigation",
+      stepUp: TIER0_STEP_UP,
+    });
+    assert.equal(result.outcome, "CANCEL_REQUESTED");
+    if (result.outcome !== "CANCEL_REQUESTED") return;
+    assert.equal(result.alreadyRequested, false);
+    assert.equal(result.workflowSignalled, false, "no Temporal config in this test process");
 
-  const row = db.state.generations.find((r) => r.id === id) as { metadata: Record<string, unknown> };
-  const intent = readCancelIntent(row.metadata);
-  assert.equal(intent?.actorClerkUserId, "admin_1");
-  assert.equal(intent?.reason, "admin_cancel:operator_investigation");
+    const row = db.state.generations.find((r) => r.id === id) as { metadata: Record<string, unknown> };
+    const intent = readCancelIntent(row.metadata);
+    assert.equal(intent?.actorClerkUserId, "admin_1");
+    assert.equal(intent?.reason, "admin_cancel:operator_investigation");
+  });
 });
 
 test("cancel: repeated admin cancel is idempotent (alreadyRequested), and re-reads current state fresh on the second call", async () => {
-  const db = new FakeSupabaseClient();
-  const id = seedGeneration(db, { status: "queued" });
-  await performAdminTemporalCancel(db as never, { generationId: id, adminActorId: "admin_1", reasonCode: "first_try" });
-  const second = await performAdminTemporalCancel(db as never, {
-    generationId: id,
-    adminActorId: "admin_2",
-    reasonCode: "second_try",
+  await withTier0("admin_1,admin_2", async () => {
+    const db = new FakeSupabaseClient();
+    const id = seedGeneration(db, { status: "queued" });
+    await performAdminTemporalCancel(db as never, {
+      generationId: id,
+      adminActorId: "admin_1",
+      reasonCode: "first_try",
+      stepUp: TIER0_STEP_UP,
+    });
+    const second = await performAdminTemporalCancel(db as never, {
+      generationId: id,
+      adminActorId: "admin_2",
+      reasonCode: "second_try",
+      stepUp: TIER0_STEP_UP,
+    });
+    assert.equal(second.outcome, "CANCEL_REQUESTED");
+    if (second.outcome !== "CANCEL_REQUESTED") return;
+    assert.equal(second.alreadyRequested, true);
   });
-  assert.equal(second.outcome, "CANCEL_REQUESTED");
-  if (second.outcome !== "CANCEL_REQUESTED") return;
-  assert.equal(second.alreadyRequested, true);
 });
 
 // ===========================================================================

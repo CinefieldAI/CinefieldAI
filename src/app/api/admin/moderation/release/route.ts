@@ -4,6 +4,7 @@ import { performModerationAction } from "@/lib/admin/moderation-admin-service";
 import type { ModerationActionKind } from "@/lib/admin/moderation-admin-contract";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guard";
 
 /**
  * POST /api/admin/moderation/release — Phase 16-C quarantine release action.
@@ -23,6 +24,9 @@ function isValidAction(value: unknown): value is ModerationActionKind {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const csrfRefusal = guardPrivilegedMutation(request);
+  if (csrfRefusal) return csrfRefusal;
+
   const access = await requireAdminAccess();
   if (!access.allowed) {
     return privateJson({ error: "not_found" }, { status: 404 });

@@ -4,6 +4,7 @@ import { setAdminRouteEnabled } from "@/lib/admin/router-admin-service";
 import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/admin/require-step-up";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guard";
 
 /**
  * POST /api/admin/router/disable — Phase 16-B route enable/disable.
@@ -15,6 +16,9 @@ import { guardRoute, privateJson } from "@/lib/security/response-headers";
  * direction. `durable_write` route class, never reachable via GET.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const csrfRefusal = guardPrivilegedMutation(request);
+  if (csrfRefusal) return csrfRefusal;
+
   const access = await requireAdminAccess();
   if (!access.allowed) {
     return privateJson({ error: "not_found" }, { status: 404 });

@@ -17,59 +17,57 @@ import {
  * Phase 16-E — the Tier-0 privileged-action authorization decision point.
  *
  * ---------------------------------------------------------------------------
- * WHAT THIS IS, PRECISELY (Section 18/27 of the 16-E spec)
+ * SECURITY FIX BATCH (post-closure-audit): `allowed` IS THE AUTHORIZATION
+ * TRUTH, ALWAYS. NOTHING ADJUSTS IT.
  * ---------------------------------------------------------------------------
- * `authorizeTier0Action` implements the chain the spec's DONE CRITERION
- * describes: given an action attempt, it identifies the action's risk
- * (`tier0-action-catalogue.ts`), checks the actor's privilege tier
- * (`admin-privilege.ts`), checks step-up assurance where the catalogue
- * requires it (`step-up-auth.ts`'s evidence, resolved by the CALLER — this
- * function never talks to Clerk or Redis itself, so it stays testable
- * without either), checks dual control where required, and produces bounded
- * durable audit evidence for every branch — allowed and denied alike.
+ * The 16-E closure audit proved a real defect here: the previous version
+ * let `CINEFIELD_TIER0_ENFORCEMENT_MODE` turn a real `deny` into
+ * `allowed: true` whenever the env var was not the exact string `"enforce"`
+ * — which is the DEFAULT, unset state. A normal admin session (no Tier-0
+ * role, no step-up, no elevation) could therefore execute
+ * `queue.dlq.redrive` / `route.disable` / `temporal.workflow.cancel`,
+ * directly violating the binding invariant: "a normal admin session alone
+ * must NOT be sufficient to execute a Tier-0 action."
  *
- * It NEVER invokes the canonical action. Section 19 is absolute: DLQ
- * redrive, BullMQ retry, route enable/disable, quarantine release, Temporal
- * cancel keep their existing, unmodified owners. A caller that receives
- * `{ allowed: true }` from this function still has to call that owner
- * itself, and — on success — call `recordTier0Execution` so the 'executed'
- * event exists. A decision here that is never followed by an execution
- * event is honestly visible in the audit trail as exactly that: requested,
- * allowed, never executed.
+ * This function no longer has that lever. `role_not_permitted`,
+ * `step_up_not_configured`, `step_up_not_elevated`, and
+ * `awaiting_second_approval` ALWAYS return `allowed: false` — full stop.
+ * `CINEFIELD_TIER0_ENFORCEMENT_MODE` still exists and is still read, but it
+ * is now OBSERVABILITY ONLY: it is stamped on the returned decision as
+ * `enforcementMode` (and available to a caller for logging/telemetry/
+ * rollout dashboards), and it changes nothing about whether the caller may
+ * proceed. There is no parsing of this env var, malformed or otherwise,
+ * that can make a deny into an allow — every unrecognized value behaves
+ * identically to `"shadow"`, and `"shadow"` no longer means anything but
+ * "label this decision as evaluated during the shadow-observation rollout
+ * window."
  *
- * ---------------------------------------------------------------------------
- * ENFORCEMENT MODE — WHY THIS CAN RETURN `allowed: true` IN SHADOW MODE
- * EVEN WHEN THE UNDERLYING CHECK FAILED
- * ---------------------------------------------------------------------------
- * `CINEFIELD_TIER0_ENFORCEMENT_MODE` (env, default unset = "shadow") governs
- * whether a real DENY here actually blocks a caller. This exists because
- * step-up assurance is honestly `NOT_CONFIGURED` in every environment today
- * (Section 8 — no Clerk MFA/passkey configuration exists in this
- * repository) — hard-enforcing `requiresStepUp` today would make DLQ
- * redrive, BullMQ retry, route disable and Temporal cancel permanently
- * unusable for every admin until an operator explicitly configures Clerk
- * assurance externally. That is arguably the intended end-state of Tier-0
- * hardening, but flipping four already-shipped, already-audited (Phase
- * 16-B/16-D) admin actions to hard-fail in every environment — including
- * this one, mid-development, with no external config path available yet —
- * is a consequential operational decision this batch does not make
- * unilaterally. So: `authorizeTier0Action` ALWAYS evaluates the real
- * decision and ALWAYS writes the real durable evidence (a shadow-mode
- * caller can see in the audit trail exactly which of its calls WOULD have
- * been denied), and only actually returns `allowed: false` to a "shadow"
- * caller when the underlying denial reason is `unknown_action` (a
- * programming error, never something enforcement-mode should paper over).
- * Every wired call site (`dlq-admin-service.ts`,
- * `bullmq-admin-service.ts`, `router-admin-service.ts`,
- * `temporal-admin-service.ts`) reads `params.enforce` from this same env var
- * — setting `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce` makes every one of
- * them start hard-denying Tier-0 actions without step-up assurance, with NO
- * further code change, and `phase-16e-tier0-authorization.e2e.test.ts`
- * proves both modes against the same production function.
+ * PRACTICAL CONSEQUENCE, STATED PLAINLY: because live Clerk MFA/passkey
+ * configuration is honestly `NOT_CONFIGURED` in every environment today
+ * (`step-up-auth.ts`'s header), every `HIGH_RISK_TIER0` action that
+ * `requiresStepUp` (DLQ redrive, route disable, Temporal cancel,
+ * quarantine release) is now REFUSED for every caller until an operator
+ * provisions that external Clerk configuration. That is correct fail-closed
+ * behavior, not a regression to work around — see Section 5 of the fix
+ * batch. `queue.bullmq.retry` (`OPERATOR_MUTATION`, `requiresStepUp: false`)
+ * is unaffected and keeps working under an `operator`-tier actor, exactly
+ * as before.
  */
 
-export function tier0EnforcementModeEnabled(rawEnv: string | undefined = process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE): boolean {
-  return rawEnv === "enforce";
+export type Tier0EnforcementMode = "enforce" | "shadow";
+
+/**
+ * Parses `CINEFIELD_TIER0_ENFORCEMENT_MODE` into an explicit mode label.
+ * Observability only — see this file's header. Any value other than the
+ * exact string `"enforce"` (missing, empty, whitespace, wrong case, a
+ * typo, or the literal `"shadow"`) resolves to `"shadow"`. That default is
+ * safe now in a way it was not before this fix: `"shadow"` no longer
+ * bypasses a real deny.
+ */
+export function tier0EnforcementMode(
+  rawEnv: string | undefined = process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE
+): Tier0EnforcementMode {
+  return rawEnv === "enforce" ? "enforce" : "shadow";
 }
 
 const ACTION_NAME_PATTERN = /^[a-z][a-z0-9_.]{1,80}$/;
@@ -82,8 +80,7 @@ export type Tier0DecisionReasonCode =
   | "step_up_not_configured"
   | "step_up_not_elevated"
   | "awaiting_second_approval"
-  | "allowed"
-  | "allowed_shadow_mode";
+  | "allowed";
 
 export interface Tier0AuthorizationParams {
   /** Caller-generated UUID, correlates every event for this one action attempt. */
@@ -97,18 +94,25 @@ export interface Tier0AuthorizationParams {
   /** Resolved by the caller via `require-step-up.ts` — never fetched here. */
   assurance: AssuranceEvidence;
   elevation: ElevationVerdict;
-  /** Defaults to `tier0EnforcementModeEnabled()`; overridable for tests. */
-  enforce?: boolean;
+  /**
+   * Overrides the env-derived mode for tests. NEVER changes whether the
+   * decision is `allowed` — see this file's header. Purely stamped onto
+   * the returned decision and into audit telemetry.
+   */
+  mode?: Tier0EnforcementMode;
 }
 
 export interface Tier0Decision {
+  /** The real authorization truth. Never adjusted by enforcement mode. */
   readonly allowed: boolean;
   readonly requestId: string;
   readonly action: string;
   readonly classification: Tier0SecurityClassification | null;
+  /** The real reason, always — never a fabricated "allowed" label. */
   readonly reasonCode: Tier0DecisionReasonCode;
   readonly role: AdminPrivilegeRole | null;
-  readonly enforced: boolean;
+  /** Observability only. See this file's header — never gates `allowed`. */
+  readonly enforcementMode: Tier0EnforcementMode;
 }
 
 function isValidTarget(target: { type: string; id?: string | null }): boolean {
@@ -116,14 +120,15 @@ function isValidTarget(target: { type: string; id?: string | null }): boolean {
 }
 
 /**
- * The decision point. See this file's header for the enforcement-mode
- * semantics and Section 19's "never invokes the owner" boundary.
+ * The decision point. See this file's header for the fail-closed guarantee
+ * and Section 19's "never invokes the owner" boundary (unchanged from the
+ * original 16-E design — only the enforcement-mode lever was removed).
  */
 export async function authorizeTier0Action(
   admin: SupabaseClient,
   params: Tier0AuthorizationParams
 ): Promise<Tier0Decision> {
-  const enforce = params.enforce ?? tier0EnforcementModeEnabled();
+  const mode = params.mode ?? tier0EnforcementMode();
 
   if (!REQUEST_ID_PATTERN.test(params.requestId) || !ACTION_NAME_PATTERN.test(params.action) || !isValidTarget(params.target)) {
     return {
@@ -133,7 +138,7 @@ export async function authorizeTier0Action(
       classification: null,
       reasonCode: "invalid_request_id",
       role: null,
-      enforced: true,
+      enforcementMode: mode,
     };
   }
 
@@ -148,7 +153,7 @@ export async function authorizeTier0Action(
       classification: null,
       reasonCode: "unknown_action",
       role: null,
-      enforced: true,
+      enforcementMode: mode,
     };
   }
 
@@ -177,21 +182,19 @@ export async function authorizeTier0Action(
       reasonCode: params.reasonCode ?? null,
       correlationId: params.correlationId ?? null,
       securityClassification: entry.classification,
-      // The REAL reason is always recorded, enforced or not — shadow mode
-      // changes what a caller does with the decision, never what the audit
-      // trail says happened. A reader of the durable evidence can always
-      // tell exactly which denials WOULD have blocked something once
-      // enforcement is switched on.
+      // The real reason, always. The audit trail never needs a second,
+      // "what enforcement mode was active" column for THIS purpose — mode
+      // is caller-side observability, not part of what happened.
       outcomeDetail,
     });
     return {
-      allowed: !enforce,
+      allowed: false,
       requestId: params.requestId,
       action: params.action,
       classification: entry.classification,
-      reasonCode: enforce ? reasonCode : "allowed_shadow_mode",
+      reasonCode,
       role,
-      enforced: enforce,
+      enforcementMode: mode,
     };
   };
 
@@ -223,13 +226,13 @@ export async function authorizeTier0Action(
         securityClassification: entry.classification,
       });
       return {
-        allowed: !enforce,
+        allowed: false,
         requestId: params.requestId,
         action: params.action,
         classification: entry.classification,
-        reasonCode: enforce ? "awaiting_second_approval" : "allowed_shadow_mode",
+        reasonCode: "awaiting_second_approval",
         role,
-        enforced: enforce,
+        enforcementMode: mode,
       };
     }
   }
@@ -254,7 +257,7 @@ export async function authorizeTier0Action(
     classification: entry.classification,
     reasonCode: "allowed",
     role,
-    enforced: enforce,
+    enforcementMode: mode,
   };
 }
 

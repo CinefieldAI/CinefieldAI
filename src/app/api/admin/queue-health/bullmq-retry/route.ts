@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/admin/require-admin-access";
 import { retryAdminBullmqJob } from "@/lib/admin/bullmq-admin-service";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guard";
 
 /**
  * POST /api/admin/queue-health/bullmq-retry — Phase 16-B BullMQ auxiliary
@@ -12,6 +13,9 @@ import { guardRoute, privateJson } from "@/lib/security/response-headers";
  * retry a job it merely believes is failed. `durable_write` route class.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const csrfRefusal = guardPrivilegedMutation(request);
+  if (csrfRefusal) return csrfRefusal;
+
   const access = await requireAdminAccess();
   if (!access.allowed) {
     return privateJson({ error: "not_found" }, { status: 404 });

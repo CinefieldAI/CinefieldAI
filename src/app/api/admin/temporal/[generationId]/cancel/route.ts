@@ -4,6 +4,7 @@ import { performAdminTemporalCancel } from "@/lib/admin/temporal-admin-service";
 import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/admin/require-step-up";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guard";
 
 /**
  * POST /api/admin/temporal/[generationId]/cancel — Phase 16-D admin-initiated
@@ -21,6 +22,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ generationId: string }> }
 ): Promise<NextResponse> {
+  const csrfRefusal = guardPrivilegedMutation(request);
+  if (csrfRefusal) return csrfRefusal;
+
   const access = await requireAdminAccess();
   if (!access.allowed) {
     return privateJson({ error: "not_found" }, { status: 404 });

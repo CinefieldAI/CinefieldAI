@@ -6,8 +6,20 @@ import { test } from "node:test";
 
 import { getAdminRouterView, setAdminRouteEnabled } from "@/lib/admin/router-admin-service";
 import { isValidRouteActionReason, ROUTE_ID_PATTERN } from "@/lib/admin/router-admin-contract";
+import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
 import { FakeSupabaseClient } from "./fake-supabase";
 import { installFakeSupabase } from "./e2e-harness";
+
+// Phase 16-E: route.disable (setAdminRouteEnabled) is now Tier-0-gated
+// (fail-closed, see tier0-authorization.ts) IN FRONT OF the pre-existing
+// ROUTE_ADMIN_CLERK_USER_IDS check this file's own tests are about. Tests
+// below that exercise the mutation supply valid Tier-0 role + step-up
+// evidence via this helper so they reach — and still prove — the SAME
+// ROUTE_ADMIN_CLERK_USER_IDS boundary they always asserted.
+const TIER0_STEP_UP: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
+  assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
+  elevation: { elevated: true, reasonCode: "verified" },
+};
 
 /**
  * Phase 16-B — Router Controls: read via `listRoutesForAdmin`, mutate via
@@ -45,7 +57,13 @@ test("isValidRouteActionReason and ROUTE_ID_PATTERN reject malformed input befor
 
 test("no ROUTE_ADMIN_CLERK_USER_IDS configured in this test process: list and set both refuse with ROUTE_AUTHORITY_DENIED, never fabricated data or a silent write", async () => {
   const original = process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+  const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   delete process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+  // Tier-0 role granted so the mutation attempt reaches the REAL
+  // ROUTE_ADMIN_CLERK_USER_IDS check this test is about, rather than being
+  // refused one layer earlier by the (correct, but not what this test
+  // proves) Tier-0 gate.
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_phase16_admin_not_route_admin";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
@@ -53,10 +71,19 @@ test("no ROUTE_ADMIN_CLERK_USER_IDS configured in this test process: list and se
     const listResult = await getAdminRouterView(db as never, "user_phase16_admin_not_route_admin");
     assert.deepEqual(listResult, { outcome: "ROUTE_AUTHORITY_DENIED" });
 
-    const setResult = await setAdminRouteEnabled(db as never, "user_phase16_admin_not_route_admin", randomUUID(), false, "test reason");
+    const setResult = await setAdminRouteEnabled(
+      db as never,
+      "user_phase16_admin_not_route_admin",
+      randomUUID(),
+      false,
+      "test reason",
+      TIER0_STEP_UP
+    );
     assert.deepEqual(setResult, { outcome: "ROUTE_AUTHORITY_DENIED" });
   } finally {
     if (original !== undefined) process.env.ROUTE_ADMIN_CLERK_USER_IDS = original;
+    if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   }
 });
 
@@ -71,38 +98,46 @@ test("an invalid route id or missing reason returns INVALID_TARGET without ever 
 
 test("when ROUTE_ADMIN_CLERK_USER_IDS admits the caller, an unknown route id returns ROUTE_NOT_FOUND, not a fabricated success", async () => {
   const original = process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+  const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   process.env.ROUTE_ADMIN_CLERK_USER_IDS = "user_route_admin_test";
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_route_admin_test";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
     if (!db.state.model_routes) db.state.model_routes = [];
-    const result = await setAdminRouteEnabled(db as never, "user_route_admin_test", randomUUID(), false, "test");
+    const result = await setAdminRouteEnabled(db as never, "user_route_admin_test", randomUUID(), false, "test", TIER0_STEP_UP);
     assert.deepEqual(result, { outcome: "ROUTE_NOT_FOUND" });
   } finally {
     if (original !== undefined) process.env.ROUTE_ADMIN_CLERK_USER_IDS = original;
     else delete process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+    if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   }
 });
 
 test("when ROUTE_ADMIN_CLERK_USER_IDS admits the caller and the route exists, disabling it succeeds and is reversible by calling again with true", async () => {
   const original = process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+  const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   process.env.ROUTE_ADMIN_CLERK_USER_IDS = "user_route_admin_test";
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_route_admin_test";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
     const routeId = randomUUID();
     db.state.model_routes = [{ id: routeId, model_id: "m1", priority: 100, enabled: true, status: "active", updated_at: "2026-01-01T00:00:00.000Z" }];
 
-    const disableResult = await setAdminRouteEnabled(db as never, "user_route_admin_test", routeId, false, "incident #1");
+    const disableResult = await setAdminRouteEnabled(db as never, "user_route_admin_test", routeId, false, "incident #1", TIER0_STEP_UP);
     assert.deepEqual(disableResult, { outcome: "APPLIED", routeId, enabled: false });
     assert.equal(db.state.model_routes[0].enabled, false);
 
-    const reEnableResult = await setAdminRouteEnabled(db as never, "user_route_admin_test", routeId, true, "incident #1 resolved");
+    const reEnableResult = await setAdminRouteEnabled(db as never, "user_route_admin_test", routeId, true, "incident #1 resolved", TIER0_STEP_UP);
     assert.deepEqual(reEnableResult, { outcome: "APPLIED", routeId, enabled: true });
     assert.equal(db.state.model_routes[0].enabled, true, "the same function reverses its own mutation — no second enable path was built");
   } finally {
     if (original !== undefined) process.env.ROUTE_ADMIN_CLERK_USER_IDS = original;
     else delete process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+    if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   }
 });
 

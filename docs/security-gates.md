@@ -4943,50 +4943,100 @@ writer/reader; `GET /api/admin/privileged-audit`
 action/target/event/time-window) query UI Section 14 asks for — no
 arbitrary SQL, no unbounded history (`PRIVILEGED_AUDIT_MAX_ROWS`).
 
-### Enforcement mode — why hard-enforcement is not flipped on for already-shipped actions in this batch
+### Enforcement mode — SECURITY FIX BATCH: observability only, never a bypass
 
-`authorizeTier0Action()` (`src/lib/admin/tier0-authorization.ts`) is the
-decision point implementing the done criterion's chain. It is wired into
-the four actions the 16-B/16-D handoff text names by name — DLQ redrive,
-route disable (`setAdminRouteEnabled`), Temporal cancel — and ALWAYS
-evaluates the real decision and ALWAYS writes real durable evidence.
-Whether a `false` decision actually blocks the caller is gated by
-`CINEFIELD_TIER0_ENFORCEMENT_MODE` (default unset = **shadow**: the
-decision and its real reason are durably recorded, but the caller
-proceeds exactly as it did before this batch; `enforce`: a Tier-0 DENY
-genuinely refuses, returning a new, additive `TIER0_AUTHORIZATION_REQUIRED`
-outcome). This is a deliberate, honest choice, not a shortcut: step-up
-assurance is `NOT_CONFIGURED` in every environment today, so
-hard-enforcing immediately would make DLQ redrive, route disable and
-Temporal cancel permanently unusable until an operator configures Clerk
-assurance externally — arguably the CORRECT end-state for Tier-0
-hardening, but a consequential operational decision this batch does not
-make unilaterally on four already-shipped, already-audited (16-B/16-D)
-actions. `phase-16e-wired-actions.e2e.test.ts` proves BOTH modes against
-the exact production functions Phase 16-B's/16-D's own closure tests
-exercise: shadow mode is byte-identical to their pre-existing assertions;
-enforce mode genuinely refuses without step-up and genuinely proceeds
-with it. `BullMQ retry` is catalogued (`OPERATOR_MUTATION`, no step-up)
-but not wired to the audit trail in this batch — lower severity, no
-production backing infra in any environment.
+**This section previously described a real, shipped defect, corrected in a
+follow-up security fix batch — the correction is documented here in place
+of the original claim, not appended as an addendum, because the original
+claim is no longer true of the code.**
+
+The original version of `authorizeTier0Action()` let
+`CINEFIELD_TIER0_ENFORCEMENT_MODE` turn a real `deny` into `allowed: true`
+whenever the env var was not the exact string `"enforce"` — which is the
+**default**, unset state. A post-implementation closure audit
+(`PHASE 16-E MASTER CLOSURE AUDIT`) traced this live through the full
+production call chain (route → service → `authorizeTier0Action` →
+caller's `if (!decision.allowed)` guard) and proved: a normal admin
+session — no Tier-0 role, no step-up, no elevation — could execute
+`queue.dlq.redrive`, `route.disable`, and `temporal.workflow.cancel`,
+directly violating the binding invariant this phase exists to enforce.
+The audit's own verdict: `PHASE_16_E_FINAL_STATUS: FAIL`,
+`TIER0_SHADOW_MODE: FAIL_OPEN`.
+
+The fix removed the lever entirely. `authorizeTier0Action()`'s `allowed`
+field is now the authorization truth, always — `role_not_permitted`,
+`step_up_not_configured`, `step_up_not_elevated`, and
+`awaiting_second_approval` return `allowed: false` unconditionally, in
+every mode, with no exception. `CINEFIELD_TIER0_ENFORCEMENT_MODE` still
+exists and is still parsed (`tier0EnforcementMode()`, replacing the old
+`tier0EnforcementModeEnabled()`), but it is now stamped onto the returned
+decision as `enforcementMode` for logging/telemetry/rollout-dashboard
+purposes ONLY — it changes nothing about whether a caller may proceed.
+Every value other than the exact string `"enforce"` (missing, empty,
+whitespace, wrong case, a typo, or the literal `"shadow"`) resolves to
+the `"shadow"` label, and that default is now SAFE in a way it was not
+before this fix, because `"shadow"` no longer means "bypass."
+
+**Practical consequence, stated plainly:** because live Clerk MFA/passkey
+configuration is honestly `NOT_CONFIGURED` in every environment today,
+every `HIGH_RISK_TIER0` action that `requiresStepUp` — DLQ redrive, route
+disable, Temporal cancel, quarantine release — is now refused for every
+caller until an operator provisions that external Clerk configuration.
+That is the correct fail-closed behavior the roadmap always asked for,
+not a regression: the phase's own security-fix brief was explicit that
+this may "temporarily make Tier-0 actions unusable in the current
+environment... do not create a bypass merely to keep the button
+functional." `queue.bullmq.retry` (`OPERATOR_MUTATION`, no step-up
+required) is unaffected.
+
+`phase-16e-tier0-authorization.e2e.test.ts`,
+`phase-16e-wired-actions.e2e.test.ts`, `phase-16e-closure-end-to-end.e2e.test.ts`,
+and the new `phase-16e-security-fix.e2e.test.ts` all pin the fixed
+contract — including tests that assert the DEFAULT (env unset)
+configuration denies an unauthorized actor through the full production
+call chain, which is the exact coverage gap that let the original defect
+ship: the pre-fix test suite only exercised the invariant under an
+explicit `enforce: true` override, never under the actual default.
 
 ### CSRF, canonical owners, AI reachability
 
-No new CSRF mechanism was invented: every privileged admin mutation route
-is POST-only, JSON-body-only (a plain HTML form cannot construct a
-matching request without triggering a CORS preflight this repository
-grants to no origin), and no admin route or `next.config.*` sets
-`Access-Control-Allow-Origin` — all three verified structurally
-(`phase-16e-boundaries.e2e.test.ts`). Canonical action owners are
-UNCHANGED: `setRouteEnabled` (7-B), `redriveOneProviderDlqMessage`
-(15-D/16-B), `recordCancelIntent`/`requestGenerationCancellation`
-(6R-H/6R.3), `requestMediaRelease`/`approveMediaRelease`/
-`rejectMediaAsset` (9-E) are all still called, unmodified, and this is
-pinned structurally too. `tier0-authorization.ts` itself imports none of
-them — it decides, it never acts. No MCP/AI-agent-facing module imports
-any Phase 16-E file (`AI_REACHABLE_TIER0_ACTION = NO`); no code in this
-repository calls `requireAiWritePolicy` (Phase 12-E's own AI write
-boundary) at all, and no Phase 16-E file does either.
+**CSRF — SECURITY FIX BATCH addition.** The closure audit found every
+privileged mutation route relied only on implicit protection (Clerk
+session-cookie `SameSite` behavior, unverifiable from this repository
+since `@clerk/clerk-js` is CDN-loaded) and an informal assumption that a
+cross-site `fetch()` triggers a CORS preflight — which is false for a
+request declaring `Content-Type: text/plain` (a CORS-simple value) whose
+body is nonetheless valid JSON text, since `Request.json()` parses body
+bytes regardless of the declared header. `src/lib/security/privileged-
+mutation-guard.ts`'s `guardPrivilegedMutation()` closes this with one
+canonical, repository-owned, reusable check — no per-route logic — wired
+as the FIRST call in every privileged mutation route, before
+`requireAdminAccess()`: it rejects any request whose `Content-Type` is
+not genuinely `application/json` (forcing a real cross-site attacker back
+onto a real preflight this app never authorizes) and any request whose
+`Origin` header is missing or does not match the request's own canonical
+origin (derived from `request.url`, never a hardcoded production domain —
+holds across production, preview deployments, and localhost with zero
+configuration). It is identity-free by construction (verified
+structurally — no Clerk/session/role reference anywhere in the module):
+it answers only "did this request's browser-observable shape come from
+this app's own origin," and a request that passes it still must separately
+pass `requireAdminAccess()` — this is additive to Clerk authorization,
+never a second authentication system. Wired into all five current
+privileged mutation routes (DLQ redrive, route disable, Temporal cancel,
+quarantine release, BullMQ retry) — not only the three Tier-0 actions,
+since the other two share the identical browser/session threat model.
+
+Canonical action owners are UNCHANGED: `setRouteEnabled` (7-B),
+`redriveOneProviderDlqMessage` (15-D/16-B),
+`recordCancelIntent`/`requestGenerationCancellation` (6R-H/6R.3),
+`requestMediaRelease`/`approveMediaRelease`/`rejectMediaAsset` (9-E) are
+all still called, unmodified, and this is pinned structurally too.
+`tier0-authorization.ts` itself imports none of them — it decides, it
+never acts. No MCP/AI-agent-facing module imports any Phase 16-E file
+(`AI_REACHABLE_TIER0_ACTION = NO`); no code in this repository calls
+`requireAiWritePolicy` (Phase 12-E's own AI write boundary) at all, and no
+Phase 16-E file does either.
 
 ### Not in this batch
 

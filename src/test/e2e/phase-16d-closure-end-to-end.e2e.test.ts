@@ -132,11 +132,28 @@ test("closure narrative: security event -> Security Center -> Incidents -> Tempo
   assert.equal(inspection.generation.status, "processing");
 
   // 6. The operator cancels it — the ONE guarded action 16-D allows.
-  const cancel = await performAdminTemporalCancel(db as never, {
-    generationId,
-    adminActorId: "admin_incident_responder",
-    reasonCode: "security_investigation",
-  });
+  //    Phase 16-E: temporal.workflow.cancel is now Tier-0-gated
+  //    (fail-closed) — this narrative's own point is the Temporal/incident
+  //    flow, not Tier-0, so it supplies valid Tier-0 role + step-up
+  //    evidence to pass that gate and reach the same assertion it always
+  //    made.
+  const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "admin_incident_responder";
+  let cancel;
+  try {
+    cancel = await performAdminTemporalCancel(db as never, {
+      generationId,
+      adminActorId: "admin_incident_responder",
+      reasonCode: "security_investigation",
+      stepUp: {
+        assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
+        elevation: { elevated: true, reasonCode: "verified" },
+      },
+    });
+  } finally {
+    if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  }
   assert.equal(cancel.outcome, "CANCEL_REQUESTED");
 
   // 7. Re-inspecting shows the durable cancel intent, attributed to the admin.

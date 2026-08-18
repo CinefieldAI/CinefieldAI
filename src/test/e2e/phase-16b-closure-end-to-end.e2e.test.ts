@@ -9,8 +9,18 @@ import type { AttemptRedriveEvidence, DlqRedriveEvidenceSource, GenerationRedriv
 import { getAdminBullmqHealth, retryAdminBullmqJob } from "@/lib/admin/bullmq-admin-service";
 import { setAdminRouteEnabled } from "@/lib/admin/router-admin-service";
 import { commandIdFor, parseCommand, serializeCommand, type CommandWireV1 } from "@/lib/contracts/command-wire";
+import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
 import { FakeSupabaseClient } from "./fake-supabase";
 import { installFakeSupabase } from "./e2e-harness";
+
+// Phase 16-E: route.disable is now Tier-0-gated (fail-closed, see
+// tier0-authorization.ts). This closure test's OWN point is Phase 7-B's
+// owner behavior, not Tier-0 — so it supplies valid Tier-0 role + step-up
+// evidence to pass that gate and reach the same assertions it always made.
+const TIER0_STEP_UP: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
+  assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
+  elevation: { elevated: true, reasonCode: "verified" },
+};
 
 /**
  * Phase 16-B closure — proof of the official done criterion:
@@ -146,7 +156,9 @@ test("done criterion (c), honestly DEFERRED_EXTERNAL: BullMQ retry is a real, co
 
 test("done criterion (d): disable a route through the existing Phase 7-B routing authority, and it is reversible", async () => {
   const original = process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+  const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   process.env.ROUTE_ADMIN_CLERK_USER_IDS = "user_route_admin_closure";
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_route_admin_closure";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
@@ -155,14 +167,16 @@ test("done criterion (d): disable a route through the existing Phase 7-B routing
       { id: routeId, model_id: "closure-model", priority: 100, enabled: true, status: "active", updated_at: "2026-01-01T00:00:00.000Z" },
     ];
 
-    const disabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, false, "closure proof");
+    const disabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, false, "closure proof", TIER0_STEP_UP);
     assert.deepEqual(disabled, { outcome: "APPLIED", routeId, enabled: false });
 
-    const reEnabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, true, "closure proof done");
+    const reEnabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, true, "closure proof done", TIER0_STEP_UP);
     assert.deepEqual(reEnabled, { outcome: "APPLIED", routeId, enabled: true });
   } finally {
     if (original !== undefined) process.env.ROUTE_ADMIN_CLERK_USER_IDS = original;
     else delete process.env.ROUTE_ADMIN_CLERK_USER_IDS;
+    if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   }
 });
 

@@ -87,10 +87,11 @@ test("authorizeTier0Action: an actor with no admin role is refused in enforce mo
     target: { type: "dlq_message" },
     assurance: NOT_CONFIGURED,
     elevation: NOT_ELEVATED,
-    enforce: true,
+    mode: "enforce",
   });
   assert.equal(decision.allowed, false);
   assert.equal(decision.reasonCode, "role_not_permitted");
+  assert.equal(decision.enforcementMode, "enforce");
 
   const rows = (db.state.admin_privileged_action_events ?? []) as Record<string, unknown>[];
   const events = rows.filter((r) => r.request_id === requestId).map((r) => r.event);
@@ -99,7 +100,14 @@ test("authorizeTier0Action: an actor with no admin role is refused in enforce mo
   assert.equal(denied?.outcome_detail, "role_not_permitted");
 });
 
-test("authorizeTier0Action: in SHADOW mode (the default), the same denial still allows the caller through, but the real reason is still recorded", async () => {
+// ===========================================================================
+// SECURITY FIX BATCH: shadow mode is observability only — it must NEVER
+// turn a real deny into an allow. This is the exact regression the 16-E
+// closure audit proved; these tests pin the fixed contract so it cannot
+// silently regress again.
+// ===========================================================================
+
+test("authorizeTier0Action: SHADOW mode (the default) still refuses a role-denied actor — shadow never blocks the caller from being DENIED, only from real ENFORCEMENT side effects that no longer exist", async () => {
   const db = new FakeSupabaseClient();
   const requestId = randomUUID();
   const decision = await authorizeTier0Action(envelope(db), {
@@ -109,15 +117,75 @@ test("authorizeTier0Action: in SHADOW mode (the default), the same denial still 
     target: { type: "dlq_message" },
     assurance: NOT_CONFIGURED,
     elevation: NOT_ELEVATED,
-    enforce: false,
+    mode: "shadow",
   });
-  assert.equal(decision.allowed, true, "shadow mode never blocks the caller");
-  assert.equal(decision.reasonCode, "allowed_shadow_mode");
-  assert.equal(decision.enforced, false);
+  assert.equal(decision.allowed, false, "shadow mode must never convert a real deny into an allow");
+  assert.equal(decision.reasonCode, "role_not_permitted", "the real reason, not a fabricated shadow label");
+  assert.equal(decision.enforcementMode, "shadow");
 
   const rows = (db.state.admin_privileged_action_events ?? []) as Record<string, unknown>[];
   const denied = rows.find((r) => r.request_id === requestId && r.event === "denied");
   assert.equal(denied?.outcome_detail, "role_not_permitted", "the durable evidence records the REAL reason regardless of enforcement mode");
+});
+
+test("authorizeTier0Action: the default (env unset) is identical to explicit shadow — still denies", async () => {
+  const original = process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
+  delete process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
+  try {
+    const db = new FakeSupabaseClient();
+    const decision = await authorizeTier0Action(envelope(db), {
+      requestId: randomUUID(),
+      action: "queue.dlq.redrive",
+      actorClerkUserId: "user_totally_unlisted",
+      target: { type: "dlq_message" },
+      assurance: NOT_CONFIGURED,
+      elevation: NOT_ELEVATED,
+    });
+    assert.equal(decision.allowed, false);
+    assert.equal(decision.enforcementMode, "shadow");
+  } finally {
+    if (original !== undefined) process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = original;
+  }
+});
+
+test("authorizeTier0Action: a malformed/unknown enforcement-mode env value still denies (never fail-open)", async () => {
+  const original = process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
+  for (const malformed of ["ENFORCE", "true", "yes", "1", "  ", "shadow-ish"]) {
+    process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = malformed;
+    const db = new FakeSupabaseClient();
+    const decision = await authorizeTier0Action(envelope(db), {
+      requestId: randomUUID(),
+      action: "queue.dlq.redrive",
+      actorClerkUserId: "user_totally_unlisted",
+      target: { type: "dlq_message" },
+      assurance: NOT_CONFIGURED,
+      elevation: NOT_ELEVATED,
+    });
+    assert.equal(decision.allowed, false, `malformed env value "${malformed}" must not fail open`);
+    assert.equal(decision.enforcementMode, "shadow", `malformed env value "${malformed}" resolves to shadow, not enforce`);
+  }
+  if (original === undefined) delete process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
+  else process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = original;
+});
+
+test("authorizeTier0Action: step-up NOT_CONFIGURED denies in shadow mode exactly as it does in enforce mode — a missing MFA/passkey configuration never becomes an allow", async () => {
+  const db = new FakeSupabaseClient();
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_t0_shadow";
+  try {
+    const decision = await authorizeTier0Action(envelope(db), {
+      requestId: randomUUID(),
+      action: "queue.dlq.redrive",
+      actorClerkUserId: "user_t0_shadow",
+      target: { type: "dlq_message" },
+      assurance: NOT_CONFIGURED,
+      elevation: NOT_ELEVATED,
+      mode: "shadow",
+    });
+    assert.equal(decision.allowed, false);
+    assert.equal(decision.reasonCode, "step_up_not_configured");
+  } finally {
+    delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  }
 });
 
 // ===========================================================================
@@ -135,7 +203,7 @@ test("authorizeTier0Action: role satisfied, but step-up NOT_CONFIGURED — denie
       target: { type: "dlq_message" },
       assurance: NOT_CONFIGURED,
       elevation: NOT_ELEVATED,
-      enforce: true,
+      mode: "enforce",
     });
     assert.equal(decision.allowed, false);
     assert.equal(decision.reasonCode, "step_up_not_configured");
@@ -155,7 +223,7 @@ test("authorizeTier0Action: assurance VERIFIED but no elevated session on file �
       target: { type: "dlq_message" },
       assurance: VERIFIED,
       elevation: NOT_ELEVATED,
-      enforce: true,
+      mode: "enforce",
     });
     assert.equal(decision.allowed, false);
     assert.equal(decision.reasonCode, "step_up_not_elevated");
@@ -176,7 +244,7 @@ test("authorizeTier0Action: role + verified assurance + a valid elevated session
       target: { type: "dlq_message", id: "msg-1" },
       assurance: VERIFIED,
       elevation: ELEVATED,
-      enforce: true,
+      mode: "enforce",
     });
     assert.equal(decision.allowed, true);
     assert.equal(decision.reasonCode, "allowed");
@@ -216,7 +284,7 @@ test("recordPrivilegedActionApproval: the requester cannot self-approve — stru
     target: { type: "media_asset", id: "asset-1" },
     assurance: NOT_CONFIGURED,
     elevation: NOT_ELEVATED,
-    enforce: false, // shadow: only care about the 'requested' event existing
+    mode: "shadow", // mode is observability-only now; only the 'requested' event matters
   });
 
   const result = await recordPrivilegedActionApproval(envelope(db), {
@@ -242,7 +310,7 @@ test("recordPrivilegedActionApproval: a second, distinct approver satisfies a 2-
     target: { type: "media_asset", id: "asset-1" },
     assurance: NOT_CONFIGURED,
     elevation: NOT_ELEVATED,
-    enforce: false,
+    mode: "shadow",
   });
 
   const first = await recordPrivilegedActionApproval(envelope(db), {

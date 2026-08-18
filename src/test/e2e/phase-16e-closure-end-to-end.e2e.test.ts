@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { authorizeTier0Action, recordTier0Execution, tier0EnforcementModeEnabled } from "@/lib/admin/tier0-authorization";
+import { authorizeTier0Action, recordTier0Execution, tier0EnforcementMode } from "@/lib/admin/tier0-authorization";
 import { queryPrivilegedActionAudit } from "@/lib/admin/privileged-action-audit";
 import { resolveAdminPrivilegeRole } from "@/lib/admin/admin-privilege";
 import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
@@ -50,31 +50,39 @@ test("every Phase 16-E file this closure claims actually exists on disk", () => 
   }
 });
 
-test("done criterion: a Tier-0 action denied for a normal (non-Tier0) admin is denied, and the ENTIRE decision chain is durably recorded", async () => {
-  const db = new FakeSupabaseClient();
-  const admin = db as never;
-  const requestId = randomUUID();
+test("done criterion: a Tier-0 action denied for a normal (non-Tier0) admin is denied, and the ENTIRE decision chain is durably recorded — in BOTH enforcement modes", async () => {
+  // SECURITY FIX BATCH: the pre-fix version of this test only exercised
+  // `mode: "enforce"`, which is NOT the default configuration — that gap is
+  // exactly how the 16-E closure audit's fail-open defect (shadow mode
+  // silently returning `allowed: true`) shipped undetected. This test now
+  // proves the invariant under every mode, including the actual default
+  // (env unset), so the same class of gap cannot slip through again.
+  for (const mode of [undefined, "shadow" as const, "enforce" as const]) {
+    const db = new FakeSupabaseClient();
+    const admin = db as never;
+    const requestId = randomUUID();
 
-  // A normal admin session compromise alone (viewer/operator, no Tier-0
-  // grant, no step-up) must NOT silently grant Tier-0 authority.
-  const decision = await authorizeTier0Action(admin, {
-    requestId,
-    action: "route.disable",
-    actorClerkUserId: "user_ordinary_admin",
-    target: { type: "model_route", id: "route-123" },
-    assurance: { state: "NOT_CONFIGURED", verifiedAt: null },
-    elevation: { elevated: false, reasonCode: "no_elevation" },
-    enforce: true,
-  });
+    // A normal admin session compromise alone (viewer/operator, no Tier-0
+    // grant, no step-up) must NOT silently grant Tier-0 authority.
+    const decision = await authorizeTier0Action(admin, {
+      requestId,
+      action: "route.disable",
+      actorClerkUserId: "user_ordinary_admin",
+      target: { type: "model_route", id: "route-123" },
+      assurance: { state: "NOT_CONFIGURED", verifiedAt: null },
+      elevation: { elevated: false, reasonCode: "no_elevation" },
+      ...(mode ? { mode } : {}),
+    });
 
-  assert.equal(decision.allowed, false, "normal admin compromise alone must not grant Tier-0 authority");
-  assert.equal(decision.classification, "HIGH_RISK_TIER0");
+    assert.equal(decision.allowed, false, `normal admin compromise alone must not grant Tier-0 authority (mode=${mode ?? "default"})`);
+    assert.equal(decision.classification, "HIGH_RISK_TIER0");
 
-  const audit = await queryPrivilegedActionAudit(admin, { actorClerkUserId: "user_ordinary_admin" });
-  assert.equal(audit.outcome, "FOUND");
-  if (audit.outcome !== "FOUND") return;
-  assert.ok(audit.rows.some((r) => r.event === "requested"));
-  assert.ok(audit.rows.some((r) => r.event === "denied"));
+    const audit = await queryPrivilegedActionAudit(admin, { actorClerkUserId: "user_ordinary_admin" });
+    assert.equal(audit.outcome, "FOUND");
+    if (audit.outcome !== "FOUND") continue;
+    assert.ok(audit.rows.some((r) => r.event === "requested"));
+    assert.ok(audit.rows.some((r) => r.event === "denied"));
+  }
 });
 
 test("done criterion: the full chain — role, step-up, and (for a two-person action) dual control — must ALL clear before the caller may invoke the canonical owner, and execution is recorded separately from authorization", async () => {
@@ -93,7 +101,7 @@ test("done criterion: the full chain — role, step-up, and (for a two-person ac
       target: { type: "generation", id: "gen-1" },
       assurance: verified,
       elevation: elevated,
-      enforce: true,
+      mode: "enforce",
     });
     assert.equal(decision.allowed, true);
 
@@ -121,15 +129,15 @@ test("done criterion: the full chain — role, step-up, and (for a two-person ac
   }
 });
 
-test("enforcement mode defaults to shadow (unset env) — hard-enforcement is an explicit opt-in, never accidental", () => {
+test("enforcement mode label defaults to shadow (unset env) and is observability-only — it never gates authorization truth", () => {
   const original = process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
   try {
     delete process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
-    assert.equal(tier0EnforcementModeEnabled(), false);
+    assert.equal(tier0EnforcementMode(), "shadow");
     process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = "yes";
-    assert.equal(tier0EnforcementModeEnabled(), false, "only the exact value 'enforce' activates hard enforcement");
+    assert.equal(tier0EnforcementMode(), "shadow", "only the exact value 'enforce' resolves to the enforce label");
     process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = "enforce";
-    assert.equal(tier0EnforcementModeEnabled(), true);
+    assert.equal(tier0EnforcementMode(), "enforce");
   } finally {
     if (original === undefined) delete process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE;
     else process.env.CINEFIELD_TIER0_ENFORCEMENT_MODE = original;

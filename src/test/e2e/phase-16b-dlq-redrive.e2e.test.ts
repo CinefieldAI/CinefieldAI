@@ -279,10 +279,24 @@ test("getAdminDlqInvestigation is the exact same wiring scripts/dlq-investigate.
 });
 
 test("executeAdminDlqRedrive logs an audit line with actor/reason/outcome and never throws on an unconfigured environment", async () => {
-  const db = new FakeSupabaseClient();
-  await installFakeSupabase(db);
-  const result = await executeAdminDlqRedrive(db as never, "user_admin_test", "investigating incident #42");
-  assert.equal(result.outcome, "NOT_CONFIGURED");
+  // Phase 16-E: queue.dlq.redrive is now Tier-0-gated (fail-closed). This
+  // test's own point is the AWS-unconfigured path never throwing, not
+  // Tier-0 — so it supplies valid Tier-0 role + step-up evidence to pass
+  // that gate and reach the same NOT_CONFIGURED outcome it always asserted.
+  const original = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_admin_test";
+  try {
+    const db = new FakeSupabaseClient();
+    await installFakeSupabase(db);
+    const result = await executeAdminDlqRedrive(db as never, "user_admin_test", "investigating incident #42", {
+      assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
+      elevation: { elevated: true, reasonCode: "verified" },
+    });
+    assert.equal(result.outcome, "NOT_CONFIGURED");
+  } finally {
+    if (original !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = original;
+    else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  }
 });
 
 // ===========================================================================

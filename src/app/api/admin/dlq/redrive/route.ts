@@ -5,6 +5,7 @@ import { getCurrentAssuranceEvidence, getCurrentElevationVerdict } from "@/lib/a
 import { isValidDlqRedriveReason } from "@/lib/admin/dlq-admin-contract";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
+import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guard";
 
 /**
  * POST /api/admin/dlq/redrive — Phase 16-B real DLQ redrive execution.
@@ -26,6 +27,9 @@ import { guardRoute, privateJson } from "@/lib/security/response-headers";
  * durable AWS/queue state.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const csrfRefusal = guardPrivilegedMutation(request);
+  if (csrfRefusal) return csrfRefusal;
+
   const access = await requireAdminAccess();
   if (!access.allowed) {
     return privateJson({ error: "not_found" }, { status: 404 });
