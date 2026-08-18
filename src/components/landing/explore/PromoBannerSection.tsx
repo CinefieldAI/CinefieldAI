@@ -1,6 +1,7 @@
 export default function PromoBannerSection() {
   return (
-    <section className="mx-auto mb-6 flex max-w-[1400px] flex-col items-stretch gap-3 px-4 pt-4 lg:flex-row lg:gap-5">
+    <div className="mx-auto max-w-7xl px-4 pt-4 md:px-6">
+      <section className="flex flex-col items-stretch gap-3 lg:flex-row lg:gap-5">
       {/* Left Big Promo Card */}
       <div className="grid w-full transition-[height,opacity] duration-200 ease-out lg:min-h-[264px] lg:w-[48%] lg:max-w-[40rem] lg:shrink-0 motion-reduce:transition-none">
         <a
@@ -267,5 +268,6 @@ export default function PromoBannerSection() {
         </a>
       </div>
     </section>
+    </div>
   );
 }

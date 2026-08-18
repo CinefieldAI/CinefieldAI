@@ -1,0 +1,13 @@
+<svg width="48" height="128" viewBox="0 0 48 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M24 10C24 10 12 30 12 64C12 98 24 118 24 118" stroke="url(#laurel_grad)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M20 18C14 22 8 32 10 42C12 40 18 36 20 32C22 28 22 20 20 18Z" fill="url(#laurel_grad)"/>
+  <path d="M20 42C12 48 6 60 10 70C13 68 18 62 20 56C22 50 22 44 20 42Z" fill="url(#laurel_grad)"/>
+  <path d="M20 68C12 76 8 88 12 98C15 94 19 86 20 80C21 74 21 70 20 68Z" fill="url(#laurel_grad)"/>
+  <defs>
+    <linearGradient id="laurel_grad" x1="0" y1="0" x2="48" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9F8754"/>
+      <stop offset="0.5" stop-color="#EAD9A3"/>
+      <stop offset="1" stop-color="#8E733A"/>
+    </linearGradient>
+  </defs>
+</svg>
