@@ -84,7 +84,15 @@ variable "dr_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.dr_bucket_arn == null || !strcontains(var.dr_bucket_arn, "*")
+    # try(), not `== null || strcontains(...)`: Terraform's `||` does not
+    # short-circuit strcontains()'s null check, so a null ARN (the common,
+    # valid case here) failed validate() with "argument must not be null"
+    # instead of passing. coalesce(x, "") does not fix it either — coalesce
+    # treats "" as absent too, so coalesce(null, "") itself errors with "no
+    # non-null, non-empty-string arguments". try() is the correct guard: it
+    # runs strcontains() and only falls back to `true` (no wildcard found —
+    # this variable is unset) if that call itself raises an error.
+    condition     = try(!strcontains(var.dr_bucket_arn, "*"), true)
     error_message = "A wildcard bucket resource is never acceptable here."
   }
 }
@@ -108,7 +116,8 @@ variable "media_scratch_bucket_arn" {
   default     = null
 
   validation {
-    condition     = var.media_scratch_bucket_arn == null || !strcontains(var.media_scratch_bucket_arn, "*")
+    # Same try()-based null-short-circuit fix as dr_bucket_arn above.
+    condition     = try(!strcontains(var.media_scratch_bucket_arn, "*"), true)
     error_message = "A wildcard bucket resource is never acceptable here."
   }
 }

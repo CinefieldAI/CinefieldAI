@@ -65,7 +65,8 @@ export type AlertSource =
   | "reliability"
   | "cost"
   | "dr"
-  | "recovery";
+  | "recovery"
+  | "infra";
 
 /**
  * Alert lifecycle.
@@ -121,7 +122,10 @@ export type AlertType =
   // ---- recovery (Phase 15-D/2 RTO/RPO measurement, proven breach only) ---
   | "recovery_rto_breached"
   | "recovery_rpo_breached"
-  | "recovery_evidence_unavailable";
+  | "recovery_evidence_unavailable"
+  // ---- infra (Phase 18-D drift detection, proven divergence only) --------
+  | "infra_drift_detected"
+  | "infra_drift_check_unavailable";
 
 export interface AlertTypeRule {
   readonly source: AlertSource;
@@ -278,6 +282,20 @@ export const ALERT_CATALOGUE: Readonly<Record<AlertType, AlertTypeRule>> = {
     dedupeWindowSeconds: 3_600,
     userVisible: false,
     why: "Phase 15-D/2. A recovery that required restore-validation evidence (database/media) could not obtain it at all. Distinct from RECOVERED_NO_TARGET, which is an ordinary, expected, non-alerting state — this is a recovery that was actively measured and whose required evidence could not be determined, which is itself worth a human looking at.",
+  },
+  infra_drift_detected: {
+    source: "infra",
+    severity: "ERROR",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 18-D. A scheduled `terraform plan -detailed-exitcode` (or equivalent) found live infrastructure diverged from its declared Terraform configuration — a change made outside the reviewed apply path. Never user-visible: which resource drifted, and how, is internal operational/security posture.",
+  },
+  infra_drift_check_unavailable: {
+    source: "infra",
+    severity: "WARNING",
+    dedupeWindowSeconds: 3_600,
+    userVisible: false,
+    why: "Phase 18-D. The drift-check itself could not run to a real NO_DRIFT/DRIFT_DETECTED conclusion (credentials, backend, or tool failure) — distinct from a clean plan, so a broken checker can never be silently reported as drift-free. WARNING, not ERROR: the checker failing is not proof anything is actually wrong with the infrastructure, only that this run could not confirm either way.",
   },
 };
 

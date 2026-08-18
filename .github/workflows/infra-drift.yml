@@ -1,0 +1,111 @@
+name: Infra Drift Check (Phase 18-D)
+
+# Scheduled, READ-ONLY. Never applies, never destroys, never targets a
+# specific resource for import. Runs `terraform plan -detailed-exitcode`
+# against the real backend for each environment and reports one of three
+# honest outcomes to the existing Phase 13-D alert authority via the
+# narrow ingestion seam at src/app/api/internal/infra/drift-report:
+#
+#   NO_DRIFT        exit code 0 — resolves any standing drift alert
+#   DRIFT_DETECTED  exit code 2 — raises infra_drift_detected (ERROR)
+#   UNAVAILABLE     any other outcome (missing config, init/plan failure)
+#                   — raises infra_drift_check_unavailable (WARNING),
+#                   NEVER reported as NO_DRIFT. A broken checker must never
+#                   look like a clean one.
+#
+# See docs/operations/INFRA_EMERGENCY_RUNBOOK.md for what a human does
+# once DRIFT_DETECTED fires.
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # once daily; the exact minute is arbitrary, off-the-hour on purpose
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.9.8"
+
+jobs:
+  drift-check:
+    name: drift check (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [production]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Determine outcome
+        id: outcome
+        working-directory: infra/environments/${{ matrix.environment }}
+        run: |
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ] || [ -z "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "status=UNAVAILABLE" >> "$GITHUB_OUTPUT"
+            echo "reason_code=credentials_not_configured" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "status=PENDING" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.outcome.outputs.status == 'PENDING'
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        if: steps.outcome.outputs.status == 'PENDING'
+        id: init
+        working-directory: infra/environments/${{ matrix.environment }}
+        continue-on-error: true
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_STATE_DYNAMODB_TABLE }}" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="encrypt=true"
+
+      - name: terraform plan -detailed-exitcode
+        if: steps.outcome.outputs.status == 'PENDING' && steps.init.outcome == 'success'
+        id: plan
+        working-directory: infra/environments/${{ matrix.environment }}
+        continue-on-error: true
+        run: terraform plan -input=false -detailed-exitcode -no-color
+
+      - name: Classify the real result
+        if: steps.outcome.outputs.status == 'PENDING'
+        id: classify
+        run: |
+          if [ "${{ steps.init.outcome }}" != "success" ]; then
+            echo "status=UNAVAILABLE" >> "$GITHUB_OUTPUT"
+            echo "reason_code=init_failed" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
+            echo "status=NO_DRIFT" >> "$GITHUB_OUTPUT"
+            echo "reason_code=plan_clean" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.plan.outputs.exitcode }}" == "2" ]; then
+            echo "status=DRIFT_DETECTED" >> "$GITHUB_OUTPUT"
+            echo "reason_code=plan_detailed_exitcode_2" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=UNAVAILABLE" >> "$GITHUB_OUTPUT"
+            echo "reason_code=plan_failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report to the alert bridge
+        if: always()
+        env:
+          STATUS: ${{ steps.outcome.outputs.status == 'UNAVAILABLE' && steps.outcome.outputs.status || steps.classify.outputs.status }}
+          REASON_CODE: ${{ steps.outcome.outputs.status == 'UNAVAILABLE' && steps.outcome.outputs.reason_code || steps.classify.outputs.reason_code }}
+        run: |
+          curl --fail-with-body -sS -X POST "${{ vars.CINEFIELD_APP_URL }}/api/internal/infra/drift-report" \
+            -H "Authorization: Bearer ${{ secrets.CINEFIELD_INFRA_DRIFT_INGEST_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"environment\":\"${{ matrix.environment }}\",\"status\":\"${STATUS}\",\"reasonCode\":\"${REASON_CODE}\",\"workflowRunUrl\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",\"commitSha\":\"${{ github.sha }}\"}"

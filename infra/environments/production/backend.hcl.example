@@ -1,0 +1,14 @@
+# Partial backend config for `terraform init -backend-config=backend.hcl`.
+# Copy this file to `backend.hcl` (git-ignored, like *.tfvars) and fill in
+# the real values once infra/bootstrap/ has been applied for real.
+#
+# `key` is what makes this SAFE to share one bucket with every other
+# environment: it is the one value that must never collide with another
+# environment's key. Getting this wrong is how a dev apply could target
+# production's state — review it with the same care as the plan itself.
+
+bucket         = "cinefield-tfstate-eu-central-1"   # infra/bootstrap output: bucket_name
+region         = "eu-central-1"                     # infra/bootstrap output: region
+dynamodb_table = "cinefield-tfstate-lock"            # infra/bootstrap output: dynamodb_table_name
+key            = "production/terraform.tfstate"
+encrypt        = true

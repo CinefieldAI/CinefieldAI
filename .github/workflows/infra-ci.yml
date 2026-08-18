@@ -1,0 +1,133 @@
+name: Infra CI (Phase 18-C)
+
+# Validates every infra/ change on its pull request. NEVER applies —
+# apply lives only in infra-apply.yml, behind a protected GitHub
+# Environment that requires a human reviewer (see that workflow's own
+# header and docs/operations/INFRA_EMERGENCY_RUNBOOK.md).
+#
+# Live AWS credentials are OPTIONAL here, not required: the fmt/validate
+# job runs with `-backend=false` and needs nothing but the Terraform
+# binary, so every PR gets that check regardless of whether AWS OIDC is
+# configured yet. The plan job additionally needs `vars.AWS_ROLE_ARN` and
+# the remote-state backend to be live; until infra/bootstrap/ is applied
+# for real, that job reports SKIPPED_NOT_CONFIGURED rather than a fake
+# green check — see its own step below.
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-ci.yml"
+
+permissions:
+  contents: read
+  id-token: write # only used if AWS OIDC is configured; harmless otherwise
+  pull-requests: write # only used to comment the plan; harmless otherwise
+
+env:
+  TF_VERSION: "1.9.8" # pinned to the version verified against this tree — see infra/README.md
+
+jobs:
+  fmt-and-validate:
+    name: fmt + validate (${{ matrix.root }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        root: [bootstrap, environments/dev, environments/production]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt -check (whole tree, once)
+        if: matrix.root == 'bootstrap'
+        run: terraform fmt -check -recursive -diff infra/
+
+      - name: terraform init (no backend — this job proves syntax, not live state)
+        working-directory: infra/${{ matrix.root }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: infra/${{ matrix.root }}
+        run: terraform validate
+
+  policy-and-secret-scan:
+    name: policy / secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      # Reuses the existing repository scanners rather than adding a new
+      # policy engine — a dedicated Terraform-aware static analyzer
+      # (tfsec/checkov) is not yet part of this repository's toolchain;
+      # adding one is a reasonable future addition, not built here.
+      - run: npm run secrets:scan
+
+  plan:
+    name: plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: fmt-and-validate
+    strategy:
+      matrix:
+        environment: [dev, production]
+    # Only attempted when the live backend/credentials are actually
+    # configured — see the "Check live configuration" step. This keeps a
+    # PR from a contributor without AWS access fully reviewable (fmt +
+    # validate still ran above) without a plan job failing for a reason
+    # that has nothing to do with their change.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check live configuration
+        id: live
+        run: |
+          if [ -n "${{ vars.AWS_ROLE_ARN }}" ] && [ -n "${{ vars.TF_STATE_BUCKET }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS_ROLE_ARN / TF_STATE_BUCKET repository variables are not set — plan skipped, not faked. See infra/bootstrap/ and docs/operations/INFRA_EMERGENCY_RUNBOOK.md."
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.live.outputs.configured == 'true'
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init (real backend)
+        if: steps.live.outputs.configured == 'true'
+        working-directory: infra/environments/${{ matrix.environment }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_STATE_DYNAMODB_TABLE }}" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="encrypt=true"
+
+      - name: terraform plan
+        if: steps.live.outputs.configured == 'true'
+        working-directory: infra/environments/${{ matrix.environment }}
+        run: terraform plan -input=false -no-color -out=tfplan.binary | tee plan-output.txt
+
+      # Reviewable evidence for the human who approves apply — never the
+      # raw state, never credentials, just the plan text this run just
+      # produced.
+      - name: Upload plan as an artifact
+        if: steps.live.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}-${{ github.sha }}
+          path: infra/environments/${{ matrix.environment }}/plan-output.txt
+          retention-days: 90

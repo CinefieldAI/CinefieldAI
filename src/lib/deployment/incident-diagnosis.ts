@@ -267,6 +267,20 @@ const ELIGIBILITY: Readonly<Record<AlertType, EligibilityRule>> = {
     candidateFilePaths: [],
     why: "Phase 15-A. A breached objective is an aggregate over many requests; the underlying cause already alerts separately through its own health, debt or provider signal, which is the alert an agent could act on.",
   },
+  infra_drift_detected: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 18-D. Live infrastructure diverged from its declared Terraform configuration outside the reviewed apply path — the fix is a human reconciling the console change or the Terraform declaration, never a source-code patch. See docs/operations/INFRA_EMERGENCY_RUNBOOK.md.",
+  },
+  infra_drift_check_unavailable: {
+    category: "infrastructure_incident",
+    confidence: "none",
+    remediationEligible: false,
+    candidateFilePaths: [],
+    why: "Phase 18-D. The drift checker itself failed to reach a conclusion (credentials, backend, or tool failure) — an operational/CI investigation, never a source-code remediation, and never proof anything about the infrastructure is actually wrong.",
+  },
 };
 
 /**

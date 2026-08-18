@@ -63,6 +63,10 @@ video-compressed/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+# Phase 18-A: partial backend config carries the real state bucket/table —
+# same reasoning and same *.example exception as tfvars above.
+backend.hcl
+!backend.hcl.example
 .terraform/
 crash.log
 # .terraform.lock.hcl is deliberately NOT ignored — the provider lock file

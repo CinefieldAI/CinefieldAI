@@ -8,15 +8,15 @@ output "responsibilities" {
 
   value = {
     application_state = {
-      purpose  = "provider health, rate limits, idempotency, model/pricing cache, distributed locks"
-      provider = var.redis_a_provider
-      endpoint = var.redis_a_endpoint
+      purpose              = "provider health, rate limits, idempotency, model/pricing cache, distributed locks"
+      provider             = var.redis_a_provider
+      endpoint             = var.redis_a_endpoint
       managed_by_terraform = false
     }
     bullmq_queue_state = {
-      purpose  = "BullMQ job and retry state — isolated so a queue backlog cannot evict application state"
-      provider = var.redis_b_provider
-      endpoint = var.redis_b_endpoint
+      purpose              = "BullMQ job and retry state — isolated so a queue backlog cannot evict application state"
+      provider             = var.redis_b_provider
+      endpoint             = var.redis_b_endpoint
       managed_by_terraform = false
     }
   }

@@ -8,16 +8,18 @@ terraform {
     }
   }
 
-  # NO BACKEND BLOCK ON PURPOSE.
-  #
-  # Remote-state ownership has not been decided, and hard-coding an S3 bucket
-  # + DynamoDB lock table that do not exist would make `init` fail in a way
-  # that reads like a bug rather than a missing decision. Bootstrapping state
-  # storage — bucket, versioning, encryption, lock table, and who may write
-  # to it — is its own reviewed change.
-  #
-  # Until then this root initializes with local state, which is adequate for
-  # `validate` and code review and is NOT adequate for a real apply.
+  # Empty, PARTIAL backend block (Phase 18-A) — same reasoning as the dev
+  # root's own comment. `infra/bootstrap/` now defines the S3 bucket +
+  # DynamoDB lock table this points at (CODE_COMPLETE, never applied — see
+  # that module's own header). Real values are supplied at
+  # `init -backend-config=backend.hcl` time from
+  # environments/production/backend.hcl, which is git-ignored exactly like
+  # every other *.tfvars in this tree; only backend.hcl.example is
+  # committed. Until that bootstrap is applied for real,
+  # `init -backend=false` is what `validate`/CI use — this root still
+  # initializes with local state for that purpose, and that remains NOT
+  # adequate for a real apply.
+  backend "s3" {}
 }
 
 provider "aws" {

@@ -453,7 +453,18 @@ test("15. no IAM policy grants a wildcard action or resource", () => {
     const bare = code.replace(/^\s*#.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
     assert.ok(!/actions\s*=\s*\[\s*"\*"/.test(bare), `${file} grants Action = *`);
     assert.ok(!/resources\s*=\s*\[\s*"\*"\s*\]/.test(bare), `${file} grants Resource = *`);
-    assert.ok(!/"iam:\*"|"s3:\*"|"sqs:\*"|"kms:\*"/.test(bare), `${file} grants a service wildcard`);
+
+    // A service wildcard is the finding ONLY inside an Allow statement — a
+    // wildcard-action DENY (e.g. infra/bootstrap/main.tf's "deny every
+    // action over insecure transport") is maximally restrictive, the
+    // opposite of the privilege-escalation risk this check exists to catch.
+    // Scoped per `statement { ... }` block so a real least-privilege module
+    // can legitimately contain both an Allow (never wildcarded) and a Deny
+    // (wildcarded on purpose) without this check conflating the two.
+    for (const block of bare.split(/(?=\bstatement\s*\{)/)) {
+      if (!/"iam:\*"|"s3:\*"|"sqs:\*"|"kms:\*"/.test(block)) continue;
+      assert.match(block, /effect\s*=\s*"Deny"/, `${file} grants a service wildcard outside a Deny statement`);
+    }
   }
 });
 

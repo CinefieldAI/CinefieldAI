@@ -51,6 +51,16 @@ resource "aws_sqs_queue" "dlq" {
     "cinefield:role"  = "dead-letter"
     "cinefield:queue" = each.key
   })
+
+  # A DLQ holds the commands the primary queue already gave up retrying —
+  # losing it loses the one remaining copy of that work in any environment,
+  # not just production. `prevent_destroy` cannot be conditioned on a
+  # variable (a real Terraform lifecycle-block restriction, not a choice
+  # made here), so this applies uniformly rather than being forked into a
+  # second module just to exempt dev.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_sqs_queue" "main" {
@@ -77,4 +87,11 @@ resource "aws_sqs_queue" "main" {
     "cinefield:role"  = "primary"
     "cinefield:queue" = each.key
   })
+
+  # Same reasoning as the DLQ above: an in-flight provider command lost to
+  # an accidental destroy is real, billable-adjacent work disappearing, not
+  # recoverable state.
+  lifecycle {
+    prevent_destroy = true
+  }
 }

@@ -61,6 +61,7 @@ five-minute change to `secret-registry.ts`.
 | `FAL_KEY`, `GEMINI_API_KEY`, and every other provider key | ⚠️ cut-over | One provider at a time. Never rotate two providers in one change: if generation breaks you need to know which. |
 | `TEMPORAL_CLIENT_CERT` / `TEMPORAL_CLIENT_KEY` | ✅ dual | The self-hosted mTLS alternative to the API key. Temporal accepts multiple client CA certificates, so a new pair can be trusted before the old one is withdrawn. Rotate the two variables together — they are one credential, and a cert without its key is an outage. |
 | `TRIGGER_SECRET_KEY` | ⚠️ cut-over | Operational tasks only; not a generation owner since 6R-B. |
+| `CINEFIELD_INFRA_DRIFT_INGEST_TOKEN` | ⚠️ cut-over | Phase 18-D. One shared bearer secret with exactly one caller (`infra-drift.yml`). No dual-key mechanism to lean on — generate a new value, update the GitHub Actions secret and the server env var together, confirm the next scheduled drift-check run authenticates, then there is nothing old to revoke since it was never a pair. |
 | AWS access keys | — | **Should not exist.** Production uses task roles, which rotate themselves. A long-lived AWS access key in a deployment is a finding, not a credential to schedule. |
 
 ---

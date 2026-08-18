@@ -285,6 +285,10 @@ export const PRODUCED_ALERT_TYPES: readonly AlertType[] = [
   "recovery_rto_breached",
   "recovery_rpo_breached",
   "recovery_evidence_unavailable",
+  // Raised by src/lib/infra/infra-alert-bridge.ts (Phase 18-D), which owns
+  // the signal and depends on 13-D rather than the other way round.
+  "infra_drift_detected",
+  "infra_drift_check_unavailable",
 ];
 
 export type { AlertCandidate };

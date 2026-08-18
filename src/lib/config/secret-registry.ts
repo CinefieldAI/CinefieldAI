@@ -93,7 +93,8 @@ export type SecretGroup =
   | "kafka"
   | "billing"
   | "security-policy"
-  | "cloudflare";
+  | "cloudflare"
+  | "infra";
 
 /**
  * How a credential is replaced.
@@ -219,6 +220,9 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
   { name: "CINEFIELD_ADMIN_OPERATOR_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. Role-separation allowlist for OPERATOR_MUTATION-tier Phase 16 actions. Empty means no one holds operator authority (viewer only)." },
   { name: "CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. The narrowest allowlist — Tier-0/HIGH_RISK_TIER0 admin action eligibility. Empty (its default state) means no one may perform a Tier-0 action, which is the deliberate, honest default while Clerk step-up assurance is unconfigured." },
   { name: "CINEFIELD_TIER0_ENFORCEMENT_MODE", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "security-policy", rotation: "NOT_A_SECRET", note: "Phase 16-E. Unset/anything but the literal 'enforce' = shadow mode (decision recorded, never blocks). 'enforce' = a Tier-0 DENY actually refuses the caller. See tier0-authorization.ts's header." },
+
+  // ---- infra (Phase 18-D) --------------------------------------------------
+  { name: "CINEFIELD_INFRA_DRIFT_INGEST_TOKEN", class: "SERVER_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "CUT_OVER", note: "Shared bearer secret for POST /api/internal/infra/drift-report — the only caller is the infra-drift.yml GitHub Actions job, never a browser. Unset means every request is refused (fail closed), which is the correct state until infra/bootstrap/ is applied for real." },
 ] as const;
 
 const BY_NAME = new Map(SECRET_REGISTRY.map((e) => [e.name, e]));

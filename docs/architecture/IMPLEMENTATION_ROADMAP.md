@@ -39,20 +39,36 @@ name. 17-E (model/prompt promotion gated by a Phase 22 eval regression gate
 detail, evidence, and file-by-file citations for every package: see
 `security-gates.md`'s "Phase 17 Roadmap Reconciliation" section.
 
-**Phase 18 — no authoritative roadmap document exists for this phase, in
-this repository or supplied externally.** A dedicated audit searched this
-repository's own history and found exactly one pre-existing reference: an
-old security-gates.md gate-table row scoping "Phase 18" (jointly with
-6R-C/Phase 12) to AWS infrastructure security hardening — SQS IAM least
-privilege and network-level egress enforcement — not a continuation of the
-Phase 17 product-intelligence work. Both named sub-items of that gap were
-found already complete under the phases that actually built them (6R-C,
-12-D — the gate table's stale `NOT_STARTED` label has been corrected), and
-the one genuinely remaining piece (network-level egress/VPC hardening)
-requires live AWS provisioning this repository has never had and cannot
-fabricate. No new code was implemented for "Phase 18" as a result — see
-`security-gates.md`'s "Phase 18 — Master Audit" section for the full
-evidence trail.
+**Phase 18 — Infrastructure as Code & Drift Management, official packages
+18-A through 18-D (authoritative master roadmap v1.9.2
+PHASE15_UZLASTIRILMIS_MASTER, external to this repository):** an earlier
+audit of this phase (preserved in git history) worked from this
+repository's own pre-existing gate-table evidence alone, before the
+authoritative roadmap was supplied, and correctly closed a stale `NOT_
+STARTED` label (SQS IAM/worker message distrust, already done under
+6R-C/12-D) — but that was an incomplete picture of what Phase 18 actually
+is. 18-A (infra/ structure, Terraform as the canonical IaC engine, remote
+state + locking, dev/staging/prod separation) is **code-complete** —
+`infra/bootstrap/` now declares the S3 state bucket + DynamoDB lock table,
+both environments declare a partial `backend "s3"` block — with the actual
+bucket/table creation **live-external-required** (needs a real AWS
+account). 18-B (controlled import of the hand-created production
+resources) is **code-complete for the declarations**, with the import
+itself correctly left undone — importing live production infrastructure
+without a state backend and real credentials was explicitly out of this
+batch's authorization. 18-C (CI fmt/validate/plan, human-approved
+protected production apply) is **code-complete**: this repository's first-
+ever `.github/workflows/` — `infra-ci.yml`, `infra-apply.yml`,
+`infra-drift.yml` — with the GitHub environment-protection reviewer gate
+itself live-external-required (a one-time repository Settings action).
+18-D (drift detection + Alert Router integration + emergency runbook) is
+**code-complete**: a real `terraform plan -detailed-exitcode` drift check,
+a narrow ingestion route into the existing Phase 13-D alert system (never
+a second alert channel), and `docs/operations/INFRA_EMERGENCY_RUNBOOK.md`
+— with live drift-checking itself waiting on the same AWS account 18-A/
+18-B need. Full detail, evidence, and file-by-file citations for every
+package: see `security-gates.md`'s "Phase 18 — Infrastructure as Code &
+Drift Management" section.
 
 ---
 

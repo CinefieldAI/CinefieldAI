@@ -5443,113 +5443,264 @@ does not start Phase 18.**
 
 ---
 
-## Phase 18 — Master Audit
+## Phase 18 — Infrastructure as Code & Drift Management
 
-**No authoritative Phase 18 roadmap document exists, in-repo or externally
-supplied for this batch.** Unlike Phase 17, which eventually had an explicit
-external master roadmap named for it (v1.9.1 TEMIZ MASTER EK F), no such
-document was provided or found here. Per this batch's own operating rules
-("do not assume what Phase 18 means from memory... reconstruct the real
-Phase 18 contract from repository evidence... do not silently substitute an
-older roadmap as authoritative"), this section documents exactly what was
-searched, what was found, and why no new implementation followed from it —
-rather than guessing a scope from the Phase 16→17 conversational narrative,
-which would itself be exactly the "assume from memory" failure mode this
-batch was told to avoid.
+**Authoritative roadmap source:**
+`Cinefield_Master_Yol_Haritasi_v1.9.2_PHASE15_UZLASTIRILMIS_MASTER.docx`
+(external, supplied directly for this batch). The prior audit in this
+section (preserved in git history at commit `a0f7d90`, not repeated here)
+worked from the strongest evidence available at the time — this repository's
+own pre-existing "Gates not yet addressed" table, which scoped an old
+`18-A` label to AWS infrastructure security hardening (SQS IAM, worker
+message distrust) and correctly found both already complete under 6R-C/
+12-D. That correction stands and is not reverted. It was, however, an
+incomplete picture: the authoritative v1.9.2 roadmap names Phase 18 as
+**Infrastructure as Code & Drift Management** — four official packages,
+18-A through 18-D — a materially larger scope than the single stale gate
+row suggested. This section replaces the prior audit's conclusion
+(`PHASE_18_CAN_CLOSE: YES` on a "nothing to implement" basis) with the real
+package-by-package implementation below.
 
-### What was searched
+**Binding ACTIVE/RESERVED rule.** IaC provisions ONLY active canonical
+infrastructure. RDS, EKS, Lambda, API Gateway, Route53, CloudFront, and
+ElastiCache all remain reserved/optional — none is declared as a Terraform
+resource anywhere in this batch, pinned structurally
+(`phase-18-infra-iac-drift.e2e.test.ts`, "Active/Reserved enforcement"
+group, which scans every `.tf` file in the tree for exactly these resource
+types).
 
-`grep -rn "Phase 18\|Phase18\|18-A\|18-B\|18-C\|18-D\|18-E"` across `docs/`,
-`src/`, `supabase/migrations/`, `policies/`; `git log --all --grep="Phase
-18"`; a search for any Phase-18-named file. Also checked, and explicitly
-ruled out as a false match: `CINEFIELD_ARCHITECTURE_CONTRACT.md`'s own
-document section "## 18. Hero-Frame-First Workflow" — that file's 1–47
-numbering is an unrelated topic index (target architecture, not
-implemented), not the sequential implementation-phase numbering this
-project actually uses (which reaches at least Phase 25, per evidence below)
-— and the ORIGINAL source contract's "Faz 1–10" numbering (section 45),
-which stops at 10 and was superseded by `IMPLEMENTATION_ROADMAP.md`'s own
-phase order, so it cannot reach "18" either.
+### A real, pre-existing defect found and fixed, before anything else
 
-### What was found
+`infra/README.md` had documented, since Phase 6R.16, that neither
+`terraform` nor `tofu` had ever actually been run against this tree — "HCL
+here is syntactically standard and hand-reviewed, but unverified by a
+parser." This batch installed Terraform 1.9.8 locally and ran
+`fmt -check` / `init -backend=false` / `validate` for real, for the first
+time. Two real, previously-undetected problems surfaced:
 
-Exactly one substantive hit, in this file's own pre-existing (not written
-this session) "Gates not yet addressed" table:
+1. **A formatting inconsistency** in `infra/modules/redis/outputs.tf`
+   (misaligned map-literal `=` signs) — fixed by `terraform fmt`.
+2. **A genuine `terraform validate` failure** in `infra/modules/iam/
+   variables.tf`: the `dr_bucket_arn` and `media_scratch_bucket_arn`
+   validation blocks used `var.x == null || !strcontains(var.x, "*")`.
+   Terraform's `||` does not short-circuit `strcontains()`'s null check, so
+   the ordinary, valid, default (`null`) state of these variables failed
+   `validate()` with "argument must not be null" — meaning this module has
+   never actually passed a real `terraform validate` in its entire
+   existence until this batch. Fixed with `try(!strcontains(var.x, "*"),
+   true)`, which only falls back to `true` (no wildcard — the variable is
+   simply unset) if `strcontains()` itself errors. `coalesce(var.x, "")`
+   was tried first and rejected: `coalesce` treats `""` as absent too, so
+   `coalesce(null, "")` itself errors with "no non-null, non-empty-string
+   arguments" — a second real gotcha, not a fix.
 
-- Gate 6, before this batch's correction: *"SQS IAM least privilege; worker
-  distrusts queue messages | 6R-C · 18-A | NOT_STARTED."*
-- Gate 3 (a separate table, "Phase 9 closure"): *"Production egress
-  hardening (Gate 3) | Phase 12/18 infra | The application-level gateway
-  blocks private, link-local, loopback and metadata addresses... the
-  missing piece is network-level enforcement."*
+Both fixes are verified with real `terraform fmt -check` (exit 0) and real
+`terraform validate` (Success) against all three roots
+(`infra/bootstrap/`, `infra/environments/dev/`,
+`infra/environments/production/`), re-run fresh at the end of this batch.
 
-Both references use the SAME sequential phase numbering still active
-throughout this repository today (6R-C, 12-D, 16, 19-x, 23, 25-A all appear
-consistently elsewhere in this exact file and in `CINEFIELD_ARCHITECTURE_
-CONTRACT.md`'s own Phase 17 bullet), so this is not a coincidental numeric
-collision from an unrelated old scheme — it is this project's own historical
-record of what "Phase 18" was scoped to mean: **AWS infrastructure security
-hardening** (SQS IAM policy tightening, worker-side message distrust, and
-network-level egress enforcement), not a continuation of the Phase 16/17
-product-intelligence work.
+### 18-A — infra/ structure, IaC engine, remote state, environment separation — COMPLETE (code), remote state LIVE_EXTERNAL_REQUIRED
 
-### Verifying that evidence against current reality
+Done criterion: *"A staging environment can be created from an empty
+environment using IaC."* **CODE_COMPLETE, LIVE_EXTERNAL_REQUIRED** — the
+dev root already declared everything a staging apply needs (queues, IAM,
+the Redis boundary declaration); nothing new was needed there. What was
+missing, and is now real:
 
-Both Gate 6 sub-items turned out to be **already complete, under different
-phase numbers, mis-documented as `NOT_STARTED`**:
+- **IaC engine: Terraform**, made explicit rather than left as
+  "compatible with either." `infra/README.md` already described the HCL as
+  written to be Terraform/OpenTofu-compatible with "no tool... inherited";
+  this batch declares Terraform the canonical owner (the CI workflows pin
+  `hashicorp/setup-terraform`) rather than introducing OpenTofu as a second
+  engine, per this batch's own instruction.
+- **Remote state + locking**: `infra/bootstrap/` (new) — a Terraform root
+  declaring an S3 bucket (versioned, KMS-encrypted, public access fully
+  blocked, deny-insecure-transport bucket policy) and a DynamoDB lock
+  table, both `prevent_destroy = true` (losing either loses every
+  environment's understanding of what it manages). `validate`-clean,
+  verified live this batch. Both `infra/environments/{dev,production}/
+  versions.tf` now declare an empty, PARTIAL `backend "s3" {}` block —
+  real values come from a git-ignored `backend.hcl` at `init
+  -backend-config=` time (a committed `backend.hcl.example` per
+  environment documents the exact keys). **This bootstrap root has never
+  been applied** — creating the real bucket/table is a live AWS account
+  action this repository does not have credentials for, and CI's
+  `infra-ci.yml` explicitly reports `SKIPPED_NOT_CONFIGURED` (not a fake
+  green check) when the backend/OIDC role variables are unset.
+- **Environment separation**: dev and production already used distinct
+  `name_prefix`es (`cinefield-dev` / `dev-` queue prefix vs
+  `cinefield-production`) and, now, distinct state **keys**
+  (`dev/terraform.tfstate` vs `production/terraform.tfstate`) inside the
+  ONE shared state bucket — one bucket, not one-bucket-per-environment
+  (a second bucket would need identical hardening for no isolation
+  benefit; IAM and the state key are what actually gate who reads which
+  environment's state). Pinned structurally that the two keys can never
+  collide.
 
-1. **SQS IAM least privilege** — `infra/modules/iam/main.tf` defines real,
-   narrow, per-runtime Terraform IAM roles (ECS execution, provider worker,
-   Temporal worker, realtime dispatcher, DR backup worker, media worker),
-   documented in `docs/security/least-privilege.md` (Phase 12-D) and proven
-   by `phase-12d-secret-environment.e2e.test.ts`, re-run fresh this batch:
-   **26/26 pass**, including assertions that no file grants an `Action`/
-   `Resource` wildcard, that the DR backup role has no `DeleteObject`, and
-   that the media worker role has no `ListBucket`. Only the *live
-   application* of this Terraform to a real AWS account remains undone —
-   the production root's own header comment says so explicitly ("NEVER
-   APPLIED... created by hand... Applying this root as-is would attempt to
-   CREATE them again and fail on name conflicts. Adoption... is a separate,
-   deliberate change.") — but that is a provisioning/business decision
-   requiring a live AWS account, not a missing design.
-2. **Worker distrusts queue messages** — `worker/provider-worker.ts`
-   (Phase 6R.5/6R-C) parses every SQS message body through `parseCommand()`
-   (`src/lib/contracts/command-wire.ts`) before acting on it; a
-   schema-invalid body is classified `poison_message` and left for
-   redelivery/DLQ, never handed to a provider — with the code's own comment
-   stating the exact principle the gate names: "a queue message is not an
-   authority." Verified by direct code read this batch, not by trusting the
-   stale table.
+### 18-B — controlled import of existing infrastructure — CODE_COMPLETE, import itself DEFERRED_EXTERNAL
 
-The Gate 6 table row itself has been corrected in place (see above) to
-attribute this work to the phases that actually built it (`6R-C · 12-D`)
-rather than the `18-A` label under which it was apparently once planned and
-never updated once superseded.
+Done criterion: *"Terraform/OpenTofu plan shows no unexpected destroy/
+recreate."* The hand-created production resources (SQS queues, ECS
+cluster, IAM roles — documented in `docs/operations/
+AWS_PROVIDER_RUNTIME.md`) are **not** in this repository's Terraform state
+(there is no state yet — see 18-A). `infra/environments/production/
+main.tf`'s own header has said so since Phase 6R.16: "Applying this root
+as-is would attempt to CREATE them again and fail on name conflicts.
+Adoption means importing the existing resources into state first,
+resource by resource, verifying an empty plan, and only then treating
+Terraform as the owner." This batch did not perform that import — doing so
+against real production resources without live AWS access, and without
+the state backend existing yet (18-A), would be exactly the "import live
+production infrastructure without explicit authorization" this batch was
+told never to do. Classified `DEFERRED_EXTERNAL`, unchanged. What this
+batch confirms instead: the Terraform *declarations themselves* already
+match the real topology closely enough that `docs/operations/
+AWS_PROVIDER_RUNTIME.md`'s resource inventory and `infra/modules/{sqs,
+iam}/`'s resource shapes agree (queue names, role boundaries) — so the
+eventual import, when a live account and credentials exist, is expected to
+be a narrow reconciliation, not a redesign. `infra-apply.yml`'s own plan
+step is the live proof this batch cannot produce: a real `terraform plan`
+against imported state showing no destroy/recreate.
 
-**Gate 3's network-level egress enforcement remains genuinely open and
-genuinely external.** Checked `infra/modules/ecs/main.tf` and
-`infra/environments/production/main.tf` directly: the ECS module only
-*references* `var.security_group_ids` / `var.worker_security_group_ids` —
-no `aws_security_group` (or NACL) resource exists anywhere in this
-repository's Terraform to harden. Building one from scratch would mean
-inventing VPC/subnet topology and CIDR decisions this repository has never
-made (the production root is explicitly "NEVER APPLIED," resources were
-"created by hand," and adopting them into Terraform is its own future,
-deliberate step) — fabricating that would be exactly the "invent missing
-roadmap requirements" / "provision paid infrastructure without explicit
-authorization" failure mode this batch was told to avoid. Left as
-`DEFERRED_EXTERNAL`, unchanged, correctly owned by "Phase 12/18 infra."
+### 18-C — CI fmt/validate/plan, policy/security checks, human approval, protected production apply — CODE_COMPLETE, live protection LIVE_EXTERNAL_REQUIRED
 
-### Conclusion
+Done criterion: *"Production apply can occur only through the protected
+workflow."* Three new GitHub Actions workflows — **this repository had NO
+CI workflows of any kind before this batch**, `.github/workflows/` did not
+exist:
 
-The only in-repo evidence for "Phase 18" describes infrastructure-security
-work that is either already done (now correctly attributed) or requires
-live AWS provisioning this batch cannot fabricate. There is no discoverable,
-currently open, code-actionable Phase 18 scope in this repository as of
-this audit. **This batch's only change is the Gate 6 documentation
-correction above** — a real fix to a stale, incorrect status claim, not new
-production code, since nothing to implement was found. Should a canonical
-Phase 18 roadmap document (equivalent to Phase 17's externally-supplied
-master roadmap) surface later with a different scope, this section should
-be revisited rather than assumed superseded. **Phase 18 does not start
-Phase 19.**
+- **`infra-ci.yml`** (PR-triggered): `terraform fmt -check` once across
+  the whole tree, then `init -backend=false` + `validate` for all three
+  roots (matrix), then `npm run secrets:scan` (reusing the existing
+  scanner rather than adding a new IaC-specific policy engine — a
+  dedicated tool like tfsec/checkov is not part of this repository's
+  toolchain today; adding one is a reasonable future addition, not built
+  here, per the instruction not to implement Phase 19's policy runtime
+  early). A separate `plan` job additionally runs a real `terraform plan`
+  per environment and uploads it as a 90-day PR artifact — but ONLY when
+  `vars.AWS_ROLE_ARN`/`vars.TF_STATE_BUCKET` are configured; otherwise it
+  reports `SKIPPED_NOT_CONFIGURED` explicitly rather than a fabricated
+  pass. Never runs `terraform apply`, pinned structurally.
+- **`infra-apply.yml`** (the ONLY workflow that may apply production):
+  `workflow_dispatch`-only (no `push` trigger — a human must deliberately
+  start it), gated by a GitHub `environment: production`, requires a
+  literal confirmation phrase input, fails closed (non-zero exit) rather
+  than skipping when unconfigured, plans fresh inside the same run and
+  applies EXACTLY that plan file (`terraform apply tfplan.binary`, never
+  an implicit re-diff), and records actor/commit/environment/run-URL to
+  the run's own step summary.
+- **`infra-drift.yml`**: see 18-D below.
+
+**What is CODE_COMPLETE vs. what remains LIVE_EXTERNAL_REQUIRED:** the
+workflow YAML, the fail-closed-when-unconfigured behavior, and the plan-
+then-apply-same-plan discipline are all real and pinned by test. The
+GitHub *Environment protection rule* itself — the actual required-reviewer
+gate `environment: production` depends on — is a live, external, one-time
+repository Settings action this workflow file cannot configure from
+within itself; until that's done, the YAML gate exists but is not yet
+backed by a human-approval enforcement on GitHub's side. Documented, not
+hidden, in `infra-apply.yml`'s own header and in
+`docs/operations/INFRA_EMERGENCY_RUNBOOK.md`.
+
+### 18-D — drift detection, alerting, emergency-change runbook — CODE_COMPLETE, live drift-checking LIVE_EXTERNAL_REQUIRED
+
+Done criterion: *"Console drift produces an alert and a reconciliation
+record."*
+
+- **`infra-drift.yml`** (scheduled, daily, plus manual dispatch):
+  read-only, never applies/destroys/imports. Runs `terraform plan
+  -detailed-exitcode` against the real backend and classifies the ONLY
+  three honest outcomes: `NO_DRIFT` (exit 0), `DRIFT_DETECTED` (exit 2),
+  or `UNAVAILABLE` (missing credentials, init failure, or any other plan
+  outcome) — a tool failure is never reported as drift-free, pinned by a
+  dedicated test.
+- **`POST /api/internal/infra/drift-report`** (new route) — the narrow
+  seam CI evidence flows through into the app. Not `auth()`-gated (the
+  caller is a CI job, not a browser); gated instead by one shared bearer
+  secret (`CINEFIELD_INFRA_DRIFT_INGEST_TOKEN`, registered in
+  `secret-registry.ts` as `SERVER_SECRET`/`CUT_OVER`, documented in
+  `.env.example` and `docs/runbooks/secret-rotation.md`), compared with
+  `crypto.timingSafeEqual` (never a plain `===`), fails closed (refuses
+  every request) when unconfigured — no bypass mode. Delegates all body
+  validation to `drift-report-contract.ts`'s `parseDriftReport()` — bounded
+  fields only, no plan body, no diff, no state, no credentials ever
+  accepted.
+- **Alert Router reuse (13-D), not a second channel.** `alert-contract.ts`
+  gained exactly two new catalogued types — `infra_drift_detected`
+  (ERROR) and `infra_drift_check_unavailable` (WARNING, deliberately
+  lower: a broken checker is not proof anything is wrong) — and
+  `src/lib/infra/infra-alert-bridge.ts` (new, mirrors the existing
+  `dr-alert-bridge.ts`/`recovery-alert-bridge.ts` pattern exactly) calls
+  the SAME `raiseAlert()`/`resolveAlert()` every other producer uses. No
+  second Telegram channel, no second SNS router, no second alert
+  catalogue. `UNAVAILABLE` never resolves a standing `DRIFT_DETECTED`
+  alert — going uncertain must not look like recovery, the same rule
+  `dr-alert-bridge.ts` already follows.
+- **`docs/operations/INFRA_EMERGENCY_RUNBOOK.md`** (new) — the sanctioned
+  emergency-console-change path: make the change, record actor/reason
+  immediately (in the incident channel/issue tracker — deliberately NOT a
+  new database table, since the actor is a human on the AWS console, not
+  a Clerk admin session or a GitHub identity, and does not fit Phase
+  16-E's admin-privileged-action schema), confirm the immediate effect,
+  reconcile Terraform via a normal PR through `infra-ci.yml`, review the
+  plan shows no unexpected destroy/recreate, import if the resource wasn't
+  Terraform-managed, confirm the next drift check reports clean, retain
+  the evidence (the PR + workflow runs, already durably retained by
+  GitHub). Explicitly states "console forever" is not acceptable.
+- **Infra audit evidence, ownership decided.** Bounded evidence (actor,
+  commit SHA, environment, action, result, timestamp, correlation via the
+  workflow run URL) lives in the GitHub Actions run itself (`infra-apply.
+  yml`'s step summary, `infra-ci.yml`'s plan artifacts) plus the alert
+  envelope Phase 13-D already persists — not a new migration. Phase
+  16-E's `admin_privileged_action_events` table was considered and
+  rejected as the wrong owner: its schema is scoped to actions taken
+  through this application's own Clerk-authenticated admin surface, and
+  neither a CI job's GitHub identity nor a human on the AWS console fits
+  that model — force-fitting either would duplicate a concept, not close
+  a real gap. Recorded as the honest owner, not a deferred table.
+
+**What remains LIVE_EXTERNAL_REQUIRED for 18-D specifically:** every drift
+check reported by `infra-drift.yml` today would be `UNAVAILABLE`
+(`credentials_not_configured`), correctly, since no AWS OIDC role or
+remote-state backend exists yet (18-A). The scheduled workflow, the
+classification logic, the alert bridge, and the ingestion route are all
+real and tested; a live `NO_DRIFT`/`DRIFT_DETECTED` proof requires the
+same live AWS account 18-A/18-B are waiting on.
+
+### Security Gate 3 / Gate 6 relationship to this Phase 18 batch
+
+Gate 6 (SQS IAM least privilege / worker message distrust) is NOT this
+batch's scope — it was already closed by the prior audit (6R-C/12-D,
+corrected in the gate table above) and this batch consumes those existing
+IAM resources as-is via `infra/modules/iam/` rather than rebuilding them.
+Gate 3 (network-level egress/VPC hardening) is also NOT this batch's
+scope: no `aws_security_group`/NACL resource exists anywhere in this
+repository's Terraform to harden, building one would mean inventing
+VPC/subnet/CIDR topology nobody has decided, and doing so "merely to close
+Phase 18" is explicitly the fabrication this batch was told to avoid.
+Both remain correctly attributed to their own owners, unchanged.
+
+### Regression (this batch)
+
+Real `terraform fmt -check` (all three roots): PASS. Real `terraform
+validate` (bootstrap, dev, production, all three independently
+`init -backend=false`'d): PASS, PASS, PASS. Full suite: 1971/1974 pass —
+the 2 known pre-existing Phase-8 `ModelSelector` pins (unrelated,
+unmodified) plus the git-status-snapshot pin (clears on commit). `tsc
+--noEmit`, `npm run build`, ESLint on every touched file, `secrets:scan`,
+`telemetry:scan`: all clean. No Supabase migration. No locked product UI
+touched.
+
+### Not in this batch
+
+Actually applying `infra/bootstrap/` or any environment root to a live AWS
+account (needs real credentials and an account decision nobody has made);
+configuring GitHub's `environment: production` required-reviewer rule
+(live, external, one-time repository Settings action); importing the
+hand-created production resources into Terraform state (needs the above
+first); a dedicated Terraform-aware policy/security scanner (tfsec/
+checkov — reasonable future addition, not required by this batch's own
+"reuse existing scanners" instruction); Phase 19's OPA runtime (not
+implemented, not needed here); Gate 3's network-level egress hardening
+(remains `DEFERRED_EXTERNAL`/`BUSINESS_DECISION_REQUIRED`, VPC topology
+undecided). **Phase 18 does not start Phase 19.**
