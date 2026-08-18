@@ -13,10 +13,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface HeroCard {
   title: string;
   subtitle: string;
+  videoSrc?: string;
+  href?: string;
 }
 
 const HERO_CARDS: HeroCard[] = [
-  { title: "Seedance 2.5", subtitle: "Now generating in 1080p on Cinefield." },
+  {
+    title: "Seedance 2.5",
+    subtitle: "Now generating in 1080p on Cinefield.",
+    videoSrc: "/Klon kopya fotos _videos/seedance_2_5_1080p.mp4",
+    href: "https://higgsfield.ai/ai/video?model=seedance_2_5&resolution=1080p",
+  },
   { title: "Marketing Studio", subtitle: "Ad-ready shorts and product creatives." },
   { title: "Create Image", subtitle: "Photoreal, illustrated, or stylized stills." },
   { title: "Create Video", subtitle: "Motion generation across every model." },
@@ -68,12 +75,44 @@ export default function HeroCarousel() {
         <ul className="flex min-w-0 gap-5 *:flex-[0_0_19.5rem] md:*:flex-[0_0_25rem] xl:*:flex-[0_0_32rem]">
           {HERO_CARDS.map((card) => (
             <li key={card.title}>
-              <div className="group grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
+              <div className="group relative grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
+                {card.href && (
+                  <a
+                    href={card.href}
+                    aria-label={`Open ${card.title} in 1080p`}
+                    className="absolute inset-0 z-10 hidden md:block"
+                  >
+                    <span className="sr-only">Open {card.title} in 1080p</span>
+                  </a>
+                )}
+                {card.href && (
+                  <a
+                    href={card.href}
+                    aria-label={`Open ${card.title} in 1080p`}
+                    className="absolute inset-0 z-10 md:hidden"
+                  >
+                    <span className="sr-only">Open {card.title} in 1080p</span>
+                  </a>
+                )}
                 <figure
-                  style={{ aspectRatio: "16 / 9" }}
+                  style={{ aspectRatio: "1.7777777777777777" }}
                   className="relative overflow-hidden rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02]"
                 >
-                  {/* real video/image swaps in here once files land under public/explore/ */}
+                  {card.videoSrc ? (
+                    <video
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      disablePictureInPicture
+                      preload="none"
+                      src={card.videoSrc}
+                      className="size-full object-cover"
+                      aria-label={`${card.title} - ${card.subtitle}`}
+                    >
+                      Your browser does not support the video.
+                    </video>
+                  ) : null}
                   <div className="pointer-events-none absolute inset-0 rounded-lg shadow-[-0.5px_-0.5px_1px_0_rgba(255,255,255,0.12)_inset,0.8px_0.5px_0.5px_0_rgba(27,27,27,0.17)_inset]" />
                 </figure>
                 <div className="grid grid-rows-2 text-left">
