@@ -11,86 +11,86 @@ export const SHOWCASE_VIDEOS: ShowcaseVideo[] = [
   {
     id: "1",
     user: "banksy_pancake_gold22",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 55,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3HrUZEqvogBOowmw1C0BIb3oNDN/hf_20260814_002238_83054aec-92b9-4efe-b015-6c33e4bd7ba3_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_1_banksy_pancake_gold22.mp4"
   },
   {
     id: "2",
     user: "gaziziz",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 46,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3Btsg1RieQOoYK6o6x65C3UYqNH/hf_20260813_235221_7969f2f0-4868-4639-b8f2-85ca915bdd6e_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_2_gaziziz.mp4"
   },
   {
     id: "3",
     user: "arpanetus",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 99,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_2urnL94WJ71YKcCUCm8E5tfhGy9/437a80c2-3e11-4650-8777-c06e7ca567c5_hs_wm.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_3_arpanetus.mp4"
   },
   {
     id: "4",
     user: "folkemerald1346",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 270,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3CjmrehXCbm5Gx1QXVr3D9qhtaP/b8d9102b-6515-40c2-9ae9-d86f4d8efe4c_hs_wm.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_4_folkemerald1346.mp4"
   },
   {
     id: "5",
     user: "smartbeetle1651",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 93,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3FRnqOjr7P4vUmrsWyEzZbKAqVU/77406d67-d5db-4b1d-81e2-9e0139b39249_hs_wm.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_5_smartbeetle1651.mp4"
   },
   {
     id: "6",
     user: "jighit",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 20,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_2urRVI1bCfxGUsP28tBUphocCbh/507bc86d-a335-48fb-8732-06695a749350_hs_wm.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_6_jighit.mp4"
   },
   {
     id: "7",
     user: "higgsfield_hall_of_fame",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 33,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3HrUZEqvogBOowmw1C0BIb3oNDN/hf_20260814_041544_b5f84d9d-a9db-472c-9ece-fed23857b096_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_7_higgsfield_hall_of_fame.mp4"
   },
   {
     id: "8",
     user: "bourgeois_mean",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 36,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3HrUZEqvogBOowmw1C0BIb3oNDN/hf_20260814_041459_e02ab22b-6d8e-46bd-874e-8090a8f00799_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_8_bourgeois_mean.mp4"
   },
   {
     id: "9",
     user: "jennifer_lopez",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 35,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3HrUZEqvogBOowmw1C0BIb3oNDN/hf_20260814_040632_12ff4cdd-bba8-4a6d-bff5-312d4a2cbb23_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_9_jennifer_lopez.mp4"
   },
   {
     id: "10",
     user: "artificial_penguin",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 17,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3HrUZEqvogBOowmw1C0BIb3oNDN/hf_20260814_040418_e674bc76-e8c5-4099-bd5c-f871a9345cda_wm3.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_10_artificial_penguin.mp4"
   },
   {
     id: "11",
     user: "land_art_pencil",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 99,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3H8EAjd4lvlOfCDCxt4J3ZVPr1c/hf_20260807_105454_a60ef591-46a4-49a2-b01a-607dad928ede_thumbnail.webp"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_1_banksy_pancake_gold22.mp4"
   },
   {
     id: "12",
     user: "futurist_ice_special",
-    avatar: "https://static.higgsfield.ai/profile/avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
     likes: 86,
-    videoSrc: "https://d8j0ntlcm91z4.cloudfront.net/user_3Bu4J9LdRqhDHpwVUmDuiPIuIy0/hf_20260807_115856_816bc5fd-ea64-42ed-9c0c-d70e666a148f_thumbnail.webp"
+    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_2_gaziziz.mp4"
   }
 ];
 

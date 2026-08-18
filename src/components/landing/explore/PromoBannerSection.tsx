@@ -9,7 +9,7 @@ export default function PromoBannerSection() {
           className="relative isolate block aspect-[351/197] w-full overflow-hidden rounded-lg bg-[#1c1e21] text-left ring-1 ring-inset ring-white/20 transition-opacity hover:opacity-95 lg:aspect-auto lg:self-stretch lg:min-h-[264px] md:rounded-[20px]"
         >
           <video
-            src="https://static.higgsfield.ai/promotions/exlusive_seedance_2_5_1080p_explore_image.mp4#t=0.001"
+            src="/Klon kopya fotos _videos/seedance_showcase_assets/promo_exclusive_seedance_2_5_1080p.mp4#t=0.001"
             aria-hidden="true"
             playsInline
             disablePictureInPicture
@@ -24,7 +24,7 @@ export default function PromoBannerSection() {
             disablePictureInPicture
             preload="metadata"
             aria-hidden="true"
-            src="https://static.higgsfield.ai/promotions/exlusive_seedance_2_5_1080p_explore_image.mp4"
+            src="/Klon kopya fotos _videos/seedance_showcase_assets/promo_exclusive_seedance_2_5_1080p.mp4"
             className="pointer-events-none absolute inset-0 size-full object-cover"
           >
             Your browser does not support the video.
