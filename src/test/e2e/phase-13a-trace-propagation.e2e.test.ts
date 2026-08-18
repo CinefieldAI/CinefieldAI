@@ -241,20 +241,23 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // route was committed; a guard blind to untracked files is blind to
   // exactly the code most likely to need checking.
   //
-  // 39 = the 38 pre-existing API routes (16 originals plus the four 16-A
+  // 40 = the 39 pre-existing API routes (16 originals plus the four 16-A
   // admin routes plus the eight Phase 16-B admin routes plus the four
   // Phase 16-C admin routes — billing, assets, moderation,
   // moderation/release) plus the six Phase 16-D admin routes — Temporal
   // inspect, Temporal cancel, Security Center, Incidents, SLO/Cost Guard,
   // Deploy/Restore Health — plus Phase 16-E's one new admin route,
   // `GET /api/admin/privileged-audit` (Section 14's bounded Tier-0 audit
-  // query) — none of which takes an exemption from `guardRoute` either;
-  // each just adds `requireAdminAccess()` as an earlier, stricter check
-  // before the shared rate-limit boundary runs.
+  // query) — plus Phase 17's one new route, `POST
+  // /api/product-intelligence/compile` (a pure manifest-compile preview
+  // surface, never a lifecycle owner) — none of which takes an exemption
+  // from `guardRoute` either; each just adds `requireAdminAccess()` (admin
+  // routes) or nothing extra (the opt-in intelligence routes) as an earlier
+  // check before the shared rate-limit boundary runs.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 39, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 40, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

@@ -5054,3 +5054,131 @@ batch's privileged-ACTION audit); break-glass (not required — no hidden
 super-admin bypass exists or was added); a second rate limiter (existing
 `guardRoute({ routeClass: "durable_write" })` reused unchanged on every
 wired route). **Phase 16-E does not start Phase 17.**
+
+## Phase 17 — Cinefield Product Intelligence foundation
+
+**Binding ownership rule, unchanged and enforced structurally.** Temporal
+remains the ONLY generation lifecycle owner. Phase 17 decides WHAT a user
+intends and WHAT should be generated; it owns none of: generation workflow
+lifecycle, provider execution, retry/failover, finalization, billing
+settlement, queue transport, or provider routing authority. Every module
+below is pinned, by a real test, to import none of Temporal, the SQS/BullMQ
+transport, or any `*-provider.ts` adapter
+(`phase-17-product-intelligence.e2e.test.ts`, Security group).
+
+### Reality audit (Section 2 of the brief) — classification table
+
+| Concept | Classification |
+|---|---|
+| UserIntent / Core Coordinator / Manifest Compiler / GenerationManifest | MISSING — confirmed genuinely greenfield by a full-repo vocabulary sweep before any code was written |
+| Specialist Director (as an architecture) | MISSING as architecture; but real specialist-shaped functions already existed (`classifyAndEnhancePrompt`, `moderateText`) and are reused, not reimplemented |
+| Capability registry (execution) | ALREADY_EXISTS, narrow scope — `model-registry.ts` / `capability-validator.ts`, only the orchestratable model subset |
+| Generation request contract | FOUNDATION_EXISTS — `GenerationCreateRequest` / `generation-settings-mapper.ts`, settings travel through the untyped `metadata` JSON |
+| Control/Panel Schema Registry | MISSING — no unified shape; `cinemaStudioData.ts` is internally inconsistent and each studio (Create Image, Create Audio, Marketing Studio) duplicates its own control catalog independently (DUPLICATE_CONCEPT_EXISTS) |
+| Studio Profile / saved creative preset | MISSING entirely — no user-saveable preset/template table or concept exists anywhere in the schema or code |
+| Cinema Studio creative controls (genre, camera, era, tempo, palette, lighting) | PARTIAL — real, rich UI data exists but is not bound to any canonical, per-field execution-capability source |
+
+Because the Control/Panel Schema Registry and Studio Profile concepts are
+confirmed MISSING, Phase 17 does **not** invent structured, individually-
+capability-validated fields for camera/lighting/genre/era/tempo/palette —
+doing so would fabricate a capability guarantee the registry cannot actually
+back (Manifest Honesty rule, Section 15). Those remain bounded, optional
+free-text `styleHints` that compose into the final prompt — the same way
+Cinema Studio already builds prompts today — never a validated control.
+
+### What was built
+
+- `src/lib/product-intelligence/user-intent-contract.ts` — `UserIntent`,
+  bounded and fail-closed (`parseUserIntent`): explicit enums, size limits on
+  every array/string, no provider/credential/lifecycle field exists to
+  accept.
+- `src/lib/product-intelligence/specialists/capability-specialist.ts` — the
+  one deterministic, non-AI specialist. Calls the EXISTING
+  `findModel()` / `resolveWorkflow()` / `validateCapabilities()` directly;
+  never a second capability source.
+- `src/lib/product-intelligence/specialists/prompt-specialist.ts` and
+  `.../safety-specialist.ts` — thin wrappers around the EXISTING
+  `classifyAndEnhancePrompt()` and `moderateText()` (both already shipped,
+  both already Cloudflare Workers AI, opt-in, degrade-gracefully). No new
+  paid service was added. `"unavailable"` is never treated as `"safe"` — the
+  Safety Specialist's own return type has no path that collapses the two.
+- `src/lib/product-intelligence/core-coordinator.ts` — deterministic
+  composition only (calls each specialist once, combines results); no retry
+  policy, no scheduling, no durable state.
+- `src/lib/product-intelligence/manifest-compiler.ts` — deterministic;
+  implements the exact conflict-resolution precedence from Section 14
+  (safety/policy > capability > explicit user choice > specialist suggestion
+  > default; the profile tier is skipped, not fabricated, since no profile
+  system exists). Never selects a provider, never starts a workflow, never
+  reserves credits, never writes terminal state.
+- `src/lib/product-intelligence/generation-manifest-contract.ts` —
+  `GenerationManifest`, versioned (`manifestVersion: "1.0.0"`), provider-
+  neutral by construction (no `fal.*`/`runway.*`/`openai.*`/`xai.*`/
+  `providerJobId`/`providerUrl`, pinned structurally), and explicitly
+  excludes provider, credentials, queue receipt, Temporal state, retry
+  counter, billing settlement state, and raw provider response.
+- `src/lib/product-intelligence/compatibility-seam.ts` — pure mappers
+  proving the layer CAN feed the existing generation admission seam:
+  `mapGenerationManifestToCreateRequest()` produces the exact metadata shape
+  `generation-settings-mapper.ts` already reads (`aspect_ratio`,
+  `resolution`, `duration_seconds`, `image_count` as a fraction string,
+  `mime_type`, ...), and the reverse mapper shows existing
+  `GenerationCreateRequest` traffic could be represented as a `UserIntent`.
+  Neither mapper calls Temporal, reserves credits, or writes a row.
+- `POST /api/product-intelligence/compile` — one new, additive, optional
+  route. Auth (`auth()`) then `guardRoute({ routeClass: "paid_compute" })`
+  before the body is even parsed (pinned structurally), same shape as
+  `/api/orchestration/enhance-prompt` and `/api/orchestration/moderate-text`.
+  It compiles and RETURNS a manifest; it never creates a `generations` row,
+  never calls Temporal, never reserves credits. `/api/generate` — the one
+  canonical generation owner — is untouched.
+
+### Integration seam decision (Section 16/17)
+
+Narrowest safe integration, Option B from the brief: the compatibility
+mappers prove the manifest CAN feed the existing seam, but nothing is wired
+automatically. `/api/generate`'s route handler was not modified. There is
+still exactly one canonical generation owner and no silent dual production
+path.
+
+### Persistence decision (Section 22)
+
+**EPHEMERAL for this batch.** A `GenerationManifest` is computed on demand
+by the compile endpoint and returned in the response; it is not written to
+a new table and not stuffed into `generations.metadata` — that column
+already has a real, established, unrelated consumer (`cancel-intent.ts`'s
+cancel-intent data), and writing a second, versioned, provenance-carrying
+shape into the same JSON column without a discriminated sub-key would be
+exactly the "convenience persistence without checking existing schema
+boundaries" anti-pattern the brief warns against. The settings SUBSET of a
+compiled manifest already has a governed home once a caller chooses to feed
+it through the existing seam — `mapGenerationManifestToCreateRequest()`
+reuses that, unmodified. Durable manifest evidence (if ever wanted, once
+this layer is wired into a live generation path) is a
+`FUTURE_OWNER_HANDOFF` / `BUSINESS_DECISION_REQUIRED` item, not something
+this batch had to invent a migration for. `MANIFEST_PERSISTENCE_DECISION_REQUIRED`
+was not triggered — this is a reasoned EPHEMERAL choice, not an unresolved
+blocker.
+
+### Failure semantics
+
+`ManifestOutcome` implements the brief's bounded enum exactly: `VALID`,
+`PARTIAL`, `UNSUPPORTED_CAPABILITY`, `INVALID_INTENT`, `POLICY_REFUSED`,
+`PROFILE_NOT_FOUND`, `CONFLICTING_CONTROLS`, `COMPILER_UNAVAILABLE`,
+`SPECIALIST_UNAVAILABLE`. `PROFILE_NOT_FOUND` is intentionally unreachable
+in this batch — `UserIntent` has no profile reference to fail on, since no
+Studio Profile system exists yet — and is kept in the enum, not deleted, so
+it is ready the day that system is built rather than requiring a breaking
+enum change later.
+
+### Not in this batch
+
+A "Camera Director"/"Style Director"/"Lighting Director" specialist (would
+require a canonical, per-field control capability source that does not
+exist — Control/Panel Schema Registry is still MISSING); a Studio Profile /
+saved-preset system (still MISSING, out of Phase 17's own remit); wiring the
+compiled manifest automatically into `/api/generate` (deliberately left as a
+proven-but-unwired capability, narrowest-safe-integration); durable manifest
+persistence (EPHEMERAL decision above); any new OPA runtime or a second
+policy engine (Safety Specialist reuses Phase 12/moderation foundations
+only). **Phase 17 does not start Phase 18.**
