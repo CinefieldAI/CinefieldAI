@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Film, ImageIcon, Menu, Music2, X } from "lucide-react";
@@ -109,6 +109,16 @@ export default function Navbar({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNavItem, setOpenNavItem] = useState("");
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleFeatureSelect = (key: ImageFeatureKey) => {
     if (key === "create") {
@@ -272,9 +282,13 @@ export default function Navbar({
 
   return (
     <header
-      className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 md:grid-cols-[auto_1fr_auto]"
+      className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 transition-all duration-300 md:grid-cols-[auto_1fr_auto]"
       style={{
-        background: "rgba(35,38,42,0.75)",
+        background: isScrolled ? "rgba(10,10,12,0.96)" : "rgba(35,38,42,0.75)",
+        borderBottom: isScrolled
+          ? "1px solid rgba(255,255,255,0.12)"
+          : "1px solid rgba(255,255,255,0.05)",
+        boxShadow: isScrolled ? "0 4px 20px rgba(0,0,0,0.6)" : "none",
         backdropFilter: "blur(40px)",
         WebkitBackdropFilter: "blur(40px)",
       }}
