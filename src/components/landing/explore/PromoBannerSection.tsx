@@ -82,9 +82,9 @@ export default function PromoBannerSection() {
         </a>
       </div>
 
-      {/* Right 6 Cards Grid */}
-      <div className="grid flex-1 min-w-0 auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 lg:gap-3">
-        {/* Card 1 */}
+      {/* Right 6 Cards Grid (2 cols x 3 rows landscape cards) */}
+      <div className="grid flex-1 min-w-0 auto-rows-fr grid-cols-2 gap-2 lg:gap-3">
+        {/* Row 1 - Card 1 */}
         <a
           href="/ai/video?model=seedance_2_5&resolution=1080p"
           className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-black border border-[rgba(217,217,217,0.04)] p-4 lg:p-5 gap-3 transition hover:brightness-125 active:brightness-100 md:items-start md:justify-between"
@@ -118,7 +118,7 @@ export default function PromoBannerSection() {
           </p>
         </a>
 
-        {/* Card 2 */}
+        {/* Row 1 - Card 2 */}
         <a
           href="/academy"
           className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
@@ -153,7 +153,53 @@ export default function PromoBannerSection() {
           </div>
         </a>
 
-        {/* Card 3 */}
+        {/* Row 2 - Card 3 */}
+        <a
+          href="/supercomputer"
+          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
+        >
+          <div className="relative flex w-full items-center justify-between">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
+              src="https://static.higgsfield.ai/explore-image/spc-explore-icon.png"
+            />
+          </div>
+          <div className="relative flex w-full flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-6 text-white tracking-[-0.16px]">
+              <span className="truncate">Supercomputer</span>
+            </div>
+            <p className="text-sm font-normal leading-5 text-[#898a8b] lg:text-xs lg:leading-[18px]">
+              Automation, skills, apps and more
+            </p>
+          </div>
+        </a>
+
+        {/* Row 2 - Card 4 */}
+        <a
+          href="/mcp"
+          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
+        >
+          <div className="relative flex w-full items-center justify-between">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
+              src="https://static.higgsfield.ai/explore/image-generate-block/claude-logo.png"
+            />
+          </div>
+          <div className="relative flex w-full flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-6 text-white tracking-[-0.16px]">
+              <span className="truncate">MCP &amp; CLI</span>
+            </div>
+            <p className="text-sm font-normal leading-5 text-[#898a8b] lg:text-xs lg:leading-[18px]">
+              Turn Claude into a creative engine
+            </p>
+          </div>
+        </a>
+
+        {/* Row 3 - Card 5 */}
         <a
           href="/ai/video?model=seedance_2_0"
           className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
@@ -195,56 +241,10 @@ export default function PromoBannerSection() {
           </span>
         </a>
 
-        {/* Card 4 */}
-        <a
-          href="/supercomputer"
-          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
-        >
-          <div className="relative flex w-full items-center justify-between">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore-image/spc-explore-icon.png"
-            />
-          </div>
-          <div className="relative flex w-full flex-col gap-1">
-            <div className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-6 text-white tracking-[-0.16px]">
-              <span className="truncate">Supercomputer</span>
-            </div>
-            <p className="text-sm font-normal leading-5 text-[#898a8b] lg:text-xs lg:leading-[18px]">
-              Automation, skills, apps and more
-            </p>
-          </div>
-        </a>
-
-        {/* Card 5 */}
-        <a
-          href="/mcp"
-          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between hidden lg:flex"
-        >
-          <div className="relative flex w-full items-center justify-between">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore/image-generate-block/claude-logo.png"
-            />
-          </div>
-          <div className="relative flex w-full flex-col gap-1">
-            <div className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-6 text-white tracking-[-0.16px]">
-              <span className="truncate">MCP &amp; CLI</span>
-            </div>
-            <p className="text-sm font-normal leading-5 text-[#898a8b] lg:text-xs lg:leading-[18px]">
-              Turn Claude into a creative engine
-            </p>
-          </div>
-        </a>
-
-        {/* Card 6 */}
+        {/* Row 3 - Card 6 */}
         <a
           href="/generate"
-          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between hidden lg:flex"
+          className="relative flex flex-col min-h-[126px] overflow-hidden rounded-2xl bg-[#1c1e20] border border-white/5 p-4 lg:p-5 gap-3 transition hover:bg-[#23252a] active:bg-[#1c1e20] md:items-start md:justify-between"
         >
           <div className="relative flex w-full items-center justify-between">
             <img
