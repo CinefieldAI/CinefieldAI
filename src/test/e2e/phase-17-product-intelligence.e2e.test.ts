@@ -288,6 +288,7 @@ describe("Phase 17 - Manifest Compiler", () => {
       assert.equal(compiled.manifest.modelId, "mock-image");
       assert.equal(compiled.manifest.workflow, "text-to-image");
       assert.equal(compiled.manifest.manifestVersion, "1.0.0");
+      assert.equal(compiled.manifest.compilerVersion, "1.0.0");
     }
   });
 
@@ -386,6 +387,37 @@ describe("Phase 17 - Manifest Compiler", () => {
       assert.ok(!keys.includes(forbidden), `manifest must not carry "${forbidden}"`);
     }
   });
+
+  test("every VALID/PARTIAL manifest carries both manifestVersion and compilerVersion", () => {
+    const compiled = compileManifest(fixtureResult());
+    assert.equal(compiled.outcome, "VALID");
+    if (compiled.outcome !== "VALID") return;
+    assert.equal(compiled.manifest.manifestVersion, "1.0.0");
+    assert.equal(compiled.manifest.compilerVersion, "1.0.0");
+  });
+
+  test("model-aware prompt compiler: styleHints that push the composed prompt over the model's real maxPromptLength are refused, not silently truncated", () => {
+    // mock-tts's real registry maxPromptLength is 5000 — force the composed
+    // (prompt + styleHints) string past it.
+    const intent = baseIntent({
+      generationType: "audio",
+      modelId: "mock-tts",
+      workflow: "text-to-speech",
+      prompt: "a".repeat(4990),
+      styleHints: ["b".repeat(50)],
+    });
+    const compiled = compileManifest(fixtureResult({ intent, capability: runCapabilitySpecialist(intent) }));
+    assert.equal(compiled.outcome, "UNSUPPORTED_CAPABILITY");
+    if (compiled.outcome === "UNSUPPORTED_CAPABILITY") {
+      assert.ok(compiled.reasonCodes[0].includes("composed_prompt_exceeds_max_length"));
+    }
+  });
+
+  test("model-aware prompt compiler: a composed prompt within the model's limit still compiles VALID", () => {
+    const intent = baseIntent({ styleHints: ["golden hour"] });
+    const compiled = compileManifest(fixtureResult({ intent, capability: runCapabilitySpecialist(intent) }));
+    assert.equal(compiled.outcome, "VALID");
+  });
 });
 
 // ---- Integration (compatibility seam) --------------------------------------
@@ -427,6 +459,7 @@ describe("Phase 17 - Compatibility seam", () => {
   test("only the first reference survives the manifest -> request direction (documented limitation)", () => {
     const manifest: GenerationManifest = {
       manifestVersion: "1.0.0",
+      compilerVersion: "1.0.0",
       intentId: randomUUID(),
       projectId: PROJECT_ID,
       generationType: "image",
@@ -467,7 +500,7 @@ describe("Phase 17 - Security boundary", () => {
   });
 
   test("the compile route never logs the raw prompt text, only bounded fields", () => {
-    assert.doesNotMatch(ROUTE, /emit\(\{[^}]*prompt:/s);
+    assert.doesNotMatch(ROUTE, /emit\(\{[^}]*prompt:/);
     assert.match(ROUTE, /promptLength: intent\.prompt\.length/);
   });
 
@@ -508,6 +541,63 @@ describe("Phase 17 - Security boundary", () => {
     );
     assert.match(source, /import \{ [^}]*validateCapabilities[^}]* \} from "@\/lib\/orchestration\/capability-validator"/);
     assert.match(source, /validateCapabilities\(\{/);
+  });
+});
+
+// ---- Real admission integration (17-A closure) -----------------------------
+
+describe("Phase 17 - Real generation-admission integration (/execute)", () => {
+  const EXECUTE_ROUTE = readFileSync(
+    path.join(ROOT, "src/app/api/product-intelligence/execute/route.ts"),
+    "utf8"
+  );
+
+  test("requires auth() before any other work, same as /compile", () => {
+    assert.match(EXECUTE_ROUTE, /const \{ userId \} = await auth\(\);/);
+  });
+
+  test("rate-limits via guardRoute before parsing the body", () => {
+    const authIndex = EXECUTE_ROUTE.indexOf("await auth()");
+    const guardIndex = EXECUTE_ROUTE.indexOf("guardRoute(");
+    const parseIndex = EXECUTE_ROUTE.indexOf("request.json()");
+    assert.ok(authIndex >= 0 && guardIndex > authIndex);
+    assert.ok(parseIndex > guardIndex);
+  });
+
+  test("calls the exact same two canonical functions POST /api/generate calls, in the same order, never reimplementing either", () => {
+    assert.match(
+      EXECUTE_ROUTE,
+      /import \{ createGeneration \} from "@\/lib\/orchestration\/generation-create-service"/
+    );
+    assert.match(
+      EXECUTE_ROUTE,
+      /import \{ respondToGenerationRequest \} from "@\/lib\/orchestration\/generation-api-contract"/
+    );
+    const createIndex = EXECUTE_ROUTE.indexOf("await createGeneration(");
+    const respondIndex = EXECUTE_ROUTE.lastIndexOf("respondToGenerationRequest(generationId, userId)");
+    assert.ok(createIndex >= 0 && respondIndex > createIndex, "createGeneration must run before respondToGenerationRequest");
+  });
+
+  test("recompiles the intent fresh — never accepts or trusts a client-supplied manifest", () => {
+    assert.doesNotMatch(EXECUTE_ROUTE, /body\.manifest/);
+    assert.doesNotMatch(EXECUTE_ROUTE, /candidate\.manifest/);
+    assert.match(EXECUTE_ROUTE, /parseUserIntent\(body, randomUUID\(\)\)/);
+    assert.match(EXECUTE_ROUTE, /compileManifest\(coordinated\)/);
+  });
+
+  test("only a VALID compile proceeds to admission — every other outcome returns unexecuted", () => {
+    assert.match(EXECUTE_ROUTE, /if \(compiled\.outcome !== "VALID"\) \{\s*return privateJson\(compiled/);
+  });
+
+  test("never imports Temporal, SQS, BullMQ, or a provider adapter directly", () => {
+    const source = stripComments(EXECUTE_ROUTE);
+    for (const forbidden of ["temporal", "@aws-sdk/client-sqs", "bullmq", "-provider\"", "-provider'"]) {
+      assert.ok(!source.toLowerCase().includes(forbidden.toLowerCase()));
+    }
+  });
+
+  test("the compatibility-seam mapper now has a real production caller (no longer test-only)", () => {
+    assert.match(EXECUTE_ROUTE, /mapGenerationManifestToCreateRequest\(compiled\.manifest\)/);
   });
 });
 

@@ -5,6 +5,7 @@ import { toReferenceInputs } from "./specialists/capability-specialist";
 import type { CoordinatorResult } from "./core-coordinator";
 import {
   GENERATION_MANIFEST_VERSION,
+  MANIFEST_COMPILER_VERSION,
   type GenerationManifest,
   type ManifestCompileResult,
   type ManifestFieldProvenance,
@@ -37,9 +38,30 @@ const SETTINGS_FIELDS = [
   "language",
 ] as const;
 
-function composePrompt(prompt: string, styleHints: string[]): string {
-  if (styleHints.length === 0) return prompt;
-  return `${prompt}\n\n${styleHints.join(", ")}`;
+/**
+ * Model-aware prompt compilation (Phase 17-A). `intent.prompt` alone was
+ * already checked against `model.capabilities.maxPromptLength` by the
+ * Capability Specialist — but styleHints are appended AFTER that check, so
+ * the composed string handed to the model must be re-bounded here, or a
+ * manifest could carry a prompt that violates the very capability check
+ * that just passed it. Cinefield model id and its own real, registry-owned
+ * limit are the only "model-specific" facts used — never a fabricated
+ * per-provider prompt format, since none is documented anywhere in this
+ * codebase to compile against honestly.
+ */
+function composePrompt(
+  prompt: string,
+  styleHints: string[],
+  model: ModelRegistryEntry
+): { prompt: string } | { exceedsMaxPromptLength: true } {
+  const composed = styleHints.length === 0 ? prompt : `${prompt}\n\n${styleHints.join(", ")}`;
+  if (
+    model.capabilities.maxPromptLength !== undefined &&
+    composed.length > model.capabilities.maxPromptLength
+  ) {
+    return { exceedsMaxPromptLength: true };
+  }
+  return { prompt: composed };
 }
 
 function compileSettings(
@@ -128,6 +150,14 @@ export function compileManifest(result: CoordinatorResult): ManifestCompileResul
     model
   );
 
+  const composed = composePrompt(intent.prompt, intent.styleHints, model);
+  if ("exceedsMaxPromptLength" in composed) {
+    return {
+      outcome: "UNSUPPORTED_CAPABILITY",
+      reasonCodes: [`CAPABILITY_NOT_SUPPORTED:composed_prompt_exceeds_max_length:${model.capabilities.maxPromptLength}`],
+    };
+  }
+
   const provenance: ManifestFieldProvenance[] = [
     { field: "modelId", source: "explicit_user" },
     { field: "workflow", source: intent.workflow ? "explicit_user" : "specialist_suggested" },
@@ -145,12 +175,13 @@ export function compileManifest(result: CoordinatorResult): ManifestCompileResul
 
   const manifest: GenerationManifest = {
     manifestVersion: GENERATION_MANIFEST_VERSION,
+    compilerVersion: MANIFEST_COMPILER_VERSION,
     intentId: intent.intentId,
     projectId: intent.projectId,
     generationType: model.generationType,
     workflow,
     modelId: model.id,
-    prompt: composePrompt(intent.prompt, intent.styleHints),
+    prompt: composed.prompt,
     negativePrompt: intent.negativePrompt,
     settings,
     references: intent.references.map((reference) => ({ ...reference })),

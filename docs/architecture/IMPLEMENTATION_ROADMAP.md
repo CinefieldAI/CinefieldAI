@@ -6,6 +6,41 @@ Companion document to [`CINEFIELD_ARCHITECTURE_CONTRACT.md`](./CINEFIELD_ARCHITE
 
 ---
 
+## Post-checkpoint status note
+
+**This file's own checkpoint table below stops at commit `2c4e3db` and its
+"Future Phase Order" table stops at Phase 13 — both are frozen at an early
+point in this project and have not been kept current.** Substantially more
+has since been built (Phases 6R, 7 through 16 in full, and Phase 17 in
+part), tracked package-by-package as it lands in
+[`../security-gates.md`](../security-gates.md) and in the phase-numbered
+bullets of `CINEFIELD_ARCHITECTURE_CONTRACT.md`'s "CURRENT CINEFIELD
+IMPLEMENTATION OVERRIDES" section — those two documents, not this one, are
+current. This note exists only so Phase 17 is not silently absent from this
+file, per an explicit instruction to keep this roadmap from misrepresenting
+current reality; it is not a rewrite of the table below, which remains a
+historical record of the project's early ordering and is out of scope to
+correct here.
+
+**Phase 17 — Cinefield Product Intelligence, official packages 17-A
+through 17-E (authoritative master roadmap v1.9.1 TEMIZ MASTER EK F,
+external to this repository):** 17-A (AI Director / model-specific Prompt
+Compiler / multilingual intelligence / Workflow-Skill Engine / real
+generation-admission integration) is **complete**. 17-B (Cinema Studio +
+Marketing Studio + Soul/Character + Product workflows on one shared
+generation core) is **partial** — the shared core is real where product
+flows actually reach it, but not every named flow independently does. 17-C
+(Virality analysis + Cinefield Supercomputer plan/approve/execute) is
+**deferred** — neither virality analysis nor a real plan/approval/execution
+flow exists yet. 17-D (MCP + Apps/Websites/Games Builders) is **deferred /
+not applicable** — none of the four exist in this repository under any
+name. 17-E (model/prompt promotion gated by a Phase 22 eval regression gate
++ Braintrust) is **deferred to Phase 22**, which does not exist yet. Full
+detail, evidence, and file-by-file citations for every package: see
+`security-gates.md`'s "Phase 17 Roadmap Reconciliation" section.
+
+---
+
 ## Completed Implementation Checkpoints
 
 Verified against `git log` on branch `main` as of this phase (HEAD `2c4e3db`):

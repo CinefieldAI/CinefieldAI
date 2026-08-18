@@ -5133,13 +5133,18 @@ Cinema Studio already builds prompts today — never a validated control.
   never calls Temporal, never reserves credits. `/api/generate` — the one
   canonical generation owner — is untouched.
 
-### Integration seam decision (Section 16/17)
+### Integration seam decision (Section 16/17) — SUPERSEDED by the Roadmap Reconciliation batch below
 
-Narrowest safe integration, Option B from the brief: the compatibility
-mappers prove the manifest CAN feed the existing seam, but nothing is wired
-automatically. `/api/generate`'s route handler was not modified. There is
-still exactly one canonical generation owner and no silent dual production
-path.
+The original narrowest-safe-integration choice (Option B: prove the seam CAN
+feed admission, wire nothing) was correct for a first foundation batch, but a
+subsequent independent closure audit found the seam mappers had ZERO
+production callers — proven by test only, not consumed anywhere real. The
+Roadmap Reconciliation batch (below) closes this: `POST
+/api/product-intelligence/execute` is a real, live caller of
+`mapGenerationManifestToCreateRequest()` now. `/api/generate`'s route handler
+is still not modified — there remains exactly one canonical generation owner
+and no silent dual production path; see the reconciliation section for the
+exact mechanism.
 
 ### Persistence decision (Section 22)
 
@@ -5171,14 +5176,267 @@ Studio Profile system exists yet — and is kept in the enum, not deleted, so
 it is ready the day that system is built rather than requiring a breaking
 enum change later.
 
-### Not in this batch
+### Not in this batch (original foundation batch, commit `9cbe22e`)
 
 A "Camera Director"/"Style Director"/"Lighting Director" specialist (would
 require a canonical, per-field control capability source that does not
 exist — Control/Panel Schema Registry is still MISSING); a Studio Profile /
-saved-preset system (still MISSING, out of Phase 17's own remit); wiring the
-compiled manifest automatically into `/api/generate` (deliberately left as a
-proven-but-unwired capability, narrowest-safe-integration); durable manifest
-persistence (EPHEMERAL decision above); any new OPA runtime or a second
-policy engine (Safety Specialist reuses Phase 12/moderation foundations
-only). **Phase 17 does not start Phase 18.**
+saved-preset system (still MISSING); wiring the compiled manifest
+automatically into `/api/generate` (deliberately left as a proven-but-unwired
+capability); durable manifest persistence (EPHEMERAL decision above); any new
+OPA runtime or a second policy engine (Safety Specialist reuses Phase
+12/moderation foundations only).
+
+---
+
+## Phase 17 Roadmap Reconciliation — official 17-A through 17-E, master
+## roadmap v1.9.1 TEMIZ MASTER EK F
+
+**Correction driving this batch.** The original Phase 17 implementation and
+its first closure audit both worked from a summarized, non-authoritative
+contract. The authoritative master roadmap (external, not a repository file)
+names five official Phase 17 packages, 17-A through 17-E. This section
+reconciles the already-built foundation against each, package by package,
+implementing only what is honestly buildable now and reporting the rest
+precisely rather than fabricating completion. Reconciled from THREE
+independent, parallel, read-only research passes over the actual repository
+(product-flow audit, virality/Supercomputer audit, MCP/builder audit,
+workflow-engine/Phase-22 audit) before any code was written — not from
+assumption.
+
+**Real defect fixed first, per instruction.** An independent closure audit
+of commit `9cbe22e` found `tsc --noEmit -p tsconfig.json` genuinely failing:
+`phase-17-product-intelligence.e2e.test.ts:470` used the `/s` (dotAll) regex
+flag, which requires an ES2018+ target while `tsconfig.json` targets ES2017.
+The pattern (`/emit\(\{[^}]*prompt:/`) never needed dotAll — `[^}]*` already
+matches newlines without it — so the flag was simply dropped. Neither
+`npm run build` nor `node --test` (via `tsx`, which transpiles without a full
+type-check) had caught this, which is why it shipped undetected; only a
+direct `tsc` invocation surfaces it. Verified fixed: `tsc --noEmit` now
+exits 0.
+
+**Ownership correction: Control/Panel Schema Registry belongs to Phase 7,
+not Phase 17.** The master roadmap places it there explicitly. Repository
+reality is unchanged by this correction (it was already, and remains,
+`MISSING` repo-wide) — only the *handoff owner* changes in this repo's own
+docs, from an unattributed gap to a named Phase 7 dependency. The four+
+independent per-studio control catalogs this creates (`cinemaStudioData.ts`,
+`imageModelCapabilities.ts`/`createImageData.ts`, `voiceoverModelConfig.ts`,
+Marketing Studio's inline constants) remain a real, pre-existing duplication
+risk, untouched by Phase 17 — consolidating them would mean editing locked
+Cinema Studio UI, which stays out of scope without an explicit unlock.
+
+**Studio Profile intelligence, corrected framing.** `styleHints` is bounded
+free text that composes into the final prompt — it is NOT profile
+intelligence, and this batch does not claim it is. A real Studio Profile /
+creative-preset system cannot be built honestly without the Phase 7
+Control/Panel Schema Registry existing first (a profile needs real,
+validated controls to reference — there is nothing to save a "preset" of
+today beyond raw prompt text and the narrow settings fields `UserIntent`
+already exposes). Recorded as a `FUTURE_OWNER_HANDOFF` dependent on Phase 7,
+not built, not faked.
+
+### 17-A — AI Director + model-specific Prompt Compiler + multilingual
+### intelligence + Workflow/Skill Engine — COMPLETE
+
+Done criterion: *"One intent becomes a model-aware executable generation
+plan."*
+
+- **AI Director**: satisfied by `core-coordinator.ts`'s `coordinateUserIntent()`.
+  Deliberately not renamed to "Director" — that name is already load-bearing
+  UI vocabulary in Cinema Studio ("Director Panel"). A repo-wide search found
+  no other backend "Director" concept to reconcile against.
+- **Model-specific Prompt Compiler**: a real hardening this batch, not
+  cosmetic. `manifest-compiler.ts`'s `composePrompt()` previously composed
+  `intent.prompt + styleHints` with no bound at all — meaning a manifest
+  could carry a final prompt LONGER than the very `capabilities.maxPromptLength`
+  the Capability Specialist had just validated the raw prompt against
+  (styleHints are appended afterward, outside that check). `composePrompt()`
+  now re-validates the FINAL composed string against the target model's own
+  real, registry-owned limit and refuses (`UNSUPPORTED_CAPABILITY`,
+  reason code `CAPABILITY_NOT_SUPPORTED:composed_prompt_exceeds_max_length:<limit>`)
+  rather than silently truncating — no fabricated per-provider prompt format
+  was invented, since none is documented anywhere in this codebase to compile
+  against honestly.
+- **Multilingual intelligence**: `settings.language` is real and
+  capability-validated against `model.capabilities.supportedLanguages`. Raw
+  multilingual text passes through unmodified — no auto-translation is
+  performed, honoring an earlier roadmap phase's explicit instruction
+  ("must not silently start translating or rewriting user text").
+- **Workflow/Skill Engine**: reconciled, not rebuilt. No generic
+  "skill"/"workflow engine" runtime exists anywhere in this repository (a
+  dedicated audit confirmed zero hits beyond the narrow, pre-existing
+  `WorkflowType` enum). `UserIntent` already IS the bounded "what
+  steps/semantic requirements a product flow needs" description the
+  roadmap's own definition asks for, and — per that same definition — already
+  owns none of Temporal lifecycle/SQS/provider execution/credit settlement.
+  A second, parallel type describing the same thing would duplicate a
+  concept that already exists under a different name.
+- **Real admission integration — the item that actually closes 17-A.**
+  `POST /api/product-intelligence/execute` (new route) is a real, live HTTP
+  path: `UserIntent` → Coordinator/Specialists → `GenerationManifest`, and —
+  ONLY on a clean `VALID` outcome — straight into `createGeneration()` then
+  `respondToGenerationRequest()`, the exact same two canonical functions
+  `/api/generate/route.ts` calls, imported and called verbatim in the same
+  order (pinned structurally). Any non-`VALID` outcome, including `PARTIAL`
+  (e.g. safety unavailable), returns unexecuted — the same bounded shape
+  `/compile` would already report. This is the "plan ≠ execution" boundary:
+  a caller previews with `/compile` (no side effects, unchanged), and only a
+  separate, deliberate `/execute` call can create real work.
+  `createGeneration()`'s own `create_generation_tx` RPC already verifies the
+  authenticated actor owns the target project (a foreign `projectId`
+  surfaces as not-found) — reused verbatim, so this path inherits real
+  tenant/project authorization automatically; nothing new was written for
+  it, and nothing was skipped. `/api/generate/route.ts` itself is completely
+  unmodified — this is a second CALLER of the same canonical admission
+  functions, the same pattern its own doc comment already describes as
+  normal ("the two wrapper routes" already do this for the compat-body
+  shape), not a second lifecycle.
+
+### 17-B — Cinema Studio + Marketing Studio + Soul/Character + Product
+### workflows — PARTIAL
+
+Done criterion: *"Four product flows use the same generation core."*
+
+- **Cinema Studio**: EXISTS, real, LOCKED, untouched. Already reaches
+  `createGeneration()`/`/api/generate` through its own `useGeneration()`
+  hook — the same canonical core `/execute` also calls.
+- **Marketing Studio**: EXISTS as a real, functioning UI
+  (`MarketingStudioProductWorkspace.tsx`). Its default, visible
+  target/mode/style catalog currently falls through to a `console.log`
+  placeholder rather than a real call; only an internal `?model=` dev
+  override reaches the same canonical path Cinema Studio uses. Not fixed
+  this batch — wiring the visible catalog to real generation is a distinct,
+  unauthorized UI change outside Phase 17's remit, not a Product
+  Intelligence concern.
+- **"Soul/Character"**: does not exist as a separate product flow. It is a
+  capability toggle (`SoulGeneralCard.tsx`/`CharacterCardPopover.tsx`)
+  nested inside `/image`'s `ImageForm.tsx`. Classified `NOT_APPLICABLE` as a
+  fifth flow — the roadmap name maps onto an existing feature, not an absent
+  product; nothing was fabricated to give it a standalone existence.
+- **"Product"**: `AMBIGUOUS_NAME` — resolves to Marketing Studio's own
+  `/product` page; no separate flow exists.
+
+No locked or unlocked product UI file was modified to close this gap.
+
+### 17-C — Virality analysis + Cinefield Supercomputer — DEFERRED_FUTURE
+
+Done criterion: *"Plan becomes safe execution only after user approval."*
+
+Virality analysis does not exist anywhere in the repository — "Viral
+Presets" (`HeroCarousel.tsx`) is a marketing gallery label with zero
+scoring/analysis logic behind it. `/supercomputer` (LOCKED, untouched) is a
+UI shell whose composer reaches `/api/generate` only through a dev-only
+`?model=` override; its visible model selector and category pills have no
+click handlers at all, and no planning, cost-estimation, approval, or
+quality-control concept is connected to it anywhere. Real, reusable
+infrastructure a future 17-C batch could build on already exists,
+unmodified: Phase 15-B's cost estimator (`cost-contract.ts`, real,
+`ESTIMATE_BASED` only, never real spend) and Phase 16-E's step-up/elevated-
+session mechanism (admin-scoped only, not an end-user "confirm before
+spend" gate — no simpler end-user version exists either). Nothing was built
+this batch: inventing virality-analysis scoring with no product spec, or
+editing the LOCKED Supercomputer page, are both out of Phase 17's authorized
+scope without explicit unlock.
+
+### 17-D — MCP + Apps Builder + Websites Builder + Games Builder —
+### DEFERRED_FUTURE / NOT_APPLICABLE
+
+Done criterion: *"External clients/builders generate without provider
+secret/routing exposure."*
+
+None of the four exist in this repository, in code or docs, under any name.
+This repository's own architecture contract section 31 already states "no
+MCP server exists... target architecture, not implemented," and Phase
+16-E's `AI_REACHABLE_TIER0_ACTION = NO` structural test already proves, by
+scanning for and finding zero MCP/AI-agent-facing files, that nothing
+reaches the admin boundary this way. Apps/Websites/Games Builder have zero
+code and zero doc mentions anywhere in this repository. No placeholder
+builder was created "to check a roadmap box," per this batch's own explicit
+instruction — there is nothing here to connect a generation core to.
+
+### 17-E — Model/prompt version changes + Phase 22 eval regression gate +
+### Braintrust MCP — DEFERRED_TO_PHASE_22
+
+Done criterion: *"No default route/prompt promotion without quality
+measurement."*
+
+Phase 22, an eval regression gate, and Braintrust are entirely unbuilt —
+confirmed by direct repository search (zero implementation hits of any
+kind). The only real artifact is a forward-declared landing pad Phase 7's
+own routing code already owns and Phase 17 does not touch:
+`src/lib/routing/route-quality.ts`/`routing-policy.ts` declare quality
+weight as "EMPTY TODAY, on purpose... declared so Phase 22 has a place to
+land, not so it can do something now," and
+`phase-7d-cost-quality-routing.e2e.test.ts` pins that no quality column or
+seed may exist before Phase 22. Nothing was implemented this batch, per
+explicit instruction not to build Phase 22 prematurely.
+`manifest-compiler.ts`'s new `MANIFEST_COMPILER_VERSION` constant (see
+below) is a real, separate governance track Phase 22 could eventually gate
+promotion against once it exists — that wiring remains Phase 22's to build,
+not claimed done here.
+
+### GenerationManifest hardening — `compilerVersion`
+
+Added `MANIFEST_COMPILER_VERSION` (currently `"1.0.0"`), distinct from
+`GENERATION_MANIFEST_VERSION`: one versions the compiler's DECISION logic
+(precedence order, conflict detection, default-filling), the other versions
+the manifest's FIELD SHAPE — the two can change independently. This is not
+an arbitrary constant with no governance: it mirrors the precedent
+`security-event-logger.ts`'s `policy_version` already established for
+policy decisions in this exact codebase (adapted here since the compiler's
+rules are code, not a separate data file the way
+`policies/data/actions.json` is) — a documented, hand-bumped-on-real-change
+convention, and a structural test pins that every compiled manifest carries
+it, so it cannot silently rot out of sync.
+
+### Tenant/project security, re-examined for the now-execution-capable path
+
+The original compile-only endpoint did not verify `projectId` ownership
+because its output was inert (never read, never granted access on the
+strength of it). Now that `/execute` performs real admission, this was
+re-examined and found already correctly handled: `createGeneration()`'s own
+`create_generation_tx` RPC verifies project ownership server-side and
+refuses a foreign project as not-found. Because `/execute` calls
+`createGeneration()` verbatim — never a reimplementation — this protection
+applies automatically; no new authorization code was written, and none was
+needed.
+
+### One canonical generation core — re-verified
+
+`/api/generate/route.ts` is byte-for-byte unmodified by this reconciliation
+batch. `POST /api/product-intelligence/execute` creates no second create-
+owner, no second Temporal-start owner, no second router, no second provider-
+adapter network, and no second billing reserve/settlement path — it is a
+second CALLER of the one existing owner of each, never a second owner.
+Verified by direct import audit: no file under `src/lib/product-intelligence/`
+or the two `src/app/api/product-intelligence/*` routes imports Temporal, the
+SQS/BullMQ transport, `src/lib/routing/health-aware-router.ts`, any
+`*-provider.ts` adapter, or `src/lib/credits.ts`.
+
+### External service boundary
+
+No new LLM provider, no Braintrust runtime, no new orchestration service was
+added or purchased. Every AI-assisted piece (`prompt-specialist.ts`,
+`safety-specialist.ts`) continues to reuse the same, already-shipped
+Cloudflare Workers AI functions from the original batch.
+
+### Regression (this reconciliation batch)
+
+Full suite: 1930/1933 pass. The 2 known pre-existing Phase-8 `ModelSelector`
+pins remain, unrelated and unmodified. The one remaining failure at the
+moment of this audit run is `phase-15a-slo-error-budget.e2e.test.ts`'s
+git-status-snapshot test, which fails only while the working tree carries
+uncommitted work — it clears once this batch is committed, as it has after
+every prior phase in this session. `tsc --noEmit`, `npm run build`, ESLint,
+`secrets:scan`, and `telemetry:scan` all pass clean. No new migration.
+
+### Not in this batch (reconciliation)
+
+A real Studio Profile system (blocked on the Phase 7 Control/Panel Schema
+Registry, per the correction above); consolidating the four+ duplicate
+per-studio control catalogs (would require editing locked Cinema Studio UI);
+Marketing Studio's default catalog wired to real generation (unauthorized UI
+change); any 17-C/17-D/17-E implementation (all genuinely absent or
+future-phase-gated, per the audits above); Phase 22 in any form. **Phase 17
+does not start Phase 18.**

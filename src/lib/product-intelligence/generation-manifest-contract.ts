@@ -22,6 +22,24 @@ import type { GenerationType, WorkflowType } from "@/lib/orchestration/types";
 export const GENERATION_MANIFEST_VERSION = "1.0.0";
 
 /**
+ * Version of the Manifest Compiler's DECISION logic (precedence order,
+ * conflict detection, default-filling) — distinct from
+ * GENERATION_MANIFEST_VERSION, which versions the manifest's FIELD SHAPE.
+ * The two can change independently: a new settings field is a manifest
+ * version bump with no compiler-logic change; a precedence-order change is
+ * a compiler version bump with no field-shape change.
+ *
+ * Governance: bumped by hand whenever manifest-compiler.ts's precedence or
+ * conflict-detection logic changes — the same convention
+ * security-event-logger.ts's `policy_version` established for policy
+ * decisions, adapted here since the compiler's rules are code, not a
+ * separate data file the way policies/data/actions.json is. This is NOT an
+ * arbitrary constant: a structural test pins that every compiled manifest
+ * carries it, so it cannot silently rot out of sync with real changes.
+ */
+export const MANIFEST_COMPILER_VERSION = "1.0.0";
+
+/**
  * Bounded outcome enum (Phase 17 brief, failure semantics). PROFILE_NOT_FOUND
  * is included per the brief's own enum even though the Phase 17 reality
  * audit confirmed no Studio Profile concept exists yet (MISSING) — it is
@@ -75,6 +93,7 @@ export interface ManifestReference {
  */
 export interface GenerationManifest {
   manifestVersion: typeof GENERATION_MANIFEST_VERSION;
+  compilerVersion: typeof MANIFEST_COMPILER_VERSION;
   intentId: string;
   projectId: string;
   generationType: GenerationType;
