@@ -94,11 +94,11 @@ export default function HeroCarousel() {
         aria-label="Scroll left"
         onClick={() => scrollByCard(-1)}
         disabled={!canScrollLeft}
-        className={`absolute left-0 top-0 flex h-[calc(100%-2.75rem)] w-14 items-center justify-center bg-gradient-to-r from-black/70 to-transparent transition-opacity duration-150 ${
+        className={`absolute left-0 top-0 z-30 flex h-[calc(100%-2.75rem)] w-14 cursor-pointer items-center justify-center bg-gradient-to-r from-black/80 to-transparent transition-all duration-150 ${
           canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-lg text-white">‹</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-xl font-bold text-white shadow-md transition-transform hover:scale-110 active:scale-95">‹</span>
       </button>
 
       <button
@@ -106,11 +106,11 @@ export default function HeroCarousel() {
         aria-label="Scroll right"
         onClick={() => scrollByCard(1)}
         disabled={!canScrollRight}
-        className={`absolute right-0 top-0 flex h-[calc(100%-2.75rem)] w-14 items-center justify-center bg-gradient-to-l from-black/70 to-transparent transition-opacity duration-150 ${
+        className={`absolute right-0 top-0 z-30 flex h-[calc(100%-2.75rem)] w-14 cursor-pointer items-center justify-center bg-gradient-to-l from-black/80 to-transparent transition-all duration-150 ${
           canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-lg text-white">›</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-xl font-bold text-white shadow-md transition-transform hover:scale-110 active:scale-95">›</span>
       </button>
     </div>
   );
