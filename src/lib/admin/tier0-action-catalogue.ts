@@ -130,20 +130,31 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     classification: "HIGH_RISK_TIER0",
     minimumRole: "tier0_admin",
     requiresStepUp: true,
-    // No explicit roadmap text mandates two-person specifically for THIS
-    // mutation path (setRouteEnabled, distinct from routing.control.set/
-    // clear above) — see BUSINESS_DECISION_REQUIRED in the 16-E report.
-    requiresTwoPerson: false,
+    // PHASE 19 CLOSURE FIX: the roadmap's own Phase 19 Two-Person Approval
+    // list (¶2344) names "provider enable/disable" explicitly, and
+    // `route.disable` (setRouteEnabled) is the REAL, production-reachable
+    // route/provider-disable path — see `router-admin-service.ts`'s header
+    // for why `setRouteEnabled` rather than `setRuntimeRoutingControl` is
+    // the one an admin route actually calls. Previously false with a
+    // BUSINESS_DECISION_REQUIRED note; that decision is now made. This
+    // activates the ALREADY-BUILT dual-control branch in
+    // `authorizeTier0Action` (the generic `admin_privileged_action_events`
+    // mechanism this file's own header describes) rather than adding a
+    // second one.
+    requiresTwoPerson: true,
     owner: "phase-7b (src/lib/routing/admin-route-service.ts, setRouteEnabled) via phase-16b (router-admin-service.ts)",
-    note: "Reversible (same function re-enables), but redirects production traffic — named explicitly in the 16-B/16-E handoff.",
+    note: "Reversible (same function re-enables), but redirects production traffic — named explicitly in the 16-B/16-E handoff and the roadmap's Two-Person Approval list.",
   },
   "queue.dlq.redrive": {
     classification: "HIGH_RISK_TIER0",
     minimumRole: "tier0_admin",
     requiresStepUp: true,
-    requiresTwoPerson: false,
+    // PHASE 19 CLOSURE FIX: roadmap ¶2344 names "DLQ redrive" explicitly on
+    // the Two-Person Approval list. Activates the same generic dual-control
+    // mechanism as `route.disable` above.
+    requiresTwoPerson: true,
     owner: "phase-15d (src/lib/aws/dlq-redrive/) via phase-16b (dlq-admin-service.ts)",
-    note: "Re-submits a message to a live provider queue. Named explicitly in the 16-B/16-E handoff.",
+    note: "Re-submits a message to a live provider queue. Named explicitly in the 16-B/16-E handoff and the roadmap's Two-Person Approval list.",
   },
   "queue.bullmq.retry": {
     classification: "OPERATOR_MUTATION",
@@ -157,9 +168,13 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     classification: "HIGH_RISK_TIER0",
     minimumRole: "tier0_admin",
     requiresStepUp: true,
-    requiresTwoPerson: false,
+    // PHASE 19 CLOSURE FIX: roadmap ¶2344 names "Temporal workflow cancel"
+    // explicitly on the Two-Person Approval list. Activates the same
+    // generic dual-control mechanism as `route.disable`/`queue.dlq.redrive`
+    // above.
+    requiresTwoPerson: true,
     owner: "phase-6rh (cancel-intent.ts, generation-starter.ts) via phase-16d (temporal-admin-service.ts)",
-    note: "Stops a running generation on an admin's own initiative, distinct from the owner's cancel path.",
+    note: "Stops a running generation on an admin's own initiative, distinct from the owner's cancel path. Named explicitly in the roadmap's Two-Person Approval list.",
   },
 } as const;
 

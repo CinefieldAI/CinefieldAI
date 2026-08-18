@@ -84,23 +84,37 @@ WASM and the embedded TypeScript evaluator agree on all 49 conformance
 cases — this repository's second-ever `.github/workflows/`
 (`policy-ci.yml`) enforces all of it on every `policies/**` change. 19-C
 (wire deployment gate + admin/AI action points to policy, add decision
-log) is **partial** — the new `deployment.production.apply` registry
-entry and `src/lib/deployment/deployment-policy-gate.ts` wire the
-deployment gate additively (Phase 14-D's `deployment-guard.ts` itself
-untouched), and the decision log requirement is met by reusing the
-existing `security_events` RPC chain (no new table); the AI
-remediation/provider-disable/admin-sensitive-action points named in 19-C
-already call `requirePolicy()` from earlier phases (14-B/16), and were
-not modified further this batch. 19-D (fail-safe, TTL/reversible/
-idempotent bounds, policy-change PR governance) is **code-complete** for
-the fail-safe and CI-required-check halves; TTL/reversible/idempotent
-runbook bounds on high-risk automation remain the existing Phase 14/15
-mechanisms, not duplicated here. A live OPA sidecar/service (the literal
-text of 19-A) was deliberately **not** stood up — `PolicyDecision.engine`
-stays `"embedded"` in every production path; the WASM build is CI-proof
-only. Full detail, evidence, and file-by-file citations: see
-`security-gates.md`'s "Phase 19 — Policy-as-Code & Automated Action
-Guardrails" section.
+log) is **partial** — a closure audit found the first pass overstated
+how much was actually wired (`routing.control.set/clear` were
+policy-gated but unreachable from any real admin route; the REAL
+provider/route-disable, DLQ-redrive and Temporal-cancel paths went
+through Tier-0 only, never through policy). A closure-fix batch corrected
+this: `requirePolicy()` is now the real, unconditional first gate in
+`router-admin-service.ts`, `dlq-admin-service.ts`, and
+`temporal-admin-service.ts`, and all three actions are now catalogued
+two-person per the roadmap's own list — which also surfaced and fixed the
+missing SECOND HALF of Phase 16-E's own dual-control mechanism (a real
+caller for the `record_admin_privileged_action_approval` RPC never
+existed; `decidePrivilegedAction` + `POST
+/api/admin/privileged-actions/decide` are that caller now). The
+`deployment.production.apply` registry entry and
+`src/lib/deployment/deployment-policy-gate.ts` still wire the deployment
+gate additively (Phase 14-D's `deployment-guard.ts` itself untouched) and
+are now also correctly marked two-person in the registry, with real
+enforcement ownership documented as CI/platform-external since no
+application-level deploy-execution path exists in this repo to gate; the
+decision log requirement is met by reusing the existing `security_events`
+RPC chain (no new table, no migration anywhere in this batch either).
+19-D (fail-safe, TTL/reversible/idempotent bounds, policy-change PR
+governance) is **code-complete** for the fail-safe and CI-required-check
+halves; TTL/reversible/idempotent runbook bounds on high-risk automation
+remain the existing Phase 14/15 mechanisms, not duplicated here. A live
+OPA sidecar/service (the literal text of 19-A) was deliberately **not**
+stood up — `PolicyDecision.engine` stays `"embedded"` in every production
+path; the WASM build is CI-proof only. Full detail, evidence, and
+file-by-file citations: see `security-gates.md`'s "Phase 19 —
+Policy-as-Code & Automated Action Guardrails" and "Phase 19 Closure Fix"
+sections.
 
 ---
 

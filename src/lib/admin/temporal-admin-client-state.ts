@@ -27,7 +27,9 @@ export type TemporalCancelPanelState =
       readonly alreadyRequested: boolean;
       readonly workflowSignalled: boolean;
     }
-  | { readonly kind: "tier0_authorization_required"; readonly reasonCode: string };
+  | { readonly kind: "tier0_authorization_required"; readonly reasonCode: string }
+  /** PHASE 19 CLOSURE FIX. requirePolicy() denied `temporal.workflow.cancel` before Tier-0 was ever evaluated. */
+  | { readonly kind: "policy_denied"; readonly reasonCode: string };
 
 function isDeniedBody(value: unknown): boolean {
   return typeof value === "object" && value !== null && (value as Record<string, unknown>).error === "not_found";
@@ -59,6 +61,9 @@ export function interpretCancelResponse(status: number, body: unknown): Temporal
   if (result.outcome === "CANCEL_NOT_ALLOWED") return { kind: "not_allowed", status: result.status };
   if (result.outcome === "TIER0_AUTHORIZATION_REQUIRED") {
     return { kind: "tier0_authorization_required", reasonCode: result.reasonCode };
+  }
+  if (result.outcome === "POLICY_DENIED") {
+    return { kind: "policy_denied", reasonCode: result.reasonCode };
   }
   return {
     kind: "requested",

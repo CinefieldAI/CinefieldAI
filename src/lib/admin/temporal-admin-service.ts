@@ -9,6 +9,8 @@ import { isTemporalGenerationEnabled } from "@/lib/temporal/config";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { createLogger } from "@/lib/observability/logger";
 import { authorizeTier0Action, recordTier0Execution } from "./tier0-authorization";
+import { requirePolicy } from "@/lib/policy/policy-gate";
+import { PolicyDenied } from "@/lib/policy/policy-contract";
 import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import {
   ADMIN_CANCEL_REASON_PATTERN,
@@ -114,6 +116,17 @@ export async function getAdminTemporalInspection(
  * "durable_write" })` already happened before this is called — this
  * function additionally validates its own inputs so it fails closed even if
  * ever called from anywhere else.
+ *
+ * PHASE 19 CLOSURE FIX. `requirePolicy` (action `temporal.workflow.cancel`)
+ * is the FIRST gate, unconditional — a policy DENY always blocks, before
+ * Tier-0 is evaluated and before the generation row is even re-read. It is
+ * a NECESSARY but not SUFFICIENT condition: Tier-0
+ * role/step-up/two-person still independently gates the same call, and
+ * `temporal.workflow.cancel` is now catalogued two-person per the
+ * roadmap's own Phase 19 Two-Person Approval list. `requestId` is optional
+ * so a caller can RESUME a pending two-person request (returned on the
+ * prior `TIER0_AUTHORIZATION_REQUIRED` response) rather than minting a
+ * fresh one every attempt, which could never be satisfied.
  */
 export async function performAdminTemporalCancel(
   admin: SupabaseClient,
@@ -126,6 +139,7 @@ export async function performAdminTemporalCancel(
     // this file never imports `require-step-up.ts` directly. Omitted (the
     // pre-16-E test calls) defaults to the honest fail-closed state.
     stepUp?: { assurance: AssuranceEvidence; elevation: ElevationVerdict };
+    requestId?: string;
   }
 ): Promise<TemporalAdminCancelResult> {
   const { generationId, adminActorId, reasonCode } = params;
@@ -133,6 +147,7 @@ export async function performAdminTemporalCancel(
     assurance: { state: "NOT_CONFIGURED" as const, verifiedAt: null },
     elevation: { elevated: false as const, reasonCode: "no_elevation" as const },
   };
+  const requestId = params.requestId ?? randomUUID();
 
   if (
     !GENERATION_ID_PATTERN.test(generationId) ||
@@ -143,7 +158,19 @@ export async function performAdminTemporalCancel(
     return { outcome: "INVALID_INPUT" };
   }
 
-  const requestId = randomUUID();
+  try {
+    await requirePolicy({
+      action: "temporal.workflow.cancel",
+      actor: { id: adminActorId, role: "route_admin", kind: "human" },
+      resource: { type: "generation", id: generationId },
+      correlationId: requestId,
+    });
+  } catch (caught) {
+    if (!(caught instanceof PolicyDenied)) throw caught;
+    auditLog.info("admin_temporal_cancel_attempted", { adminActorId, generationId, reasonCode, outcome: "POLICY_DENIED", policyReasonCode: caught.reason });
+    return { outcome: "POLICY_DENIED", reasonCode: caught.reason };
+  }
+
   const decision = await authorizeTier0Action(admin, {
     requestId,
     action: "temporal.workflow.cancel",
@@ -156,7 +183,7 @@ export async function performAdminTemporalCancel(
   });
   if (!decision.allowed) {
     auditLog.info("admin_temporal_cancel_attempted", { adminActorId, generationId, reasonCode, outcome: "TIER0_AUTHORIZATION_REQUIRED", tier0ReasonCode: decision.reasonCode });
-    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode };
+    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode, requestId };
   }
 
   let row: GenerationRow | null;

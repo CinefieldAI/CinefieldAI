@@ -261,10 +261,15 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // `requireAdminAccess()` (admin routes) or nothing extra (the opt-in
   // intelligence/internal routes) as an earlier check before the shared
   // rate-limit boundary runs.
+  // PHASE 19 CLOSURE FIX adds one more: `POST
+  // /api/admin/privileged-actions/decide` (a second, distinct admin
+  // approving/rejecting a pending two-person privileged action) — same
+  // convention as every other Phase 16 admin route, `requireAdminAccess()`
+  // ahead of the shared `guardRoute` boundary.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 42, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 43, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

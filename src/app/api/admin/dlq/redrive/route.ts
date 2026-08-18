@@ -25,6 +25,10 @@ import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guar
  * rate-limiter unavailability, unlike the `authenticated_read` class every
  * read-only 16-A/16-B route uses) — appropriate for a route that mutates
  * durable AWS/queue state.
+ *
+ * PHASE 19 CLOSURE FIX. Body also accepts an optional `requestId`, to
+ * resume a pending two-person request rather than starting a new one —
+ * see `dlq-admin-service.ts`'s header.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const csrfRefusal = guardPrivilegedMutation(request);
@@ -45,7 +49,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return privateJson({ error: "invalid_body" }, { status: 400 });
   }
 
-  const reason = (body as { reason?: unknown } | null)?.reason;
+  const { reason, requestId } = (body as { reason?: unknown; requestId?: unknown } | null) ?? {};
   if (!isValidDlqRedriveReason(reason)) {
     return privateJson({ error: "invalid_reason" }, { status: 400 });
   }
@@ -60,9 +64,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     getCurrentElevationVerdict(access.clerkUserId),
   ]);
 
-  const result = await executeAdminDlqRedrive(getSupabaseAdminClient(), access.clerkUserId as string, reason.trim(), {
-    assurance,
-    elevation,
-  });
+  const result = await executeAdminDlqRedrive(
+    getSupabaseAdminClient(),
+    access.clerkUserId as string,
+    reason.trim(),
+    { assurance, elevation },
+    typeof requestId === "string" && requestId.length > 0 ? requestId : undefined
+  );
   return privateJson(result);
 }

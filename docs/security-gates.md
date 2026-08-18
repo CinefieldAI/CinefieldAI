@@ -5849,3 +5849,147 @@ their own not-yet-built phases: data export/delete and retention/legal
 hold to Phase 23, admin review resolution and secret rotation to Phase 16,
 account suspension to Phase 12-D); a dedicated policy-change PR review
 bot beyond the required CI check. **Phase 19 does not start Phase 20.**
+
+## Phase 19 Closure Fix — 19-C real-path policy wiring + two-person reconciliation
+
+An independent master closure audit (read-only) re-verified the batch
+above and found the OPA/parity/fail-closed claims solid, but found 19-C's
+wiring materially thinner than reported: `routing.control.set/clear` were
+policy-gated but structurally unreachable from any real admin route
+(`router-admin-service.ts` deliberately calls `setRouteEnabled` instead —
+see its own header); the REAL, production-reachable route-disable path,
+plus `queue.dlq.redrive` and `temporal.workflow.cancel`, went through
+Tier-0 only and never through `requirePolicy()`; and the new
+`deployment.production.apply` entry's `requiresTwoPerson: false`
+contradicted the roadmap's own Two-Person Approval list (¶2344), which
+names "provider enable/disable", "DLQ redrive", "Temporal workflow
+cancel", and "deployment/rollback" explicitly. This batch closes those
+three gaps.
+
+### Real policy wiring, all three real paths
+
+`requirePolicy()` (action `route.disable` / `queue.dlq.redrive` /
+`temporal.workflow.cancel`) is now the unconditional first gate in
+`router-admin-service.ts`'s `setAdminRouteEnabled`, `dlq-admin-service.ts`'s
+`executeAdminDlqRedrive`, and `temporal-admin-service.ts`'s
+`performAdminTemporalCancel` — matching the exact composition
+`admin-route-service.ts`'s `routing.control.set/clear` already
+established, and never replacing `setRouteEnabled`/the redrive
+executor/`recordCancelIntent` themselves. A `PolicyDenied` is caught and
+returned as a new `POLICY_DENIED` outcome on each contract; any other
+thrown error propagates (fail-closed, never silently allowed). All three
+actions are registered in `policies/data/actions.json`
+(`requiredRoles: ["route_admin"]`, `requiresHumanApproval: false`,
+`requiresTwoPerson: true`), are never AI-allowlisted, and an AI actor is
+denied by `evaluatePolicy` before any role check runs.
+
+### The missing half of Phase 16-E's own dual-control mechanism
+
+`tier0-action-catalogue.ts` now sets `requiresTwoPerson: true` for all
+three actions — activating a branch that already existed inside
+`authorizeTier0Action` (`isTwoPersonSatisfied`, now `twoPersonStatus`) but
+had never been reachable in practice: no code anywhere called
+`record_admin_privileged_action_approval` (the Phase 16-E SQL RPC that
+structurally blocks self-approval), so a `requiresTwoPerson` action would
+have gone straight to `awaiting_second_approval` on a fresh, random
+`requestId` every single attempt and could never actually be satisfied.
+This batch closes that gap with:
+
+- `decidePrivilegedAction` (`tier0-authorization.ts`) — the real, missing
+  second caller. A second, distinct admin submits `approve`/`reject`
+  against an EXISTING `requestId`, gated by the same role/step-up bar the
+  original requester cleared. Approval calls the existing RPC unmodified;
+  rejection reuses the plain append-only event writer (`event: "rejected"`
+  — no RPC needed, no new migration).
+- `POST /api/admin/privileged-actions/decide` — the one new admin route,
+  same conventions as every other Phase 16 admin route
+  (`requireAdminAccess`, `guardPrivilegedMutation` CSRF guard,
+  `durable_write`, opaque 404 on denial). Never imports or calls a
+  canonical action owner.
+- The three admin-service functions now accept an optional `requestId` so
+  a caller can RESUME a pending request after a second admin approves it,
+  rather than minting a fresh, unsatisfiable one every attempt; the
+  `TIER0_AUTHORIZATION_REQUIRED` outcome now carries that `requestId`.
+- `authorizeTier0Action` no longer re-writes a fresh `'requested'` event
+  on every retry of the SAME `requestId` — a real bug this batch found
+  and fixed during its own test-writing: without this, a retry would
+  silently renew the request's apparent age, making expiry unreachable in
+  practice.
+- Request-window expiry (`PRIVILEGED_ACTION_REQUEST_TTL_SECONDS = 900`,
+  matching `step-up-auth.ts`'s `ELEVATED_SESSION_TTL_SECONDS` precedent)
+  and rejection are both real, application-level, terminal states
+  (`two_person_expired` / `two_person_rejected`), enforced against the
+  existing `occurred_at` column — no schema change.
+- **Approval bound to action + target** (an explicit closure-fix
+  requirement): the Phase 16-E RPC validates the requester by `request_id`
+  alone — it does not itself check that the action/target an approver
+  names still matches what was originally requested. `decidePrivilegedAction`
+  adds that check itself, refusing (`NO_MATCHING_REQUEST`) an approval or
+  rejection whose action/target don't match the original `'requested'`
+  event — a real, pre-existing binding gap this batch found and closed,
+  reusing the same audit table, no RPC change.
+
+`media.quarantine.release`'s own real, SQL-PK-enforced two-person
+mechanism (Phase 9-E) is untouched — this batch does not duplicate it.
+`routing.control.set/clear` remain `requiresTwoPerson: false`, unchanged:
+still real, still policy-gated, still structurally unreachable from any
+admin route, still `BUSINESS_DECISION_REQUIRED` per Phase 16-E's own
+catalogue note — genuinely out of this batch's scope, since the roadmap's
+Two-Person list names the REAL provider-disable path
+(`route.disable`/`setRouteEnabled`), not this dormant one.
+
+### Deployment two-person — contract corrected, ownership documented, nothing faked
+
+`deployment.production.apply`'s `requiresTwoPerson` is now `true`,
+correctly representing the roadmap's own list. It is **not** enforced
+downstream the way the three actions above now are, because no real
+application-level production-deploy EXECUTION path exists anywhere in
+this repository for either mechanism to gate (`evaluateDeployment()`
+itself, Phase 14-D, has never had a real caller either — deploys happen
+outside this codebase, via Vercel/CI). Inventing a downstream two-person
+check with nothing real to guard would be exactly the "fake
+application-level execution" this batch was told not to do.
+`deployment-policy-gate.ts`'s own header now documents the real owner,
+when a real deploy-trigger path exists to gate: a GitHub
+protected-environment required-reviewer rule (the same live-external
+mechanism `infra-apply.yml`, Phase 18, already uses), a Phase 16-E durable
+approval if the trigger is itself an in-repo admin action, or both — that
+decision belongs to whoever builds the real trigger.
+
+### Credit adjustment, user unblock, secret rotation — classified, not fabricated
+
+None of these three roadmap-named Two-Person actions has a real
+application owner/caller anywhere in this repository today (confirmed by
+exhaustive grep — no credit-adjustment mutation, no account-unblock
+mutation exists). `secret.rotate` and `account.suspend` were already
+correctly registered `implemented: false` (owners: Phase 12-D and Phase
+16 respectively) before this batch; no credit-adjustment action is
+registered at all, since inventing one merely to populate a checklist
+would be exactly the "fabricate endpoints" this batch was told not to do.
+All three are classified `NOT_REACHABLE` / `FUTURE_OWNER` — real,
+disclosed gaps for their respective future phases, not silently dropped.
+
+### Regression (this batch)
+
+Full suite: 2023/2026 pass — the 2 known pre-existing Phase-8
+`ModelSelector` pins (unrelated, unmodified) plus the git-status-dirty pin
+(clears on commit). A real bug was found and fixed DURING this batch's own
+test-writing (`authorizeTier0Action`'s duplicate-`'requested'`-event-on-retry
+defect above) — proof the new two-person test coverage exercises the real
+mechanism rather than a mock of it. `tsc --noEmit`, `npm run build`,
+ESLint on every touched file, `secrets:scan`, `telemetry:scan`: all clean.
+No Supabase migration. No locked product UI touched.
+
+### Not in this batch
+
+`routing.control.set/clear`'s admin-UI reachability (still
+`BUSINESS_DECISION_REQUIRED`, unchanged from Phase 16-E); a live
+application-level deploy-trigger for `deployment.production.apply` (none
+exists to build against); expiry/rejection at the SQL/RPC layer (both
+implemented in application code against the existing `occurred_at`
+column instead, deliberately avoiding a migration this batch was not
+asked to add); a UI for `POST /api/admin/privileged-actions/decide` (the
+route is real and functions correctly against a manually-shared
+`requestId`; an admin-panel affordance for it is a reasonable future
+slice, not required to close this gap). **This closure-fix batch does not
+start Phase 20.**

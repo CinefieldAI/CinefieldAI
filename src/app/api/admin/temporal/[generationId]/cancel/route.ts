@@ -10,13 +10,16 @@ import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guar
  * POST /api/admin/temporal/[generationId]/cancel — Phase 16-D admin-initiated
  * cancel.
  *
- * Body: `{ reasonCode: string }`. `durable_write` route class — never
- * reachable via GET. The ONE mutation this whole 16-D package allows (Action
- * Authority, spec section 16); every other 16-D surface is read-only. See
- * `temporal-admin-service.ts`'s `performAdminTemporalCancel` for the full
- * order of operations: fresh re-read, fail closed on a terminal generation,
- * then (and only then) the existing canonical cancel-intent write and
- * Temporal signal.
+ * Body: `{ reasonCode: string; requestId?: string }`. `durable_write` route
+ * class — never reachable via GET. The ONE mutation this whole 16-D
+ * package allows (Action Authority, spec section 16); every other 16-D
+ * surface is read-only. See `temporal-admin-service.ts`'s
+ * `performAdminTemporalCancel` for the full order of operations: policy
+ * gate, Tier-0 role/step-up/two-person, fresh re-read, fail closed on a
+ * terminal generation, then (and only then) the existing canonical
+ * cancel-intent write and Temporal signal. `requestId` (PHASE 19 CLOSURE
+ * FIX) is optional — omitted, a fresh pending two-person request is
+ * created; supplied, an attempt resumes that same pending request.
  */
 export async function POST(
   request: Request,
@@ -40,7 +43,7 @@ export async function POST(
     return privateJson({ outcome: "INVALID_INPUT" }, { status: 400 });
   }
 
-  const reasonCode = (body as { reasonCode?: unknown } | null)?.reasonCode;
+  const { reasonCode, requestId } = (body as { reasonCode?: unknown; requestId?: unknown } | null) ?? {};
   if (typeof reasonCode !== "string") {
     return privateJson({ outcome: "INVALID_INPUT" }, { status: 400 });
   }
@@ -59,6 +62,7 @@ export async function POST(
     adminActorId: access.clerkUserId as string,
     reasonCode,
     stepUp: { assurance, elevation },
+    requestId: typeof requestId === "string" && requestId.length > 0 ? requestId : undefined,
   });
   return privateJson(result);
 }

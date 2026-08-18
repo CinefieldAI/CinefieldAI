@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { getAdminTemporalInspection, performAdminTemporalCancel } from "@/lib/admin/temporal-admin-service";
+import { decidePrivilegedAction } from "@/lib/admin/tier0-authorization";
 import { getAdminSecurityCenter } from "@/lib/admin/security-center-service";
 import { getAdminIncidents } from "@/lib/admin/incidents-admin-service";
 import { buildRollbackView } from "@/lib/admin/deploy-restore-admin-service";
@@ -133,23 +134,51 @@ test("closure narrative: security event -> Security Center -> Incidents -> Tempo
 
   // 6. The operator cancels it — the ONE guarded action 16-D allows.
   //    Phase 16-E: temporal.workflow.cancel is now Tier-0-gated
-  //    (fail-closed) — this narrative's own point is the Temporal/incident
-  //    flow, not Tier-0, so it supplies valid Tier-0 role + step-up
-  //    evidence to pass that gate and reach the same assertion it always
-  //    made.
+  //    (fail-closed), and (Phase 19 closure fix) two-person — this
+  //    narrative's own point is the Temporal/incident flow, not Tier-0/
+  //    two-person themselves, so a second incident responder approves the
+  //    same pending request to pass that gate and reach the same
+  //    assertion it always made.
   const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
-  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "admin_incident_responder";
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS =
+    "admin_incident_responder,admin_incident_responder_approver_a,admin_incident_responder_approver_b";
+  const stepUp = {
+    assurance: { state: "VERIFIED" as const, verifiedAt: new Date().toISOString() },
+    elevation: { elevated: true as const, reasonCode: "verified" as const },
+  };
   let cancel;
   try {
-    cancel = await performAdminTemporalCancel(db as never, {
+    const first = await performAdminTemporalCancel(db as never, {
       generationId,
       adminActorId: "admin_incident_responder",
       reasonCode: "security_investigation",
-      stepUp: {
-        assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
-        elevation: { elevated: true, reasonCode: "verified" },
-      },
+      stepUp,
     });
+    if (first.outcome === "TIER0_AUTHORIZATION_REQUIRED" && first.reasonCode === "awaiting_second_approval") {
+      // TWO further, distinct incident responders approve — the RPC's own
+      // "two distinct people" threshold excludes the requester.
+      for (const approver of ["admin_incident_responder_approver_a", "admin_incident_responder_approver_b"]) {
+        const approval = await decidePrivilegedAction(db as never, {
+          requestId: first.requestId,
+          action: "temporal.workflow.cancel",
+          actorClerkUserId: approver,
+          target: { type: "generation", id: generationId },
+          decision: "approve",
+          assurance: stepUp.assurance,
+          elevation: stepUp.elevation,
+        });
+        assert.equal(approval.outcome, "APPROVAL_RECORDED");
+      }
+      cancel = await performAdminTemporalCancel(db as never, {
+        generationId,
+        adminActorId: "admin_incident_responder",
+        reasonCode: "security_investigation",
+        stepUp,
+        requestId: first.requestId,
+      });
+    } else {
+      cancel = first;
+    }
   } finally {
     if (originalTier0 !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = originalTier0;
     else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;

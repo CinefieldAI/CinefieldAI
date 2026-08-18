@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { authorizeTier0Action, recordTier0Execution, tier0EnforcementMode } from "@/lib/admin/tier0-authorization";
-import { queryPrivilegedActionAudit } from "@/lib/admin/privileged-action-audit";
+import { queryPrivilegedActionAudit, recordPrivilegedActionApproval } from "@/lib/admin/privileged-action-audit";
 import { resolveAdminPrivilegeRole } from "@/lib/admin/admin-privilege";
 import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
 import { FakeSupabaseClient } from "./fake-supabase";
@@ -89,11 +89,45 @@ test("done criterion: the full chain — role, step-up, and (for a two-person ac
   const db = new FakeSupabaseClient();
   const admin = db as never;
   const requestId = randomUUID();
-  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_t0_final";
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_t0_final,user_t0_final_approver_a,user_t0_final_approver_b";
   try {
     const verified: AssuranceEvidence = { state: "VERIFIED", verifiedAt: new Date().toISOString() };
     const elevated: ElevationVerdict = { elevated: true, reasonCode: "verified" };
 
+    // Role + step-up alone is NOT the full chain for a two-person action
+    // (`temporal.workflow.cancel`, roadmap Two-Person Approval list,
+     // ¶2344) — this is exactly the "for a two-person action, dual control"
+    // clause in this test's own title.
+    const firstAttempt = await authorizeTier0Action(admin, {
+      requestId,
+      action: "temporal.workflow.cancel",
+      actorClerkUserId: "user_t0_final",
+      target: { type: "generation", id: "gen-1" },
+      assurance: verified,
+      elevation: elevated,
+      mode: "enforce",
+    });
+    assert.equal(firstAttempt.allowed, false);
+    assert.equal(firstAttempt.reasonCode, "awaiting_second_approval");
+
+    // TWO further, DISTINCT admins approve the same request — the RPC's
+    // own "two distinct people" threshold excludes the requester.
+    let approval;
+    for (const approver of ["user_t0_final_approver_a", "user_t0_final_approver_b"]) {
+      approval = await recordPrivilegedActionApproval(admin, {
+        requestId,
+        actorClerkUserId: approver,
+        actionType: "temporal.workflow.cancel",
+        targetType: "generation",
+        targetId: "gen-1",
+        securityClassification: "HIGH_RISK_TIER0",
+      });
+      assert.equal(approval.recorded, true);
+    }
+    if (!approval?.recorded) return;
+    assert.equal(approval.satisfied, true);
+
+    // NOW, and only now, does the chain clear.
     const decision = await authorizeTier0Action(admin, {
       requestId,
       action: "temporal.workflow.cancel",
@@ -119,11 +153,14 @@ test("done criterion: the full chain — role, step-up, and (for a two-person ac
       outcome: "executed",
     });
 
-    const audit = await queryPrivilegedActionAudit(admin, { actorClerkUserId: "user_t0_final" });
+    // Unfiltered by actor: the "approved" event belongs to the SECOND admin,
+    // not the requester — a query scoped to the requester alone would
+    // silently miss it, which would be the wrong assertion to pin.
+    const audit = await queryPrivilegedActionAudit(admin, {});
     assert.equal(audit.outcome, "FOUND");
     if (audit.outcome !== "FOUND") return;
     const events = audit.rows.filter((r) => r.requestId === requestId).map((r) => r.event);
-    assert.deepEqual(new Set(events), new Set(["requested", "approved", "executed"]));
+    assert.deepEqual(new Set(events), new Set(["requested", "awaiting_second_approval", "approved", "executed"]));
   } finally {
     delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   }

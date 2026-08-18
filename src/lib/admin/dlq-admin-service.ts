@@ -7,6 +7,8 @@ import { createSupabaseDlqRedriveSource } from "@/lib/aws/dlq-redrive/adapters/s
 import { redriveOneProviderDlqMessage } from "@/lib/aws/dlq-redrive/adapters/sqs-dlq-redrive-executor";
 import { createLogger } from "@/lib/observability/logger";
 import { authorizeTier0Action, recordTier0Execution } from "./tier0-authorization";
+import { requirePolicy } from "@/lib/policy/policy-gate";
+import { PolicyDenied } from "@/lib/policy/policy-contract";
 import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import type { DlqAdminInvestigationResult, DlqAdminRedriveResult } from "./dlq-admin-contract";
 
@@ -36,14 +38,26 @@ export async function getAdminDlqInvestigation(admin: SupabaseClient): Promise<D
 
 /**
  * Phase 16-E. `queue.dlq.redrive` is catalogued `HIGH_RISK_TIER0` +
- * step-up-required (named explicitly in the 16-B/16-E handoff — see
- * `tier0-action-catalogue.ts`). The authorization decision ALWAYS runs and
- * is ALWAYS durably recorded; whether a `false` decision actually blocks
- * this function depends on `CINEFIELD_TIER0_ENFORCEMENT_MODE` — see
- * `tier0-authorization.ts`'s header for why hard-enforcement is not the
- * default in this batch. The redrive executor itself
- * (`redriveOneProviderDlqMessage`, Phase 15-D/16-B) is called completely
- * unmodified either way.
+ * step-up-required + (as of the Phase 19 closure fix) two-person, named
+ * explicitly in the 16-B/16-E handoff and the roadmap's own Phase 19
+ * Two-Person Approval list — see `tier0-action-catalogue.ts`. The Tier-0
+ * authorization decision ALWAYS runs and is ALWAYS durably recorded;
+ * whether a `false` decision actually blocks this function depends on
+ * `CINEFIELD_TIER0_ENFORCEMENT_MODE` — see `tier0-authorization.ts`'s
+ * header for why hard-enforcement is not the default in this batch. The
+ * redrive executor itself (`redriveOneProviderDlqMessage`, Phase 15-D/16-B)
+ * is called completely unmodified either way.
+ *
+ * PHASE 19 CLOSURE FIX. `requirePolicy` (action `queue.dlq.redrive`) is the
+ * FIRST gate, unconditional (unlike Tier-0's enforcement-mode split) — a
+ * policy DENY always blocks. It is a NECESSARY but not SUFFICIENT
+ * condition: Tier-0 role/step-up/two-person still independently gates the
+ * same call.
+ *
+ * `requestId` is optional so a caller can RESUME a pending two-person
+ * request (returned on the prior `TIER0_AUTHORIZATION_REQUIRED` response)
+ * rather than minting a fresh one every attempt, which could never be
+ * satisfied.
  */
 export async function executeAdminDlqRedrive(
   admin: SupabaseClient,
@@ -58,9 +72,22 @@ export async function executeAdminDlqRedrive(
   stepUp: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
     assurance: { state: "NOT_CONFIGURED", verifiedAt: null },
     elevation: { elevated: false, reasonCode: "no_elevation" },
-  }
+  },
+  requestId: string = randomUUID()
 ): Promise<DlqAdminRedriveResult> {
-  const requestId = randomUUID();
+  try {
+    await requirePolicy({
+      action: "queue.dlq.redrive",
+      actor: { id: actorClerkUserId, role: "route_admin", kind: "human" },
+      resource: { type: "dlq_message", id: null },
+      correlationId: requestId,
+    });
+  } catch (caught) {
+    if (!(caught instanceof PolicyDenied)) throw caught;
+    auditLog.info("dlq_redrive_attempted", { actorClerkUserId, reason, outcome: "POLICY_DENIED", policyReasonCode: caught.reason });
+    return { outcome: "POLICY_DENIED", reasonCode: caught.reason };
+  }
+
   const { assurance, elevation } = stepUp;
   const decision = await authorizeTier0Action(admin, {
     requestId,
@@ -74,7 +101,7 @@ export async function executeAdminDlqRedrive(
 
   if (!decision.allowed) {
     auditLog.info("dlq_redrive_attempted", { actorClerkUserId, reason, outcome: "TIER0_AUTHORIZATION_REQUIRED", tier0ReasonCode: decision.reasonCode });
-    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode };
+    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode, requestId };
   }
 
   const evidenceSource = createSupabaseDlqRedriveSource(admin);

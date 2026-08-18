@@ -8,6 +8,7 @@ import { redriveOneProviderDlqMessageWithClient } from "@/lib/aws/dlq-redrive/ad
 import type { AttemptRedriveEvidence, DlqRedriveEvidenceSource, GenerationRedriveEvidence } from "@/lib/aws/dlq-redrive/dlq-redrive-contract";
 import { getAdminBullmqHealth, retryAdminBullmqJob } from "@/lib/admin/bullmq-admin-service";
 import { setAdminRouteEnabled } from "@/lib/admin/router-admin-service";
+import { decidePrivilegedAction } from "@/lib/admin/tier0-authorization";
 import { commandIdFor, parseCommand, serializeCommand, type CommandWireV1 } from "@/lib/contracts/command-wire";
 import type { AssuranceEvidence, ElevationVerdict } from "@/lib/admin/step-up-auth";
 import { FakeSupabaseClient } from "./fake-supabase";
@@ -158,7 +159,13 @@ test("done criterion (d): disable a route through the existing Phase 7-B routing
   const original = process.env.ROUTE_ADMIN_CLERK_USER_IDS;
   const originalTier0 = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   process.env.ROUTE_ADMIN_CLERK_USER_IDS = "user_route_admin_closure";
-  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_route_admin_closure";
+  // PHASE 19 CLOSURE FIX: route.disable is now requiresTwoPerson: true —
+  // the RPC's own "two distinct people" threshold (required_approvals
+  // default 2) excludes the requester by construction, so TWO further,
+  // distinct Tier-0 admins must approve the same pending request before
+  // setRouteEnabled is ever reached.
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS =
+    "user_route_admin_closure,user_route_admin_closure_approver_a,user_route_admin_closure_approver_b";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
@@ -167,10 +174,56 @@ test("done criterion (d): disable a route through the existing Phase 7-B routing
       { id: routeId, model_id: "closure-model", priority: 100, enabled: true, status: "active", updated_at: "2026-01-01T00:00:00.000Z" },
     ];
 
-    const disabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, false, "closure proof", TIER0_STEP_UP);
+    const disableAttempt = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, false, "closure proof", TIER0_STEP_UP);
+    assert.equal(disableAttempt.outcome, "TIER0_AUTHORIZATION_REQUIRED");
+    if (disableAttempt.outcome !== "TIER0_AUTHORIZATION_REQUIRED") return;
+    for (const approver of ["user_route_admin_closure_approver_a", "user_route_admin_closure_approver_b"]) {
+      const disableApproval = await decidePrivilegedAction(db as never, {
+        requestId: disableAttempt.requestId,
+        action: "route.disable",
+        actorClerkUserId: approver,
+        target: { type: "model_route", id: routeId },
+        decision: "approve",
+        assurance: TIER0_STEP_UP.assurance,
+        elevation: TIER0_STEP_UP.elevation,
+      });
+      assert.equal(disableApproval.outcome, "APPROVAL_RECORDED");
+    }
+    const disabled = await setAdminRouteEnabled(
+      db as never,
+      "user_route_admin_closure",
+      routeId,
+      false,
+      "closure proof",
+      TIER0_STEP_UP,
+      disableAttempt.requestId
+    );
     assert.deepEqual(disabled, { outcome: "APPLIED", routeId, enabled: false });
 
-    const reEnabled = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, true, "closure proof done", TIER0_STEP_UP);
+    const reEnableAttempt = await setAdminRouteEnabled(db as never, "user_route_admin_closure", routeId, true, "closure proof done", TIER0_STEP_UP);
+    assert.equal(reEnableAttempt.outcome, "TIER0_AUTHORIZATION_REQUIRED");
+    if (reEnableAttempt.outcome !== "TIER0_AUTHORIZATION_REQUIRED") return;
+    for (const approver of ["user_route_admin_closure_approver_a", "user_route_admin_closure_approver_b"]) {
+      const reEnableApproval = await decidePrivilegedAction(db as never, {
+        requestId: reEnableAttempt.requestId,
+        action: "route.disable",
+        actorClerkUserId: approver,
+        target: { type: "model_route", id: routeId },
+        decision: "approve",
+        assurance: TIER0_STEP_UP.assurance,
+        elevation: TIER0_STEP_UP.elevation,
+      });
+      assert.equal(reEnableApproval.outcome, "APPROVAL_RECORDED");
+    }
+    const reEnabled = await setAdminRouteEnabled(
+      db as never,
+      "user_route_admin_closure",
+      routeId,
+      true,
+      "closure proof done",
+      TIER0_STEP_UP,
+      reEnableAttempt.requestId
+    );
     assert.deepEqual(reEnabled, { outcome: "APPLIED", routeId, enabled: true });
   } finally {
     if (original !== undefined) process.env.ROUTE_ADMIN_CLERK_USER_IDS = original;

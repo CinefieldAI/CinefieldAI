@@ -5,6 +5,8 @@ import { listRoutesForAdmin, setRouteEnabled } from "@/lib/routing/admin-route-s
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { createLogger } from "@/lib/observability/logger";
 import { authorizeTier0Action, recordTier0Execution } from "./tier0-authorization";
+import { requirePolicy } from "@/lib/policy/policy-gate";
+import { PolicyDenied } from "@/lib/policy/policy-contract";
 import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import {
   isValidRouteActionReason,
@@ -67,11 +69,24 @@ export async function getAdminRouterView(
 
 /**
  * Phase 16-E. `route.disable` is catalogued `HIGH_RISK_TIER0` +
- * step-up-required — named explicitly in the 16-B/16-E handoff
+ * step-up-required + (as of the Phase 19 closure fix) two-person —
+ * named explicitly in the 16-B/16-E handoff
  * (`docs/security-gates.md`'s "The minimum safe action gate (Phase 16-B,
- * not 16-E)" section). See `tier0-authorization.ts`'s header for the
- * shadow/enforce mode split; `setRouteEnabled` (Phase 7-B) is called
- * completely unmodified either way.
+ * not 16-E)" section) and in the roadmap's own Phase 19 Two-Person Approval
+ * list. See `tier0-authorization.ts`'s header for the shadow/enforce mode
+ * split; `setRouteEnabled` (Phase 7-B) is called completely unmodified
+ * either way.
+ *
+ * PHASE 19 CLOSURE FIX. `requirePolicy` (action `route.disable`) is the
+ * FIRST gate — matching `admin-route-service.ts`'s `routing.control.set`
+ * convention ("the gate lands here first") — and is a NECESSARY but not
+ * SUFFICIENT condition: Tier-0 role/step-up/two-person still independently
+ * gates the same call, and neither layer substitutes for the other.
+ *
+ * `requestId` is optional so a caller can RESUME a pending two-person
+ * request (returned on the prior `TIER0_AUTHORIZATION_REQUIRED` response)
+ * rather than minting a fresh one every attempt, which could never be
+ * satisfied.
  */
 export async function setAdminRouteEnabled(
   admin: SupabaseClient,
@@ -82,13 +97,26 @@ export async function setAdminRouteEnabled(
   stepUp: { assurance: AssuranceEvidence; elevation: ElevationVerdict } = {
     assurance: { state: "NOT_CONFIGURED", verifiedAt: null },
     elevation: { elevated: false, reasonCode: "no_elevation" },
-  }
+  },
+  requestId: string = randomUUID()
 ): Promise<RouterAdminSetEnabledResult> {
   if (!ROUTE_ID_PATTERN.test(routeId) || !isValidRouteActionReason(reason)) {
     return { outcome: "INVALID_TARGET" };
   }
 
-  const requestId = randomUUID();
+  try {
+    await requirePolicy({
+      action: "route.disable",
+      actor: { id: actorClerkUserId, role: "route_admin", kind: "human" },
+      resource: { type: "model_route", id: routeId },
+      correlationId: requestId,
+    });
+  } catch (caught) {
+    if (!(caught instanceof PolicyDenied)) throw caught;
+    auditLog.info("route_enabled_set_attempted", { actorClerkUserId, routeId, enabled, reason, outcome: "POLICY_DENIED", policyReasonCode: caught.reason });
+    return { outcome: "POLICY_DENIED", reasonCode: caught.reason };
+  }
+
   const decision = await authorizeTier0Action(admin, {
     requestId,
     action: "route.disable",
@@ -101,7 +129,7 @@ export async function setAdminRouteEnabled(
   });
   if (!decision.allowed) {
     auditLog.info("route_enabled_set_attempted", { actorClerkUserId, routeId, enabled, reason, outcome: "TIER0_AUTHORIZATION_REQUIRED", tier0ReasonCode: decision.reasonCode });
-    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode };
+    return { outcome: "TIER0_AUTHORIZATION_REQUIRED", reasonCode: decision.reasonCode, requestId };
   }
 
   let applied: boolean;

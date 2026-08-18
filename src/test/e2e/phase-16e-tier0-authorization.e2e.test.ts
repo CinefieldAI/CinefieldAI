@@ -232,7 +232,7 @@ test("authorizeTier0Action: assurance VERIFIED but no elevated session on file â
   }
 });
 
-test("authorizeTier0Action: role + verified assurance + a valid elevated session -> ALLOWED, even in enforce mode", async () => {
+test("authorizeTier0Action: role + verified assurance + a valid elevated session alone -> awaiting_second_approval, even in enforce mode (queue.dlq.redrive is two-person, Phase 19 closure fix)", async () => {
   const db = new FakeSupabaseClient();
   process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_t0";
   try {
@@ -246,9 +246,71 @@ test("authorizeTier0Action: role + verified assurance + a valid elevated session
       elevation: ELEVATED,
       mode: "enforce",
     });
-    assert.equal(decision.allowed, true);
-    assert.equal(decision.reasonCode, "allowed");
+    assert.equal(decision.allowed, false);
+    assert.equal(decision.reasonCode, "awaiting_second_approval");
     assert.equal(decision.role, "tier0_admin");
+  } finally {
+    delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
+  }
+});
+
+test("authorizeTier0Action: role + step-up + TWO further, distinct approvers -> ALLOWED, and execution is recorded separately from authorization", async () => {
+  const db = new FakeSupabaseClient();
+  // record_admin_privileged_action_approval's own "two distinct people"
+  // threshold (required_approvals default 2) excludes the requester by
+  // construction â€” see phase-16e-tier0-authorization.e2e.test.ts's own
+  // pre-existing "a second, distinct approver satisfies a 2-required
+  // threshold" test, which proves the SAME thing against this RPC directly.
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_t0,user_t0_approver_a,user_t0_approver_b";
+  try {
+    const requestId = randomUUID();
+    const first = await authorizeTier0Action(envelope(db), {
+      requestId,
+      action: "queue.dlq.redrive",
+      actorClerkUserId: "user_t0",
+      target: { type: "dlq_message", id: "msg-1" },
+      assurance: VERIFIED,
+      elevation: ELEVATED,
+      mode: "enforce",
+    });
+    assert.equal(first.allowed, false);
+    assert.equal(first.reasonCode, "awaiting_second_approval");
+
+    const firstApproval = await recordPrivilegedActionApproval(envelope(db), {
+      requestId,
+      actorClerkUserId: "user_t0_approver_a",
+      actionType: "queue.dlq.redrive",
+      targetType: "dlq_message",
+      targetId: "msg-1",
+      securityClassification: "HIGH_RISK_TIER0",
+    });
+    assert.equal(firstApproval.recorded, true);
+    if (firstApproval.recorded) assert.equal(firstApproval.satisfied, false);
+
+    const approval = await recordPrivilegedActionApproval(envelope(db), {
+      requestId,
+      actorClerkUserId: "user_t0_approver_b",
+      actionType: "queue.dlq.redrive",
+      targetType: "dlq_message",
+      targetId: "msg-1",
+      securityClassification: "HIGH_RISK_TIER0",
+    });
+    assert.equal(approval.recorded, true);
+    if (!approval.recorded) return;
+    assert.equal(approval.satisfied, true);
+
+    const retry = await authorizeTier0Action(envelope(db), {
+      requestId,
+      action: "queue.dlq.redrive",
+      actorClerkUserId: "user_t0",
+      target: { type: "dlq_message", id: "msg-1" },
+      assurance: VERIFIED,
+      elevation: ELEVATED,
+      mode: "enforce",
+    });
+    assert.equal(retry.allowed, true);
+    assert.equal(retry.reasonCode, "allowed");
+    assert.equal(retry.role, "tier0_admin");
 
     await recordTier0Execution(envelope(db), {
       requestId,
@@ -263,6 +325,7 @@ test("authorizeTier0Action: role + verified assurance + a valid elevated session
     if (result.outcome !== "FOUND") return;
     const events = result.rows.filter((r) => r.requestId === requestId).map((r) => r.event);
     assert.ok(events.includes("requested"));
+    assert.ok(events.includes("awaiting_second_approval"));
     assert.ok(events.includes("approved"));
     assert.ok(events.includes("executed"));
   } finally {

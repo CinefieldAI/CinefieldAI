@@ -13,6 +13,7 @@ import {
 } from "@/lib/aws/dlq-redrive/adapters/sqs-dlq-redrive-executor";
 import type { AttemptRedriveEvidence, DlqRedriveEvidenceSource, GenerationRedriveEvidence } from "@/lib/aws/dlq-redrive/dlq-redrive-contract";
 import { getAdminDlqInvestigation, executeAdminDlqRedrive } from "@/lib/admin/dlq-admin-service";
+import { decidePrivilegedAction } from "@/lib/admin/tier0-authorization";
 import { isValidDlqRedriveReason } from "@/lib/admin/dlq-admin-contract";
 import {
   commandIdFor,
@@ -284,14 +285,41 @@ test("executeAdminDlqRedrive logs an audit line with actor/reason/outcome and ne
   // Tier-0 — so it supplies valid Tier-0 role + step-up evidence to pass
   // that gate and reach the same NOT_CONFIGURED outcome it always asserted.
   const original = process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
-  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_admin_test";
+  // PHASE 19 CLOSURE FIX: queue.dlq.redrive is now requiresTwoPerson: true —
+  // the RPC's own "two distinct people" threshold (required_approvals
+  // default 2) excludes the requester by construction, so TWO further,
+  // distinct Tier-0 admins must approve the same pending request before the
+  // redrive executor is ever reached.
+  process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = "user_admin_test,user_admin_test_approver_a,user_admin_test_approver_b";
   try {
     const db = new FakeSupabaseClient();
     await installFakeSupabase(db);
-    const result = await executeAdminDlqRedrive(db as never, "user_admin_test", "investigating incident #42", {
-      assurance: { state: "VERIFIED", verifiedAt: new Date().toISOString() },
-      elevation: { elevated: true, reasonCode: "verified" },
-    });
+    const stepUp = {
+      assurance: { state: "VERIFIED" as const, verifiedAt: new Date().toISOString() },
+      elevation: { elevated: true as const, reasonCode: "verified" as const },
+    };
+    const first = await executeAdminDlqRedrive(db as never, "user_admin_test", "investigating incident #42", stepUp);
+    assert.equal(first.outcome, "TIER0_AUTHORIZATION_REQUIRED");
+    if (first.outcome !== "TIER0_AUTHORIZATION_REQUIRED") return;
+    for (const approver of ["user_admin_test_approver_a", "user_admin_test_approver_b"]) {
+      const approval = await decidePrivilegedAction(db as never, {
+        requestId: first.requestId,
+        action: "queue.dlq.redrive",
+        actorClerkUserId: approver,
+        target: { type: "dlq_message", id: null },
+        decision: "approve",
+        assurance: stepUp.assurance,
+        elevation: stepUp.elevation,
+      });
+      assert.equal(approval.outcome, "APPROVAL_RECORDED");
+    }
+    const result = await executeAdminDlqRedrive(
+      db as never,
+      "user_admin_test",
+      "investigating incident #42",
+      stepUp,
+      first.requestId
+    );
     assert.equal(result.outcome, "NOT_CONFIGURED");
   } finally {
     if (original !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = original;

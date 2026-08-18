@@ -44,6 +44,30 @@
       "implemented": true,
       "owner": "phase-7e"
     },
+    "route.disable": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-19"
+    },
+    "queue.dlq.redrive": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-19"
+    },
+    "temporal.workflow.cancel": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-19"
+    },
     "security.temporary_block.apply": {
       "critical": true,
       "requiredRoles": ["service"],
@@ -135,7 +159,7 @@
     "deployment.production.apply": {
       "critical": true,
       "requiredRoles": ["route_admin", "service"],
-      "requiresTwoPerson": false,
+      "requiresTwoPerson": true,
       "requiresHumanApproval": true,
       "implemented": true,
       "owner": "phase-19"

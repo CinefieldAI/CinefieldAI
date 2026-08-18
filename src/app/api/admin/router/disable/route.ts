@@ -9,11 +9,21 @@ import { guardPrivilegedMutation } from "@/lib/security/privileged-mutation-guar
 /**
  * POST /api/admin/router/disable — Phase 16-B route enable/disable.
  *
- * Body: `{ routeId: string; enabled: boolean; reason: string }`. `enabled`
- * carries both directions of this one reversible mutation (`false` to
- * disable, `true` to re-enable) — see `router-admin-service.ts`'s header
- * for why this reuses `setRouteEnabled` rather than a separate path per
- * direction. `durable_write` route class, never reachable via GET.
+ * Body: `{ routeId: string; enabled: boolean; reason: string; requestId?:
+ * string }`. `enabled` carries both directions of this one reversible
+ * mutation (`false` to disable, `true` to re-enable) — see
+ * `router-admin-service.ts`'s header for why this reuses `setRouteEnabled`
+ * rather than a separate path per direction. `durable_write` route class,
+ * never reachable via GET.
+ *
+ * PHASE 19 CLOSURE FIX. `requestId` is optional: omitted, a fresh pending
+ * two-person request is created and its id returned on
+ * `TIER0_AUTHORIZATION_REQUIRED`; supplied, an attempt resumes that SAME
+ * pending request (e.g. after a second admin approved it via
+ * `POST /api/admin/privileged-actions/decide`) rather than starting a new
+ * one. Never trusted for anything but continuity — shape validation and
+ * the actual two-person state live entirely server-side in
+ * `tier0-authorization.ts`.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const csrfRefusal = guardPrivilegedMutation(request);
@@ -34,7 +44,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     return privateJson({ error: "invalid_body" }, { status: 400 });
   }
 
-  const { routeId, enabled, reason } = (body as { routeId?: unknown; enabled?: unknown; reason?: unknown }) ?? {};
+  const { routeId, enabled, reason, requestId } =
+    (body as { routeId?: unknown; enabled?: unknown; reason?: unknown; requestId?: unknown }) ?? {};
   if (typeof routeId !== "string" || typeof enabled !== "boolean") {
     return privateJson({ outcome: "INVALID_TARGET" }, { status: 400 });
   }
@@ -54,7 +65,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     routeId,
     enabled,
     typeof reason === "string" ? reason.trim() : "",
-    { assurance, elevation }
+    { assurance, elevation },
+    typeof requestId === "string" && requestId.length > 0 ? requestId : undefined
   );
   return privateJson(result);
 }

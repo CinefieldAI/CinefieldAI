@@ -280,13 +280,13 @@
       "expect": { "decision": "REQUIRE_APPROVAL", "reason": "human_approval_required" }
     },
     {
-      "name": "Phase 19: deployment.production.apply is allowed once approval evidence is attached",
+      "name": "Phase 19: deployment.production.apply is allowed once approval evidence is attached, and says two-person is enforced elsewhere - the roadmap's own Two-Person Approval list names deployment/rollback",
       "patch": {
         "action": "deployment.production.apply",
         "actor": { "id": "user_admin_1", "role": "route_admin", "kind": "human" },
         "approvalEvidence": { "humanApproved": true }
       },
-      "expect": { "decision": "ALLOW", "reason": "allowed" }
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
     },
     {
       "name": "Phase 19: deployment.production.apply may also be driven by a service identity",
@@ -295,13 +295,64 @@
         "actor": { "id": "cinefield-deploy-ci", "role": "service", "kind": "service" },
         "approvalEvidence": { "humanApproved": true }
       },
-      "expect": { "decision": "ALLOW", "reason": "allowed" }
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
     },
     {
       "name": "Phase 19: deployment.production.apply refuses a member - only route_admin or service may trigger it",
       "patch": {
         "action": "deployment.production.apply",
         "actor": { "id": "user_2", "role": "member", "kind": "human" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 19 closure fix: route.disable is allowed for a route_admin, two-person enforced downstream by Tier-0",
+      "patch": {
+        "action": "route.disable",
+        "resource": { "type": "model_route", "id": "11111111-1111-4111-8111-111111111111" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "Phase 19 closure fix: route.disable refuses a member",
+      "patch": {
+        "action": "route.disable",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "resource": { "type": "model_route", "id": "11111111-1111-4111-8111-111111111111" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 19 closure fix: queue.dlq.redrive is allowed for a route_admin, two-person enforced downstream by Tier-0",
+      "patch": {
+        "action": "queue.dlq.redrive",
+        "resource": { "type": "dlq_message", "id": null }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "Phase 19 closure fix: queue.dlq.redrive refuses a member",
+      "patch": {
+        "action": "queue.dlq.redrive",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "resource": { "type": "dlq_message", "id": null }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 19 closure fix: temporal.workflow.cancel is allowed for a route_admin, two-person enforced downstream by Tier-0",
+      "patch": {
+        "action": "temporal.workflow.cancel",
+        "resource": { "type": "generation", "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "Phase 19 closure fix: temporal.workflow.cancel refuses a member",
+      "patch": {
+        "action": "temporal.workflow.cancel",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "resource": { "type": "generation", "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
       },
       "expect": { "decision": "DENY", "reason": "role_not_permitted" }
     }

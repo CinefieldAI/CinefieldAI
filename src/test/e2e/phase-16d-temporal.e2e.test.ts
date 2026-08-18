@@ -9,6 +9,8 @@ import {
   getAdminTemporalInspection,
   performAdminTemporalCancel,
 } from "@/lib/admin/temporal-admin-service";
+import { decidePrivilegedAction } from "@/lib/admin/tier0-authorization";
+import type { TemporalAdminCancelResult } from "@/lib/admin/temporal-admin-contract";
 import { ADMIN_CANCEL_REASON_PATTERN } from "@/lib/admin/temporal-admin-contract";
 import {
   interpretCancelResponse,
@@ -36,6 +38,46 @@ function withTier0<T>(actorIds: string, fn: () => Promise<T>): Promise<T> {
     if (original !== undefined) process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS = original;
     else delete process.env.CINEFIELD_ADMIN_TIER0_CLERK_USER_IDS;
   });
+}
+
+/**
+ * PHASE 19 CLOSURE FIX: `temporal.workflow.cancel` is now catalogued
+ * `requiresTwoPerson: true`. Every test below that needs the mutation to
+ * actually run (reach `recordCancelIntent`/`GENERATION_NOT_FOUND`/
+ * `CANCEL_NOT_ALLOWED` — all decided AFTER Tier-0 clears) now needs a
+ * SECOND, distinct Tier-0 admin to approve the same pending `requestId`
+ * first. This helper does exactly that and returns the retried attempt's
+ * result, so each test still proves the ONE behavior it always asserted.
+ */
+async function performAdminTemporalCancelWithTwoPersonSatisfied(
+  db: FakeSupabaseClient,
+  params: { generationId: string; adminActorId: string; reasonCode: string; stepUp: { assurance: AssuranceEvidence; elevation: ElevationVerdict } },
+  // record_admin_privileged_action_approval's own "two distinct people"
+  // threshold (required_approvals default 2) excludes the requester by
+  // construction — two FURTHER, distinct admins must approve.
+  approverClerkUserIds: readonly [string, string] = [
+    `${params.adminActorId}_approver_a`,
+    `${params.adminActorId}_approver_b`,
+  ]
+): Promise<TemporalAdminCancelResult> {
+  const first = await performAdminTemporalCancel(db as never, params);
+  if (first.outcome !== "TIER0_AUTHORIZATION_REQUIRED" || first.reasonCode !== "awaiting_second_approval") {
+    return first;
+  }
+  let lastApproval;
+  for (const approver of approverClerkUserIds) {
+    lastApproval = await decidePrivilegedAction(db as never, {
+      requestId: first.requestId,
+      action: "temporal.workflow.cancel",
+      actorClerkUserId: approver,
+      target: { type: "generation", id: params.generationId },
+      decision: "approve",
+      assurance: params.stepUp.assurance,
+      elevation: params.stepUp.elevation,
+    });
+  }
+  if (lastApproval?.outcome !== "APPROVAL_RECORDED" || !lastApproval.satisfied) return first;
+  return performAdminTemporalCancel(db as never, { ...params, requestId: first.requestId });
 }
 
 /**
@@ -194,9 +236,9 @@ test("cancel: invalid input (bad generation id, bad reason code, missing actor) 
 });
 
 test("cancel: unknown generation id is GENERATION_NOT_FOUND", async () => {
-  await withTier0("admin_1", async () => {
+  await withTier0("admin_1,admin_1_approver_a,admin_1_approver_b", async () => {
     const db = new FakeSupabaseClient();
-    const result = await performAdminTemporalCancel(db as never, {
+    const result = await performAdminTemporalCancelWithTwoPersonSatisfied(db, {
       generationId: randomUUID(),
       adminActorId: "admin_1",
       reasonCode: "operator_investigation",
@@ -207,10 +249,10 @@ test("cancel: unknown generation id is GENERATION_NOT_FOUND", async () => {
 });
 
 test("cancel: a terminal generation fails closed as CANCEL_NOT_ALLOWED, never mutated", async () => {
-  await withTier0("admin_1", async () => {
+  await withTier0("admin_1,admin_1_approver_a,admin_1_approver_b", async () => {
     const db = new FakeSupabaseClient();
     const id = seedGeneration(db, { status: "completed" });
-    const result = await performAdminTemporalCancel(db as never, {
+    const result = await performAdminTemporalCancelWithTwoPersonSatisfied(db, {
       generationId: id,
       adminActorId: "admin_1",
       reasonCode: "operator_investigation",
@@ -223,10 +265,10 @@ test("cancel: a terminal generation fails closed as CANCEL_NOT_ALLOWED, never mu
 });
 
 test("cancel: a non-terminal generation is cancelled, the real owner id is used (never the admin's), and Temporal signalling is honestly false when unconfigured", async () => {
-  await withTier0("admin_1", async () => {
+  await withTier0("admin_1,admin_1_approver_a,admin_1_approver_b", async () => {
     const db = new FakeSupabaseClient();
     const id = seedGeneration(db, { status: "queued", clerk_user_id: "user_owner" });
-    const result = await performAdminTemporalCancel(db as never, {
+    const result = await performAdminTemporalCancelWithTwoPersonSatisfied(db, {
       generationId: id,
       adminActorId: "admin_1",
       reasonCode: "operator_investigation",
@@ -245,21 +287,26 @@ test("cancel: a non-terminal generation is cancelled, the real owner id is used 
 });
 
 test("cancel: repeated admin cancel is idempotent (alreadyRequested), and re-reads current state fresh on the second call", async () => {
-  await withTier0("admin_1,admin_2", async () => {
+  // Four distinct Tier-0 admins: admin_1 requests the first cancel
+  // (approved by admin_3 + admin_4, the RPC's own 2-distinct-approver
+  // threshold), then admin_2 requests a SEPARATE cancel attempt on the
+  // same, already-cancelled generation (also approved by admin_3 +
+  // admin_4, neither of whom is ITS requester either) — two-person is
+  // per-request, so idempotency must hold even though each attempt is its
+  // own fully-satisfied two-person cycle.
+  await withTier0("admin_1,admin_2,admin_3,admin_4", async () => {
     const db = new FakeSupabaseClient();
     const id = seedGeneration(db, { status: "queued" });
-    await performAdminTemporalCancel(db as never, {
-      generationId: id,
-      adminActorId: "admin_1",
-      reasonCode: "first_try",
-      stepUp: TIER0_STEP_UP,
-    });
-    const second = await performAdminTemporalCancel(db as never, {
-      generationId: id,
-      adminActorId: "admin_2",
-      reasonCode: "second_try",
-      stepUp: TIER0_STEP_UP,
-    });
+    await performAdminTemporalCancelWithTwoPersonSatisfied(
+      db,
+      { generationId: id, adminActorId: "admin_1", reasonCode: "first_try", stepUp: TIER0_STEP_UP },
+      ["admin_3", "admin_4"]
+    );
+    const second = await performAdminTemporalCancelWithTwoPersonSatisfied(
+      db,
+      { generationId: id, adminActorId: "admin_2", reasonCode: "second_try", stepUp: TIER0_STEP_UP },
+      ["admin_3", "admin_4"]
+    );
     assert.equal(second.outcome, "CANCEL_REQUESTED");
     if (second.outcome !== "CANCEL_REQUESTED") return;
     assert.equal(second.alreadyRequested, true);

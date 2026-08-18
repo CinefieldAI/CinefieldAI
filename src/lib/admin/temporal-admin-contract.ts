@@ -76,5 +76,18 @@ export type TemporalAdminCancelResult =
       readonly alreadyRequested: boolean;
       readonly workflowSignalled: boolean;
     }
-  /** Phase 16-E. Only reachable under `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce` — see `tier0-authorization.ts`. */
-  | { readonly outcome: "TIER0_AUTHORIZATION_REQUIRED"; readonly reasonCode: string };
+  /**
+   * PHASE 19 CLOSURE FIX. The Phase 12-E policy gate (`requirePolicy`,
+   * action `temporal.workflow.cancel`) is now the FIRST check
+   * `performAdminTemporalCancel` makes — see that function's header. A
+   * policy DENY blocks before Tier-0 is evaluated and before the
+   * generation row is even re-read.
+   */
+  | { readonly outcome: "POLICY_DENIED"; readonly reasonCode: string }
+  /**
+   * Phase 16-E, extended by the Phase 19 closure fix. `requestId` carries
+   * across retries so a second admin's approval (`decidePrivilegedAction`)
+   * can satisfy the SAME pending request. Only reachable under
+   * `CINEFIELD_TIER0_ENFORCEMENT_MODE=enforce` — see `tier0-authorization.ts`.
+   */
+  | { readonly outcome: "TIER0_AUTHORIZATION_REQUIRED"; readonly reasonCode: string; readonly requestId: string };

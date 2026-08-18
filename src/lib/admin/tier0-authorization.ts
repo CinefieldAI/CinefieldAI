@@ -9,6 +9,7 @@ import { tier0ActionEntry, type Tier0SecurityClassification } from "./tier0-acti
 import type { AssuranceEvidence, ElevationVerdict } from "./step-up-auth";
 import {
   recordPrivilegedActionEvent,
+  recordPrivilegedActionApproval,
   queryPrivilegedActionAudit,
   type PrivilegedActionEvent,
 } from "./privileged-action-audit";
@@ -80,6 +81,8 @@ export type Tier0DecisionReasonCode =
   | "step_up_not_configured"
   | "step_up_not_elevated"
   | "awaiting_second_approval"
+  | "two_person_rejected"
+  | "two_person_expired"
   | "allowed";
 
 export interface Tier0AuthorizationParams {
@@ -159,17 +162,28 @@ export async function authorizeTier0Action(
 
   const role = resolveAdminPrivilegeRole(params.actorClerkUserId);
 
-  await recordPrivilegedActionEvent(admin, {
-    requestId: params.requestId,
-    event: "requested",
-    actorClerkUserId: params.actorClerkUserId,
-    actionType: params.action,
-    targetType: params.target.type,
-    targetId: params.target.id ?? null,
-    reasonCode: params.reasonCode ?? null,
-    correlationId: params.correlationId ?? null,
-    securityClassification: entry.classification,
-  });
+  // PHASE 19 CLOSURE FIX: a caller retrying a pending two-person request
+  // passes back the SAME `requestId` (see `decidePrivilegedAction`'s
+  // header). Re-writing a fresh 'requested' event on every retry would
+  // both clutter the audit trail with duplicates AND, worse, silently
+  // renew the request's apparent age on every attempt — defeating the
+  // whole point of the request-window expiry check below, since a stale
+  // request would look freshly requested forever as long as SOMEONE kept
+  // retrying it. Only the FIRST attempt for a given `requestId` logs
+  // 'requested'.
+  if (!(await originalRequestFor(admin, params.requestId))) {
+    await recordPrivilegedActionEvent(admin, {
+      requestId: params.requestId,
+      event: "requested",
+      actorClerkUserId: params.actorClerkUserId,
+      actionType: params.action,
+      targetType: params.target.type,
+      targetId: params.target.id ?? null,
+      reasonCode: params.reasonCode ?? null,
+      correlationId: params.correlationId ?? null,
+      securityClassification: entry.classification,
+    });
+  }
 
   const deny = async (reasonCode: Tier0DecisionReasonCode, outcomeDetail: string): Promise<Tier0Decision> => {
     await recordPrivilegedActionEvent(admin, {
@@ -212,11 +226,14 @@ export async function authorizeTier0Action(
   }
 
   if (entry.requiresTwoPerson) {
-    const satisfied = await isTwoPersonSatisfied(admin, params.requestId);
-    if (!satisfied) {
+    const status = await twoPersonStatus(admin, params.requestId);
+    if (!status.satisfied) {
+      // "awaiting_second_approval" is recorded for the ordinary pending
+      // case; a rejection or expiry is not re-labelled as "still waiting" —
+      // the audit trail should say which of the three actually happened.
       await recordPrivilegedActionEvent(admin, {
         requestId: params.requestId,
-        event: "awaiting_second_approval",
+        event: status.reason === "rejected" ? "rejected" : "awaiting_second_approval",
         actorClerkUserId: params.actorClerkUserId,
         actionType: params.action,
         targetType: params.target.type,
@@ -224,13 +241,19 @@ export async function authorizeTier0Action(
         reasonCode: params.reasonCode ?? null,
         correlationId: params.correlationId ?? null,
         securityClassification: entry.classification,
+        outcomeDetail: status.reason === "expired" ? "two_person_expired" : null,
       });
       return {
         allowed: false,
         requestId: params.requestId,
         action: params.action,
         classification: entry.classification,
-        reasonCode: "awaiting_second_approval",
+        reasonCode:
+          status.reason === "rejected"
+            ? "two_person_rejected"
+            : status.reason === "expired"
+              ? "two_person_expired"
+              : "awaiting_second_approval",
         role,
         enforcementMode: mode,
       };
@@ -261,16 +284,202 @@ export async function authorizeTier0Action(
   };
 }
 
-/** Distinct-approver count for `requestId`, satisfied at >= 2 (see the migration's dual-control mechanism). */
-async function isTwoPersonSatisfied(admin: SupabaseClient, requestId: string): Promise<boolean> {
+/**
+ * PHASE 19 CLOSURE FIX. A pending two-person request older than this is
+ * stale, not silently still open — the same reasoning
+ * `ELEVATED_SESSION_TTL_SECONDS` (`step-up-auth.ts`) already applies to an
+ * elevated session, applied here to a pending approval. Enforced entirely
+ * in application code against `occurred_at`, which already exists on every
+ * row — no new column, no migration.
+ */
+export const PRIVILEGED_ACTION_REQUEST_TTL_SECONDS = 900;
+
+type TwoPersonStatus =
+  | { readonly satisfied: true; readonly approvals: number }
+  | { readonly satisfied: false; readonly reason: "awaiting_second_approval" | "rejected" | "expired"; readonly approvals: number };
+
+/**
+ * The real two-person state for `requestId`: satisfied at >= 2 DISTINCT
+ * approvers (see the migration's dual-control mechanism), but a rejection
+ * or an expired request window are terminal/stale states, never silently
+ * folded into "still waiting".
+ */
+async function twoPersonStatus(admin: SupabaseClient, requestId: string): Promise<TwoPersonStatus> {
   const result = await queryPrivilegedActionAudit(admin, {});
-  if (result.outcome !== "FOUND") return false;
+  if (result.outcome !== "FOUND") {
+    return { satisfied: false, reason: "awaiting_second_approval", approvals: 0 };
+  }
+  const rows = result.rows.filter((row) => row.requestId === requestId);
+
+  if (rows.some((row) => (row.event as PrivilegedActionEvent) === "rejected")) {
+    return { satisfied: false, reason: "rejected", approvals: 0 };
+  }
+
+  // `String(x ?? "")` rather than a bare `.localeCompare` — matches the
+  // defensive pattern the fake harness's own RPC mock already uses for the
+  // same column; a durable audit row's timestamp should never be trusted
+  // present by type alone.
+  const requested = [...rows]
+    .filter((row) => (row.event as PrivilegedActionEvent) === "requested")
+    .sort((a, b) => String(a.occurredAt ?? "").localeCompare(String(b.occurredAt ?? "")))[0];
+  if (requested?.occurredAt) {
+    const ageSeconds = (Date.now() - Date.parse(requested.occurredAt)) / 1000;
+    if (Number.isFinite(ageSeconds) && ageSeconds > PRIVILEGED_ACTION_REQUEST_TTL_SECONDS) {
+      return { satisfied: false, reason: "expired", approvals: 0 };
+    }
+  }
+
   const approvers = new Set(
-    result.rows
-      .filter((row) => row.requestId === requestId && (row.event as PrivilegedActionEvent) === "approved")
-      .map((row) => row.actorClerkUserId)
+    rows.filter((row) => (row.event as PrivilegedActionEvent) === "approved").map((row) => row.actorClerkUserId)
   );
-  return approvers.size >= 2;
+  if (approvers.size >= 2) return { satisfied: true, approvals: approvers.size };
+  return { satisfied: false, reason: "awaiting_second_approval", approvals: approvers.size };
+}
+
+/**
+ * PHASE 19 CLOSURE FIX — the missing half of the dual-control mechanism.
+ *
+ * `authorizeTier0Action` records a "requested" event and, for a
+ * `requiresTwoPerson` action, returns `awaiting_second_approval` with the
+ * `requestId` it just recorded. Before this function existed there was no
+ * real caller that let a SECOND, distinct admin ever satisfy that
+ * request — `record_admin_privileged_action_approval` (the SQL RPC) was
+ * real and tested, but nothing in the application called it. This is that
+ * caller: a second admin submits a decision against an EXISTING
+ * `requestId`, gated by the SAME role/step-up bar `authorizeTier0Action`
+ * itself enforces (a `HIGH_RISK_TIER0` action's approver must clear the
+ * same bar its requester did — approving is not a lesser act than
+ * requesting). The requester-cannot-approve-their-own-request guarantee is
+ * enforced structurally inside the RPC itself, not here.
+ *
+ * Rejection reuses the plain append-only event writer — no RPC needed,
+ * since a rejection has no "distinct approver" invariant to protect.
+ */
+export type PrivilegedActionDecisionOutcome =
+  | { readonly outcome: "INVALID_REQUEST" }
+  | { readonly outcome: "UNKNOWN_ACTION" }
+  | { readonly outcome: "ROLE_NOT_PERMITTED" }
+  | { readonly outcome: "STEP_UP_REQUIRED"; readonly reasonCode: "step_up_not_configured" | "step_up_not_elevated" }
+  | { readonly outcome: "SELF_APPROVAL_BLOCKED" }
+  | { readonly outcome: "NO_MATCHING_REQUEST" }
+  | { readonly outcome: "REQUEST_EXPIRED" }
+  | { readonly outcome: "REJECTED" }
+  | { readonly outcome: "APPROVAL_RECORDED"; readonly approvals: number; readonly required: number; readonly satisfied: boolean };
+
+/** The original 'requested' event for `requestId`, or null if none exists. */
+async function originalRequestFor(
+  admin: SupabaseClient,
+  requestId: string
+): Promise<{ actionType: string; targetType: string; targetId: string | null; occurredAt: string | null } | null> {
+  const result = await queryPrivilegedActionAudit(admin, {});
+  if (result.outcome !== "FOUND") return null;
+  const requested = result.rows
+    .filter((row) => row.requestId === requestId && (row.event as PrivilegedActionEvent) === "requested")
+    .sort((a, b) => String(a.occurredAt ?? "").localeCompare(String(b.occurredAt ?? "")))[0];
+  if (!requested) return null;
+  return {
+    actionType: requested.actionType,
+    targetType: requested.targetType,
+    targetId: requested.targetId,
+    occurredAt: requested.occurredAt ?? null,
+  };
+}
+
+export async function decidePrivilegedAction(
+  admin: SupabaseClient,
+  params: {
+    requestId: string;
+    action: string;
+    actorClerkUserId: string;
+    target: { type: string; id?: string | null };
+    decision: "approve" | "reject";
+    reasonCode?: string | null;
+    correlationId?: string | null;
+    assurance: AssuranceEvidence;
+    elevation: ElevationVerdict;
+  }
+): Promise<PrivilegedActionDecisionOutcome> {
+  if (
+    !REQUEST_ID_PATTERN.test(params.requestId) ||
+    !ACTION_NAME_PATTERN.test(params.action) ||
+    !isValidTarget(params.target)
+  ) {
+    return { outcome: "INVALID_REQUEST" };
+  }
+
+  const entry = tier0ActionEntry(params.action);
+  if (!entry) return { outcome: "UNKNOWN_ACTION" };
+
+  const role = resolveAdminPrivilegeRole(params.actorClerkUserId);
+  if (!role || !roleAtLeast(role, entry.minimumRole)) {
+    return { outcome: "ROLE_NOT_PERMITTED" };
+  }
+  if (entry.requiresStepUp) {
+    if (params.assurance.state !== "VERIFIED") {
+      return { outcome: "STEP_UP_REQUIRED", reasonCode: "step_up_not_configured" };
+    }
+    if (!params.elevation.elevated) {
+      return { outcome: "STEP_UP_REQUIRED", reasonCode: "step_up_not_elevated" };
+    }
+  }
+
+  // "Approval bound to action + target": `record_admin_privileged_action_
+  // approval` (the SQL RPC) validates the requester by request_id alone —
+  // it does not itself check that the action/target an approver names
+  // still matches what was originally requested. A caller could otherwise
+  // approve `route.disable` against a `requestId` that was actually
+  // requested for `queue.dlq.redrive`. Checked here, in the one place both
+  // decision branches (approve AND reject) pass through.
+  const original = await originalRequestFor(admin, params.requestId);
+  if (!original) return { outcome: "NO_MATCHING_REQUEST" };
+  if (original.actionType !== params.action || original.targetType !== params.target.type || (original.targetId ?? null) !== (params.target.id ?? null)) {
+    return { outcome: "NO_MATCHING_REQUEST" };
+  }
+  if (original.occurredAt) {
+    const ageSeconds = (Date.now() - Date.parse(original.occurredAt)) / 1000;
+    if (Number.isFinite(ageSeconds) && ageSeconds > PRIVILEGED_ACTION_REQUEST_TTL_SECONDS) {
+      return { outcome: "REQUEST_EXPIRED" };
+    }
+  }
+
+  if (params.decision === "reject") {
+    await recordPrivilegedActionEvent(admin, {
+      requestId: params.requestId,
+      event: "rejected",
+      actorClerkUserId: params.actorClerkUserId,
+      actionType: params.action,
+      targetType: params.target.type,
+      targetId: params.target.id ?? null,
+      reasonCode: params.reasonCode ?? null,
+      correlationId: params.correlationId ?? null,
+      securityClassification: entry.classification,
+      outcomeDetail: "rejected_by_approver",
+    });
+    return { outcome: "REJECTED" };
+  }
+
+  const result = await recordPrivilegedActionApproval(admin, {
+    requestId: params.requestId,
+    actorClerkUserId: params.actorClerkUserId,
+    actionType: params.action,
+    targetType: params.target.type,
+    targetId: params.target.id ?? null,
+    reasonCode: params.reasonCode ?? null,
+    correlationId: params.correlationId ?? null,
+    securityClassification: entry.classification,
+    requiredApprovals: 2,
+  });
+  if (!result.recorded) {
+    return result.reason === "self_approval_blocked"
+      ? { outcome: "SELF_APPROVAL_BLOCKED" }
+      : { outcome: "NO_MATCHING_REQUEST" };
+  }
+  return {
+    outcome: "APPROVAL_RECORDED",
+    approvals: result.approvals,
+    required: result.required,
+    satisfied: result.satisfied,
+  };
 }
 
 /**
