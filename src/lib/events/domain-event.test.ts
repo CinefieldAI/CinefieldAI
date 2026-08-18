@@ -159,6 +159,50 @@ test("traceId is carried through when supplied, omitted when not", () => {
 });
 
 // ---------------------------------------------------------------------------
+// PHASE 20 CORRECTIVE BATCH — tenantId
+// ---------------------------------------------------------------------------
+
+test("tenantId is carried through when supplied, omitted when not — an old-style envelope without one is exactly as valid", () => {
+  const base = {
+    eventType: "generation.completed",
+    eventVersion: 1,
+    aggregateType: "generation",
+    aggregateId: "gen-1",
+    payload: {},
+  };
+  const withTenant = buildDomainEvent({ ...base, tenantId: "user_clerk_123" });
+  assert.equal(withTenant.tenantId, "user_clerk_123");
+
+  const withoutTenant = buildDomainEvent(base);
+  assert.equal(withoutTenant.tenantId, undefined);
+  assert.ok(!("tenantId" in withoutTenant), "an absent tenant must not even appear as an undefined key — matches traceId's own convention");
+});
+
+test("an empty-string tenantId is rejected, matching the SQL check constraint's own bound (1-255 chars)", () => {
+  const base = {
+    eventType: "generation.completed",
+    eventVersion: 1,
+    aggregateType: "generation",
+    aggregateId: "gen-1",
+    payload: {},
+  };
+  assert.throws(() => buildDomainEvent({ ...base, tenantId: "" }), /invalid tenantId/);
+});
+
+test("tenantId does not appear inside payload — it is an envelope field, never folded into the fact being described", () => {
+  const event = buildDomainEvent({
+    eventType: "generation.completed",
+    eventVersion: 1,
+    aggregateType: "generation",
+    aggregateId: "gen-1",
+    payload: { generationId: "g1", provider: "mock" },
+    tenantId: "user_clerk_123",
+  });
+  assert.ok(!("tenantId" in event.payload));
+  assert.equal(Object.keys(event).filter((k) => k.toLowerCase().includes("tenant")).length, 1, "exactly one tenant-shaped field on the envelope — no alternate/duplicate name");
+});
+
+// ---------------------------------------------------------------------------
 // TOPIC CONTRACT
 // ---------------------------------------------------------------------------
 

@@ -6141,3 +6141,117 @@ TypeScript CLIENT (only types are generated — an actual fetch-wrapper
 client was not requested by this batch's own scope and would be
 incremental work on top of the types that now exist). **Phase 20 does not
 start Phase 21.**
+
+### Phase 20 corrective batch — event tenant context + HTTP breaking-change detection
+
+The closure audit found two real gaps the batch above left open: the
+envelope had no tenant/workspace field despite the roadmap naming one, and
+20-D only ever covered Kafka event schemas — an HTTP path/shape could be
+removed or narrowed with nothing catching it. Both are now closed.
+
+**Canonical wire field: `tenantId`.** Chosen over `workspaceId` on a
+15-vs-4 file terminology audit across the codebase (Clerk's own `sub`
+claim, `profiles.clerk_user_id`, and every existing per-user scoping
+already say "tenant", not "workspace"; nothing user-facing uses
+"workspace" as an isolation boundary today). Added as `tenantId?: string`
+to `DomainEventEnvelope` (`domain-event.ts`) and to `ENVELOPE_SCHEMA`
+(`schema-registry.ts`) as an OPTIONAL property, never `required` — an
+old-style envelope with no tenant is exactly as valid as before, so no
+version bump was needed anywhere in `event-schemas.ts`.
+
+**Real producer threading, not a decorative field.** The actual gap was
+`claim_outbox_events()`: `outbox_events.tenant_id` (added Phase 20's own
+`20260824000000_event_contract_and_tenant_routing.sql`, captured
+automatically at write time inside `emit_outbox_event` from the
+aggregate) was never SELECTed by the claim function, so it never reached
+the TypeScript layer or the Kafka-bound envelope even though the column
+existed. `supabase/migrations/20260830000000_outbox_claim_tenant_id.sql`
+adds `tenant_id text` to `claim_outbox_events()`'s output — via
+`DROP FUNCTION` + `CREATE FUNCTION` (Postgres refuses `CREATE OR REPLACE`
+across a changed `RETURNS TABLE` column set), with
+`ALTER FUNCTION OWNER TO`/`REVOKE`/`GRANT EXECUTE` re-stated since `DROP`
+removes prior grants. The write side (`emit_outbox_event`) is untouched —
+its own migration header already documents that a caller-supplied tenant
+parameter was tried once and reverted (two ways to supply a tenant is two
+ways to supply the wrong one), so the fix only widens the READ side.
+`outbox-repository.ts` gained an exported pure `outboxRowToEnvelope()`
+mapping the new column onto `event.tenantId` (absent on the row means
+absent on the envelope, never guessed or defaulted); `kafka-producer.ts`
+carries it onto the wire as a `tenant-id` Kafka message header, the same
+place `traceId` already travels. The full real path is now: `outbox_events
+.tenant_id → claim_outbox_events() → outboxRowToEnvelope() →
+DomainEventEnvelope.tenantId → publishDomainEvent() → Kafka header`.
+
+**Bounded routing/correlation evidence only** — the same discipline
+`traceId` already follows. `tenantId` is never read as auth, billing, or
+project-ownership authority anywhere in the events/kafka/outbox modules
+(checked this batch); Supabase RLS, Clerk `auth()`, and the credit RPCs
+remain the only real authorities for those concerns, completely
+unmodified.
+
+**20-D extended to HTTP: `scripts/check-openapi-compatibility.ts`.** A
+narrow structural checker for exactly the OpenAPI subset
+`generate-openapi.ts` emits (inline `paths[path][method]` request/response
+schemas plus `components.schemas`, no `$ref`/`allOf`) — not a generic
+OpenAPI diff engine. Reuses the SAME `classifyCompatibility()` the event
+checker already uses, in both directions (request-shape narrowing breaks
+old callers; response-shape narrowing breaks old consumers). Reads the
+base ref via the identical `git show <ref>:<path>` / `CONTRACT_BASE_REF`
+model `check-contract-compatibility.ts` already established — one
+baseline store, not two. Flags `PATH_REMOVED`, `METHOD_REMOVED`,
+`REQUEST_BODY_REMOVED`, `REQUEST_NARROWED`, `RESPONSE_REMOVED`,
+`RESPONSE_NARROWED`, `SCHEMA_REMOVED`; a new path, new method, new schema,
+or optional-field addition is structurally never visited by the
+removal/narrowing loops (they iterate the BASE document's keys looking
+for absence in the current one), so none of those can ever be flagged.
+
+**Proven working, not just written** — this batch injected and reverted,
+against the real committed `openapi/cinefield.json` on `origin/main`:
+(A) removed `/api/admin/privileged-actions/decide` entirely → `PATH_REMOVED`,
+exit 1; (B) removed its `POST` method → `METHOD_REMOVED`, exit 1;
+(C) moved its optional `targetId` request field into `required` →
+`REQUEST_NARROWED: ... targetId: became required`, exit 1; (D) removed its
+`satisfied` response field → `RESPONSE_NARROWED: ... satisfied: removed`,
+exit 1. Then, separately, injected three compatible changes in one batch —
+a brand-new `/api/health/ready` path, a new optional request field, a new
+optional response field — and confirmed exit 0, no finding. All injections
+reverted; `git diff` against the committed file showed only the legitimate
+`tenantId` addition from regeneration, nothing left over. Both compatibility
+scripts were also proven to return `NOT_CONFIGURED` (exit 2, not a silent
+pass) when pointed at a base ref that does not exist.
+
+**CI wiring.** `contract-ci.yml` gained a fifth step,
+`npm run contracts:check-openapi-compat`, using the identical
+`CONTRACT_BASE_REF` env var the event-schema step already sets (one
+env-var name appears exactly twice in the workflow — one baseline model).
+No `continue-on-error` anywhere in the file. `paths:` trigger extended to
+include the new script.
+
+**Regression (this batch).** The Phase 20 contract-governance suite plus
+the event/schema-registry/outbox unit suites: 101/101 pass (8 new unit
+tests across `domain-event.test.ts`/`schema-registry.test.ts`, 11 new
+structural/behavioral tests in `phase-20-contract-governance.e2e.test.ts`).
+Full regression: 2267/2327 pass; every one of the 60 failures was
+independently attributed to one of four causes, none a code regression
+from this batch: 53 are the pre-existing Windows
+`Failed to start ephemeral server: Zugriff verweigert (os error 5)`
+Temporal test-server environment failure (present identically on this
+machine before this batch — classified `ENVIRONMENT_FAILURE` per explicit
+instruction, application code was not touched to hide it); 3 are OTHER
+phases' own blunt `git status --short -- supabase/` migration-guard tests
+(`phase-13-health-foundation`, `phase-14b-ai-pr-safety`,
+`phase-15a-slo-error-budget`) spuriously failing only because this batch's
+own new, not-yet-committed migration file was sitting in the working tree
+at test-run time — self-resolving the moment it is committed, not a defect
+in this batch's own code; 2 are the same pre-existing Phase-8
+`ModelSelector` pin mismatches already known and unmodified from the
+original Phase 20 batch; 2 are a pre-existing, unrelated `iac-contract.test.ts`
+assertion about `infra/README.md` wording that neither this batch nor its
+files touch. `tsc --noEmit`, `npm run build`, ESLint on every touched file,
+`secrets:scan`, `telemetry:scan`: all clean — the one pre-existing
+`require()`-style-import lint error in `schema-registry.test.ts` sits
+outside every line this batch added or touched.
+
+**Not in this batch.** OpenAPI coverage of routes beyond the original two;
+a live GitHub branch-protection "required" setting for `contract-ci.yml`
+(unchanged deferred external action). **Phase 20 does not start Phase 21.**

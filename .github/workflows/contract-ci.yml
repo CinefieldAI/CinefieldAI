@@ -5,19 +5,24 @@ name: Contract CI (Phase 20-C/20-D)
 # this is the "breaking schema değişikliği CI'da bloklanıyor" gate 20-D
 # names, proving a change before it can merge, not after.
 #
-# Four real, independent proofs, all of which must pass:
-#   1. `npm run contracts:check-compat` — no already-published event schema
-#      version was mutated incompatibly in place (Phase 20-D breaking-change
-#      detection, against the real PR base branch, not a static snapshot).
+# Five real, independent proofs, all of which must pass:
+#   1. `npm run contracts:check-compat` — no already-published Kafka event
+#      schema version was mutated incompatibly in place (against the real PR
+#      base branch, not a static snapshot).
 #   2. `npm run contracts:generate` regenerates openapi/cinefield.json and
 #      src/lib/contracts/generated/api-types.ts fresh, then `git diff
 #      --exit-code` proves nothing drifted from what is committed — the
 #      generated file was not hand-edited and the source schema was not
 #      changed without regenerating.
-#   3. The real event/schema-registry/domain-event contract test suite
+#   3. `npm run contracts:check-openapi-compat` (Phase 20 corrective batch)
+#      — no HTTP path/method was removed and no request/response shape
+#      narrowed for the routes `openapi/cinefield.json` documents, against
+#      the SAME PR base branch the event check uses — one baseline model,
+#      not two.
+#   4. The real event/schema-registry/domain-event contract test suite
 #      (Phase 6R.15) plus the SQL<->TypeScript event contract guard
-#      (Phase 11-A).
-#   4. `tsc --noEmit`.
+#      (Phase 11-A) plus the Phase 20 contract-governance suite.
+#   5. `tsc --noEmit`.
 
 on:
   pull_request:
@@ -29,6 +34,7 @@ on:
       - "scripts/generate-openapi.ts"
       - "scripts/generate-api-types.ts"
       - "scripts/check-contract-compatibility.ts"
+      - "scripts/check-openapi-compatibility.ts"
       - ".github/workflows/contract-ci.yml"
 
 permissions:
@@ -62,6 +68,11 @@ jobs:
           npm run contracts:generate
           git diff --exit-code -- openapi/cinefield.json src/lib/contracts/generated/api-types.ts \
             || (echo "::error::openapi/cinefield.json or the generated API types are out of date — run 'npm run contracts:generate' and commit the result." && exit 1)
+
+      - name: HTTP/OpenAPI breaking-change detection (Phase 20 corrective batch, vs. PR base)
+        env:
+          CONTRACT_BASE_REF: origin/${{ github.event.pull_request.base.ref || 'main' }}
+        run: npm run contracts:check-openapi-compat
 
       - name: Event/schema-registry contract tests (Phase 6R.15)
         run: |

@@ -42,6 +42,8 @@ export const MAX_EVENT_PAYLOAD_BYTES = 65_536;
 const AGGREGATE_ID_PATTERN = /^[A-Za-z0-9_:-]{1,200}$/;
 /** e.g. "generation.completed" — family prefix, dotted, bounded. */
 const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
+/** Matches `outbox_events.tenant_id`'s own CHECK constraint (1-255 chars) — the real value is a Clerk user id, an identifier, never free text. */
+const TENANT_ID_PATTERN = /^.{1,255}$/;
 
 const KNOWN_FAMILIES: ReadonlySet<string> = new Set<EventFamily>([
   "generation",
@@ -68,6 +70,19 @@ export interface DomainEventEnvelope {
   occurredAt: string;
   /** Correlation id, matching the SQS command wire's existing `traceId` convention. */
   traceId?: string;
+  /**
+   * PHASE 20 CORRECTIVE BATCH. Bounded routing/correlation evidence ONLY —
+   * never authorization, never billing, never project ownership. Mirrors
+   * `outbox_events.tenant_id`, itself resolved server-side, once, at write
+   * time (`outbox_tenant_for_aggregate()` — see
+   * `20260824000000_event_contract_and_tenant_routing.sql`'s own header for
+   * why a caller cannot supply this directly: exactly one resolution path,
+   * so no call site can pass a mistaken tenant). Optional and additive — an
+   * event built before this field existed, or one whose aggregate resolved
+   * to no owner, is exactly as valid without it as with it; no consumer may
+   * treat its absence as an error.
+   */
+  tenantId?: string;
   payload: Record<string, unknown>;
 }
 
@@ -78,6 +93,16 @@ export type BuildEventInput = {
   aggregateId: string;
   payload: Record<string, unknown>;
   traceId?: string;
+  /**
+   * PHASE 20 CORRECTIVE BATCH. For the STANDALONE enqueue path only
+   * (`enqueueEventStandalone`, itself non-transactional — see that
+   * function's own header). The transactional path (`emit_outbox_event`)
+   * NEVER accepts a caller-supplied tenant; it resolves one itself from the
+   * aggregate, and this field is silently unused when that path is taken —
+   * see `outbox-repository.ts`'s `enqueueEventStandalone` for exactly where
+   * that distinction is enforced.
+   */
+  tenantId?: string;
   /** Supply ONLY to preserve identity across an application-level retry. Otherwise generated. */
   eventId?: string;
   /** Supply ONLY when the fact's real time differs from now. Otherwise generated. */
@@ -157,6 +182,9 @@ export function buildDomainEvent(input: BuildEventInput): DomainEventEnvelope {
   if (input.occurredAt !== undefined && Number.isNaN(Date.parse(input.occurredAt))) {
     throw new Error("domain-event: invalid occurredAt");
   }
+  if (input.tenantId !== undefined && !TENANT_ID_PATTERN.test(input.tenantId)) {
+    throw new Error("domain-event: invalid tenantId");
+  }
 
   return {
     eventId: input.eventId ?? crypto.randomUUID(),
@@ -166,6 +194,7 @@ export function buildDomainEvent(input: BuildEventInput): DomainEventEnvelope {
     aggregateId: input.aggregateId,
     occurredAt: input.occurredAt ?? new Date().toISOString(),
     ...(input.traceId !== undefined ? { traceId: input.traceId } : {}),
+    ...(input.tenantId !== undefined ? { tenantId: input.tenantId } : {}),
     payload: input.payload,
   };
 }

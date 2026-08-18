@@ -179,6 +179,49 @@ test("eventId and traceId survive the consumer boundary intact", () => {
   assert.equal(decision.traceId, "trace-abc", "the correlation id is propagated");
 });
 
+// ---------------------------------------------------------------------------
+// PHASE 20 CORRECTIVE BATCH — tenantId on the envelope
+// ---------------------------------------------------------------------------
+
+test("a valid event carrying tenantId is accepted", () => {
+  const result = validateDomainEvent(validEvent({ tenantId: "user_clerk_123" }));
+  assert.deepEqual(result, { ok: true, schemaName: "cinefield.generation.completed" });
+});
+
+test("an old-style event with no tenantId at all remains fully valid — backward compatible by construction", () => {
+  const event = validEvent();
+  assert.ok(!("tenantId" in event), "the fixture itself carries no tenantId, proving the absence case");
+  const result = validateDomainEvent(event);
+  assert.deepEqual(result, { ok: true, schemaName: "cinefield.generation.completed" });
+});
+
+test("an empty-string tenantId on the wire is rejected by the envelope schema, same bound buildDomainEvent enforces", () => {
+  const result = validateDomainEvent(validEvent({ tenantId: "" }));
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.reason, "malformed_envelope");
+});
+
+test("the consumer sees the SAME tenantId a producer built — no re-derivation, no alternate field", () => {
+  const event = buildDomainEvent({
+    eventType: "provider.submitted",
+    eventVersion: 1,
+    aggregateType: "generation",
+    aggregateId: randomUUID(),
+    tenantId: "user_clerk_456",
+    payload: {
+      generationId: randomUUID(),
+      attemptId: randomUUID(),
+      provider: "mock",
+      providerJobId: "mock-job-1",
+      submissionEvidence: "job",
+    },
+  });
+  const decision = inspectInboundEvent(JSON.stringify(event));
+  assert.equal(decision.decision, "handle");
+  if (decision.decision !== "handle") return;
+  assert.equal(decision.event.tenantId, "user_clerk_456");
+});
+
 test("a consumer REJECTS an invalid event rather than retrying it forever", () => {
   for (const raw of [
     "{not json",
@@ -350,6 +393,25 @@ test("a fully valid event still publishes, carrying its eventId as the message k
   assert.equal(sent.length, 1);
   assert.equal(sent[0].topic, "generation.events");
   assert.equal(sent[0].messages[0].key, event.eventId, "the dedup identity is the partition key");
+});
+
+test("PHASE 20 CORRECTIVE BATCH: tenantId, when present, reaches the Kafka message as a header, matching trace-id's own precedent — absent when the event has none", async () => {
+  const { publishDomainEvent } = await import("@/lib/kafka/kafka-producer");
+  const sent: { topic: string; messages: { key: string; value: string; headers?: Record<string, string> }[] }[] = [];
+  const producer = {
+    async send(r: { topic: string; messages: { key: string; value: string; headers?: Record<string, string> }[] }) {
+      sent.push(r);
+    },
+    async disconnect() {},
+  };
+
+  const withTenant = validEvent({ tenantId: "user_clerk_789" });
+  await publishDomainEvent(withTenant as never, producer);
+  assert.equal(sent[0].messages[0].headers?.["tenant-id"], "user_clerk_789");
+
+  const withoutTenant = validEvent();
+  await publishDomainEvent(withoutTenant as never, producer);
+  assert.ok(!("tenant-id" in (sent[1].messages[0].headers ?? {})), "no tenant-id header when the event carries none");
 });
 
 test("an invalid event is reported as invalid even when no producer exists", async () => {

@@ -196,6 +196,11 @@
             "minLength": 1,
             "maxLength": 200
           },
+          "tenantId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
           "payload": {
             "type": "object",
             "additionalProperties": false

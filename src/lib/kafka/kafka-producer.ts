@@ -127,6 +127,11 @@ export async function publishDomainEvent(
             "event-type": event.eventType,
             "event-version": String(event.eventVersion),
             ...(event.traceId ? { "trace-id": event.traceId } : {}),
+            // PHASE 20 CORRECTIVE BATCH. Bounded routing evidence, same as
+            // trace-id — lets a consumer filter/route by tenant without
+            // deserializing the payload. Never authorization: a consumer
+            // still resolves its own access decisions independently.
+            ...(event.tenantId ? { "tenant-id": event.tenantId } : {}),
           },
         },
       ],

@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { EVENT_SCHEMAS } from "@/lib/events/event-schemas";
 import { ENVELOPE_SCHEMA, classifyCompatibility } from "@/lib/events/schema-registry";
+import { outboxRowToEnvelope } from "@/lib/events/outbox-repository";
 import type { JsonSchema } from "@/lib/events/json-schema";
 
 /**
@@ -179,5 +180,125 @@ describe("Phase 20 — sensitive data boundary", () => {
       }
     }
     assert.doesNotMatch(raw, /"example"\s*:\s*"(sk-|ey[A-Za-z0-9_-]{20,}|AKIA)/);
+  });
+});
+
+// ---- Phase 20 corrective batch: event tenant context -----------------------
+
+describe("Phase 20 corrective batch — event tenant context", () => {
+  test("ENVELOPE_SCHEMA declares tenantId as optional (additive, no version bump needed) with the same bound as the SQL check constraint", () => {
+    assert.ok(!(ENVELOPE_SCHEMA.required ?? []).includes("tenantId"), "tenantId must stay optional — an old envelope without it is exactly as valid");
+    const field = ENVELOPE_SCHEMA.properties?.tenantId;
+    assert.ok(field);
+    assert.equal(field?.minLength, 1);
+    assert.equal(field?.maxLength, 255);
+  });
+
+  test("outboxRowToEnvelope threads a real outbox row's tenant_id onto the wire envelope's tenantId — the one place the SQL column crosses onto Kafka", () => {
+    const claimed = outboxRowToEnvelope({
+      event_id: "3d9e7c2a-5b1f-4a8e-9c6d-2b3a4c5d6e7f",
+      event_type: "generation.completed",
+      event_version: 1,
+      aggregate_type: "generation",
+      aggregate_id: "gen-1",
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      tenant_id: "user_clerk_real_row",
+      payload: { generationId: "g1", provider: "mock" },
+      publish_attempts: 1,
+      claim_token: "11111111-1111-4111-8111-111111111111",
+    });
+    assert.equal(claimed.event.tenantId, "user_clerk_real_row");
+  });
+
+  test("outboxRowToEnvelope leaves tenantId absent when the row's tenant_id is null — never guessed, never defaulted to a fallback", () => {
+    const claimed = outboxRowToEnvelope({
+      event_id: "3d9e7c2a-5b1f-4a8e-9c6d-2b3a4c5d6e7f",
+      event_type: "generation.completed",
+      event_version: 1,
+      aggregate_type: "generation",
+      aggregate_id: "gen-1",
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      tenant_id: null,
+      payload: {},
+      publish_attempts: 1,
+      claim_token: "11111111-1111-4111-8111-111111111111",
+    });
+    assert.ok(!("tenantId" in claimed.event));
+  });
+
+  test("enqueueEventStandalone never forwards event.tenantId to emit_outbox_event — the SQL function resolves its own tenant, by design, per its own migration header", () => {
+    const src = stripComments(read("src/lib/events/outbox-repository.ts"));
+    const fnBody = src.slice(
+      src.indexOf("export async function enqueueEventStandalone"),
+      src.indexOf("\nexport async function claimPendingEvents")
+    );
+    assert.doesNotMatch(fnBody, /p_tenant_id/, "no call site may pass a tenant — the migration's own history warns this was tried once and reverted");
+  });
+
+  test("the tenant is bounded routing/correlation evidence only — no route/module treats it as auth, billing, or project-ownership authority", () => {
+    for (const file of ["src/lib/events/domain-event.ts", "src/lib/events/outbox-repository.ts", "src/lib/kafka/kafka-producer.ts"]) {
+      const src = stripComments(read(file));
+      assert.doesNotMatch(src, /tenantId\s*===?\s*.*(role|admin|billing|credit|balance)/i);
+    }
+  });
+
+  test("the new migration only widens claim_outbox_events' OUTPUT columns — same input signature, grants re-stated not altered, no other table touched", () => {
+    const migration = read("supabase/migrations/20260830000000_outbox_claim_tenant_id.sql");
+    const sqlOnly = migration.replace(/--.*$/gm, ""); // the header prose freely names emit_outbox_event/CREATE/DROP as explanation — only real statements count
+    assert.match(migration, /DROP FUNCTION IF EXISTS "public"\."claim_outbox_events"\(integer, integer\)/);
+    assert.match(migration, /CREATE FUNCTION "public"\."claim_outbox_events"\(/);
+    assert.match(migration, /"tenant_id" "text"/);
+    assert.match(migration, /GRANT EXECUTE ON FUNCTION "public"\."claim_outbox_events"\(integer, integer\) TO "service_role"/);
+    assert.match(migration, /REVOKE ALL ON FUNCTION "public"\."claim_outbox_events"\(integer, integer\) FROM PUBLIC, "anon", "authenticated"/);
+    assert.doesNotMatch(sqlOnly, /CREATE TABLE|DROP TABLE|ALTER TABLE(?!.*claim_outbox_events)/i, "must not touch any table — the tenant_id column already exists");
+    assert.doesNotMatch(
+      sqlOnly,
+      /(CREATE|CREATE OR REPLACE|DROP|ALTER)\s+FUNCTION[^;]*emit_outbox_event/i,
+      "must not touch the write-side function — only the read/claim side changes (mentioning it in prose, to explain the relationship, is fine)"
+    );
+  });
+});
+
+// ---- Phase 20 corrective batch: HTTP/OpenAPI breaking-change detection ----
+
+describe("Phase 20 corrective batch — HTTP/OpenAPI breaking-change detection", () => {
+  test("check-openapi-compatibility.ts reuses classifyCompatibility for both request and response comparison — no second compatibility rule", () => {
+    const src = stripComments(read("scripts/check-openapi-compatibility.ts"));
+    const requestSection = src.slice(src.indexOf("REQUEST_NARROWED"));
+    const responseSection = src.slice(src.indexOf("RESPONSE_NARROWED"));
+    assert.match(src, /from "@\/lib\/events\/schema-registry"/);
+    assert.ok((src.match(/classifyCompatibility\(/g) ?? []).length >= 2, "both request and response comparisons must call the real, shared function");
+    assert.ok(requestSection.length > 0 && responseSection.length > 0);
+  });
+
+  test("detects PATH_REMOVED, METHOD_REMOVED, REQUEST_NARROWED, RESPONSE_NARROWED, and SCHEMA_REMOVED as distinct finding classes", () => {
+    const src = read("scripts/check-openapi-compatibility.ts");
+    for (const findingClass of ["PATH_REMOVED", "METHOD_REMOVED", "REQUEST_NARROWED", "RESPONSE_NARROWED", "SCHEMA_REMOVED"]) {
+      assert.match(src, new RegExp(findingClass));
+    }
+  });
+
+  test("a new path, a new method, and a new components.schemas entry are structurally never flagged — only base-ref keys missing from the current tree can be", () => {
+    const src = stripComments(read("scripts/check-openapi-compatibility.ts"));
+    // The removal-detection loops iterate the BASE document's paths/schemas
+    // and look up the CURRENT document — a key that exists only in current
+    // (i.e. something newly added) is never visited by these loops at all.
+    assert.match(src, /for \(const \[routePath, baseMethods\] of Object\.entries\(base\.paths/);
+    assert.match(src, /for \(const name of Object\.keys\(base\.components\?\.schemas/);
+  });
+
+  test("NOT_CONFIGURED (no base ref available) is a distinct, non-zero exit — never silently treated as a pass", () => {
+    const src = stripComments(read("scripts/check-openapi-compatibility.ts"));
+    assert.match(src, /NOT_CONFIGURED/);
+    assert.match(src, /process\.exit\(2\)/);
+  });
+
+  test("contract-ci.yml runs the HTTP compatibility check with the SAME CONTRACT_BASE_REF the event check uses — one baseline model, not two", () => {
+    const workflow = read(".github/workflows/contract-ci.yml");
+    const openapiCompatStepIndex = workflow.indexOf("contracts:check-openapi-compat");
+    const eventCompatStepIndex = workflow.indexOf("contracts:check-compat");
+    assert.ok(openapiCompatStepIndex > 0 && eventCompatStepIndex > 0);
+    const baseRefMentions = (workflow.match(/CONTRACT_BASE_REF/g) ?? []).length;
+    assert.equal(baseRefMentions, 2, "exactly one env var name, used by both steps — no second baseline store");
   });
 });

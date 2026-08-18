@@ -88,8 +88,13 @@ async function main(): Promise<void> {
   const ref = baseRef();
   const base = await loadBaseRegistry(ref);
   if (!base) {
-    console.log(`contracts:check-compat: base ref "${ref}" or its registry files are unavailable — nothing to compare (first change, or shallow checkout).`);
-    return;
+    // NOT_CONFIGURED, never a silent pass — see check-openapi-compatibility.ts's
+    // identical convention. In CI (fetch-depth: 0) this branch should be
+    // unreachable; reaching it there is itself worth failing loudly on.
+    console.error(
+      `contracts:check-compat: NOT_CONFIGURED — base ref "${ref}" or its registry files are unavailable (first change, shallow checkout, or offline). No comparison was made.`
+    );
+    process.exit(2);
   }
 
   const { EVENT_SCHEMAS: currentSchemas } = (await import(pathToFileURL(path.join(ROOT, REGISTRY_REL)).href)) as {

@@ -64,6 +64,14 @@ function log(fields: Record<string, unknown>): void {
  * Inserts an outbox row on its own — NOT transactionally joined to any
  * business mutation (see this module's header). Use only when there is no
  * accompanying state change to be atomic with.
+ *
+ * PHASE 20 CORRECTIVE BATCH. `event.tenantId`, if the caller set one, is
+ * NOT forwarded here — `emit_outbox_event` deliberately accepts no tenant
+ * parameter at all (see `20260824000000_event_contract_and_tenant_routing.sql`'s
+ * own header: a caller-supplied tenant was tried once and reverted, exactly
+ * because two ways to supply it means two ways to supply the wrong one).
+ * The row's real `tenant_id` is always resolved server-side, from the
+ * aggregate, inside that function — this call site cannot override it.
  */
 export async function enqueueEventStandalone(event: DomainEventEnvelope): Promise<EnqueueOutcome> {
   const admin = getSupabaseAdminClient();
@@ -86,6 +94,38 @@ export async function enqueueEventStandalone(event: DomainEventEnvelope): Promis
 }
 
 /**
+ * Maps one `claim_outbox_events()` row to a claimed event. A pure function,
+ * exported (Phase 20 corrective batch) so its field-by-field mapping —
+ * specifically that `tenant_id` crosses onto the wire envelope's
+ * `tenantId`, and only when the row actually has one — is directly unit
+ * testable without mocking Supabase's locking/claim semantics, which are
+ * exercised elsewhere.
+ */
+export function outboxRowToEnvelope(row: Record<string, unknown>): ClaimedOutboxEvent {
+  return {
+    event: {
+      eventId: String(row.event_id),
+      eventType: String(row.event_type),
+      eventVersion: Number(row.event_version),
+      aggregateType: String(row.aggregate_type),
+      aggregateId: String(row.aggregate_id),
+      occurredAt: String(row.occurred_at),
+      ...(row.trace_id ? { traceId: String(row.trace_id) } : {}),
+      // PHASE 20 CORRECTIVE BATCH. `claim_outbox_events()` (see
+      // 20260830000000_outbox_claim_tenant_id.sql) now surfaces the tenant
+      // `emit_outbox_event` already captured at write time — this is the
+      // one place it crosses from the SQL row onto the wire envelope.
+      // Never resolved or guessed here: absent on the row means absent on
+      // the envelope, exactly like traceId above.
+      ...(row.tenant_id ? { tenantId: String(row.tenant_id) } : {}),
+      payload: (row.payload ?? {}) as Record<string, unknown>,
+    },
+    publishAttempts: Number(row.publish_attempts),
+    claimToken: String(row.claim_token),
+  };
+}
+
+/**
  * Atomically claims a batch of pending events. Two concurrent publishers
  * can never receive the same row — the SQL function uses
  * `FOR UPDATE SKIP LOCKED` inside its own transaction. Rows whose claim
@@ -105,20 +145,7 @@ export async function claimPendingEvents(limit = 100, leaseSeconds = 300): Promi
   }
 
   const rows = (data ?? []) as Record<string, unknown>[];
-  const events: ClaimedOutboxEvent[] = rows.map((row) => ({
-    event: {
-      eventId: String(row.event_id),
-      eventType: String(row.event_type),
-      eventVersion: Number(row.event_version),
-      aggregateType: String(row.aggregate_type),
-      aggregateId: String(row.aggregate_id),
-      occurredAt: String(row.occurred_at),
-      ...(row.trace_id ? { traceId: String(row.trace_id) } : {}),
-      payload: (row.payload ?? {}) as Record<string, unknown>,
-    },
-    publishAttempts: Number(row.publish_attempts),
-    claimToken: String(row.claim_token),
-  }));
+  const events: ClaimedOutboxEvent[] = rows.map(outboxRowToEnvelope);
 
   return { outcome: "claimed", events };
 }

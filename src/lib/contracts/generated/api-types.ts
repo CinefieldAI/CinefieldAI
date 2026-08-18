@@ -57,6 +57,7 @@ export interface components {
             /** Format: date-time */
             occurredAt: string;
             traceId?: string;
+            tenantId?: string;
             payload: Record<string, never>;
         };
         AssetRejectedPayloadV1: {

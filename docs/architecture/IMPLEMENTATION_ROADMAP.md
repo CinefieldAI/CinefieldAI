@@ -148,6 +148,29 @@ reasoning already established for Phase 18's infrastructure and Phase
 `security-gates.md`'s "Phase 20 — API & Event Contract / Schema
 Governance" section.
 
+**Phase 20 corrective batch — event tenant context + HTTP breaking-change
+detection:** closed the two real gaps the closure audit found. The
+envelope gained an optional `tenantId` (chosen over `workspaceId` on a
+codebase-wide terminology audit), threaded through the REAL producer
+path — `outbox_events.tenant_id` (captured at write time, already
+existing from this phase's own earlier migration) was never SELECTed by
+`claim_outbox_events()`; a new migration
+(`20260830000000_outbox_claim_tenant_id.sql`, `DROP`+`CREATE` since
+Postgres refuses `REPLACE` across a changed `RETURNS TABLE` set) closes
+that, and it now reaches the Kafka message as a `tenant-id` header,
+exactly where `traceId` already travels. Bounded routing/correlation
+evidence only — never auth, billing, or ownership authority. 20-D was
+extended from Kafka-only to HTTP:
+`scripts/check-openapi-compatibility.ts`, a narrow structural checker
+(reusing the same `classifyCompatibility()` and the same
+`CONTRACT_BASE_REF` baseline model already established) proven, by real
+injected-and-reverted defects against the committed OpenAPI document, to
+catch path removal, method removal, request narrowing, and response
+narrowing, and proven separately to accept a new path, a new optional
+request field, and a new optional response field as compatible. Wired
+into `contract-ci.yml` as a fifth required step. Full detail: see
+`security-gates.md`'s "Phase 20 corrective batch" subsection.
+
 ---
 
 ## Completed Implementation Checkpoints

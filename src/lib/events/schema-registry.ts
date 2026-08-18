@@ -83,6 +83,13 @@ export const ENVELOPE_SCHEMA: JsonSchema = {
     aggregateId: { type: "string", minLength: 1, maxLength: 200 },
     occurredAt: { type: "string", format: "date-time" },
     traceId: { type: "string", minLength: 1, maxLength: 200 },
+    // PHASE 20 CORRECTIVE BATCH. Optional, additive — matches the
+    // roadmap's own backward-compatibility rule (an added optional
+    // property needs no version bump). An envelope built before this
+    // field existed, or whose aggregate resolved to no tenant, is exactly
+    // as valid without it. Bounded routing/correlation evidence only —
+    // see DomainEventEnvelope's own header for the authority boundary.
+    tenantId: { type: "string", minLength: 1, maxLength: 255 },
     // Validated separately against the resolved payload schema.
     payload: { type: "object", additionalProperties: false },
   },
