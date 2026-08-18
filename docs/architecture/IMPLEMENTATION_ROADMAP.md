@@ -116,6 +116,38 @@ file-by-file citations: see `security-gates.md`'s "Phase 19 —
 Policy-as-Code & Automated Action Guardrails" and "Phase 19 Closure Fix"
 sections.
 
+**Phase 20 — API & Event Contract / Schema Governance, official packages
+20-A through 20-D (authoritative master roadmap v1.9.1 TEMIZ MASTER EK F,
+the same version already used for Phases 17/19):** the reality audit found
+20-A and 20-B **already essentially complete** from Phase 6R.15, predating
+this batch — the event envelope standard, a 13-schema domain registry,
+real producer validation, real consumer SerDe/compatibility checking, and
+an honestly-disabled Glue stub, all exhaustively tested already. This
+batch verified that (making one file's existing constant importable,
+nothing else) and built what was genuinely missing. 20-C (OpenAPI
+source-of-truth + generated TypeScript types) is **code-complete for an
+honestly-scoped subset**: `openapi/cinefield.json` derives its 14 event
+schemas directly from the real registry (never a hand-written duplicate)
+plus 2 field-verified real HTTP routes (of ~40 total — coverage is
+disclosed as partial, not fabricated as complete), and
+`src/lib/contracts/generated/api-types.ts` is real, generated output
+(via `openapi-typescript`, MIT-licensed, no paid service) proven
+deterministic by re-running and diffing. 20-D (breaking-change CI gate) is
+**code-complete**: `scripts/check-contract-compatibility.ts` reuses the
+existing `classifyCompatibility()` (no second compatibility rule) to
+catch an already-published event schema version mutated incompatibly in
+place, proven by actually injecting and detecting a real breaking change
+during this batch; `contract-ci.yml` (this repository's third contract/
+governance CI workflow) wires that check plus a generated-artifact drift
+check plus the real Phase 6R.15/11-A contract test suite as a required PR
+gate. Live AWS Glue Schema Registry / MSK provisioning remains
+deliberately deferred — Kafka/MSK is "activation-ready... not provisioned
+before a scale signal arrives" per the roadmap's own words, the same
+reasoning already established for Phase 18's infrastructure and Phase
+19's OPA sidecar. Full detail, evidence, and file-by-file citations: see
+`security-gates.md`'s "Phase 20 — API & Event Contract / Schema
+Governance" section.
+
 ---
 
 ## Completed Implementation Checkpoints

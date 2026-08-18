@@ -16,7 +16,11 @@
     "policy:build": "opa build -t wasm -e cinefield/policy/decision policies/ -o policies/bundle/policy.tar.gz",
     "policy:wasm-parity": "tsx scripts/policy-wasm-parity.ts",
     "secrets:scan": "tsx scripts/scan-secrets.ts",
-    "telemetry:scan": "tsx scripts/scan-telemetry.ts"
+    "telemetry:scan": "tsx scripts/scan-telemetry.ts",
+    "contracts:generate-openapi": "tsx --conditions=react-server scripts/generate-openapi.ts",
+    "contracts:generate-types": "tsx --conditions=react-server scripts/generate-api-types.ts",
+    "contracts:generate": "npm run contracts:generate-openapi && npm run contracts:generate-types",
+    "contracts:check-compat": "tsx --conditions=react-server scripts/check-contract-compatibility.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",
@@ -65,6 +69,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "openapi-typescript": "^7.13.0",
     "playwright": "^1.61.1",
     "supabase": "^2.111.0",
     "tailwindcss": "^4",

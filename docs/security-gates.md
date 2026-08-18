@@ -5993,3 +5993,151 @@ route is real and functions correctly against a manually-shared
 `requestId`; an admin-panel affordance for it is a reasonable future
 slice, not required to close this gap). **This closure-fix batch does not
 start Phase 20.**
+
+## Phase 20 — API & Event Contract / Schema Governance
+
+**Authoritative roadmap source:** `Cinefield_Master_Yol_Haritasi_v1.9.1_TEMIZ_MASTER_EK_F SON.docx`
+(the same version already authoritative for Phases 17/19). Official title:
+"Phase 20 — API & Event Contract / Schema Governance." Roadmap status line:
+"NOT_STARTED — FOUNDATION EXISTS. Outbox/event schema, UserIntent/
+GenerationManifest ve command contracts foundation sağlar; governance/
+sürümleme Phase 20'de." Four official packages, 20-A through 20-D:
+20-A (event envelope/version standard + AWS Glue Schema Registry domain
+schema set), 20-B (producer validation + consumer SerDe/compatibility),
+20-C (OpenAPI source-of-truth + generated TypeScript types/client
+pipeline), 20-D (Kafka schema compatibility + HTTP contract CI gate).
+
+### The reality audit found far more foundation than "FOUNDATION_EXISTS" implied
+
+20-A and 20-B are not merely foundational — they are essentially
+**already complete, real, and exhaustively tested**, predating this batch
+under Phase 6R.15:
+
+- `src/lib/events/domain-event.ts` — the envelope standard itself
+  (`eventId`/`eventType`/`eventVersion`/`aggregateType`/`aggregateId`/
+  `occurredAt`/`traceId`/`payload`), with `buildDomainEvent()` enforcing
+  every field, JSON-plain payload, and a 64KB size ceiling.
+- `src/lib/events/event-schemas.ts` — the domain schema SET (13 registered
+  event payloads across the generation/provider/credit/asset/security
+  families — "GROUNDED, NOT INVENTED" per its own header: events for
+  concepts that don't exist yet are deliberately absent, not fabricated).
+- `src/lib/events/schema-registry.ts` — `validateDomainEvent()` (producer
+  validation, called from `kafka-producer.ts` before every publish) and
+  `classifyCompatibility()`, a real, already-tested implementation of
+  exactly the backward-compatibility policy the roadmap describes
+  conceptually (additive/widening = no bump; removal/narrowing/new-required
+  = bump required).
+- `src/lib/events/event-consumer.ts` — `inspectInboundEvent()` is the
+  consumer-side SerDe/compatibility check: parses, validates against the
+  same registry, and routes a schema violation to reject/DLQ rather than
+  an infinite redelivery loop.
+- `src/lib/events/glue-schema-registry.ts` / `schema-registry-config.ts` —
+  Glue integration exists as a real, honestly-disabled stub
+  (`syncSchemasToGlue()` always returns `disabled`/`unconfigured`/
+  `unavailable`, never a fake `ready`; `@aws-sdk/client-glue` is
+  deliberately not installed) — consistent with the roadmap's own note
+  that Kafka/MSK is "activation-ready... not provisioned before a scale
+  signal arrives."
+- `src/test/e2e/phase-11a-event-contract-guard.e2e.test.ts` — ties SQL
+  event emission to the TypeScript contract, catching the exact class of
+  defect ("SQL emits an event type TypeScript refuses") that shipped
+  undetected once before (9-E's `media.asset.released`).
+
+None of this was reinvented. What this batch verified was real and left
+unmodified except one additive change: `ENVELOPE_SCHEMA` in
+`schema-registry.ts` gained an `export` keyword so the new OpenAPI
+generator could reuse the exact runtime-enforced shape instead of
+declaring a second copy.
+
+### 20-C — OpenAPI + generated TypeScript types, honestly scoped
+
+Genuinely missing before this batch (confirmed: zero `.yaml`/`.json`
+OpenAPI files anywhere in the repo, zero `zod`/`json-schema`/`openapi`
+dependencies). Built:
+
+- `openapi/cinefield.json` (generated, `npm run contracts:generate-openapi`) —
+  `components.schemas` is DERIVED from `EVENT_SCHEMAS` and
+  `ENVELOPE_SCHEMA` (14 schemas: the envelope + all 13 real registered
+  events), never a hand-written duplicate. Cinefield's internal
+  `JsonSchema` subset (json-schema.ts) already IS valid OpenAPI 3.1 (which
+  is JSON Schema 2020-12), so the generator copies rather than converts.
+  `paths` covers exactly two real, field-by-field-verified routes
+  (`GET /api/health/live`, `POST /api/admin/privileged-actions/decide`) —
+  a deliberately small, honest subset, not a claim of full API coverage.
+  Cinefield has roughly 40 HTTP routes; extending coverage is additive,
+  incremental future work.
+- `src/lib/contracts/generated/api-types.ts` (generated, `npm run
+  contracts:generate-types`, via `openapi-typescript` — MIT-licensed, pure
+  local codegen, no network call, no paid service) — real TypeScript types
+  produced FROM the OpenAPI document, satisfying "API tipleri şemadan
+  otomatik üretiliyor" for the routes/events it covers. Marked
+  "GENERATED — DO NOT EDIT BY HAND"; `contract-ci.yml` regenerates and
+  diffs to catch manual edits or a stale artifact.
+- Both generation steps are verified deterministic: re-running produces a
+  byte-identical file (checked this batch by diffing a fresh run against
+  the committed output — zero difference).
+
+### 20-D — breaking-change detection and CI gate, real and independently proven
+
+`scripts/check-contract-compatibility.ts` — for every `eventType@eventVersion`
+key present in BOTH a base git ref (default `origin/main`, overridable via
+`CONTRACT_BASE_REF`) and the current tree, reuses the EXISTING
+`classifyCompatibility()` (no second compatibility rule) to detect an
+already-published version's schema being mutated incompatibly in place —
+the exact silent breaking change 20-D exists to block. A brand-new version
+key is never flagged (that is the correct way to make an incompatible
+change). Reads the base revision via `git show <ref>:<path>` only — no
+GitHub API, no network beyond git itself.
+
+**Proven working, not just written:** this batch temporarily injected a
+real breaking change into `event-schemas.ts` (`asset.released@1` gained a
+new required field), ran the script, confirmed a real non-zero exit and
+the exact finding reported, then reverted the injection (`git diff`
+confirmed byte-identical to before). Re-run afterward: clean, exit 0.
+
+`.github/workflows/contract-ci.yml` (this repository's third contract/
+governance-focused CI workflow, after `policy-ci.yml` and the `infra-*.yml`
+trio) runs, on every PR touching `src/lib/events/**`, `src/lib/contracts/**`,
+`openapi/**`, or the generator scripts: the compatibility check against the
+real PR base ref, `npm run contracts:generate` followed by
+`git diff --exit-code` (drift detection), the real Phase 6R.15 event/
+schema-registry test suite, the Phase 11-A SQL↔TypeScript contract guard,
+and `tsc --noEmit`. Never applies, publishes, or mutates production state.
+
+### Ownership preserved
+
+Phase 17's `GenerationManifest`/`manifestVersion`/`compilerVersion`
+contract (already real, already dual-versioned, already following the
+same `policy_version`-derived convention this batch's own governance
+reuses) is untouched — Phase 20 governs contracts, it does not redesign
+Phase 17 semantics. Phase 19's policy registry, Rego, and CI workflow are
+untouched (diffs confirmed empty). No second policy engine, no second
+admin authorization layer, no second AI authority, no second deployment
+owner was created. The event schema registry remains the ONE domain
+schema source of truth; OpenAPI is generated FROM it, never a competing
+definition.
+
+### Regression (this batch)
+
+Full suite + event-schema unit tests: 2088/2090 pass — the 2 known
+pre-existing Phase-8 `ModelSelector` pins (unrelated, unmodified).
+`tsc --noEmit`, `npm run build`, ESLint on every touched file,
+`secrets:scan`, `telemetry:scan`: all clean. No Supabase migration — the
+contract registry stays source-controlled TypeScript, per the roadmap's
+own "prefer no new paid service"/"no DB table by default" instruction. No
+locked product UI touched.
+
+### Not in this batch
+
+Live AWS Glue Schema Registry / MSK provisioning (deliberately deferred —
+"Kafka/MSK... not provisioned before a scale signal arrives," same
+reasoning already established for Phase 18's infrastructure and Phase
+19's OPA sidecar); OpenAPI coverage of the ~38 remaining HTTP routes
+(incremental, honestly disclosed as partial rather than fabricated as
+complete); making `contract-ci.yml` a GitHub-required status check (a
+live, external, one-time repository Settings action, same category as
+every other CI workflow this repository has shipped); a generated
+TypeScript CLIENT (only types are generated — an actual fetch-wrapper
+client was not requested by this batch's own scope and would be
+incremental work on top of the types that now exist). **Phase 20 does not
+start Phase 21.**

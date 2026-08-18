@@ -65,8 +65,13 @@ export type EventValidation =
       errors: string[];
     };
 
-/** Envelope fields every event must carry regardless of its payload schema. */
-const ENVELOPE_SCHEMA: JsonSchema = {
+/**
+ * Envelope fields every event must carry regardless of its payload schema.
+ * Exported (Phase 20) so `scripts/generate-openapi.ts` can reuse this exact
+ * shape as the OpenAPI `DomainEventEnvelope` schema rather than declaring a
+ * second, driftable copy — the envelope has exactly one definition.
+ */
+export const ENVELOPE_SCHEMA: JsonSchema = {
   type: "object",
   additionalProperties: false,
   required: ["eventId", "eventType", "eventVersion", "aggregateType", "aggregateId", "occurredAt", "payload"],

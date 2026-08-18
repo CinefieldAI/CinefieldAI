@@ -1,0 +1,81 @@
+name: Contract CI (Phase 20-C/20-D)
+
+# Required check for every change to the event schema registry, the OpenAPI
+# generator, or generated contract types. Never applies/publishes anything —
+# this is the "breaking schema değişikliği CI'da bloklanıyor" gate 20-D
+# names, proving a change before it can merge, not after.
+#
+# Four real, independent proofs, all of which must pass:
+#   1. `npm run contracts:check-compat` — no already-published event schema
+#      version was mutated incompatibly in place (Phase 20-D breaking-change
+#      detection, against the real PR base branch, not a static snapshot).
+#   2. `npm run contracts:generate` regenerates openapi/cinefield.json and
+#      src/lib/contracts/generated/api-types.ts fresh, then `git diff
+#      --exit-code` proves nothing drifted from what is committed — the
+#      generated file was not hand-edited and the source schema was not
+#      changed without regenerating.
+#   3. The real event/schema-registry/domain-event contract test suite
+#      (Phase 6R.15) plus the SQL<->TypeScript event contract guard
+#      (Phase 11-A).
+#   4. `tsc --noEmit`.
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/events/**"
+      - "src/lib/contracts/**"
+      - "src/lib/product-intelligence/generation-manifest-contract.ts"
+      - "openapi/**"
+      - "scripts/generate-openapi.ts"
+      - "scripts/generate-api-types.ts"
+      - "scripts/check-contract-compatibility.ts"
+      - ".github/workflows/contract-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: compat check + generated-types drift + contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `check-contract-compatibility.ts` reads the PR base ref's
+          # version of event-schemas.ts via `git show` — needs real history,
+          # not a 1-commit shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Breaking-change detection (event schema registry vs. PR base)
+        env:
+          CONTRACT_BASE_REF: origin/${{ github.event.pull_request.base.ref || 'main' }}
+        run: npm run contracts:check-compat
+
+      - name: Regenerate OpenAPI + API types, then fail on drift
+        run: |
+          npm run contracts:generate
+          git diff --exit-code -- openapi/cinefield.json src/lib/contracts/generated/api-types.ts \
+            || (echo "::error::openapi/cinefield.json or the generated API types are out of date — run 'npm run contracts:generate' and commit the result." && exit 1)
+
+      - name: Event/schema-registry contract tests (Phase 6R.15)
+        run: |
+          node --conditions=react-server --import tsx --test \
+            src/lib/events/domain-event.test.ts \
+            src/lib/events/schema-registry.test.ts \
+            src/lib/events/outbox-publisher.test.ts
+
+      - name: SQL <-> TypeScript event contract guard (Phase 11-A) + capability contract
+        run: |
+          node --conditions=react-server --import tsx --test \
+            src/test/e2e/phase-11a-event-contract-guard.e2e.test.ts \
+            src/test/e2e/phase-7-capability-contract.e2e.test.ts \
+            src/test/e2e/phase-20-contract-governance.e2e.test.ts
+
+      - name: tsc
+        run: npx tsc --noEmit -p tsconfig.json
