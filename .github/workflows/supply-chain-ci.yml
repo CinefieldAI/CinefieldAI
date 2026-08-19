@@ -66,7 +66,7 @@ jobs:
         run: docker build -f Dockerfile.provider-worker -t cinefield-provider-worker:ci .
 
       - name: Trivy container scan (reports, does not gate — same reasoning as the dependency scan above)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: cinefield-provider-worker:ci
           format: table
