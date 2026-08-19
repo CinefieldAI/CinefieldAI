@@ -336,6 +336,47 @@ append-only trigger in its own migration. Full detail, evidence, and
 file-by-file citations: see `security-gates.md`'s "Phase 23 — Privacy,
 GDPR & Data Lifecycle Architecture" section.
 
+**Phase 24 — Software Supply Chain Security & Build Provenance, official
+packages 24-A through 24-D:** confirmed by direct roadmap search that
+C2PA/content credentials belong exclusively to Phase 27 and that SLSA/
+Sigstore/cosign are named nowhere in the roadmap — "GitHub Artifact
+Attestations" is the one officially named tool, used here keyless (GitHub
+OIDC + Sigstore under the hood, no signing key in this repository). 24-A
+adds `scripts/generate-sbom.ts` (a real CycloneDX SBOM via
+`@cyclonedx/cyclonedx-npm` + `npm audit` dependency scan, directly tested
+against this repository's own lockfile) and a Trivy container scan of the
+locally-built (never pushed) `Dockerfile.provider-worker` image in
+`.github/workflows/supply-chain-ci.yml`; it reports risk and blocks only
+on the scan tooling itself failing, never on the vulnerability count — a
+real first run found 8 pre-existing, unrelated high-severity production-
+dependency vulnerabilities, disclosed rather than silently gated on or
+fixed (out of this batch's scope). 24-B issues a real, verified GitHub
+Artifact Attestation for the SBOM on every push to `main`
+(`actions/attest-build-provenance` + `gh attestation verify` in the same
+job) and writes bounded release metadata (commit SHA, workflow run,
+digest, attestation URL — never a secret or signed URL);
+`src/lib/deployment/release-provenance.ts` is the code-owned, pure
+verifier half, reusing `artifact-verification.ts`'s (14-E) own
+`DIGEST_PATTERN`/`COMMIT_SHA_PATTERN` rather than duplicating them — 14-E's
+own header had already reserved its `provenanceRef` field for exactly
+this. 24-C is honestly scoped to merge-to-`main` (the `supply_chain_scan`
+required check) rather than a fabricated separate production-deploy gate,
+since this repository has no application-level deploy-execution path
+(Vercel deploys externally — `deployment-policy-gate.ts`'s own documented
+state, unchanged). 24-D required no new AI-specific code at all:
+`required-checks.ts`'s `BASELINE` gained `supply_chain_scan`, and because
+`ai-pr-authority.ts` already resolves required checks through that same
+shared function, AI-authored PRs are subject to it identically to human
+ones by construction — proven directly in
+`phase-24-supply-chain.e2e.test.ts`. Release-provenance visibility extends
+Phase 16-D's existing Deploy/Restore Health admin card (one new field, not
+a second Operations Center), honestly `PROVENANCE_EVIDENCE_UNAVAILABLE` at
+runtime since no live GitHub Actions run-history read-back exists yet —
+CI-side generation is real; the admin-panel read-back is a distinct,
+deferred integration decision. Full detail, evidence, and file-by-file
+citations: see `security-gates.md`'s "Phase 24 — Software Supply Chain
+Security & Build Provenance" section.
+
 ---
 
 ## Completed Implementation Checkpoints

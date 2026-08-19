@@ -171,11 +171,17 @@ test("S14B-9  LOW_RISK resolves the baseline checks only", () => {
   const result = classifyChangeRisk(["docs/architecture/CINEFIELD_ARCHITECTURE_CONTRACT.md"]);
   assert.equal(result.riskClass, "LOW_RISK");
   const checks = resolveRequiredChecks(result.riskClass, ["docs/architecture/CINEFIELD_ARCHITECTURE_CONTRACT.md"]);
+  // Pinned baseline membership — bump this list (with a comment) whenever a
+  // real check joins BASELINE. 8 entries as of Phase 24-A/24-D's
+  // `supply_chain_scan` (SBOM + dependency + container scan, real and
+  // enforced for every risk class, including AI-authored PRs via this same
+  // resolution function).
   assert.deepEqual(checks, [
     "build",
     "changed_file_lint",
     "policy_conformance",
     "secret_scan",
+    "supply_chain_scan",
     "telemetry_scan",
     "test_suite",
     "typecheck",
@@ -533,9 +539,13 @@ test("S14B-PROOF-A  docs-only change -> LOW_RISK -> baseline checks -> PR eligib
     { agentId: AGENT }
   );
   assert.equal(record.riskClass, "LOW_RISK");
+  // Includes supply_chain_scan (Phase 24-A/24-D) — an AI-authored proposal
+  // resolves the exact same baseline as a human PR would, through this same
+  // function. That equality IS the 24-D "AI Fix PR'lerine aynı checks'i
+  // zorunlu yap" requirement, proven directly.
   assert.deepEqual(
     [...record.requiredCheckIds].sort(),
-    ["build", "changed_file_lint", "policy_conformance", "secret_scan", "telemetry_scan", "test_suite", "typecheck"]
+    ["build", "changed_file_lint", "policy_conformance", "secret_scan", "supply_chain_scan", "telemetry_scan", "test_suite", "typecheck"]
   );
   assert.equal(record.state, "REVIEW_REQUIRED", "no approval evidence supplied yet");
 

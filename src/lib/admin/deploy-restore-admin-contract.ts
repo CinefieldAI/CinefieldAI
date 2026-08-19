@@ -71,12 +71,33 @@ export interface RecoveryTargetsView {
   readonly rpoTargetsConfigured: number;
 }
 
+/**
+ * Phase 24-D — release provenance visibility (read-only).
+ *
+ * `ciGenerationCodeComplete: true` is a real, static fact: the SBOM +
+ * attestation pipeline (`.github/workflows/supply-chain-ci.yml`,
+ * `scripts/generate-sbom.ts`, `src/lib/deployment/release-provenance.ts`)
+ * exists and runs on every push to main — this is not a fabricated claim.
+ * `state` is honestly `PROVENANCE_EVIDENCE_UNAVAILABLE` because this
+ * application has no live read-path into GitHub Actions run history — the
+ * SAME class of gap `deployEligibility` above already discloses rather
+ * than fakes (Phase 14's own documented "No external integration is
+ * active"). Wiring a live GitHub API read is a distinct, later decision —
+ * not fabricated here to make this card look more complete than it is.
+ */
+export interface ReleaseProvenanceView {
+  readonly state: "PROVENANCE_EVIDENCE_UNAVAILABLE";
+  readonly reasonCode: "no_live_github_actions_run_history_integration";
+  readonly ciGenerationCodeComplete: boolean;
+}
+
 export type DeployRestoreAdminResult =
   | { readonly outcome: "SOURCE_UNAVAILABLE"; readonly reasonCode: string }
   | {
       readonly outcome: "FOUND";
       readonly rollback: RollbackView;
       readonly deployEligibility: DeployEligibilityView;
+      readonly releaseProvenance: ReleaseProvenanceView;
       readonly restore: OperationalTaskResult;
       readonly recovery: RecoveryTargetsView;
     };

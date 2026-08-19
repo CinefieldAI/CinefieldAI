@@ -67,6 +67,18 @@ export default function DeployRestorePanel() {
           </div>
 
           <div className="rounded border border-neutral-800 p-3 text-xs text-neutral-400">
+            <h3 className="mb-2 text-sm font-medium text-neutral-200">Release provenance (Phase 24)</h3>
+            <p className="text-amber-400">
+              {state.result.releaseProvenance.state} ({state.result.releaseProvenance.reasonCode})
+            </p>
+            <p className="mt-1 text-neutral-500">
+              {state.result.releaseProvenance.ciGenerationCodeComplete
+                ? "SBOM generation, dependency scan, and GitHub Artifact Attestation run on every push to main (.github/workflows/supply-chain-ci.yml) — real and CI-verified. This application has no live read-path into GitHub Actions run history yet, so evidence cannot be shown here; see the workflow run itself for commit SHA, digest, and attestation."
+                : "No supply-chain CI pipeline is wired."}
+            </p>
+          </div>
+
+          <div className="rounded border border-neutral-800 p-3 text-xs text-neutral-400">
             <h3 className="mb-2 text-sm font-medium text-neutral-200">Rollback signal (Phase 14-D, real)</h3>
             <div>decision: {state.result.rollback.decision}</div>
             <div>reasons: {state.result.rollback.reasons.join(", ") || "—"}</div>

@@ -39,7 +39,8 @@ export type RequiredCheckId =
   | "policy_conformance"
   | "migration_safety"
   | "postgres_proofs"
-  | "dependency_review";
+  | "dependency_review"
+  | "supply_chain_scan";
 
 export type CheckStatus = "available" | "deferred";
 
@@ -56,9 +57,17 @@ export interface RequiredCheckDefinition {
 }
 
 /**
- * The seven checks every risk class runs, always. They cost nothing to
+ * The eight checks every risk class runs, always. They cost nothing to
  * always run and this repository's own practice, every batch this session,
  * has been "run the full battery" — never a partial one chosen per change.
+ *
+ * `supply_chain_scan` (Phase 24-A/24-D) joined this list once
+ * `.github/workflows/supply-chain-ci.yml` made it real — a deferred check
+ * is never added here (see `dependency_review`, still absent below for
+ * exactly that reason). Because `ai-pr-authority.ts` calls this SAME
+ * function for AI-authored PRs, adding it here is the entire 24-D
+ * "AI Fix PR'lerine aynı checks'i zorunlu yap" requirement — no separate
+ * AI-specific wiring exists or is needed.
  */
 const BASELINE: readonly RequiredCheckId[] = [
   "typecheck",
@@ -68,6 +77,7 @@ const BASELINE: readonly RequiredCheckId[] = [
   "secret_scan",
   "telemetry_scan",
   "policy_conformance",
+  "supply_chain_scan",
 ];
 
 const ALL_RISK_CLASSES: readonly ChangeRiskClass[] = [
@@ -166,7 +176,16 @@ export const REQUIRED_CHECK_REGISTRY: Readonly<Record<RequiredCheckId, RequiredC
     applicableRiskClasses: ALL_RISK_CLASSES,
     status: "deferred",
     failureBehavior: "warn_only",
-    why: "Named by 14-B's own roadmap text, but no tool is wired yet — deferred to 14-B's GitHub-config half, never reported as passing.",
+    why: "Named by 14-B's own roadmap text (the native GitHub Dependency Review feature specifically), but not activated — its private-repo tier requires GitHub Advanced Security, which this repository has not confirmed/purchased. Phase 24's own dependency scan (supply_chain_scan, below) is a SEPARATE, unconditionally-free mechanism built instead; this entry stays deferred rather than being silently repurposed to claim a different tool satisfies it.",
+  },
+  supply_chain_scan: {
+    id: "supply_chain_scan",
+    command: "npx tsx scripts/generate-sbom.ts",
+    blocking: true,
+    applicableRiskClasses: ALL_RISK_CLASSES,
+    status: "available",
+    failureBehavior: "block_pr",
+    why: "Phase 24-A. Generates a real CycloneDX SBOM and an npm dependency-vulnerability report — see that script's own header for why it blocks only on the SCAN failing to run, never on the vulnerability count a clean run reports. .github/workflows/supply-chain-ci.yml additionally runs a Trivy scan of the locally-built provider-worker container image as a separate step in the same job. All open-source, zero-cost tools — no paid service or GitHub Advanced Security tier required. Applies to every PR including AI-authored ones, since ai-pr-authority.ts resolves required checks through this same registry.",
   },
 };
 

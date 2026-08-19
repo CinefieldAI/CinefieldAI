@@ -1,0 +1,126 @@
+name: Supply Chain CI (Phase 24-A/24-B/24-C)
+
+# Required check for every PR (`supply_chain_scan` in required-checks.ts —
+# applies to human AND AI-authored PRs, since ai-pr-authority.ts resolves
+# required checks through that same registry). Two jobs:
+#
+#   1. scan (every PR + every push to main): generates a real CycloneDX
+#      SBOM and an npm dependency-vulnerability report
+#      (scripts/generate-sbom.ts), and scans the locally-built
+#      provider-worker container image with Trivy. Reports risk; blocks
+#      only if a tool itself fails to run — see generate-sbom.ts's own
+#      header for why it does not gate on pre-existing vulnerability counts.
+#
+#   2. attest (push to main only): re-generates the SBOM, issues a real
+#      GitHub Artifact Attestation for it (keyless — GitHub OIDC + Sigstore
+#      under the hood, no signing key stored anywhere in this repository),
+#      then independently verifies that attestation with `gh attestation
+#      verify` before the job can succeed. Writes bounded release metadata
+#      (commit SHA, workflow run id/url, environment, SBOM digest,
+#      attestation subject digest) to the step summary and as a retained
+#      artifact — never a secret, a signed URL, or a credential.
+#
+# Honest scope: this repository has no application-level production-deploy
+# execution path (Vercel deploys externally from main) — see
+# src/lib/deployment/deployment-policy-gate.ts's own header. "Doğrulanmamış
+# artifact production'a çıkamıyor" is enforced at the point this repository
+# actually controls: a PR cannot merge to main without this job passing.
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: SBOM + dependency scan + container scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Generate SBOM + dependency vulnerability report
+        run: npx tsx scripts/generate-sbom.ts --out sbom-out
+
+      - name: Upload SBOM + audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom-out/
+          retention-days: 90
+
+      - name: Build provider-worker image (local only, never pushed)
+        run: docker build -f Dockerfile.provider-worker -t cinefield-provider-worker:ci .
+
+      - name: Trivy container scan (reports, does not gate — same reasoning as the dependency scan above)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: cinefield-provider-worker:ci
+          format: table
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
+
+  attest:
+    name: Attest release provenance (main only)
+    needs: scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Regenerate SBOM (the exact artifact being attested)
+        run: npx tsx scripts/generate-sbom.ts --out sbom-out
+
+      - name: Issue GitHub Artifact Attestation (keyless — no signing key in this repository)
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: sbom-out/sbom.json
+
+      - name: Independently verify the attestation just issued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify sbom-out/sbom.json --owner ${{ github.repository_owner }}
+
+      - name: Record release metadata (bounded evidence — no secrets, no signed URLs)
+        run: |
+          SBOM_DIGEST="sha256:$(sha256sum sbom-out/sbom.json | cut -d' ' -f1)"
+          {
+            echo "commit_sha=${{ github.sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "environment=production_candidate"
+            echo "build_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "sbom_digest=${SBOM_DIGEST}"
+            echo "attestation_url=${{ steps.attest.outputs.attestation-url }}"
+          } | tee release-metadata.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata-${{ github.sha }}
+          path: release-metadata.txt
+          retention-days: 365

@@ -58,6 +58,15 @@ export async function getAdminDeployRestore(): Promise<DeployRestoreAdminResult>
       state: "DEPLOY_EVIDENCE_UNAVAILABLE",
       reasonCode: "external_ci_artifact_integration_not_wired",
     },
+    // Phase 24-D. CI-side generation is real (see the contract's own
+    // header) — this field's UNAVAILABLE state is about this application
+    // having no live read-path into GitHub Actions run history, not about
+    // the pipeline itself being fake.
+    releaseProvenance: {
+      state: "PROVENANCE_EVIDENCE_UNAVAILABLE",
+      reasonCode: "no_live_github_actions_run_history_integration",
+      ciGenerationCodeComplete: true,
+    },
     restore,
     recovery: {
       state: "RTO_RPO_NOT_CONFIGURED",

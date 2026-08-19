@@ -7004,3 +7004,165 @@ into. Third-party AI processor-side data deletion (fal.ai/Gemini/
 Cloudflare Workers AI exposing no delete API this codebase can call) —
 disclosed in `processor-inventory.ts`'s own header, not fabricated.
 **Phase 23 does not start Phase 24.**
+
+## Phase 24 — Software Supply Chain Security & Build Provenance
+
+**Authoritative roadmap source:** the same master DOCX authoritative for
+Phases 19–23. Official title: "Phase 24 — Software Supply Chain Security &
+Build Provenance." Handoff, stated explicitly: "Phase 14-E artifact digest +
+commit/build lineage foundation'dır. SBOM, signing, attestation ve
+provenance Phase 24'te eklenir; 14-E Phase 24'ü tamamlamış sayılmaz" —
+14-E's artifact-digest/commit-lineage verification is the FOUNDATION; SBOM,
+signing, attestation, and provenance are ADDED here. Four official
+packages: 24-A (SBOM + dependency/container scan pipeline), 24-B (GitHub
+Artifact Attestation/provenance + digest/release metadata), 24-C
+(pre-merge attestation/digest verification gate), 24-D (the same checks
+mandatory on AI Fix PRs + release provenance in incident/Admin
+visibility).
+
+Confirmed NOT in scope this batch, by direct search of the roadmap's own
+text: C2PA/content credentials (53 mentions in the document, all inside
+Phase 27 — "İçerik Provenansı & AI Act İşaretleme (C2PA)" — a distinct,
+later phase; zero C2PA mentions inside Phase 24's own section). SLSA and
+Sigstore/cosign are named nowhere in the roadmap at all — "GitHub Artifact
+Attestations" is the one officially named tool, and it is what this batch
+uses (keyless, GitHub-OIDC/Sigstore-backed under the hood, no key material
+this repository has to manage).
+
+### The scaffolding this phase fills already existed, deliberately unimplemented
+
+`src/lib/deployment/artifact-verification.ts` (Phase 14-E) already defines
+`ArtifactIdentity.provenanceRef` with its own header stating plainly:
+"Reference to an attestation record. Phase 24 owns issuing them." Its
+`verifyArtifact()` already refuses a `VERIFIED` artifact with no
+`provenanceRef` (`provenance_missing`). `required-checks.ts`'s
+`dependency_review` entry was already reserved (status `"deferred"`) for
+exactly a dependency-scan mechanism. This phase fills both seams rather
+than inventing parallel ones.
+
+### 24-A — SBOM + dependency/container scan pipeline
+
+`scripts/generate-sbom.ts` — real, directly-tested (`phase-24-supply-chain
+.e2e.test.ts` executes it against this repository's own lockfile, not a
+mock). `generateSbom()` runs the real `@cyclonedx/cyclonedx-npm` (new
+devDependency, open-source, zero-cost) against `package-lock.json`,
+producing a valid CycloneDX 1.5 SBOM, and computes its sha256 digest over
+the bytes actually written to disk. `runDependencyAudit()` runs real `npm
+audit --omit=dev --json` (production dependencies only — a dev-only tool's
+vulnerability never ships to users). `.github/workflows/supply-chain-ci.yml`
+additionally builds `Dockerfile.provider-worker` locally (never pushed to
+any registry) and scans it with Trivy (open-source GitHub Action, zero
+cost, no registry credentials needed).
+
+**Reports risk, does not gate on pre-existing debt.** A real first run
+against this repository's own dependency tree found genuine, pre-existing
+production-dependency vulnerabilities (0 critical / 8 high / 14 moderate /
+1 low as of this batch — unrelated to Phase 24, not introduced by it).
+Roadmap 24-A's own done-criterion is "a dependency-risk report EXISTS", not
+"zero vulnerabilities" — `generate-sbom.ts` exits non-zero only when the
+SCAN ITSELF fails to run, never on the vulnerability count a clean run
+finds; the count is always printed and written to `audit.json` so a human
+can act on it. Hard-blocking every future PR on 8 pre-existing, unrelated
+high-severity findings would have turned a reporting requirement into an
+unplanned, potentially breaking dependency-upgrade project — exactly the
+"absorb unrelated scope" this batch was told not to do. Remediating those
+findings is a real, separate, future decision — see Future Owner Handoff.
+
+### 24-B — GitHub Artifact Attestation + digest/release metadata
+
+`.github/workflows/supply-chain-ci.yml`'s `attest` job (push to `main`
+only) re-generates the SBOM, issues a real, keyless GitHub Artifact
+Attestation for it via `actions/attest-build-provenance@v2` (GitHub OIDC +
+Sigstore under the hood — no signing key stored anywhere in this
+repository, matching "prefer keyless CI signing"), then independently
+verifies that exact attestation with `gh attestation verify` before the
+job can succeed — a real cryptographic check this repository does not
+reimplement. Release metadata (commit SHA, workflow run id/url,
+environment, build timestamp, SBOM digest, attestation URL) is written to
+the job's step summary and a retained workflow artifact — bounded,
+public-GitHub-URL evidence only, never a secret, credential, or signed
+private URL.
+
+`src/lib/deployment/release-provenance.ts` is the code-owned half:
+`ReleaseProvenanceRecord` (the bounded evidence shape) and
+`verifyReleaseProvenance()` (a pure structural verifier — digest
+present/well-formed, commit match, workflow-run reference present,
+attestation-subject digest present and matching). It imports
+`DIGEST_PATTERN`/`COMMIT_SHA_PATTERN` from `artifact-verification.ts`
+rather than redefining them, and issues no signature itself — the real
+cryptographic verification already happened in CI via `gh attestation
+verify`; re-deriving it here without the real OIDC/transparency-log
+material would be reinventing crypto this batch does not need to own.
+
+### 24-C — pre-merge verification gate
+
+Honest scope, stated directly: this repository has no application-level
+production-deploy EXECUTION path (`deployment-policy-gate.ts`'s own
+header — Vercel deploys externally from `main`). "Doğrulanmamış artifact
+production'a çıkamıyor" is enforced at the point this repository actually
+controls — merge to `main`, which Vercel then auto-deploys from — via the
+new `supply_chain_scan` required check (`required-checks.ts`), not a
+fabricated separate production-deploy gate this codebase does not
+control. `evaluateDeployment()`/`verifyArtifact()` (Phase 14-D/14-E)
+remain unmodified and un-called by anything new here — 24-C completes the
+`provenanceRef` seam 14-E already left open; it does not touch 14-D/14-E's
+own decision logic.
+
+### 24-D — AI Fix PR gate + release provenance visibility
+
+`required-checks.ts`'s `BASELINE` array gained `supply_chain_scan` — real,
+`available`, `applicableRiskClasses: ALL_RISK_CLASSES`. Because
+`ai-pr-authority.ts` calls the exact same `resolveRequiredChecks()`
+function for AI-authored proposals, this single registry change is the
+entire 24-D "AI Fix PR'lerine aynı checks'i zorunlu yap" requirement — no
+AI-specific carve-out exists or was added
+(`phase-24-supply-chain.e2e.test.ts` proves this directly, resolving
+checks for an AI proposal and asserting `supply_chain_scan` is present,
+then grepping `ai-pr-authority.ts` for the absence of any special-casing).
+`FORBIDDEN_AUTOMATION` still never reaches the policy gate at all (Phase
+14-B's own structural guarantee, unmodified) — this batch adds no new AI
+authority anywhere; AI still cannot sign, attest, verify, or promote
+anything.
+
+Release provenance visibility reuses Phase 16-D's existing Deploy/Restore
+Health admin card (`deploy-restore-admin-contract.ts`/`-service.ts`/
+`DeployRestorePanel.tsx`) — a new `releaseProvenance` field, not a second
+Operations Center. Honestly `PROVENANCE_EVIDENCE_UNAVAILABLE` at runtime:
+CI-side generation is real (`ciGenerationCodeComplete: true`, a static
+fact), but this application has no live read-path into GitHub Actions run
+history — the same class of disclosed gap `deployEligibility` on the same
+card already reports rather than fakes (Phase 14's own "No external
+integration is active"). Wiring a live GitHub API read is a distinct,
+later decision, not fabricated here.
+
+### Ownership preserved
+
+Phase 9 (media/storage), Phase 17 (Product Intelligence), Phase 18
+(IaC/drift), Phase 19 (policy-as-code), Phase 20 (contract governance),
+Phase 21 (feature flags/`release_stage`), Phase 22 (eval/quality), and
+Phase 23 (privacy) are untouched — confirmed by full regression, not
+merely asserted. No new Kafka/domain event schema was registered (this is
+CI/build metadata, not a runtime domain event — `phase-24-supply-chain.e2e
+.test.ts` greps `src/lib/events/` for the absence of one). No second
+release-status/maturity field was created — `release_stage` (Phase 21)
+remains the only one; Phase 24's admin card was checked directly for the
+absence of a shadow field. No migration was added — the entire batch is
+application logic, a CI workflow, and one new devDependency.
+
+### Not in this batch
+
+`retention.override`-class future work is Phase 23's own, not Phase 24's.
+A live GitHub Actions run-history read-back into the admin panel —
+`DEFERRED_EXTERNAL`, a distinct integration decision from generating the
+evidence in CI (which this batch does). Remediating the 8 pre-existing
+high-severity production-dependency vulnerabilities `generate-sbom.ts`'s
+first real run surfaced — `BUSINESS_DECISION_REQUIRED`/a separate,
+scoped batch; disclosed, not fixed, not hidden. Activating GitHub's native
+Dependency Review feature (`dependency_review`, still `deferred`) —
+its private-repo tier needs GitHub Advanced Security, unconfirmed for
+this repository; Phase 24's own `supply_chain_scan` (unconditionally
+free) was built instead rather than assuming GHAS availability. C2PA/
+content credentials — confirmed Phase 27's exclusive scope, not
+duplicated or fabricated here. SLSA level claims — the roadmap names no
+SLSA requirement; none is claimed.
+**Phase 24 does not start Phase 25.**
