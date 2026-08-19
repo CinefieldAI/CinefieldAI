@@ -40,10 +40,11 @@ import { LiveClerkUserDeleter, type ClerkUserDeleter } from "./clerk-account-ser
  * `processor-inventory.ts`'s own header; that gap is disclosed, not
  * fabricated. `analytics`/`log` in the roadmap's own wording map to
  * `security_events`/`admin_privileged_action_events`, which are
- * INTENTIONALLY retained past account deletion for their own audit window
- * (data-classification.ts: "retain_for_audit_window") — deleting audit
- * evidence of a deletion because the account was deleted would defeat the
- * evidence's own purpose.
+ * INTENTIONALLY retained past account deletion, permanently
+ * (data-classification.ts: "retain_immutable" — both tables have a real
+ * `BEFORE UPDATE OR DELETE` trigger, confirmed in their own migrations) —
+ * deleting audit evidence of a deletion because the account was deleted
+ * would defeat the evidence's own purpose.
  *
  * Callers MUST have already cleared `data.delete`'s policy + Tier-0
  * dual-control gates (see privacy-execution-service.ts) — this function

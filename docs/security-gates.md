@@ -6890,6 +6890,102 @@ extended (two flipped, three left alone), never replaced; Tier-0's
 re-delete control is Phase 23's own, separate, read-write function, never
 a mutation added to Phase 15's read-only engine.
 
+### Narrow corrective batch — retention-expiry cleanup mechanism
+
+The Phase 23 Master Closure Audit found a real gap: the roadmap's own
+phase-level done-criterion ("retention süresi geçen veriler temizleniyor" —
+data past its retention period is cleaned up) had no mechanism anywhere in
+the codebase, despite 23-A's retention matrix existing. This batch builds
+that mechanism, honestly, without inventing the one thing that was
+genuinely missing — real retention durations.
+
+**`src/lib/privacy/retention-policy-resolver.ts`** — a pure, no-I/O decision
+layer. `resolveClassRetention(entry)` maps a `DATA_CLASSIFICATION_MATRIX`
+entry to `KEEP` / `RETAIN_IMMUTABLE` / `NOT_APPLICABLE` /
+`BUSINESS_DECISION_REQUIRED` / `ROW_EVALUATION_REQUIRED{durationDays}`.
+`resolveRowRetention(row, durationDays, action, now)` maps one row to
+`KEEP` / `LEGAL_HOLD` (checked first, unconditionally dominant) /
+`NOT_CONFIGURED` (unparseable timestamp) / `DELETE|ANONYMIZE{cutoffAt}`.
+Neither function ever fabricates a duration: an entry with no
+`retentionDurationDays` set resolves to `BUSINESS_DECISION_REQUIRED`, full
+stop.
+
+**A real labeling correction, made in the same batch:** four of the five
+tables originally classified `retentionPolicy: "audit_window_only"` /
+`deletionPolicy: "retain_for_audit_window"` in 23-A — `security_events`,
+`admin_privileged_action_events`, `feature_flag_audit`,
+`deletion_tombstones` — were re-inspected against their own migrations and
+found to already carry a real, unconditional `BEFORE UPDATE OR DELETE`
+trigger (confirmed in `20260826000000_security_events.sql`,
+`20260829000000_tier0_admin_action_audit.sql`,
+`20260901000000_feature_flags.sql`, `20260910000000_privacy_lifecycle.sql`
+respectively). "Pending a window decision" was never actually true for
+these four — cleanup has been schema-impossible since each table's own
+creation. Reclassified to `retentionPolicy: "append_only_permanent"` /
+`deletionPolicy: "retain_immutable"`. `privacy_requests` is left
+unchanged — the one table in that original group of five with no such
+trigger, so it remains the genuinely undecided
+`BUSINESS_DECISION_REQUIRED` case.
+
+**`src/lib/privacy/retention-cleanup-executor.ts`** — the real, runnable
+mechanism, `MANUAL_OPERATOR_CALLER` only (no scheduler, no cron, no new
+admin route or UI this batch — none is genuinely required while every real
+class is inert). `evaluateRetentionCleanup(admin, {dryRun})` walks all 14
+`DATA_CLASSIFICATION_MATRIX` entries, resolves each class, and for any
+class reaching `ROW_EVALUATION_REQUIRED` with a table this file has an
+explicit, hand-written performer for, queries a bounded, deterministically
+ordered (`created_at ASC`, capped at `MAX_CLEANUP_BATCH_SIZE`) batch and
+evaluates each row. `dryRun: true` returns bounded evidence only (table,
+row id, the verdict's action/reason/cutoff) and mutates nothing;
+`dryRun: false` performs the same-computed action through that table's
+registered performer. A class needing row evaluation on a table with NO
+registered performer fails closed as `unsupported_table` — there is no
+code path that accepts a table name or SQL fragment from a caller.
+
+The one registered performer, `media_assets`, reuses
+`account-deletion-workflow.ts`'s own R2 object-removal call
+(`deleteAssetObject`) rather than a second deletion path, and tombstones
+the row the same way `AccountDeletionWorkflow` does — so a row this
+executor cleans up is indistinguishable, downstream, from one
+`AccountDeletionWorkflow` cleaned up. `legal_hold` rows are excluded by
+the resolver (checked first, unconditionally); already-tombstoned rows are
+excluded by the fetch query itself, making a repeat run over the same
+table naturally idempotent.
+
+**Today this remains fully inert, honestly.** `media_assets` itself is
+classified `retentionPolicy: "account_lifetime"` (resolves to `KEEP`, tied
+to account deletion, not an independent age cutoff) — no real
+`DATA_CLASSIFICATION_MATRIX` entry has `retentionDurationDays` set, so no
+real class ever reaches `ROW_EVALUATION_REQUIRED` and no real row is ever
+touched by this mechanism as shipped. `retention-cleanup-executor.test.ts`
+proves the row-level DELETE/ANONYMIZE/legal-hold/idempotency/fail-closed
+behavior against a *synthetic* entry with a fabricated 90-day duration —
+never against a real table — the same "prove the seam works, don't invent
+the policy" discipline `retention-policy-resolver.test.ts` and Phase 22's
+`trustedEvaluators: []` already established. Activating real cleanup for
+any table requires one deliberate, reviewed change: setting
+`retentionDurationDays` on that table's own `DATA_CLASSIFICATION_MATRIX`
+entry — not new code.
+
+Billing tables (`credit_ledger`/`credit_wallets`/`credit_reservations`)
+and every `retain_immutable` table are untouched by construction: their
+class verdict is `RETAIN_IMMUTABLE`, which never reaches row evaluation.
+`privacy_requests`/`deletion_tombstones` — the two tables holding evidence
+of a person's own deletion/export — are likewise never at risk of
+accidental self-expiry: `deletion_tombstones` is `retain_immutable`
+(append-only trigger), and `privacy_requests` is
+`BUSINESS_DECISION_REQUIRED` (no duration defined), so this batch cannot
+expire the very evidence it depends on.
+
+No migration was needed — the executor is pure application logic over
+`data_class`/`retention_policy`/`legal_hold`/`tombstoned_at`/`created_at`
+columns Phase 9-A and Phase 23-A already added. No new `policies/data/
+actions.json` entry was added — no real, exposed destructive admin
+operation exists this batch to register; if a future batch wires this
+behind an admin route, that route must go through the existing
+`requireAdminAccess()` → policy → Tier-0-if-destructive chain like every
+other privileged admin action, never a new approval system.
+
 ### Not in this batch
 
 `retention.override`/`legal_hold.set`/`legal_hold.clear` real handlers —

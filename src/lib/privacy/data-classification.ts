@@ -22,9 +22,20 @@ export type LegalBasis = "contract" | "legitimate_interest" | "legal_obligation"
 export type DeletionPolicy =
   /** Hard-deleted or PII-anonymized by AccountDeletionWorkflow. */
   | "anonymize_on_deletion"
-  /** Financial record — retained per legal_obligation, never scrubbed by account deletion. */
+  /**
+   * Financial record, OR a table whose own migration already enforces a
+   * real `BEFORE UPDATE OR DELETE` trigger — retained per legal_obligation
+   * or by structural schema constraint, never scrubbed by account deletion
+   * OR by any retention-expiry cleanup this codebase can build without a
+   * separate, deliberate schema change.
+   */
   | "retain_immutable"
-  /** Security/audit evidence — retained for its own retention window regardless of account deletion. */
+  /**
+   * A retention window is intended but no explicit duration has been
+   * decided yet, and nothing in the schema prevents cleanup once one is —
+   * `retention-policy-resolver.ts` resolves this to
+   * `BUSINESS_DECISION_REQUIRED`, never a fabricated default duration.
+   */
   | "retain_for_audit_window"
   /** Catalog/reference data with no user identity — deletion is not applicable. */
   | "not_applicable";
@@ -40,6 +51,17 @@ export interface DataClassificationEntry {
   /** A short retention-policy key, matching media_assets.retention_policy's CHECK shape when applicable. */
   readonly retentionPolicy: string;
   readonly deletionPolicy: DeletionPolicy;
+  /**
+   * PHASE 23 CORRECTIVE BATCH — the roadmap's own phase-level done-criterion
+   * ("retention süresi geçen veriler temizleniyor" — data past its
+   * retention period is cleaned up) requires an actual EXPIRY DURATION to
+   * evaluate, not just a policy label. Undefined here on every entry today,
+   * deliberately: `retention-policy-resolver.ts` never invents a number —
+   * an undefined duration resolves to `BUSINESS_DECISION_REQUIRED`, not a
+   * fabricated default. Setting this on a real entry is itself the
+   * business decision, made once, by whoever owns that table.
+   */
+  readonly retentionDurationDays?: number;
 }
 
 /**
@@ -141,8 +163,15 @@ export const DATA_CLASSIFICATION_MATRIX: readonly DataClassificationEntry[] = [
     legalBasis: "legitimate_interest",
     owner: "phase-12",
     storageLocation: "supabase_postgres",
-    retentionPolicy: "audit_window_only",
-    deletionPolicy: "retain_for_audit_window",
+    // PHASE 23 CORRECTIVE BATCH: this table's own migration
+    // (20260826000000_security_events.sql) has a real BEFORE UPDATE OR
+    // DELETE trigger raising an exception on every row, always — cleanup
+    // is not "pending a window decision", it is structurally impossible
+    // today without a separate, deliberate schema change. The original
+    // "audit_window_only" label predates this correction and implied a
+    // decidable duration that was never actually enforceable.
+    retentionPolicy: "append_only_permanent",
+    deletionPolicy: "retain_immutable",
   },
   {
     table: "admin_privileged_action_events",
@@ -151,8 +180,9 @@ export const DATA_CLASSIFICATION_MATRIX: readonly DataClassificationEntry[] = [
     legalBasis: "legal_obligation",
     owner: "phase-16",
     storageLocation: "supabase_postgres",
-    retentionPolicy: "audit_window_only",
-    deletionPolicy: "retain_for_audit_window",
+    // Same correction — real append-only trigger, 20260829000000_tier0_admin_action_audit.sql.
+    retentionPolicy: "append_only_permanent",
+    deletionPolicy: "retain_immutable",
   },
   {
     table: "feature_flag_audit",
@@ -161,8 +191,9 @@ export const DATA_CLASSIFICATION_MATRIX: readonly DataClassificationEntry[] = [
     legalBasis: "legitimate_interest",
     owner: "phase-21",
     storageLocation: "supabase_postgres",
-    retentionPolicy: "audit_window_only",
-    deletionPolicy: "retain_for_audit_window",
+    // Same correction — real append-only trigger, 20260901000000_feature_flags.sql.
+    retentionPolicy: "append_only_permanent",
+    deletionPolicy: "retain_immutable",
   },
   {
     table: "model_eval_runs",
@@ -191,8 +222,11 @@ export const DATA_CLASSIFICATION_MATRIX: readonly DataClassificationEntry[] = [
     legalBasis: "legal_obligation",
     owner: "phase-23",
     storageLocation: "supabase_postgres",
-    retentionPolicy: "audit_window_only",
-    deletionPolicy: "retain_for_audit_window",
+    // Same correction — real append-only trigger, this table's own
+    // migration (20260910000000_privacy_lifecycle.sql). A tombstone
+    // "aging out" would defeat the exact guarantee it exists to make.
+    retentionPolicy: "append_only_permanent",
+    deletionPolicy: "retain_immutable",
   },
 ] as const;
 

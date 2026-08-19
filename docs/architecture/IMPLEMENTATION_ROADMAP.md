@@ -318,9 +318,23 @@ simultaneously, resolved by running Tier-0 first (it is the real owner of
 the approval evidence policy needs) and policy second, unconditionally,
 immediately before real work — a deliberate, narrow, documented deviation
 from the established "policy first" convention, not a bypass of either
-gate. Full detail, evidence, and file-by-file citations: see
-`security-gates.md`'s "Phase 23 — Privacy, GDPR & Data Lifecycle
-Architecture" section.
+gate. A narrow corrective batch closed the one real gap the Master
+Closure Audit found — no retention-expiry cleanup mechanism existed —
+by adding `retention-policy-resolver.ts` (pure class/row eligibility
+logic, never inventing a duration) and `retention-cleanup-executor.ts`
+(a real, `MANUAL_OPERATOR_CALLER`-only dry-run/execute mechanism,
+registered today only for `media_assets`, reusing
+`AccountDeletionWorkflow`'s own R2/tombstone seam). It ships fully inert:
+every real `DATA_CLASSIFICATION_MATRIX` entry still has no
+`retentionDurationDays` set, so no real row is deleted or anonymized by
+it as shipped — activating it for any table is one reviewed data change,
+not new code. The same batch corrected four tables' retention labels
+(`security_events`, `admin_privileged_action_events`,
+`feature_flag_audit`, `deletion_tombstones`) from "pending an audit-window
+decision" to `retain_immutable`, having found each already carries a real
+append-only trigger in its own migration. Full detail, evidence, and
+file-by-file citations: see `security-gates.md`'s "Phase 23 — Privacy,
+GDPR & Data Lifecycle Architecture" section.
 
 ---
 
