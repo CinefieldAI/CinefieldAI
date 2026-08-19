@@ -67,19 +67,58 @@ export interface EvalRunIdentity {
   readonly evalSetKey: string;
   readonly evaluator: string;
   readonly evaluatorVersion: string;
+  /**
+   * Read from `generations.metadata.semanticVersion` (compatibility-seam.ts),
+   * never recomputed — absent when the run's evidence did not originate
+   * from a generation admitted through the manifest/compiler path (e.g. the
+   * synthetic CLI smoke run, or a sample whose generation used the primary
+   * POST /api/generate path, which carries no manifest at all).
+   */
+  readonly manifestVersion?: string;
+  readonly compilerVersion?: string;
 }
 
 export const REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{1,64}$/;
 export const EVAL_SET_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,80}$/;
 export const CASE_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,80}$/;
 
-/** [0,1]. Below this a dimension's own score counts as a failure for that dimension. */
-export const SCORE_PASS_THRESHOLD = 0.7;
+/**
+ * PHASE 22 CORRECTIVE BATCH — THRESHOLD GOVERNANCE
+ *
+ * There used to be a hardcoded `SCORE_PASS_THRESHOLD = 0.7` here. The
+ * Phase 22 closure audit found it had no roadmap source and no prior
+ * repository authority — the Phase 22 roadmap section names no numeric
+ * threshold anywhere, for any purpose. It coincidentally matched
+ * `route-quality.ts`'s pre-existing `DEFAULT_QUALITY_POLICY.minConfidence`,
+ * but that gates a different question (is a route's quality SIGNAL trusted
+ * enough to move routing) than this one (did a single case's own score
+ * clear the bar for "pass"). Retaining an invented number as if it were
+ * settled business policy would keep giving every stored `verdict` an
+ * authority nobody actually granted it.
+ *
+ * The per-case pass/fail cutoff is now a REQUIRED, explicit, validated
+ * input — the same discipline check-model-eval-regression.ts's own
+ * `MODEL_EVAL_REGRESSION_THRESHOLD` already established for the (different)
+ * candidate-vs-baseline regression tolerance. The two thresholds answer
+ * different business questions and are never merged into one constant or
+ * one env var.
+ *
+ * Fail-safe by construction: `threshold === null` (missing/malformed —
+ * see `parseScorePassThreshold`) means every dimension using it is
+ * INCONCLUSIVE, never a fabricated pass.
+ */
+export function parseScorePassThreshold(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) return null;
+  return value;
+}
 
-export function verdictForScore(score: number | null): Verdict {
+export function verdictForScore(score: number | null, threshold: number | null): Verdict {
+  if (threshold === null) return "inconclusive";
   if (score === null) return "inconclusive";
   if (!Number.isFinite(score) || score < 0 || score > 1) return "inconclusive";
-  return score >= SCORE_PASS_THRESHOLD ? "pass" : "fail";
+  return score >= threshold ? "pass" : "fail";
 }
 
 /**

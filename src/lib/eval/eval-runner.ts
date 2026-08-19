@@ -43,18 +43,26 @@ export type ProduceOutputFn = (evalCase: EvalCase) => Promise<ProducedOutput>;
 export async function runEvalCase(
   evalCase: EvalCase,
   produceOutput: ProduceOutputFn,
-  judge: AiJudgeProvider = NO_JUDGE_AVAILABLE
+  judge: AiJudgeProvider = NO_JUDGE_AVAILABLE,
+  /**
+   * The per-case dimension pass/fail cutoff (Phase 22 corrective batch —
+   * see eval-contract.ts's `parseScorePassThreshold`). `null` means no
+   * threshold is configured: every threshold-driven dimension below scores
+   * "inconclusive" rather than a fabricated pass, exactly like a null score
+   * already does.
+   */
+  scorePassThreshold: number | null = null
 ): Promise<CaseResult> {
   const produced = await produceOutput(evalCase);
 
   const scores = await Promise.all([
     Promise.resolve(scoreFailure(produced.succeeded)),
-    Promise.resolve(scoreLatency(evalCase, produced.latencyMs)),
-    Promise.resolve(scoreCost(evalCase, produced.cost)),
+    Promise.resolve(scoreLatency(evalCase, produced.latencyMs, scorePassThreshold)),
+    Promise.resolve(scoreCost(evalCase, produced.cost, scorePassThreshold)),
     Promise.resolve(scoreSafety(produced.moderation)),
-    scoreAdherence(judge, evalCase, produced.outputUrl),
-    scoreQuality(judge, evalCase, produced.outputUrl),
-    scoreConsistency(judge, evalCase, produced.outputUrl),
+    scoreAdherence(judge, evalCase, produced.outputUrl, scorePassThreshold),
+    scoreQuality(judge, evalCase, produced.outputUrl, scorePassThreshold),
+    scoreConsistency(judge, evalCase, produced.outputUrl, scorePassThreshold),
   ]);
 
   const { verdict, reasonCode } = caseVerdict(scores);
@@ -89,16 +97,25 @@ export async function runEval(
   identity: EvalRunIdentity,
   cases: readonly EvalCase[],
   produceOutput: ProduceOutputFn,
-  judge: AiJudgeProvider = NO_JUDGE_AVAILABLE
+  judge: AiJudgeProvider = NO_JUDGE_AVAILABLE,
+  scorePassThreshold: number | null = null
 ): Promise<RunEvalOutcome> {
   if (cases.length === 0) return { outcome: "no_cases" };
 
-  const started = await startEvalRun(admin, identity, { caseCount: cases.length });
+  // Version evidence rides in the run's own `metadata` jsonb column — no
+  // migration, the same existing-canonical-persistence choice
+  // compatibility-seam.ts made for `generations.metadata`. Referenced from
+  // `identity`, never recomputed here.
+  const runMetadata: Record<string, unknown> = { caseCount: cases.length };
+  if (identity.manifestVersion !== undefined) runMetadata.manifestVersion = identity.manifestVersion;
+  if (identity.compilerVersion !== undefined) runMetadata.compilerVersion = identity.compilerVersion;
+
+  const started = await startEvalRun(admin, identity, runMetadata);
   if (started.outcome === "failed") return { outcome: "start_failed", errorCode: started.errorCode };
 
   const results: CaseResult[] = [];
   for (const evalCase of cases) {
-    const result = await runEvalCase(evalCase, produceOutput, judge);
+    const result = await runEvalCase(evalCase, produceOutput, judge, scorePassThreshold);
     results.push(result);
     await recordEvalCaseResult(admin, started.runId, result);
   }

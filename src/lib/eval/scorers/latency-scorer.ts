@@ -8,7 +8,11 @@ import { verdictForScore } from "../eval-contract";
  * `maxLatencyMs` bound). A case with no declared bound cannot fail on
  * latency — absence of a criterion is not a zero criterion.
  */
-export function scoreLatency(evalCase: EvalCase, observedLatencyMs: number | null): ScoreResult {
+export function scoreLatency(
+  evalCase: EvalCase,
+  observedLatencyMs: number | null,
+  passThreshold: number | null
+): ScoreResult {
   const bound = evalCase.criteria.maxLatencyMs;
   if (observedLatencyMs === null) {
     return { dimension: "latency", score: null, verdict: "inconclusive", reasonCode: "latency_not_observed" };
@@ -20,5 +24,5 @@ export function scoreLatency(evalCase: EvalCase, observedLatencyMs: number | nul
     return { dimension: "latency", score: null, verdict: "inconclusive", reasonCode: "invalid_latency_observation" };
   }
   const score = Math.max(0, Math.min(1, 1 - observedLatencyMs / bound));
-  return { dimension: "latency", score, verdict: verdictForScore(score), reasonCode: "measured" };
+  return { dimension: "latency", score, verdict: verdictForScore(score, passThreshold), reasonCode: "measured" };
 }

@@ -1,7 +1,39 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { latestCompletedRun } from "@/lib/eval/eval-store";
-import type { ModelQualityAdminResult, ModelQualityRouteView } from "./model-quality-admin-contract";
+import { latestCompletedRun, type EvalRunSummary } from "@/lib/eval/eval-store";
+import { GOLDEN_EVAL_CASES } from "@/lib/eval/golden-dataset";
+import { DEFAULT_QUALITY_POLICY } from "@/lib/routing/route-quality";
+import type {
+  ModelQualityAdminResult,
+  ModelQualityRouteView,
+  QualityMetricState,
+  LatencyMetricState,
+  CostMetricState,
+  EvidenceScale,
+} from "./model-quality-admin-contract";
+
+function evidenceScale(): EvidenceScale {
+  const datasetCaseCount = GOLDEN_EVAL_CASES.length;
+  const minSamplesForRoutingConfidence = DEFAULT_QUALITY_POLICY.minSamples;
+  return {
+    datasetCaseCount,
+    minSamplesForRoutingConfidence,
+    label: datasetCaseCount >= minSamplesForRoutingConfidence ? "PRODUCTION_ROUTING_CONFIDENT" : "CI_EVAL_EVIDENCE",
+  };
+}
+
+function qualityMetric(value: number | undefined): QualityMetricState {
+  return value === undefined ? { state: "NO_EVIDENCE" } : { state: "AVAILABLE", value };
+}
+
+function latencyMetric(run: EvalRunSummary): LatencyMetricState {
+  return run.meanLatencyMs === null ? { state: "NO_EVIDENCE" } : { state: "AVAILABLE", valueMs: run.meanLatencyMs };
+}
+
+function costMetric(run: EvalRunSummary): CostMetricState {
+  if (run.cost.state === "AVAILABLE") return { state: "AVAILABLE", value: run.cost.meanAmount, currency: run.cost.currency };
+  return { state: run.cost.state };
+}
 
 /**
  * The Phase 22-D admin Model Quality read service.
@@ -58,15 +90,18 @@ export async function getModelQualityAdminView(admin: SupabaseClient): Promise<M
               completedAt: run.completedAt,
               caseCount: run.caseCount,
               failedCaseCount: run.failedCaseCount,
-              meanQualityScore: run.meanScores.quality_score ?? null,
-              meanLatencyScore: null,
-              meanSafetyScore: run.meanScores.safety_score ?? null,
+              quality: qualityMetric(run.meanScores.quality_score),
+              latency: latencyMetric(run),
+              safety: qualityMetric(run.meanScores.safety_score),
+              cost: costMetric(run),
+              manifestVersion: run.manifestVersion,
+              compilerVersion: run.compilerVersion,
             }
           : null,
       });
     }
 
-    return { outcome: "FOUND", routes };
+    return { outcome: "FOUND", routes, evidenceScale: evidenceScale() };
   } catch {
     return { outcome: "SOURCE_UNAVAILABLE", reasonCode: "model_quality_read_failed" };
   }

@@ -23,6 +23,29 @@ import type { UserIntent } from "./user-intent-contract";
  * it does not have. Extending GenerationCreateRequest to accept multiple
  * inputs is out of Phase 17's scope — it would touch the live creation path,
  * which is explicitly not authorized here.
+ *
+ * PHASE 22 CORRECTIVE BATCH — SEMANTIC VERSION TRACEABILITY
+ * `manifestVersion`/`compilerVersion`/`intentId` now travel into
+ * `metadata.semanticVersion`, the same namespaced-key convention
+ * generation-create-service.ts's own `routing` key already established for
+ * server-derived facts riding alongside UI settings in one jsonb column —
+ * no new migration, no second generation path. This makes them reachable at
+ * `generations.metadata.semanticVersion` for any generation admitted through
+ * POST /api/product-intelligence/execute (the one live caller of this
+ * function). The PRIMARY POST /api/generate path builds its
+ * GenerationCreateRequest directly from client UI state and never compiles
+ * a manifest at all, so a generation admitted there still carries no
+ * semantic version — that is an honest, disclosed scope limit of this
+ * batch (see docs/security-gates.md's Phase 22 section), not something this
+ * seam can fix without making the manifest compiler mandatory on the
+ * primary path, which is a Phase 17 redesign this corrective batch is not
+ * authorized to make.
+ *
+ * `provenance` (which field came from the user vs. a specialist vs. a
+ * registry default) is deliberately NOT copied here — it answers a
+ * different question ("why does this manifest look the way it does") than
+ * "which manifest/compiler version produced it", and copying it would grow
+ * this seam's scope past the traceability gap this batch exists to close.
  */
 
 function outputCountFraction(outputCount: number | undefined): string | undefined {
@@ -46,6 +69,11 @@ export function mapGenerationManifestToCreateRequest(manifest: GenerationManifes
   if (firstReference) {
     metadata.mime_type = firstReference.mimeType;
   }
+  metadata.semanticVersion = {
+    manifestVersion: manifest.manifestVersion,
+    compilerVersion: manifest.compilerVersion,
+    intentId: manifest.intentId,
+  };
 
   return {
     model: manifest.modelId,

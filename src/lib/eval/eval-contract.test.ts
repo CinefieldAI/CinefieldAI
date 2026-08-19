@@ -1,22 +1,41 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { verdictForScore, caseVerdict, type ScoreResult } from "./eval-contract";
+import { verdictForScore, caseVerdict, parseScorePassThreshold, type ScoreResult } from "./eval-contract";
 
 test("verdictForScore: null is inconclusive, not a fabricated pass or fail", () => {
-  assert.equal(verdictForScore(null), "inconclusive");
+  assert.equal(verdictForScore(null, 0.7), "inconclusive");
 });
 
 test("verdictForScore: out-of-range or non-finite scores are inconclusive, never trusted", () => {
-  assert.equal(verdictForScore(-0.1), "inconclusive");
-  assert.equal(verdictForScore(1.1), "inconclusive");
-  assert.equal(verdictForScore(NaN), "inconclusive");
+  assert.equal(verdictForScore(-0.1, 0.7), "inconclusive");
+  assert.equal(verdictForScore(1.1, 0.7), "inconclusive");
+  assert.equal(verdictForScore(NaN, 0.7), "inconclusive");
 });
 
 test("verdictForScore: at or above the pass threshold is pass, below is fail", () => {
-  assert.equal(verdictForScore(0.7), "pass");
-  assert.equal(verdictForScore(1), "pass");
-  assert.equal(verdictForScore(0.69), "fail");
-  assert.equal(verdictForScore(0), "fail");
+  assert.equal(verdictForScore(0.7, 0.7), "pass");
+  assert.equal(verdictForScore(1, 0.7), "pass");
+  assert.equal(verdictForScore(0.69, 0.7), "fail");
+  assert.equal(verdictForScore(0, 0.7), "fail");
+});
+
+test("verdictForScore: a missing threshold (null) is inconclusive even for a real, in-range score — a threshold is never invented", () => {
+  assert.equal(verdictForScore(1, null), "inconclusive");
+  assert.equal(verdictForScore(0, null), "inconclusive");
+});
+
+test("parseScorePassThreshold: missing/malformed/out-of-range is null, never a fabricated default", () => {
+  assert.equal(parseScorePassThreshold(undefined), null);
+  assert.equal(parseScorePassThreshold("not-a-number"), null);
+  assert.equal(parseScorePassThreshold("-0.1"), null);
+  assert.equal(parseScorePassThreshold("1.1"), null);
+  assert.equal(parseScorePassThreshold("NaN"), null);
+});
+
+test("parseScorePassThreshold: a valid [0,1] number is accepted, including the boundaries", () => {
+  assert.equal(parseScorePassThreshold("0"), 0);
+  assert.equal(parseScorePassThreshold("1"), 1);
+  assert.equal(parseScorePassThreshold("0.7"), 0.7);
 });
 
 function score(dimension: ScoreResult["dimension"], verdict: ScoreResult["verdict"]): ScoreResult {

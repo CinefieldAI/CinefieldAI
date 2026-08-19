@@ -2,6 +2,7 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabas
 import { GOLDEN_EVAL_CASES, GOLDEN_EVAL_SET_KEY } from "@/lib/eval/golden-dataset";
 import { runEval, type ProducedOutput } from "@/lib/eval/eval-runner";
 import type { EvalCase, EvalRunIdentity } from "@/lib/eval/eval-contract";
+import { parseScorePassThreshold } from "@/lib/eval/eval-contract";
 import type { CostObservation } from "@/lib/finops/cost-contract";
 
 /**
@@ -77,9 +78,26 @@ async function main(): Promise<void> {
     evaluatorVersion: "1.0.0",
   };
 
+  // No default. A missing/malformed threshold means every threshold-driven
+  // dimension records "inconclusive", never a fabricated pass — see
+  // eval-contract.ts's parseScorePassThreshold header.
+  const scorePassThreshold = parseScorePassThreshold(process.env.MODEL_EVAL_SCORE_PASS_THRESHOLD);
+  if (scorePassThreshold === null) {
+    console.log(
+      "run-model-eval: NOTE — MODEL_EVAL_SCORE_PASS_THRESHOLD is not set (or not a number in [0,1]). " +
+        "Per-case pass/fail verdicts will be recorded as inconclusive; this does not block the run — " +
+        "evidence is still written durably. Set it to opt into pass/fail labeling."
+    );
+  }
+
   const admin = getSupabaseAdminClient();
-  const outcome = await runEval(admin, identity, GOLDEN_EVAL_CASES, (evalCase) =>
-    synthesizeOutput(evalCase, providerId, providerModelId)
+  const outcome = await runEval(
+    admin,
+    identity,
+    GOLDEN_EVAL_CASES,
+    (evalCase) => synthesizeOutput(evalCase, providerId, providerModelId),
+    undefined,
+    scorePassThreshold
   );
 
   if (outcome.outcome !== "completed") {

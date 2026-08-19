@@ -12,20 +12,41 @@ async function judgeDimension(
   dimension: "adherence" | "quality" | "consistency",
   judge: AiJudgeProvider,
   evalCase: EvalCase,
-  outputUrl: string | null
+  outputUrl: string | null,
+  passThreshold: number | null
 ): Promise<ScoreResult> {
   const verdict = await judge.judge(dimension, evalCase, outputUrl);
-  return { dimension, score: verdict.score, verdict: verdictForScore(verdict.score), reasonCode: verdict.reasonCode };
+  return {
+    dimension,
+    score: verdict.score,
+    verdict: verdictForScore(verdict.score, passThreshold),
+    reasonCode: verdict.reasonCode,
+  };
 }
 
-export function scoreAdherence(judge: AiJudgeProvider, evalCase: EvalCase, outputUrl: string | null): Promise<ScoreResult> {
-  return judgeDimension("adherence", judge, evalCase, outputUrl);
+export function scoreAdherence(
+  judge: AiJudgeProvider,
+  evalCase: EvalCase,
+  outputUrl: string | null,
+  passThreshold: number | null
+): Promise<ScoreResult> {
+  return judgeDimension("adherence", judge, evalCase, outputUrl, passThreshold);
 }
 
-export function scoreQuality(judge: AiJudgeProvider, evalCase: EvalCase, outputUrl: string | null): Promise<ScoreResult> {
-  return judgeDimension("quality", judge, evalCase, outputUrl);
+export function scoreQuality(
+  judge: AiJudgeProvider,
+  evalCase: EvalCase,
+  outputUrl: string | null,
+  passThreshold: number | null
+): Promise<ScoreResult> {
+  return judgeDimension("quality", judge, evalCase, outputUrl, passThreshold);
 }
 
-export function scoreConsistency(judge: AiJudgeProvider, evalCase: EvalCase, outputUrl: string | null): Promise<ScoreResult> {
-  return judgeDimension("consistency", judge, evalCase, outputUrl);
+export function scoreConsistency(
+  judge: AiJudgeProvider,
+  evalCase: EvalCase,
+  outputUrl: string | null,
+  passThreshold: number | null
+): Promise<ScoreResult> {
+  return judgeDimension("consistency", judge, evalCase, outputUrl, passThreshold);
 }

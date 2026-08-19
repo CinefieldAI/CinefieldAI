@@ -69,6 +69,18 @@ export async function completeEvalRun(
   return data === true ? { outcome: "completed" } : { outcome: "not_found_or_already_terminal" };
 }
 
+/**
+ * Cost cannot be safely averaged across currencies (Phase 22 corrective
+ * batch). `AVAILABLE` only when every priced case in the run shares one
+ * currency; `MIXED_CURRENCY` is reported honestly rather than silently
+ * averaging unlike units; `NO_EVIDENCE` when nothing in the run has a known
+ * cost at all.
+ */
+export type CostSummary =
+  | { readonly state: "NO_EVIDENCE" }
+  | { readonly state: "AVAILABLE"; readonly meanAmount: number; readonly currency: string }
+  | { readonly state: "MIXED_CURRENCY" };
+
 export interface EvalRunSummary {
   readonly runId: string;
   readonly modelVersionId: string;
@@ -82,8 +94,13 @@ export interface EvalRunSummary {
   readonly completedAt: string | null;
   /** Mean of each case's non-null dimension scores actually measured — never a default. */
   readonly meanScores: Readonly<Record<string, number>>;
+  readonly meanLatencyMs: number | null;
+  readonly cost: CostSummary;
   readonly caseCount: number;
   readonly failedCaseCount: number;
+  /** From the run's own `metadata` (Phase 22 corrective batch) — null when the evidence has no known manifest/compiler lineage. See eval-contract.ts's EvalRunIdentity. */
+  readonly manifestVersion: string | null;
+  readonly compilerVersion: string | null;
 }
 
 /** The latest COMPLETED run for one provider/model pair — what the regression gate and the admin dashboard both read as "the current measurement." */
@@ -94,7 +111,9 @@ export async function latestCompletedRun(
 ): Promise<EvalRunSummary | null> {
   const { data: run, error } = await admin
     .from("model_eval_runs")
-    .select("id, model_version_id, provider_id, provider_model_id, eval_set_key, evaluator, evaluator_version, status, started_at, completed_at")
+    .select(
+      "id, model_version_id, provider_id, provider_model_id, eval_set_key, evaluator, evaluator_version, status, started_at, completed_at, metadata"
+    )
     .eq("provider_id", providerId)
     .eq("provider_model_id", providerModelId)
     .eq("status", "completed")
@@ -106,12 +125,13 @@ export async function latestCompletedRun(
 
   const { data: results } = await admin
     .from("model_eval_results")
-    .select("adherence_score, quality_score, consistency_score, safety_score, failed")
+    .select("adherence_score, quality_score, consistency_score, safety_score, latency_ms, cost_amount, cost_currency, failed")
     .eq("run_id", run.id);
 
   const rows = (results ?? []) as Record<string, unknown>[];
   const meanScores = meanByDimension(rows);
   const failedCaseCount = rows.filter((r) => r.failed === true).length;
+  const metadata = (run.metadata ?? {}) as Record<string, unknown>;
 
   return {
     runId: String(run.id),
@@ -125,8 +145,12 @@ export async function latestCompletedRun(
     startedAt: String(run.started_at),
     completedAt: run.completed_at ? String(run.completed_at) : null,
     meanScores,
+    meanLatencyMs: meanLatency(rows),
+    cost: costSummary(rows),
     caseCount: rows.length,
     failedCaseCount,
+    manifestVersion: typeof metadata.manifestVersion === "string" ? metadata.manifestVersion : null,
+    compilerVersion: typeof metadata.compilerVersion === "string" ? metadata.compilerVersion : null,
   };
 }
 
@@ -138,6 +162,26 @@ function meanByDimension(rows: Record<string, unknown>[]): Record<string, number
     if (values.length > 0) means[dim] = values.reduce((a, b) => a + b, 0) / values.length;
   }
   return means;
+}
+
+function meanLatency(rows: Record<string, unknown>[]): number | null {
+  const values = rows.map((r) => r.latency_ms).filter((v): v is number => typeof v === "number");
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function costSummary(rows: Record<string, unknown>[]): CostSummary {
+  const priced = rows.filter(
+    (r): r is Record<string, unknown> & { cost_amount: number; cost_currency: string } =>
+      typeof r.cost_amount === "number" && typeof r.cost_currency === "string" && r.cost_currency.length > 0
+  );
+  if (priced.length === 0) return { state: "NO_EVIDENCE" };
+
+  const currencies = new Set(priced.map((r) => r.cost_currency));
+  if (currencies.size > 1) return { state: "MIXED_CURRENCY" };
+
+  const meanAmount = priced.reduce((a, r) => a + r.cost_amount, 0) / priced.length;
+  return { state: "AVAILABLE", meanAmount, currency: priced[0].cost_currency };
 }
 
 /**

@@ -38,25 +38,30 @@ function unavailable(): CostObservation {
 }
 
 test("a cheap generation scores near 1", () => {
-  const result = scoreCost(evalCase(1), known(0.01));
+  const result = scoreCost(evalCase(1), known(0.01), 0.7);
   assert.ok(result.score !== null && result.score >= 0.98);
   assert.equal(result.verdict, "pass");
 });
 
 test("at the bound scores 0 and fails", () => {
-  const result = scoreCost(evalCase(1), known(1));
+  const result = scoreCost(evalCase(1), known(1), 0.7);
   assert.equal(result.score, 0);
   assert.equal(result.verdict, "fail");
 });
 
 test("an unavailable cost observation is inconclusive, never treated as free", () => {
-  const result = scoreCost(evalCase(1), unavailable());
+  const result = scoreCost(evalCase(1), unavailable(), 0.7);
   assert.equal(result.score, null);
   assert.equal(result.verdict, "inconclusive");
   assert.equal(result.reasonCode, "cost_unavailable");
 });
 
 test("no declared cost bound is an automatic pass", () => {
-  const result = scoreCost(evalCase(undefined), known(999));
+  const result = scoreCost(evalCase(undefined), known(999), 0.7);
   assert.equal(result.score, 1);
+});
+
+test("a null pass threshold makes even a cheap, in-bound observation inconclusive rather than fabricating a pass", () => {
+  const result = scoreCost(evalCase(1), known(0.01), null);
+  assert.equal(result.verdict, "inconclusive");
 });

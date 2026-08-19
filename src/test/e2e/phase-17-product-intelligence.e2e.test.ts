@@ -456,6 +456,19 @@ describe("Phase 17 - Compatibility seam", () => {
     assert.equal((back.metadata as Record<string, unknown>).duration_seconds, 8);
   });
 
+  test("Phase 22 corrective batch: manifest/compiler version/intentId ride along under metadata.semanticVersion, readable back verbatim", () => {
+    const compiled = compileManifest(fixtureResult());
+    assert.equal(compiled.outcome, "VALID");
+    if (compiled.outcome !== "VALID") return;
+    const request = mapGenerationManifestToCreateRequest(compiled.manifest);
+    const metadata = request.metadata as Record<string, unknown>;
+    assert.deepEqual(metadata.semanticVersion, {
+      manifestVersion: compiled.manifest.manifestVersion,
+      compilerVersion: compiled.manifest.compilerVersion,
+      intentId: compiled.manifest.intentId,
+    });
+  });
+
   test("only the first reference survives the manifest -> request direction (documented limitation)", () => {
     const manifest: GenerationManifest = {
       manifestVersion: "1.0.0",

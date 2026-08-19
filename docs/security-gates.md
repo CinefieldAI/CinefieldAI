@@ -6627,4 +6627,111 @@ deliberately left to a human. Automated `model_routes`-diff candidate
 extraction for a fully automatic CI gate — a real, disclosed future item.
 A live Trigger.dev schedule for automatic online-sample feedback — the same
 `LIVE_DEFERRED` gap Phase 21 already disclosed for its own canary trigger.
+
+### Phase 22 corrective batch — traceability, quality dashboard, threshold governance, CI enforcement
+
+The Phase 22 Master Closure Audit found four real gaps, narrowly fixed here.
+Nothing outside these four areas was touched — Phase 7 routing, Phase 17's
+manifest compiler, Phase 19 policy, Phase 20 contracts, and Phase 21 rollout
+remain exactly as they were.
+
+**Model/manifest/compiler version traceability — real, and honestly
+partial.** `src/lib/product-intelligence/compatibility-seam.ts`'s
+`mapGenerationManifestToCreateRequest()` now attaches
+`metadata.semanticVersion = { manifestVersion, compilerVersion, intentId }`
+onto every `GenerationCreateRequest` it produces — the same namespaced-key
+convention `generation-create-service.ts`'s own `routing` metadata key
+already established, so no migration was needed; `generations.metadata` was
+already an unbounded jsonb column. This makes the values reachable for any
+generation admitted through the one real, live caller of that function,
+`POST /api/product-intelligence/execute`. **`POST /api/generate`, the
+primary generation path, still carries no semantic version at all** — it
+builds its `GenerationCreateRequest` directly from client UI state and never
+compiles a manifest, and making it do so would be a Phase 17 redesign this
+corrective batch is not authorized to make. `MODEL_VERSION_TRACEABILITY`
+remains `PASS` (via `generation_attempts.model_version_id`, independent of
+any of this). `MANIFEST_VERSION_TRACEABILITY`/`COMPILER_VERSION_TRACEABILITY`
+move from `FAIL` to `PARTIAL`: the mechanism is real and live, scoped to one
+of two admission paths.
+
+**Prompt version — `CANONICAL_COMPILER_VERSION`, not fabricated.** This
+repository has no distinct `promptVersion` concept anywhere, and this batch
+does not invent one. `GenerationManifest.compilerVersion` (bumped by hand
+whenever `manifest-compiler.ts`'s precedence/conflict-detection logic
+changes — see `generation-manifest-contract.ts`'s own header) is the closest
+real thing to "which logic produced this prompt," and is documented here,
+explicitly, as the canonical owner of that question until a real, distinct
+prompt-versioning concept exists.
+
+**`SCORE_PASS_THRESHOLD` — no longer a hardcoded default.** The closure
+audit found `SCORE_PASS_THRESHOLD = 0.7` had no roadmap source and no prior
+repository authority (a fresh re-extraction of the Phase 22 roadmap section
+found zero numeric thresholds anywhere in it). `verdictForScore()` now
+requires an explicit `threshold: number | null` argument;
+`parseScorePassThreshold()` reads `MODEL_EVAL_SCORE_PASS_THRESHOLD` from the
+environment with the exact same discipline
+`MODEL_EVAL_REGRESSION_THRESHOLD` already had — required, validated to
+`[0,1]`, no invented default — and a missing/malformed threshold makes every
+threshold-driven dimension (latency, cost, adherence, quality, consistency)
+record `inconclusive`, never a fabricated `pass`. The two thresholds remain
+two separate business concepts, read from two separate env vars, in two
+separate scripts — the per-case score cutoff never feeds the
+candidate-vs-baseline regression tolerance or vice versa.
+
+**Admin Model Quality dashboard — quality/latency/cost are all real now.**
+`eval-store.ts`'s `latestCompletedRun()` now aggregates real
+`mean latency_ms` and a currency-safe cost summary (`AVAILABLE` only when
+every priced case in a run shares one currency; `MIXED_CURRENCY` reported
+honestly rather than silently averaged; `NO_EVIDENCE` when nothing has a
+known cost) alongside the existing per-dimension score means.
+`model-quality-admin-contract.ts`'s `meanLatencyScore: null` stub is gone,
+replaced with real `QualityMetricState`/`LatencyMetricState`/`CostMetricState`
+types the panel renders directly — no fabricated zero for missing evidence.
+The panel also now states, honestly, whether its evidence is
+`CI_EVAL_EVIDENCE` or `PRODUCTION_ROUTING_CONFIDENT`, computed from the real
+golden-dataset case count (7) against Phase 7's own real
+`DEFAULT_QUALITY_POLICY.minSamples` (20) — today, and for as long as the
+dataset stays this size, it is honestly `CI_EVAL_EVIDENCE`: real evidence,
+sized for a CI smoke check, not for a production routing-confidence
+decision. `minSamples` was not changed to make this look better.
+
+**CI enforcement — the real promotion path is now gated automatically.**
+Audited directly: `src/lib/routing/admin-route-service.ts` is the only live
+route-mutation surface, and its three operations (enable/disable, priority,
+kill switch) can never introduce a NEW `(provider_id, provider_model_id)`
+pair into `model_routes` — that only ever happens via a migration file (the
+only non-test `INSERT INTO model_routes` anywhere in this repository is
+`20260817000000_model_routing.sql`, using a plain, git-diffable
+`FROM (VALUES (...)) AS seed(model_id, provider_id, provider_model_id)`
+convention). `scripts/check-new-route-eval-evidence.ts` (new) parses exactly
+that real, demonstrated convention out of every newly ADDED migration file
+in a PR and requires a completed eval run to already exist for every pair
+found — an unparseable `INSERT INTO model_routes` blocks rather than being
+silently skipped. `.github/workflows/eval-ci.yml` now runs this
+automatically on `pull_request` for any change under `supabase/migrations/`,
+alongside its pre-existing `workflow_dispatch`-only candidate/baseline
+regression comparison (unchanged, still deliberately manual — see that
+job's own header for why an automatic regression comparison would mean
+spending real provider budget on every PR). This closes the loop for new
+routes: no unmeasured pair can ever become routable. It does **not**
+automatically detect "this migration changed which route is DEFAULT for a
+model" (priority is a separate, non-migration action via
+`setRoutePriority`) and therefore does not automatically trigger a
+regression comparison at that moment — deciding a reprioritization event
+should trigger one is a disclosed `BUSINESS_DECISION`, not a fabricated
+automation. Marking the new job as a required branch-protection check is
+also disclosed as an external, human, GitHub-repository-settings step this
+codebase cannot perform on its own.
+
+**Router quality signal — confirmed genuinely ready, not touched again.**
+`DEFAULT_QUALITY_POLICY.trustedEvaluators` is still `[]`, still untouched by
+this batch. Both branches this corrective brief asked to confirm were
+already proven by Phase 7-D's own pre-existing test
+(`phase-7d-cost-quality-routing.e2e.test.ts`): an untrusted evaluator's
+signal grants no routing advantage, and a LOCAL `QualityPolicy` object (not
+the mutated global default) with `trustedEvaluators: ["cinefield-eval"]`
+does let a signal reach `scoreRouteComposite()`'s real composite score.
+Nothing in `route-quality.ts`/`route-scoring.ts` was touched to confirm
+this.
+
 **Phase 22 does not start Phase 23.**

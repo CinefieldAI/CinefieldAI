@@ -254,6 +254,36 @@ faked. Full detail, evidence, and file-by-file citations: see
 `security-gates.md`'s "Phase 22 — AI Model Evaluation & Quality Governance"
 section.
 
+**Phase 22 corrective batch (post-closure-audit):** four real gaps found by
+the Master Closure Audit, narrowly fixed. Manifest/compiler version now
+travels from `GenerationManifest` into `generations.metadata.semanticVersion`
+(no migration — the existing `routing`-metadata-key precedent) and from
+there into a completed eval run's own metadata — real for
+`POST /api/product-intelligence/execute`, still honestly absent for the
+primary `POST /api/generate` path, which never compiles a manifest.
+`SCORE_PASS_THRESHOLD`'s hardcoded `0.7` (found to have no roadmap source)
+is gone; the per-case pass/fail cutoff is now a required, validated
+`MODEL_EVAL_SCORE_PASS_THRESHOLD` env var, kept strictly separate from the
+pre-existing `MODEL_EVAL_REGRESSION_THRESHOLD`, and a missing/malformed
+threshold fails closed to `inconclusive`, never a fabricated pass. The Admin
+Model Quality dashboard's `meanLatencyScore: null` stub and missing cost
+field are gone — real mean-latency and currency-safe cost aggregates now
+back the panel's own "quality/latency/cost" claim, and the panel now states
+honestly whether its evidence is CI-scale or large enough for Phase 7's own
+production-routing-confidence bar (today: CI-scale — 7 golden cases against
+a real `minSamples` of 20, undisclosed no more, `minSamples` not weakened to
+hide it). A new automatic PR gate
+(`scripts/check-new-route-eval-evidence.ts`,
+`.github/workflows/eval-ci.yml`'s new `pull_request`-triggered job) now
+requires existing eval evidence before any new `(provider, provider model)`
+pair can enter `model_routes` — audited directly against
+`admin-route-service.ts` to confirm that migration file is genuinely the
+only way a new pair can ever become routable, closing the "unmeasured
+upgrade reaches production" gap the closure audit flagged; the
+candidate-vs-baseline regression comparison itself stays a deliberate,
+manual `workflow_dispatch` action, and marking the new gate a required
+GitHub branch-protection check remains an external, human step.
+
 ---
 
 ## Completed Implementation Checkpoints

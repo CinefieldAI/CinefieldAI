@@ -19,9 +19,9 @@ test("NO_JUDGE_AVAILABLE always returns null score, never a fabricated one", asy
 });
 
 test("all three judge-backed scorers are inconclusive with no judge configured", async () => {
-  const adherence = await scoreAdherence(NO_JUDGE_AVAILABLE, evalCase, null);
-  const quality = await scoreQuality(NO_JUDGE_AVAILABLE, evalCase, null);
-  const consistency = await scoreConsistency(NO_JUDGE_AVAILABLE, evalCase, null);
+  const adherence = await scoreAdherence(NO_JUDGE_AVAILABLE, evalCase, null, 0.7);
+  const quality = await scoreQuality(NO_JUDGE_AVAILABLE, evalCase, null, 0.7);
+  const consistency = await scoreConsistency(NO_JUDGE_AVAILABLE, evalCase, null, 0.7);
   for (const result of [adherence, quality, consistency]) {
     assert.equal(result.score, null);
     assert.equal(result.verdict, "inconclusive");
@@ -33,7 +33,13 @@ test("all three judge-backed scorers are inconclusive with no judge configured",
 
 test("a real judge implementation's score is respected verbatim, proving the seam is real", async () => {
   const fakeJudge = { async judge() { return { score: 0.42, reasonCode: "fake_judge_test" }; } };
-  const result = await scoreQuality(fakeJudge, evalCase, "https://example.invalid/out.png");
+  const result = await scoreQuality(fakeJudge, evalCase, "https://example.invalid/out.png", 0.7);
   assert.equal(result.score, 0.42);
   assert.equal(result.reasonCode, "fake_judge_test");
+});
+
+test("a null pass threshold makes even a high real-judge score inconclusive rather than fabricating a pass", async () => {
+  const fakeJudge = { async judge() { return { score: 0.99, reasonCode: "fake_judge_test" }; } };
+  const result = await scoreQuality(fakeJudge, evalCase, "https://example.invalid/out.png", null);
+  assert.equal(result.verdict, "inconclusive");
 });

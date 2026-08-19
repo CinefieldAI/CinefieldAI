@@ -2,21 +2,48 @@ name: Model Eval Regression Gate (Phase 22-C)
 
 # 22-C's own done-criterion: "Threshold aşan upgrade default route olamıyor"
 # — an upgrade exceeding the regression threshold cannot become the default
-# route. This workflow runs the real, fail-closed gate
-# (scripts/check-model-eval-regression.ts) against a candidate/baseline
-# pair.
+# route. Two real, independent jobs:
 #
-# HONEST GAP, DISCLOSED RATHER THAN HIDDEN: there is no automated
-# "which model_routes row changed" extraction from a migration diff in this
-# repository yet, so this cannot be a fully automatic on-every-PR gate the
-# way contract-ci.yml/policy-ci.yml are. It runs on workflow_dispatch,
-# naming the candidate/baseline explicitly — the same workflow_dispatch-only
-# pattern infra-apply.yml already uses for its own highest-consequence
-# action. Building the automatic extraction (and wiring this into a true
-# required PR check for any routing-migration change) is a real, disclosed
-# future item — see docs/security-gates.md's Phase 22 section.
+#   1. new-route-evidence-gate (pull_request, automatic) — every new
+#      migration file touching `model_routes` (the ONLY way a new
+#      (provider, provider model) pair can ever enter the router's table —
+#      audited directly against admin-route-service.ts, whose three live
+#      mutations can enable/disable/reprioritize/kill-switch an EXISTING
+#      route but never create a new pair) must name only pairs that already
+#      have completed golden-dataset evidence. Missing evidence blocks the
+#      PR. See scripts/check-new-route-eval-evidence.ts's own header for the
+#      full reasoning and what this deliberately does not attempt (an
+#      automatic regression comparison).
+#
+#   2. eval-regression-gate (workflow_dispatch, manual) — the real,
+#      fail-closed candidate-vs-baseline quality comparison
+#      (scripts/check-model-eval-regression.ts). Naming which pair is the
+#      "baseline" for a given model is a business decision this repository
+#      has no automated concept of (no `is_baseline` column, no default-
+#      route-change detector) — automating it would mean guessing at a
+#      decision nobody made, so it stays a deliberate, explicit action.
+#
+# STILL AN HONEST GAP, NARROWED RATHER THAN CLOSED: job 1 proves no
+# unmeasured pair can ever become routable at all — an operator can no
+# longer bypass eval by adding a route and never running a comparison. It
+# does NOT automatically detect "this migration changed which route is
+# DEFAULT for a model" (priority is set separately, via setRoutePriority,
+# which does not touch a migration) and therefore does not automatically run
+# job 2's regression comparison at that moment. That link — deciding a
+# reprioritization event should trigger a specific regression check — is a
+# disclosed BUSINESS_DECISION, not a fabricated automation; see
+# docs/security-gates.md's Phase 22 section.
+#
+# Marking job 1 as a REQUIRED branch-protection check is a GitHub repository
+# settings action outside this codebase — this workflow makes the check
+# exist and run on every relevant PR, but an operator with repo admin access
+# must still flip it to required for GitHub to actually block a merge on
+# failure.
 
 on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
   workflow_dispatch:
     inputs:
       candidate_provider_id:
@@ -39,8 +66,41 @@ permissions:
   contents: read
 
 jobs:
+  new-route-evidence-gate:
+    name: new route requires existing eval evidence
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-new-route-eval-evidence.ts reads the PR base ref's migration
+          # tree via `git diff ... --diff-filter=A` — needs real history.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: New-route eval-evidence gate (PR base vs HEAD)
+        env:
+          EVAL_GATE_BASE_REF: origin/${{ github.event.pull_request.base.ref || 'main' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run eval:check-new-route-evidence
+
+      - name: extractRoutePairs unit tests
+        run: |
+          node --conditions=react-server --import tsx --test \
+            scripts/check-new-route-eval-evidence.test.ts
+
+      - name: tsc
+        run: npx tsc --noEmit -p tsconfig.json
+
   eval-regression-gate:
     name: golden-dataset regression gate
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -154,9 +154,9 @@ describe("Phase 22-C — regression gate is real and fails closed", () => {
     assert.match(workflow, /npm run eval:check-regression/);
   });
 
-  test("this workflow's own automatic-candidate-detection gap is disclosed in its own header, not hidden", () => {
+  test("this workflow's own remaining automatic-regression-linkage gap is disclosed in its own header, not hidden — narrowed by the corrective batch's new-route gate, not silently closed", () => {
     const workflow = read(".github/workflows/eval-ci.yml");
-    assert.match(workflow, /HONEST GAP, DISCLOSED/);
+    assert.match(workflow, /STILL AN HONEST GAP, NARROWED RATHER THAN CLOSED/);
   });
 });
 
@@ -239,5 +239,130 @@ describe("Phase 22 — every new component has a real caller", () => {
   test("check-model-eval-regression.ts imports the real eval store, not a mock", () => {
     const src = stripComments(read("scripts/check-model-eval-regression.ts"));
     assert.match(src, /from "@\/lib\/eval\/eval-store"/);
+  });
+
+  test("check-new-route-eval-evidence.ts imports the real eval store and admin client, not a mock", () => {
+    const src = stripComments(read("scripts/check-new-route-eval-evidence.ts"));
+    assert.match(src, /from "@\/lib\/eval\/eval-store"/);
+    assert.match(src, /from "@\/lib\/supabase\/supabaseAdmin"/);
+  });
+});
+
+// ---- Corrective batch: traceability, threshold governance, CI enforcement --
+//
+// Behavioral proof for these lives elsewhere and is not repeated here as a
+// regex check: eval-contract.test.ts (parseScorePassThreshold/
+// verdictForScore's fail-closed behavior), eval-runner.test.ts (manifest/
+// compiler version threaded end to end into a real run's metadata, real
+// mean-latency/cost aggregation, mixed-currency honesty),
+// check-new-route-eval-evidence.test.ts (extractRoutePairs against real SQL,
+// including the actual committed 20260817000000_model_routing.sql
+// migration), and phase-17-product-intelligence.e2e.test.ts (the
+// compatibility seam actually attaching semanticVersion). What follows are
+// the governance/wiring facts a behavioral test can't express on its own.
+
+describe("Phase 22 corrective batch — no invented default threshold remains", () => {
+  test("SCORE_PASS_THRESHOLD no longer exists as a hardcoded constant", () => {
+    const src = stripComments(read("src/lib/eval/eval-contract.ts"));
+    assert.doesNotMatch(src, /export const SCORE_PASS_THRESHOLD/);
+  });
+
+  test("verdictForScore requires an explicit threshold argument — there is no way to call it and get an implicit default", () => {
+    const src = stripComments(read("src/lib/eval/eval-contract.ts"));
+    assert.match(src, /export function verdictForScore\(score: number \| null, threshold: number \| null\)/);
+  });
+
+  test("the CLI reads MODEL_EVAL_SCORE_PASS_THRESHOLD from the environment, never hardcodes 0.7", () => {
+    const src = stripComments(read("scripts/run-model-eval.ts"));
+    assert.match(src, /MODEL_EVAL_SCORE_PASS_THRESHOLD/);
+    assert.doesNotMatch(src, /0\.7/);
+  });
+
+  test("MODEL_EVAL_REGRESSION_THRESHOLD (candidate-vs-baseline) and the per-case score threshold remain two separate concepts — neither script reads the other's env var", () => {
+    const regressionScript = stripComments(read("scripts/check-model-eval-regression.ts"));
+    const runScript = stripComments(read("scripts/run-model-eval.ts"));
+    assert.doesNotMatch(regressionScript, /MODEL_EVAL_SCORE_PASS_THRESHOLD/);
+    assert.doesNotMatch(runScript, /MODEL_EVAL_REGRESSION_THRESHOLD/);
+  });
+});
+
+describe("Phase 22 corrective batch — prompt/compiler version traceability", () => {
+  test("the compatibility seam attaches manifest/compiler version to generation metadata under its own namespaced key, not raw prompt text", () => {
+    const src = stripComments(read("src/lib/product-intelligence/compatibility-seam.ts"));
+    assert.match(src, /metadata\.semanticVersion = \{/);
+    assert.match(src, /manifestVersion: manifest\.manifestVersion/);
+    assert.match(src, /compilerVersion: manifest\.compilerVersion/);
+    assert.doesNotMatch(src, /metadata\.prompt\s*=/, "raw prompt text must never be duplicated into metadata");
+  });
+
+  test("EvalRunIdentity can carry manifest/compiler version, and eval-store persists/reads them from the run's own metadata — no new migration", () => {
+    const identitySrc = stripComments(read("src/lib/eval/eval-contract.ts"));
+    assert.match(identitySrc, /manifestVersion\?: string/);
+    const storeSrc = stripComments(read("src/lib/eval/eval-store.ts"));
+    assert.match(storeSrc, /metadata\.manifestVersion/);
+  });
+
+  test("the primary POST /api/generate path is honestly left out of scope — it builds GenerationCreateRequest directly from client body, never compiling a manifest", () => {
+    const src = stripComments(read("src/app/api/generate/route.ts"));
+    assert.doesNotMatch(src, /mapGenerationManifestToCreateRequest|compileManifest/);
+  });
+});
+
+describe("Phase 22 corrective batch — Admin Model Quality dashboard matches its own claim", () => {
+  test("the contract has real latency and cost metric types, not a hardcoded null field", () => {
+    const src = stripComments(read("src/lib/admin/model-quality-admin-contract.ts"));
+    assert.doesNotMatch(src, /meanLatencyScore: null/);
+    assert.match(src, /LatencyMetricState/);
+    assert.match(src, /CostMetricState/);
+  });
+
+  test("the service computes latency/cost from the real eval-store aggregates, never a stub", () => {
+    const src = stripComments(read("src/lib/admin/model-quality-admin-service.ts"));
+    assert.match(src, /run\.meanLatencyMs/);
+    assert.match(src, /run\.cost/);
+  });
+
+  test("mixed-currency cost is reported honestly, never silently averaged across units", () => {
+    const src = stripComments(read("src/lib/eval/eval-store.ts"));
+    assert.match(src, /MIXED_CURRENCY/);
+    assert.match(src, /currencies\.size > 1/);
+  });
+
+  test("the panel distinguishes CI_EVAL_EVIDENCE from PRODUCTION_ROUTING_CONFIDENT using the real dataset size vs. the real router policy, never a hardcoded label", () => {
+    const src = stripComments(read("src/lib/admin/model-quality-admin-service.ts"));
+    assert.match(src, /GOLDEN_EVAL_CASES\.length/);
+    assert.match(src, /DEFAULT_QUALITY_POLICY\.minSamples/);
+  });
+});
+
+describe("Phase 22 corrective batch — CI enforcement on the real promotion path", () => {
+  test("eval-ci.yml now runs automatically on pull_request for supabase/migrations changes, not only workflow_dispatch", () => {
+    const workflow = read(".github/workflows/eval-ci.yml");
+    assert.match(workflow, /pull_request:\s*\n\s*paths:\s*\n\s*- "supabase\/migrations\/\*\*"/);
+  });
+
+  test("the new-route gate is scoped to pull_request and the regression gate stays scoped to workflow_dispatch — the two never run as the same job", () => {
+    const workflow = read(".github/workflows/eval-ci.yml");
+    assert.match(workflow, /if: github\.event_name == 'pull_request'/);
+    assert.match(workflow, /if: github\.event_name == 'workflow_dispatch'/);
+  });
+
+  test("an unparseable model_routes INSERT blocks rather than being silently skipped — fail-closed, not fail-open", () => {
+    const src = stripComments(read("scripts/check-new-route-eval-evidence.ts"));
+    assert.match(src, /outcome: "unverifiable"/);
+    assert.match(src, /process\.exit\(1\)/);
+  });
+
+  test("marking the new gate as a required branch-protection check is disclosed as an external, human step — never claimed as already enforced", () => {
+    const workflow = read(".github/workflows/eval-ci.yml");
+    assert.match(workflow, /repo admin access[\s\S]{0,80}flip it to required/);
+  });
+});
+
+describe("Phase 22 corrective batch — router quality signal is genuinely ready, not just inert", () => {
+  test("Phase 7-D's own test already proves both branches (untrusted evaluator has no effect; an explicitly trusted evaluator does affect scoring) without this batch touching route-scoring.ts", () => {
+    const src = stripComments(read("src/test/e2e/phase-7d-cost-quality-routing.e2e.test.ts"));
+    assert.match(src, /trustedEvaluators: \["cinefield-eval"\]/, "a LOCAL policy object proves the trusted branch — the global default is never mutated");
+    assert.match(src, /scoreQuality\(quality\)\.component, 0\.95/, "a trusted evaluator's signal reaches the router's own composite score");
   });
 });

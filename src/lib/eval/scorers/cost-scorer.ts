@@ -10,7 +10,7 @@ import { verdictForScore } from "../eval-contract";
  * bound, so it stays a pure function with no Supabase/pricing dependency
  * of its own.
  */
-export function scoreCost(evalCase: EvalCase, observation: CostObservation): ScoreResult {
+export function scoreCost(evalCase: EvalCase, observation: CostObservation, passThreshold: number | null): ScoreResult {
   const bound = evalCase.criteria.maxCost;
 
   if (observation.state !== "known" || observation.estimatedCost === undefined) {
@@ -24,5 +24,5 @@ export function scoreCost(evalCase: EvalCase, observation: CostObservation): Sco
   }
 
   const score = Math.max(0, Math.min(1, 1 - observation.estimatedCost / bound));
-  return { dimension: "cost", score, verdict: verdictForScore(score), reasonCode: "measured" };
+  return { dimension: "cost", score, verdict: verdictForScore(score, passThreshold), reasonCode: "measured" };
 }

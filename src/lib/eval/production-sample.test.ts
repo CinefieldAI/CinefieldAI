@@ -11,6 +11,8 @@ function attempt(overrides: Partial<AttemptSampleCandidate>): AttemptSampleCandi
     status: "completed",
     latencyMs: 1000,
     outputUrl: "https://example.invalid/out.png",
+    manifestVersion: null,
+    compilerVersion: null,
     ...overrides,
   };
 }

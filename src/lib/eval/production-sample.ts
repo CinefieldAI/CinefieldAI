@@ -29,6 +29,18 @@ export interface AttemptSampleCandidate {
   readonly status: string;
   readonly latencyMs: number | null;
   readonly outputUrl: string | null;
+  /**
+   * Read from the owning generation's `metadata.semanticVersion`
+   * (compatibility-seam.ts, Phase 22 corrective batch) — null when that
+   * generation was admitted via the primary POST /api/generate path, which
+   * never compiles a manifest. Carried here so a future caller that feeds a
+   * selected sample into `runEval()` can pass it through as
+   * `EvalRunIdentity.manifestVersion`/`compilerVersion` without
+   * recomputing it. Selection logic below does not read these fields —
+   * sampling is unaffected either way.
+   */
+  readonly manifestVersion: string | null;
+  readonly compilerVersion: string | null;
 }
 
 export interface SampleSelection {
