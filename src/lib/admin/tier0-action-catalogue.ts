@@ -192,6 +192,30 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     owner: "phase-21 (src/lib/feature-flags/flag-store.ts, writeFlag) via phase-21 (feature-flag-admin-service.ts)",
     note: "maintenance_mode (whole-site blast radius) and every release_stage transition except the one below. Fast single-operator authorization is intentional — an incident kill switch that requires coordinating a second human defeats its own purpose.",
   },
+  "data.export": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    // Phase 23. Already registered in policies/data/actions.json
+    // (requiresTwoPerson: true, requiresHumanApproval: true, owner:
+    // "phase-23") — that gate keeps running, unmodified, as the composed
+    // OPA-mirrored condition this file's own header describes. Activates
+    // the SAME generic dual-control mechanism as route.disable/queue.dlq.
+    // redrive/temporal.workflow.cancel/release_stage.activate_public — a
+    // bulk export of one user's personal data is at least as consequential
+    // as any of those.
+    requiresTwoPerson: true,
+    owner: "phase-23 (src/lib/privacy/privacy-execution-service.ts)",
+    note: "Bulk personal-data export for one data subject. A misauthorized DSAR endpoint is directly a \"give all user data as ZIP\" API — the roadmap's own stated risk.",
+  },
+  "data.delete": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: true,
+    owner: "phase-23 (src/lib/privacy/privacy-execution-service.ts, AccountDeletionWorkflow)",
+    note: "Irreversible account erasure across Postgres/R2/Clerk. The single highest-consequence data mutation this system can make against one user's own data.",
+  },
   "release_stage.activate_public": {
     classification: "HIGH_RISK_TIER0",
     minimumRole: "tier0_admin",

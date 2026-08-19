@@ -23,14 +23,24 @@
       "expect": { "decision": "DENY", "reason": "unknown_action" }
     },
     {
-      "name": "a registered but unbuilt action is denied - data.export is Phase 23",
+      "name": "data.export is now implemented (Phase 23) - without human approval evidence it blocks on approval, never a silent allow",
       "patch": { "action": "data.export" },
-      "expect": { "decision": "DENY", "reason": "not_implemented" }
+      "expect": { "decision": "REQUIRE_APPROVAL", "reason": "human_approval_required" }
     },
     {
-      "name": "data.delete is denied - Phase 23 owns erasure workflows",
+      "name": "data.export with human approval evidence allows, but two-person is enforced downstream - policy alone never satisfies dual control",
+      "patch": { "action": "data.export", "approvalEvidence": { "humanApproved": true } },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "data.delete is now implemented (Phase 23) - without human approval evidence it blocks on approval, never a silent allow",
       "patch": { "action": "data.delete" },
-      "expect": { "decision": "DENY", "reason": "not_implemented" }
+      "expect": { "decision": "REQUIRE_APPROVAL", "reason": "human_approval_required" }
+    },
+    {
+      "name": "data.delete with human approval evidence allows, but two-person is enforced downstream - policy alone never satisfies dual control",
+      "patch": { "action": "data.delete", "approvalEvidence": { "humanApproved": true } },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
     },
     {
       "name": "retention.override is denied",
@@ -240,7 +250,7 @@
     },
     {
       "name": "an unimplemented action outranks a bad subject",
-      "patch": { "action": "data.delete", "actor": { "id": "", "role": "superuser", "kind": "human" } },
+      "patch": { "action": "retention.override", "actor": { "id": "", "role": "superuser", "kind": "human" } },
       "expect": { "decision": "DENY", "reason": "not_implemented" }
     },
     {

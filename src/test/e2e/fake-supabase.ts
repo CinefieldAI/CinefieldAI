@@ -229,7 +229,94 @@ export class FakeSupabaseClient {
     if (fn === "complete_model_eval_run") {
       return { data: this.completeModelEvalRun(args ?? {}), error: null };
     }
+    if (fn === "create_privacy_request") {
+      return { data: this.createPrivacyRequest(args ?? {}), error: null };
+    }
+    if (fn === "mark_privacy_request_processing") {
+      return { data: this.markPrivacyRequestProcessing(args ?? {}), error: null };
+    }
+    if (fn === "resolve_privacy_request") {
+      return { data: this.resolvePrivacyRequest(args ?? {}), error: null };
+    }
+    if (fn === "record_deletion_tombstone") {
+      return { data: this.recordDeletionTombstone(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /** Mirrors create_privacy_request() (Phase 23, 20260910000000_privacy_lifecycle.sql). */
+  private createPrivacyRequest(args: Record<string, unknown>): string {
+    const id = randomUUID();
+    const rows = (this.state.privacy_requests ?? []) as Row[];
+    this.state.privacy_requests = rows;
+    rows.push({
+      id,
+      clerk_user_id: args.p_clerk_user_id,
+      request_type: args.p_request_type,
+      status: "pending",
+      tier0_request_id: null,
+      requested_at: new Date().toISOString(),
+      resolved_at: null,
+      resolved_by: null,
+      reason_code: null,
+      export_object_key: null,
+      export_expires_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    return id;
+  }
+
+  /** Mirrors mark_privacy_request_processing(): only a still-'pending' row transitions. */
+  private markPrivacyRequestProcessing(args: Record<string, unknown>): boolean {
+    const rows = (this.state.privacy_requests ?? []) as Row[];
+    const row = rows.find((r) => r.id === args.p_request_id && r.status === "pending");
+    if (!row) return false;
+    row.status = "processing";
+    row.tier0_request_id = args.p_tier0_request_id;
+    row.updated_at = new Date().toISOString();
+    return true;
+  }
+
+  /** Mirrors resolve_privacy_request(): only a 'pending'/'processing' row transitions. */
+  private resolvePrivacyRequest(args: Record<string, unknown>): boolean {
+    const rows = (this.state.privacy_requests ?? []) as Row[];
+    const row = rows.find(
+      (r) => r.id === args.p_request_id && (r.status === "pending" || r.status === "processing")
+    );
+    if (!row) return false;
+    row.status = args.p_status;
+    row.resolved_at = new Date().toISOString();
+    row.resolved_by = args.p_resolved_by;
+    if (args.p_tier0_request_id !== undefined && args.p_tier0_request_id !== null) row.tier0_request_id = args.p_tier0_request_id;
+    if (args.p_reason_code !== undefined && args.p_reason_code !== null) row.reason_code = args.p_reason_code;
+    if (args.p_export_object_key !== undefined && args.p_export_object_key !== null) row.export_object_key = args.p_export_object_key;
+    if (args.p_export_expires_at !== undefined && args.p_export_expires_at !== null) row.export_expires_at = args.p_export_expires_at;
+    row.updated_at = new Date().toISOString();
+    return true;
+  }
+
+  /** Mirrors record_deletion_tombstone(): ON CONFLICT(clerk_user_id) DO NOTHING semantics. */
+  private recordDeletionTombstone(args: Record<string, unknown>): { created: boolean; tombstone_id: string } {
+    const rows = (this.state.deletion_tombstones ?? []) as Row[];
+    this.state.deletion_tombstones = rows;
+    const existing = rows.find((r) => r.clerk_user_id === args.p_clerk_user_id);
+    if (existing) {
+      return { created: false, tombstone_id: String(existing.id) };
+    }
+    const id = randomUUID();
+    rows.push({
+      id,
+      clerk_user_id: args.p_clerk_user_id,
+      tombstoned_at: new Date().toISOString(),
+      reason_code: args.p_reason_code,
+      requested_by: args.p_requested_by ?? null,
+      executed_by: args.p_executed_by,
+      privacy_request_id: args.p_privacy_request_id ?? null,
+      legal_hold_exception: args.p_legal_hold_exception ?? false,
+      created_at: new Date().toISOString(),
+    });
+    return { created: true, tombstone_id: id };
   }
 
   /** Mirrors start_model_eval_run() (Phase 22, 20260908000000_model_eval.sql). */
@@ -702,6 +789,8 @@ class FakeQueryBuilder {
   private limitCount: number | null = null;
   private selectColumns = "*";
   private state: FakeSupabaseState;
+  private wantsCount = false;
+  private headOnly = false;
 
   constructor(rows: Row[], table: string, state: FakeSupabaseState) {
     this.rows = rows;
@@ -709,8 +798,11 @@ class FakeQueryBuilder {
     this.state = state;
   }
 
-  select(cols?: string) {
+  /** Mirrors the real client's `select(columns, { count, head })` — `count: "exact"` reports the matched row count; `head: true` skips returning rows. */
+  select(cols?: string, options?: { count?: "exact" | "planned" | "estimated"; head?: boolean }) {
     if (typeof cols === "string") this.selectColumns = cols;
+    if (options?.count) this.wantsCount = true;
+    if (options?.head) this.headOnly = true;
     if (this.mode === "select") this.mode = "select";
     else this.selectAfterWrite = true;
     return this;
@@ -802,7 +894,7 @@ class FakeQueryBuilder {
     );
   }
 
-  private execute(): { data: unknown; error: null } {
+  private execute(): { data: unknown; error: null; count?: number | null } {
     if (this.mode === "insert") {
       const nullable = NULLABLE_COLUMNS[this.table] ?? [];
       const inserted = this.insertRows.map((r) => {
@@ -836,7 +928,11 @@ class FakeQueryBuilder {
 
     const matched = this.matching();
     const selected = this.limitCount === null ? matched : matched.slice(0, this.limitCount);
-    return { data: this.embed(selected), error: null };
+    return {
+      data: this.headOnly ? [] : this.embed(selected),
+      error: null,
+      count: this.wantsCount ? matched.length : null,
+    };
   }
 
   /**
@@ -888,7 +984,7 @@ class FakeQueryBuilder {
   }
 
   then<TResult1, TResult2 = never>(
-    onfulfilled?: ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?: ((value: { data: unknown; error: null; count?: number | null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return Promise.resolve(this.execute()).then(onfulfilled, onrejected);

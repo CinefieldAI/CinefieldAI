@@ -6735,3 +6735,176 @@ Nothing in `route-quality.ts`/`route-scoring.ts` was touched to confirm
 this.
 
 **Phase 22 does not start Phase 23.**
+
+## Phase 23 — Privacy, GDPR & Data Lifecycle Architecture
+
+**Authoritative roadmap source:** the same master DOCX authoritative for
+Phases 17/19/20/21/22. Official title: "Phase 23 — Privacy, GDPR & Data
+Lifecycle Architecture." Handoff, stated explicitly: "Phase 9 media
+ownership/quarantine/retention foundation devralınır; data subject rights,
+deletion/takedown, retention policy ve privacy lifecycle burada
+tamamlanır" — Phase 9's storage foundation is inherited; data-subject
+rights, deletion, retention policy, and privacy lifecycle are COMPLETED
+here. Four official packages: 23-A (data classification + retention/
+purpose/legal-basis matrix + processor/DPA/data-region inventory), 23-B
+(`privacy_requests` + DSAR export endpoint/workflow), 23-C
+(`AccountDeletionWorkflow` + `deletion_tombstones` + backup-aging/restore
+re-delete control as ONE deletion package), 23-D (admin privacy view +
+processor/region records).
+
+### The scaffolding this phase fills already existed, deliberately unimplemented
+
+A repository-wide reality audit found `media_assets` (Phase 9-A) already
+carries FOUR Phase 23 hook columns — `data_class`, `retention_policy`,
+`legal_hold`, `tombstoned_at` — added, unfilled, with the migration's own
+comment stating plainly: "Politika sahibi Phase 23; uygulama noktası bu
+Phase'dir" (policy owner is Phase 23; the implementation point is this
+Phase). `policies/data/actions.json` already registered `data.export`,
+`data.delete`, `retention.override`, `legal_hold.set`, `legal_hold.clear`
+as `critical: true`, `requiredRoles: ["route_admin"]`,
+`requiresTwoPerson: true`, `requiresHumanApproval: true`,
+`implemented: false`, `owner: "phase-23"` — and `policies/conformance/
+cases.json` pinned the expected DENY/`not_implemented` behavior for all
+five, so this phase's job was never to invent authorization policy, only
+to build real handlers against an already-reviewed contract.
+
+### 23-A — data classification, retention matrix, processor/DPA inventory
+
+Source-controlled TypeScript, the same "golden dataset is code, reviewable
+via PR diff" precedent Phase 22 established: `src/lib/privacy/data-
+classification.ts` (14 entries — every real table carrying user-identifying
+or user-generated data, each with `dataClass`/`purpose`/`legalBasis`/
+`owner`/`storageLocation`/`retentionPolicy`/`deletionPolicy`) and
+`src/lib/privacy/processor-inventory.ts` (9 entries — every real,
+WIRED processor this codebase actually sends data to today: fal.ai,
+Gemini, Cloudflare Workers AI, Clerk, Supabase, Cloudflare R2, AWS S3 DR,
+AWS SQS, Temporal Cloud — deliberately excluding `secret-registry.ts`'s
+named-but-`DEFERRED` entries with no real adapter, e.g. OpenAI/ElevenLabs/
+Stripe, which send no data today). `dataClass` values are enforced by a
+real CHECK constraint on `media_assets.data_class`
+(`20260910000000_privacy_lifecycle.sql`), one vocabulary shared by both.
+Every `dpaStatus` is honestly `NOT_CONFIGURED` — this repository tracks no
+real, signed DPA with any vendor, and the inventory does not fabricate
+one; 23-D's admin view makes this gap visible rather than hidden.
+
+### 23-B — `privacy_requests`, DSAR export
+
+New migration adds `privacy_requests` (mutable lifecycle row — pending →
+processing → completed/failed/rejected, `resolution_consistency` enforced
+at the schema so a resolved row always records who/when) alongside the
+media_assets hook fills. Self-service creation is genuinely unprivileged:
+`POST /api/privacy/requests` reads `clerk_user_id` from a verified Clerk
+session only, never a client-supplied target — the roadmap's own named
+risk ("Yanlış authorization uygulanmış bir DSAR/export endpoint'i doğrudan
+'tüm kullanıcı verisini ZIP olarak ver' API'sine dönüşür") is closed
+structurally, not by convention. `src/lib/privacy/dsar-export.ts` gathers
+the requesting user's own profile/projects/generations/media-asset-
+metadata/credit-summary — bounded (`MAX_DSAR_BUNDLE_BYTES`, refuses rather
+than truncates) — and is the ONE deliberate inversion of this codebase's
+usual "never a raw prompt" discipline: GDPR Article 15 entitles a data
+subject to their own data verbatim, and a prompt is the user's own data.
+Delivery reuses `r2-client.ts`'s existing `createPresignedDownload`
+(`DOWNLOAD_URL_TTL_SECONDS`, one-time, short-lived) rather than inventing
+a second signing path. The raw `export_object_key` is never selected by
+ANY read function (`privacy-request-store.ts`, `privacy-admin-service.ts`)
+— only a derived `hasExport` boolean — a real defect this batch's own
+regression run caught and fixed (a pre-existing Phase 16-A sensitive-data
+sweep correctly flagged the raw key as a forbidden `object_key`-shaped
+column on a lower-privilege read surface).
+
+### 23-C — `deletion_tombstones`, AccountDeletionWorkflow, restore re-delete control
+
+`deletion_tombstones` (append-only, `UNIQUE(clerk_user_id)`,
+`ON CONFLICT DO NOTHING` semantics) is the durable "this account is gone"
+record. `src/lib/privacy/account-deletion-workflow.ts`'s
+`executeAccountDeletion()`: (1) refuses idempotently against an
+already-tombstoned account; (2) for every `media_assets` row NOT under
+`legal_hold` — the roadmap's own named exception, "legal-hold işaretli
+asset'ler retention dolsa bile istisna olarak korunur" — attempts a real
+R2 hot-object delete (`r2-client.ts`'s new `deleteAssetObject`, Phase 23's
+own addition, a genuinely different IAM identity from the DR backup
+client, which has no delete permission at all) and tombstones the row
+regardless of physical-delete outcome; (3) anonymizes `profiles`' PII
+columns (`username`/`email`/`display_name`/`avatar_url`) — the ROW is
+never deleted, since every other table FKs to `profiles.clerk_user_id`
+and `credit_ledger` in particular must remain addressable
+(`data-classification.ts`: `deletionPolicy: "retain_immutable"`, a
+financial record survives account deletion); (4) records the tombstone;
+(5) calls Clerk via a dependency-injected `ClerkUserDeleter` seam
+(`clerk-account-service.ts`) — the same discipline `eval-runner.ts`'s
+`ProduceOutputFn` established: never invoked live by this repository's own
+tests, a genuinely irreversible external action gated behind Tier-0 dual
+control. `src/lib/privacy/restore-redelete-guard.ts`'s
+`reapplyTombstonesAfterRestore()` is the roadmap's own named "restore
+re-delete control" — idempotently re-applies the exact same anonymization
+to any `deletion_tombstones`-matching row a Postgres restore could have
+resurrected. Honestly `LIVE_DEFERRED`: no live restore-EXECUTION capability
+exists anywhere in this repository to hang a post-restore hook off of yet
+(`restore-verification-engine.ts`, Phase 15, is deliberately read-only —
+confirmed by `tier0-action-catalogue.ts`'s own header, "no execute action
+exists yet anywhere in this repository to classify"), so this function is
+real and tested, with zero production callers today — the same class of
+disclosed gap `production-sample.ts` (Phase 22) already established.
+
+### 23-D — Admin Privacy view, `data.export`/`data.delete` wired into policy + Tier-0
+
+`GET /api/admin/privacy` (read-only: the real classification matrix,
+processor inventory, recent `privacy_requests`, tombstone count) and
+`POST /api/admin/privacy/execute` (the privileged path) are new.
+`data.export`/`data.delete` are the ONE place in this registry where
+`requiresHumanApproval` (the OPA-mirrored `policies/data/actions.json`
+gate) is true ALONGSIDE `requiresTwoPerson` (Tier-0's
+`admin_privileged_action_events` dual control) for the same action — a
+genuine composition question neither `route.disable` nor
+`queue.dlq.redrive` (which only set `requiresTwoPerson`) ever exercised.
+Resolved by reading `requirePolicy()`'s own documented contract
+(`deployment-policy-gate.ts`'s header: approval evidence must be "resolved
+from durable state by the caller... a Phase 16-E durable approval if the
+trigger is itself an admin action") literally: Tier-0 authorizes FIRST
+(it is the evidence's real owner — two DISTINCT approvers already recorded
+for this `tier0RequestId` IS the human-approval evidence, one durable fact
+read twice, never a third approval mechanism), and `requirePolicy()` runs
+SECOND, unconditionally, as the final gate immediately before real work —
+a deliberate, documented deviation from `router-admin-service.ts`'s
+"policy is the first gate" convention, justified narrowly for this one
+action pair. `data.export`/`data.delete` are now flipped to
+`implemented: true`; `retention.override`/`legal_hold.set`/
+`legal_hold.clear` deliberately remain `implemented: false` — out of this
+batch's scope, not silently completed alongside the two done criteria
+actually require. `policies/conformance/cases.json` and the OPA rego suite
+(`opa test`, 13/13) and `policy-wasm-parity.ts` (63/63) were all
+re-verified fresh against the updated registry.
+
+### Ownership preserved
+
+`PHASE_9_STORAGE_OWNER_PRESERVED`, `PHASE_12_SECURITY_OWNER_PRESERVED`,
+`PHASE_15_DR_OWNER_PRESERVED`, `PHASE_16_ADMIN_OWNER_PRESERVED`: all YES.
+`media_assets`' own hook columns are filled, never re-created (one
+migration, `ALTER TABLE`, no new `media_assets` definition);
+`policies/data/actions.json`'s pre-existing five-action scaffolding is
+extended (two flipped, three left alone), never replaced; Tier-0's
+`authorizeTier0Action`/`decidePrivilegedAction`/
+`admin_privileged_action_events` are reused byte-for-byte, with two new
+`TIER0_ACTION_CATALOGUE` entries following the exact existing shape;
+`restore-verification-engine.ts` (Phase 15) is untouched — the restore
+re-delete control is Phase 23's own, separate, read-write function, never
+a mutation added to Phase 15's read-only engine.
+
+### Not in this batch
+
+`retention.override`/`legal_hold.set`/`legal_hold.clear` real handlers —
+`BUSINESS_DECISION_REQUIRED` scope beyond what 23-A/B/C/D's own done
+criteria require this batch. A live Clerk webhook (Clerk-originated
+account-deletion triggering this workflow automatically) —
+`DEFERRED_EXTERNAL`; the roadmap's own wording asks this workflow to
+orchestrate deletion OUT to Clerk (an admin-triggered, dual-control-gated
+action calling Clerk's delete API), not to react to an inbound Clerk
+event, so this scope decision is a reading of the roadmap's actual words,
+not a shortcut. A signed DPA with any processor — `BUSINESS_DECISION_
+REQUIRED`, outside what code can prove. Live post-restore automatic
+re-application of `reapplyTombstonesAfterRestore()` — `LIVE_DEFERRED`, no
+live restore-execution capability exists in this repository yet to hook
+into. Third-party AI processor-side data deletion (fal.ai/Gemini/
+Cloudflare Workers AI exposing no delete API this codebase can call) —
+disclosed in `processor-inventory.ts`'s own header, not fabricated.
+**Phase 23 does not start Phase 24.**

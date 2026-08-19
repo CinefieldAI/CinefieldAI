@@ -112,6 +112,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/model-quality" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Model Quality
           </Link>
+          <Link href="/admin/privacy" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Privacy
+          </Link>
           <Link href="/admin/billing" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Billing / Credits
           </Link>

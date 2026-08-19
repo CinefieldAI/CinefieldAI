@@ -284,6 +284,44 @@ candidate-vs-baseline regression comparison itself stays a deliberate,
 manual `workflow_dispatch` action, and marking the new gate a required
 GitHub branch-protection check remains an external, human step.
 
+**Phase 23 — Privacy, GDPR & Data Lifecycle Architecture, official packages
+23-A through 23-D:** completes Phase 9's storage foundation with real data
+subject rights — a reality audit found `media_assets` already carried four
+unfilled Phase 23 hook columns (`data_class`/`retention_policy`/
+`legal_hold`/`tombstoned_at`) and `policies/data/actions.json` already
+registered `data.export`/`data.delete`/`retention.override`/
+`legal_hold.set`/`legal_hold.clear` as `implemented: false, owner:
+"phase-23"`, so this phase's job was building real handlers against an
+already-reviewed policy contract, not inventing one. 23-A is
+source-controlled TypeScript (`data-classification.ts`,
+`processor-inventory.ts`), the same golden-dataset-as-code precedent
+Phase 22 established. 23-B's `privacy_requests` + DSAR export is real
+end-to-end (self-service request creation reads only the caller's own
+verified Clerk identity; export bundles are bounded, delivered through the
+existing `createPresignedDownload` signing path, and the raw export
+object key is never selected by any read function — a real sensitive-data
+defect this batch's own regression caught and fixed). 23-C's
+`AccountDeletionWorkflow` anonymizes `profiles` without deleting the row
+(every other table FKs to it; the credit ledger is deliberately untouched,
+retained per its own immutable-record policy), tombstones/deletes
+non-legal-hold media (a new `deleteAssetObject` R2 capability, separate
+from the DR client which has no delete permission at all), and calls
+Clerk through a dependency-injected seam never invoked live by this
+repository's own tests; `restore-redelete-guard.ts` is the roadmap's own
+named "restore re-delete control", real and tested with zero production
+callers today (`LIVE_DEFERRED` — no live restore-execution path exists yet
+to hook into, the same class of gap Phase 22's `production-sample.ts`
+already disclosed). 23-D wires `data.export`/`data.delete` into BOTH the
+OPA-mirrored policy gate and Tier-0 dual control — the one action pair in
+this registry needing both `requiresHumanApproval` and `requiresTwoPerson`
+simultaneously, resolved by running Tier-0 first (it is the real owner of
+the approval evidence policy needs) and policy second, unconditionally,
+immediately before real work — a deliberate, narrow, documented deviation
+from the established "policy first" convention, not a bypass of either
+gate. Full detail, evidence, and file-by-file citations: see
+`security-gates.md`'s "Phase 23 — Privacy, GDPR & Data Lifecycle
+Architecture" section.
+
 ---
 
 ## Completed Implementation Checkpoints

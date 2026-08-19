@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getR2Config } from "./r2-config";
@@ -91,6 +92,31 @@ export async function putAssetObject(params: {
   }
 
   return { bucket: config.bucket, objectKey: params.objectKey, byteLength: params.bytes.byteLength };
+}
+
+/**
+ * Deletes one R2 hot object (Phase 23-C).
+ *
+ * PHASE 9's own disaster-recovery backup client deliberately never imports
+ * `DeleteObjectCommand` for the separate AWS backup identity it uses (that
+ * IAM identity has no delete permission at all — a backup failure must
+ * never become a data-loss path). This is a DIFFERENT credential: R2 is the
+ * canonical, live store this
+ * application already writes to via `putAssetObject`, and physical deletion
+ * of a user's own hot object is exactly what AccountDeletionWorkflow needs
+ * to actually perform (not just mark) an erasure. Never called except
+ * through that workflow's own Tier-0 dual-control gate — this function
+ * itself does no authorization of its own, the same "trusts its key
+ * argument" contract `createPresignedDownload` already states.
+ */
+export async function deleteAssetObject(objectKey: string): Promise<{ deleted: boolean }> {
+  const config = getR2Config();
+  try {
+    await client().send(new DeleteObjectCommand({ Bucket: config.bucket, Key: objectKey }));
+    return { deleted: true };
+  } catch {
+    return { deleted: false };
+  }
 }
 
 /** Verifies an object exists and reports its size. Used to prove a write. */

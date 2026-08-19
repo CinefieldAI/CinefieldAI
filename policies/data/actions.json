@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-08-19.1",
+  "policyVersion": "2026-08-19.2",
   "environments": ["development", "preview", "production"],
   "roles": ["service", "route_admin", "member", "anonymous", "ai_agent"],
   "aiWriteAllowlist": ["code.pr.create"],
@@ -81,7 +81,7 @@
       "requiredRoles": ["route_admin"],
       "requiresTwoPerson": true,
       "requiresHumanApproval": true,
-      "implemented": false,
+      "implemented": true,
       "owner": "phase-23"
     },
     "data.delete": {
@@ -89,7 +89,7 @@
       "requiredRoles": ["route_admin"],
       "requiresTwoPerson": true,
       "requiresHumanApproval": true,
-      "implemented": false,
+      "implemented": true,
       "owner": "phase-23"
     },
     "retention.override": {

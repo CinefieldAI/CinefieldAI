@@ -272,10 +272,17 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // boundary), not an exemption.
   // PHASE 22 adds one more: `GET /api/admin/model-quality` (read-only, no
   // mutation counterpart) — same convention.
+  // PHASE 23 adds three more: `POST/GET /api/privacy/requests` (self-service
+  // DSAR request creation/listing — a real, authenticated, `durable_write`/
+  // `authenticated_read` route, no exemption), `GET /api/admin/privacy`
+  // (read-only, same admin convention as `/api/admin/model-quality`), and
+  // `POST /api/admin/privacy/execute` (the privileged data.export/data.delete
+  // execution path — `requireAdminAccess()` ahead of the shared `guardRoute`
+  // boundary, same convention as every other Phase 16 admin mutation route).
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 46, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 49, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {
