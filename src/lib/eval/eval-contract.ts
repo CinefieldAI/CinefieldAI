@@ -106,10 +106,21 @@ export const CASE_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,80}$/;
  * Fail-safe by construction: `threshold === null` (missing/malformed —
  * see `parseScorePassThreshold`) means every dimension using it is
  * INCONCLUSIVE, never a fabricated pass.
+ *
+ * PHASE 22 FINAL NARROW CORRECTIVE BATCH — an empty or whitespace-only
+ * string must NOT reach `Number(...)` directly: `Number("") === 0` and
+ * `Number("   ") === 0` in JavaScript, so a blank env value would silently
+ * parse as a valid, maximally-permissive threshold of `0` instead of
+ * "not configured" — exactly the fabricated-pass hole this function exists
+ * to prevent. The empty-string case is rejected explicitly, before any
+ * numeric conversion is attempted, so this can never depend on `Number`'s
+ * own coercion rules for blank input.
  */
 export function parseScorePassThreshold(raw: string | undefined): number | null {
   if (raw === undefined) return null;
-  const value = Number(raw);
+  const normalized = raw.trim();
+  if (normalized.length === 0) return null;
+  const value = Number(normalized);
   if (!Number.isFinite(value) || value < 0 || value > 1) return null;
   return value;
 }

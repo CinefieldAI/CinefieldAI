@@ -30,12 +30,45 @@ test("parseScorePassThreshold: missing/malformed/out-of-range is null, never a f
   assert.equal(parseScorePassThreshold("-0.1"), null);
   assert.equal(parseScorePassThreshold("1.1"), null);
   assert.equal(parseScorePassThreshold("NaN"), null);
+  assert.equal(parseScorePassThreshold("Infinity"), null);
 });
 
-test("parseScorePassThreshold: a valid [0,1] number is accepted, including the boundaries", () => {
+test("parseScorePassThreshold: an empty or whitespace-only string is null, NEVER Number()'s own coercion to 0 — this is the exact fabricated-pass hole this function exists to close", () => {
+  assert.equal(parseScorePassThreshold(""), null);
+  assert.equal(parseScorePassThreshold(" "), null);
+  assert.equal(parseScorePassThreshold("\t"), null);
+  assert.equal(parseScorePassThreshold("\n"), null);
+  assert.equal(parseScorePassThreshold("   "), null);
+});
+
+test("parseScorePassThreshold: a valid [0,1] number is accepted, including the boundaries — a genuinely configured 0 is not confused with an empty string", () => {
   assert.equal(parseScorePassThreshold("0"), 0);
+  assert.equal(parseScorePassThreshold("0.25"), 0.25);
   assert.equal(parseScorePassThreshold("1"), 1);
   assert.equal(parseScorePassThreshold("0.7"), 0.7);
+});
+
+test("parseScorePassThreshold: surrounding whitespace around a real number is tolerated — trimming only removes whitespace, never digits", () => {
+  assert.equal(parseScorePassThreshold("  0.5  "), 0.5);
+});
+
+test("verdictForScore: an empty or whitespace threshold, once correctly parsed to null, is inconclusive even for a perfect score — proves the parser and the verdict function compose correctly, not just each in isolation", () => {
+  assert.equal(verdictForScore(1, parseScorePassThreshold("")), "inconclusive");
+  assert.equal(verdictForScore(1, parseScorePassThreshold("   ")), "inconclusive");
+});
+
+test("verdictForScore: a genuinely configured threshold of 0 is a real, permissive-but-legitimate threshold, distinct from an unconfigured one — any non-negative score passes", () => {
+  const threshold = parseScorePassThreshold("0");
+  assert.equal(threshold, 0);
+  assert.equal(verdictForScore(0.1, threshold), "pass");
+  assert.equal(verdictForScore(0, threshold), "pass");
+});
+
+test("verdictForScore: a genuinely configured threshold of 1 only passes a perfect score", () => {
+  const threshold = parseScorePassThreshold("1");
+  assert.equal(threshold, 1);
+  assert.equal(verdictForScore(1, threshold), "pass");
+  assert.equal(verdictForScore(0.99, threshold), "fail");
 });
 
 function score(dimension: ScoreResult["dimension"], verdict: ScoreResult["verdict"]): ScoreResult {

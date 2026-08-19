@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
 import { latestCompletedRun } from "@/lib/eval/eval-store";
 
@@ -43,6 +44,28 @@ import { latestCompletedRun } from "@/lib/eval/eval-store";
  * might mistake for a considered value.
  */
 
+/**
+ * PHASE 22 FINAL NARROW CORRECTIVE BATCH — an empty or whitespace-only
+ * `MODEL_EVAL_REGRESSION_THRESHOLD` must not reach `Number(...)` directly:
+ * `Number("") === 0` and `Number("   ") === 0` in JavaScript, which would
+ * silently accept a blank value as a considered "0" rather than
+ * NOT_CONFIGURED — exactly what this script's own header says never
+ * happens. Rejected explicitly, before any numeric conversion. Kept as its
+ * own local function, deliberately not shared with eval-contract.ts's
+ * `parseScorePassThreshold` — same parsing discipline, but a distinct
+ * business concept (candidate-vs-baseline regression tolerance, not a
+ * per-case score cutoff), with no shared default and no fallback from one
+ * to the other.
+ */
+export function parseRegressionThreshold(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const normalized = raw.trim();
+  if (normalized.length === 0) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0 || value > 1) return null;
+  return value;
+}
+
 interface Args {
   candidateProviderId: string;
   candidateProviderModelId: string;
@@ -71,9 +94,8 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const thresholdRaw = process.env.MODEL_EVAL_REGRESSION_THRESHOLD;
-  const threshold = thresholdRaw === undefined ? NaN : Number(thresholdRaw);
-  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+  const threshold = parseRegressionThreshold(process.env.MODEL_EVAL_REGRESSION_THRESHOLD);
+  if (threshold === null) {
     console.error(
       "check-model-eval-regression: NOT_CONFIGURED — MODEL_EVAL_REGRESSION_THRESHOLD must be set to a number in [0,1]. " +
         "No default is assumed; this is a business decision, not a code constant."
@@ -131,7 +153,24 @@ async function main(): Promise<void> {
   console.log("check-model-eval-regression: no regression beyond threshold, no failed cases. PASS.");
 }
 
-main().catch((error) => {
-  console.error("check-model-eval-regression: unexpected error", error);
-  process.exit(1);
-});
+/**
+ * Guarded so importing this module for its exported `parseRegressionThreshold`
+ * (see check-model-eval-regression.test.ts) does not also run `main()` — the
+ * same convention check-new-route-eval-evidence.ts already established.
+ */
+function isDirectlyExecuted(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return import.meta.url === pathToFileURL(entry).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectlyExecuted()) {
+  main().catch((error) => {
+    console.error("check-model-eval-regression: unexpected error", error);
+    process.exit(1);
+  });
+}
