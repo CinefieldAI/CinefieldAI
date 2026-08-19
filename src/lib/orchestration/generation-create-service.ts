@@ -7,6 +7,7 @@ import { validateCapabilities } from "./capability-validator";
 import { mapMetadataToInputs, mapMetadataToSettings } from "./generation-settings-mapper";
 import { resolveWorkflow } from "./workflow-router";
 import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
+import { DurableEvalQualityProvider } from "@/lib/eval/eval-quality-provider";
 import { createFieldLogger } from "@/lib/observability/logger";
 
 /**
@@ -198,13 +199,26 @@ export async function createGeneration(
   // all and a model whose every route is behind an open breaker are different
   // failures and get different typed errors — one is a misconfiguration, the
   // other is an outage that heals itself.
-  const routing = await resolveHealthyRoute(admin, {
-    cinefieldModelId: model.id,
-    // PHASE 7-D: the request's own billing shape, derived server-side from
-    // the already-validated settings. A client can ask for four images; it
-    // cannot tell the server what four images cost.
-    costShape: { outputCount: mapMetadataToSettings(request.metadata).outputCount ?? 1 },
-  });
+  const routing = await resolveHealthyRoute(
+    admin,
+    {
+      cinefieldModelId: model.id,
+      // PHASE 7-D: the request's own billing shape, derived server-side from
+      // the already-validated settings. A client can ask for four images; it
+      // cannot tell the server what four images cost.
+      costShape: { outputCount: mapMetadataToSettings(request.metadata).outputCount ?? 1 },
+    },
+    undefined,
+    undefined,
+    undefined,
+    // PHASE 22-D: a real, durable QualitySignalProvider — replacing the
+    // default NO_TRUSTED_QUALITY_SOURCE. Safe today, before any evaluator is
+    // trusted: DEFAULT_QUALITY_POLICY.trustedEvaluators stays [] (untouched
+    // by this batch), so every signal this provider returns is still
+    // discarded as "unknown" by normalizeQuality() and scores neutral —
+    // see eval-quality-provider.ts's own header.
+    new DurableEvalQualityProvider(admin)
+  );
   if (routing.outcome !== "selected") {
     log({
       modelId: model.id,

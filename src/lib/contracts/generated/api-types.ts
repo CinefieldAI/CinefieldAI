@@ -68,6 +68,18 @@ export interface components {
             /** Format: uuid */
             assetId: string;
         };
+        AuditEvalRunCompletedPayloadV1: {
+            /** Format: uuid */
+            runId: string;
+            providerId: string;
+            providerModelId: string;
+            evalSetKey: string;
+            /** @enum {string} */
+            status: "completed" | "failed";
+            caseCount: number;
+            failedCaseCount?: number;
+            meanQualityScore?: number | null;
+        };
         AuditFlagChangedPayloadV1: {
             flagKey: string;
             /** @enum {string} */

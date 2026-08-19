@@ -276,6 +276,28 @@ const AUDIT_FLAG_CHANGED: JsonSchema = {
   },
 };
 
+// PHASE 22. Describes a fact `model_eval_runs` (20260908000000) already
+// records — a run's identity plus its aggregate outcome, never a per-case
+// score bag or a prompt. `meanQualityScore` is the same aggregate
+// `eval-store.ts`'s `qualitySignalFor()` already computes for the router
+// seam — this event is a notification of that fact, not a second source of
+// it.
+const AUDIT_EVAL_RUN_COMPLETED: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["runId", "providerId", "providerModelId", "evalSetKey", "status", "caseCount"],
+  properties: {
+    runId: UUID,
+    providerId: { type: "string", minLength: 1, maxLength: 100 },
+    providerModelId: { type: "string", minLength: 1, maxLength: 200 },
+    evalSetKey: { type: "string", pattern: "^[a-z][a-z0-9_-]{1,80}$" },
+    status: { type: "string", enum: ["completed", "failed"] },
+    caseCount: { type: "integer", minimum: 0 },
+    failedCaseCount: { type: "integer", minimum: 0 },
+    meanQualityScore: { type: ["number", "null"], minimum: 0, maximum: 1 },
+  },
+};
+
 const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.generation.created", eventType: "generation.created", eventVersion: 1, payload: GENERATION_CREATED },
   { schemaName: "cinefield.generation.processing", eventType: "generation.processing", eventVersion: 1, payload: GENERATION_PROCESSING },
@@ -291,6 +313,7 @@ const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.asset.rejected", eventType: "asset.rejected", eventVersion: 1, payload: ASSET_REJECTED },
   { schemaName: "cinefield.security.warning", eventType: "security.warning", eventVersion: 1, payload: SECURITY_WARNING },
   { schemaName: "cinefield.audit.flag-changed", eventType: "audit.flag-changed", eventVersion: 1, payload: AUDIT_FLAG_CHANGED },
+  { schemaName: "cinefield.audit.eval-run-completed", eventType: "audit.eval-run-completed", eventVersion: 1, payload: AUDIT_EVAL_RUN_COMPLETED },
 ];
 
 export function schemaKey(eventType: string, eventVersion: number): SchemaKey {

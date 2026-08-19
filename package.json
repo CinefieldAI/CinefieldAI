@@ -21,7 +21,9 @@
     "contracts:generate-types": "tsx --conditions=react-server scripts/generate-api-types.ts",
     "contracts:generate": "npm run contracts:generate-openapi && npm run contracts:generate-types",
     "contracts:check-compat": "tsx --conditions=react-server scripts/check-contract-compatibility.ts",
-    "contracts:check-openapi-compat": "tsx --conditions=react-server scripts/check-openapi-compatibility.ts"
+    "contracts:check-openapi-compat": "tsx --conditions=react-server scripts/check-openapi-compatibility.ts",
+    "eval:run": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/run-model-eval.ts",
+    "eval:check-regression": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/check-model-eval-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",

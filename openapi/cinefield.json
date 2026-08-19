@@ -233,6 +233,61 @@
           }
         }
       },
+      "AuditEvalRunCompletedPayloadV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "providerId",
+          "providerModelId",
+          "evalSetKey",
+          "status",
+          "caseCount"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "providerModelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "evalSetKey": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,80}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "caseCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedCaseCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "meanQualityScore": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
       "AuditFlagChangedPayloadV1": {
         "type": "object",
         "additionalProperties": false,

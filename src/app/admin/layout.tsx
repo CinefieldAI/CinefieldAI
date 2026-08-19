@@ -57,6 +57,10 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * provider/model/route kill switches stay on that existing link; this one
  * covers only `maintenance_mode`, `feature.video.enabled`,
  * `uploads.enabled`, and `release_stage`.
+ *
+ * Phase 22-D adds "Model Quality" — the golden-dataset quality/cost/latency
+ * comparison per active route. Read-only; no mutation surface exists on it,
+ * matching "SLO / Cost Guard"'s own shape.
  */
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -104,6 +108,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           <Link href="/admin/feature-flags" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Feature Flags
+          </Link>
+          <Link href="/admin/model-quality" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Model Quality
           </Link>
           <Link href="/admin/billing" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Billing / Credits

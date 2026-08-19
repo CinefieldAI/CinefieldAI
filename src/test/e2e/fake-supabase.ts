@@ -223,7 +223,45 @@ export class FakeSupabaseClient {
     if (fn === "set_feature_flag") {
       return { data: this.setFeatureFlag(args ?? {}), error: null };
     }
+    if (fn === "start_model_eval_run") {
+      return { data: this.startModelEvalRun(args ?? {}), error: null };
+    }
+    if (fn === "complete_model_eval_run") {
+      return { data: this.completeModelEvalRun(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /** Mirrors start_model_eval_run() (Phase 22, 20260908000000_model_eval.sql). */
+  private startModelEvalRun(args: Record<string, unknown>): string {
+    const id = randomUUID();
+    const runs = (this.state.model_eval_runs ?? []) as Row[];
+    this.state.model_eval_runs = runs;
+    runs.push({
+      id,
+      model_version_id: args.p_model_version_id,
+      provider_id: args.p_provider_id,
+      provider_model_id: args.p_provider_model_id,
+      eval_set_key: args.p_eval_set_key,
+      evaluator: args.p_evaluator,
+      evaluator_version: args.p_evaluator_version,
+      status: "running",
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      metadata: args.p_metadata ?? {},
+      created_at: new Date().toISOString(),
+    });
+    return id;
+  }
+
+  /** Mirrors complete_model_eval_run(): only a still-'running' row transitions — same predicate the real RPC uses. */
+  private completeModelEvalRun(args: Record<string, unknown>): boolean {
+    const runs = (this.state.model_eval_runs ?? []) as Row[];
+    const run = runs.find((r) => r.id === args.p_run_id && r.status === "running");
+    if (!run) return false;
+    run.status = args.p_status;
+    run.completed_at = new Date().toISOString();
+    return true;
   }
 
   /**

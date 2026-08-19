@@ -211,6 +211,49 @@ already established for AWS Glue (Phase 20) and a live OPA sidecar
 `security-gates.md`'s "Phase 21 — Runtime Feature Flags, Kill Switches &
 Safe Rollout" section.
 
+**Phase 22 — AI Model Evaluation & Quality Governance, official packages
+22-A through 22-D (same master roadmap version):** deepens Phase 7's
+Router with real output-quality evidence rather than replacing any of its
+scoring logic — a reality audit found Phase 7-D had already shipped the
+entire consumption side of this signal (`resolveHealthyRoute()`'s own
+`QualitySignalProvider` parameter, `scoreRouteComposite()`'s already-wired
+`quality: 0.25` weight, `route-quality.ts`'s full contract, permanently
+returning null with its own header naming Phase 22 as the implementer).
+22-A/B are code-complete: a new migration
+(`20260908000000_model_eval.sql`, `model_eval_runs` + append-only
+`model_eval_results`) gives every evaluation run immutable identity and
+durable, immutable per-case scores; the golden dataset itself is
+deliberately source-controlled TypeScript
+(`src/lib/eval/golden-dataset.ts`), not a database table, so a case change
+stays a reviewable PR diff; seven scorer dimensions exist, four fully real
+today (failure/latency/cost/safety, reusing Phase 15-B's `CostObservation`
+and Phase 9-E's `ModerationResult` verbatim) and three judgment-requiring
+ones (adherence/quality/consistency) behind a new, honestly-unfilled
+`AiJudgeProvider` seam mirroring `QualitySignalProvider`'s own shape. 22-C
+is code-complete and proven fail-closed live against this repository's own
+Supabase connection: `scripts/check-model-eval-regression.ts` returns
+`NOT_CONFIGURED`/exit 2 for missing config (including a required, never
+defaulted, regression-threshold business value) and `NO_EVIDENCE`/exit 1
+for an unmeasured candidate; `.github/workflows/eval-ci.yml` runs it on
+`workflow_dispatch`, an explicitly disclosed gap from a fully-automatic PR
+gate since no automated "which route changed" extraction exists yet. 22-D
+is code-complete and genuinely live in production, safely: the real
+`DurableEvalQualityProvider` now replaces the implicit
+`NO_TRUSTED_QUALITY_SOURCE` default at `generation-create-service.ts`'s
+real `resolveHealthyRoute()` call site — but `DEFAULT_QUALITY_POLICY
+.trustedEvaluators` stays `[]` (an existing Phase 7-D test hard-asserts
+this), so net production routing behavior is proven unchanged today
+(173/175 of the full Phase 7/8 regression suite, the 2 failures pre-existing
+and unrelated) while a real signal becomes readable the moment a human
+deliberately trusts it — a disclosed, unmade business decision, not a
+silent one. `/admin/model-quality` (read-only, no mutation surface) and a
+pure, tested production-sampling function complete 22-D; Braintrust, a
+live AI judge, the trust decision itself, and a live scheduled sampler all
+remain deliberately deferred, each classified explicitly rather than
+faked. Full detail, evidence, and file-by-file citations: see
+`security-gates.md`'s "Phase 22 — AI Model Evaluation & Quality Governance"
+section.
+
 ---
 
 ## Completed Implementation Checkpoints

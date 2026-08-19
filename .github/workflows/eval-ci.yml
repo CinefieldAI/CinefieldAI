@@ -1,0 +1,66 @@
+name: Model Eval Regression Gate (Phase 22-C)
+
+# 22-C's own done-criterion: "Threshold aşan upgrade default route olamıyor"
+# — an upgrade exceeding the regression threshold cannot become the default
+# route. This workflow runs the real, fail-closed gate
+# (scripts/check-model-eval-regression.ts) against a candidate/baseline
+# pair.
+#
+# HONEST GAP, DISCLOSED RATHER THAN HIDDEN: there is no automated
+# "which model_routes row changed" extraction from a migration diff in this
+# repository yet, so this cannot be a fully automatic on-every-PR gate the
+# way contract-ci.yml/policy-ci.yml are. It runs on workflow_dispatch,
+# naming the candidate/baseline explicitly — the same workflow_dispatch-only
+# pattern infra-apply.yml already uses for its own highest-consequence
+# action. Building the automatic extraction (and wiring this into a true
+# required PR check for any routing-migration change) is a real, disclosed
+# future item — see docs/security-gates.md's Phase 22 section.
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_provider_id:
+        description: "Candidate provider id (e.g. fal)"
+        required: true
+      candidate_provider_model_id:
+        description: "Candidate provider-native model id"
+        required: true
+      baseline_provider_id:
+        description: "Baseline provider id"
+        required: true
+      baseline_provider_model_id:
+        description: "Baseline provider-native model id"
+        required: true
+      regression_threshold:
+        description: "Max tolerated quality drop, [0,1] — a real business decision, no default"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  eval-regression-gate:
+    name: golden-dataset regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Regression gate — candidate vs baseline
+        env:
+          EVAL_CANDIDATE_PROVIDER_ID: ${{ inputs.candidate_provider_id }}
+          EVAL_CANDIDATE_PROVIDER_MODEL_ID: ${{ inputs.candidate_provider_model_id }}
+          EVAL_BASELINE_PROVIDER_ID: ${{ inputs.baseline_provider_id }}
+          EVAL_BASELINE_PROVIDER_MODEL_ID: ${{ inputs.baseline_provider_model_id }}
+          MODEL_EVAL_REGRESSION_THRESHOLD: ${{ inputs.regression_threshold }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run eval:check-regression
+
+      - name: tsc
+        run: npx tsc --noEmit -p tsconfig.json

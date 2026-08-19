@@ -6450,3 +6450,181 @@ transport — no MCP server exists anywhere in this repository (confirmed:
 policy composition point (`requireAiWritePolicy`/`aiWriteAllowlist`, which
 already denies `flag.set.*` for any `ai_agent` actor) is real and ready,
 with no transport to attach it to. **Phase 21 does not start Phase 22.**
+
+## Phase 22 — AI Model Evaluation & Quality Governance
+
+**Authoritative roadmap source:** the same master DOCX already authoritative
+for Phases 17/19/20/21. Official title: "Phase 22 — AI Model Evaluation &
+Quality Governance." Framing: "Phase 7 Router'ın quality/health/cost
+sinyalleri burada eval setleri, quality thresholds, regression governance
+ve model/version karar kanıtlarıyla derinleşir" — this phase deepens Phase
+7's Router with real output-quality evidence, it does not replace any of
+Phase 7's own routing logic. Four official packages: 22-A (`model_eval`
+tables + Braintrust project + golden-dataset foundation), 22-B (multimodal
+scorer set + model/provider/prompt version metadata), 22-C (wire offline
+eval into a CI regression gate), 22-D (online sample/feedback loop + Admin
+Model Quality dashboard + router `quality_score`/`confidence`
+integration).
+
+### The seam this phase fills already existed, fully built, permanently returning null
+
+A repository-wide reality audit (before any code was written) found that
+Phase 7-D already ships the ENTIRE consumption side of this phase's own
+signal: `src/lib/routing/health-aware-router.ts`'s production entry point,
+`resolveHealthyRoute()`, already takes a `qualitySource: QualitySignalProvider`
+parameter; `src/lib/routing/route-scoring.ts`'s `scoreRouteComposite()`
+already has a `quality: 0.25` weight wired into its composite score;
+`src/lib/routing/route-quality.ts` already defines the full
+`QualitySignal`/`RouteQuality`/`QualityPolicy` contract, with its own header
+stating plainly: "Phase 22 will implement this against its evaluation
+store... the production implementation below returns null for everything."
+Its `NO_TRUSTED_QUALITY_SOURCE` provider, `DEFAULT_QUALITY_POLICY`'s empty
+`trustedEvaluators` allowlist, and `src/test/e2e/phase-7d-cost-quality-routing.e2e.test.ts`'s
+own hard assertions (`"the trusted-evaluator allowlist must start empty"`,
+using the fixture name `"cinefield-eval"` — the exact evaluator name this
+batch uses) were all written in an earlier phase, anticipating this one.
+**Phase 22's job was narrower than reinventing router scoring: implement
+the one interface Phase 7-D already declared, and decide — separately,
+explicitly — whether to trust it.**
+
+### 22-A/B — a real, durable eval store; source-controlled golden dataset
+
+New migration `20260908000000_model_eval.sql`: `model_eval_runs` (one row
+per measurement of one model version against one golden-dataset set,
+immutable identity, a one-way `running`→`completed`/`failed` transition
+enforced by `complete_model_eval_run()`'s own `WHERE status = 'running'`
+predicate rather than an append-only trigger, since a trigger would also
+forbid that one legitimate transition) + `model_eval_results` (append-only,
+same `..._append_only()` trigger pattern `feature_flag_audit`/
+`admin_privileged_action_events` already established). 22-A's own
+done-criterion — "the first model/provider experiment record is created
+with immutable metadata" — is satisfied by a real, durable
+`model_eval_runs` row, provable end-to-end (`npm run eval:run`, using a
+declared-synthetic producer — see below).
+
+The golden dataset itself (`src/lib/eval/golden-dataset.ts`, 7 synthetic
+cases across image/video/audio) is deliberately NOT a database table,
+despite the roadmap's own "Nasıl yapılacak" step literally naming
+`model_eval_sets`/`cases` tables — a disclosed, reasoned deviation: the
+roadmap's own "temsilî prompt/reference/criteria setleri" instruction and
+this project's standing "no DB table by default, prefer reviewable
+fixtures" discipline are both better served by a source-controlled
+TypeScript module (a case change is a normal PR diff) than a migration or
+an admin-mutable table would be. `model_eval_runs`/`results` reference a
+case only by its `caseKey` string.
+
+Seven scorer dimensions (`src/lib/eval/scorers/`): `failure`, `latency`,
+`cost`, and `safety` are fully real and computable today, reusing existing
+evidence verbatim — `cost-scorer.ts` imports Phase 15-B's own
+`CostObservation` type, never redeclaring it; `safety-scorer.ts` imports
+Phase 9-E's own `ModerationResult` type, same discipline. `adherence`,
+`quality`, and `consistency` require judgment no deterministic check can
+honestly provide, so they go through a NEW, narrow seam of their own
+(`src/lib/eval/scorers/judge-provider.ts`'s `AiJudgeProvider`/
+`NO_JUDGE_AVAILABLE`) — mirroring `QualitySignalProvider`/
+`NO_TRUSTED_QUALITY_SOURCE`'s exact shape: a bounded `{score, reasonCode}`
+verdict, no field for chain-of-thought, and the honest `null`/
+`"no_judge_configured"` answer until a real, live, paid judge model is a
+deliberate future decision — never fabricated here.
+
+### 22-C — a real, fail-closed regression gate; the live-generation line held
+
+`scripts/check-model-eval-regression.ts` reads the candidate's and
+baseline's `latestCompletedRun()` and refuses to pass — `NOT_CONFIGURED`
+(exit 2) for missing required env vars (including
+`MODEL_EVAL_REGRESSION_THRESHOLD`, which has NO invented default; the
+roadmap names no specific tolerance number, so none is assumed) or a
+missing baseline; `NO_EVIDENCE` (exit 1) for a candidate with no completed
+eval run — proven live, this batch, against this repository's own real
+Supabase connection: all three NOT_CONFIGURED paths reproduced with real
+exit codes and messages. The script does NOT itself call a real provider —
+see its own header for why running real generations against real providers
+automatically inside a CI job (spending real money on every PR touching
+routing) is exactly the "never trigger paid generation without explicit
+authorization" line this whole project holds everywhere else. Populating a
+candidate's real eval run (`npm run eval:run`, or a real
+`ProduceOutputFn` wired to an actual `ProviderAdapter`) is a deliberate,
+separately-authorized action a human takes.
+
+`.github/workflows/eval-ci.yml` runs this gate on `workflow_dispatch` — an
+HONEST, disclosed gap from `contract-ci.yml`/`policy-ci.yml`'s fully
+automatic on-every-PR pattern: no automated "which `model_routes` row
+changed" extraction from a migration diff exists yet in this repository, so
+this cannot honestly be a fully automatic required check the way those two
+are. The workflow says so in its own header rather than pretending
+otherwise, and is deliberately `workflow_dispatch`-only for now, the same
+pattern `infra-apply.yml` already uses for its own highest-consequence
+action.
+
+### 22-D — the router seam filled in, safely, before any trust decision is made
+
+`src/lib/eval/eval-quality-provider.ts`'s `DurableEvalQualityProvider`
+implements `QualitySignalProvider` for real, reading `model_eval_results`
+via `qualitySignalFor()`. It is wired into the REAL production call site —
+`src/lib/orchestration/generation-create-service.ts`'s `resolveHealthyRoute()`
+call now passes `new DurableEvalQualityProvider(admin)` instead of relying
+on the implicit `NO_TRUSTED_QUALITY_SOURCE` default. This is a genuinely
+live change to the production generation-creation path, made safely: this
+batch does **not** touch `DEFAULT_QUALITY_POLICY.trustedEvaluators` (still
+`[]`, still hard-asserted by the pre-existing Phase 7-D test), so every
+signal this provider returns is still discarded as `"unknown"` by
+`normalizeQuality()` and scores a neutral `1` — proven unchanged by
+re-running the full Phase 7/7-D/7-E/8 regression suite (173/175 pass, the
+2 failures the same pre-existing, unrelated Phase-8 `ModelSelector` pins).
+Net production routing behavior: unchanged today. What changes is that a
+real signal now EXISTS and is READABLE the moment a human deliberately adds
+`"cinefield-eval"` to `trustedEvaluators` — a disclosed, unmade business
+decision, not a silent one.
+
+`/admin/model-quality` (new nav link) is read-only — no mutation route
+exists on this surface at all (confirmed structurally) — and deliberately
+does not require Phase 7's separate `assertRouteAdmin()` route-authority
+allowlist, matching `/admin/slo-cost`'s own ambient-Phase-16-admin-only
+pattern for a report that changes nothing. Online feedback
+(`src/lib/eval/production-sample.ts`) is a pure, tested sampling function
+— every failed `generation_attempts` row sampled unconditionally (the
+roadmap's own "kötü örnekleri golden dataset'e ekle" instruction), a
+configurable rate for successes — with no automated, unattended caller:
+confirmed fresh this batch that no `schedules.task()`/cron exists anywhere
+in this repository, the same honest gap Phase 21's `canary-guardrail.ts`
+already disclosed for the identical reason.
+
+### Contract governance (Phase 20) composed, not duplicated
+
+One new domain event: `audit.eval-run-completed@1`, reusing the existing
+`audit` family/topic (already used once, by Phase 21's `audit.flag-changed`).
+Payload carries only bounded aggregate facts — run id, provider/model
+identity, case counts, mean quality score — never a per-case score, a
+prompt, or an output URL. Regenerating `openapi/cinefield.json`/
+`api-types.ts` confirmed the Phase 20 hyphen-splitting fix (from the Phase
+21 corrective batch) generalizes correctly to this event's own
+`audit.eval-run-completed` type without further changes.
+
+### Ownership preserved
+
+`PHASE_20_CONTRACT_OWNER_PRESERVED`, `TEMPORAL_OWNER_PRESERVED`,
+`ROUTER_OWNER_PRESERVED`, `BILLING_OWNER_PRESERVED`: all YES. Phase 7's own
+scoring formula/decision function, Phase 9-E's moderation judgment, Phase
+15-B's cost arithmetic, and Phase 19's policy engine are all imported by
+type or reused by call, never redeclared — confirmed by grepping every new
+eval file for a second definition of any of their contracts. No second
+policy engine, no second Tier-0 authority, no second contract registry, no
+second router.
+
+### Not in this batch
+
+Braintrust (or LangSmith) account/SDK — `BUSINESS_DECISION_REQUIRED`; the
+roadmap's own text explicitly permits "Braintrust/custom eval," and
+explicitly instructs keeping any live Braintrust connection
+read/analysis-only with the router's real decision sourced from the local
+DB regardless — the local DB-backed system this batch built already
+satisfies that framing without a live account. A live AI judge for
+adherence/quality/consistency — `DEFERRED_EXTERNAL`, the same "no live
+paid generation without explicit authorization" line held everywhere else
+in this project. Flipping `DEFAULT_QUALITY_POLICY.trustedEvaluators` to
+trust `"cinefield-eval"` in production routing — `BUSINESS_DECISION_REQUIRED`,
+deliberately left to a human. Automated `model_routes`-diff candidate
+extraction for a fully automatic CI gate — a real, disclosed future item.
+A live Trigger.dev schedule for automatic online-sample feedback — the same
+`LIVE_DEFERRED` gap Phase 21 already disclosed for its own canary trigger.
+**Phase 22 does not start Phase 23.**
