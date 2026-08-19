@@ -155,7 +155,7 @@ export async function setFeatureFlagAdmin(
     newValue,
     actorClerkUserId,
     rollbackValue: before?.value ?? definition.defaultValue,
-    reasonCode: null,
+    reasonCode: reason,
     ticketRef: ticketRef ?? null,
     expiresAt,
   });

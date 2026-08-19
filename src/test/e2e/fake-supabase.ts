@@ -220,7 +220,69 @@ export class FakeSupabaseClient {
     if (fn === "record_admin_privileged_action_approval") {
       return { data: this.recordAdminPrivilegedActionApproval(args ?? {}), error: null };
     }
+    if (fn === "set_feature_flag") {
+      return { data: this.setFeatureFlag(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /**
+   * Mirrors set_feature_flag() (Phase 21, 20260901000000_feature_flags.sql):
+   * reads the current value, upserts `feature_flags`, and appends one
+   * `feature_flag_audit` row — in that order, the same order the real
+   * PL/pgSQL function's single transaction performs it in. Returns
+   * `[{ previous_value, new_value }]`, matching the real function's
+   * `RETURNS TABLE` shape (`admin.rpc()` callers read `data[0]` or `data`
+   * depending on the PostgREST client version — `writeFlag()` handles both).
+   */
+  private setFeatureFlag(args: Record<string, unknown>) {
+    const flagKey = args.p_flag_key as string;
+    const flags = (this.state.feature_flags ?? []) as Row[];
+    this.state.feature_flags = flags;
+    const audit = (this.state.feature_flag_audit ?? []) as Row[];
+    this.state.feature_flag_audit = audit;
+
+    const existing = flags.find((f) => f.flag_key === flagKey);
+    const previousValue = existing ? (existing.value ?? null) : null;
+    const rollbackValue = (args.p_rollback_value as unknown) ?? previousValue ?? null;
+
+    if (existing) {
+      existing.value_type = args.p_value_type;
+      existing.value = args.p_new_value;
+      existing.rollback_value = rollbackValue;
+      existing.reason_code = (args.p_reason_code as string | null) ?? null;
+      existing.ticket_ref = (args.p_ticket_ref as string | null) ?? null;
+      existing.expires_at = (args.p_expires_at as string | null) ?? null;
+      existing.updated_by = args.p_actor_clerk_user_id;
+      existing.updated_at = new Date().toISOString();
+    } else {
+      flags.push({
+        flag_key: flagKey,
+        value_type: args.p_value_type,
+        value: args.p_new_value,
+        rollback_value: rollbackValue,
+        reason_code: (args.p_reason_code as string | null) ?? null,
+        ticket_ref: (args.p_ticket_ref as string | null) ?? null,
+        expires_at: (args.p_expires_at as string | null) ?? null,
+        updated_by: args.p_actor_clerk_user_id,
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    audit.push({
+      id: randomUUID(),
+      flag_key: flagKey,
+      previous_value: previousValue,
+      new_value: args.p_new_value,
+      actor_clerk_user_id: args.p_actor_clerk_user_id,
+      reason_code: (args.p_reason_code as string | null) ?? null,
+      ticket_ref: (args.p_ticket_ref as string | null) ?? null,
+      expires_at: (args.p_expires_at as string | null) ?? null,
+      changed_at: new Date().toISOString(),
+    });
+
+    return [{ previous_value: previousValue, new_value: args.p_new_value }];
   }
 
   /**
