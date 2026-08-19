@@ -266,10 +266,14 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // approving/rejecting a pending two-person privileged action) — same
   // convention as every other Phase 16 admin route, `requireAdminAccess()`
   // ahead of the shared `guardRoute` boundary.
+  // PHASE 21 adds two more: `GET /api/admin/feature-flags` and `POST
+  // /api/admin/feature-flags/set` — same convention as every other Phase 16
+  // admin route (`requireAdminAccess()` ahead of the shared `guardRoute`
+  // boundary), not an exemption.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 43, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 45, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

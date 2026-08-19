@@ -51,6 +51,12 @@ import { requireAdminAccess } from "@/lib/admin/require-admin-access";
  * placeholder labels remain — every screen the Phase 16-A/B/C/D packages
  * name is now a real link. 16-E's own future sections are not anticipated
  * here.
+ *
+ * Phase 21-B adds "Feature Flags" — the generic runtime kill-switch/
+ * release-stage screen. Deliberately NOT a second "Router Controls" —
+ * provider/model/route kill switches stay on that existing link; this one
+ * covers only `maintenance_mode`, `feature.video.enabled`,
+ * `uploads.enabled`, and `release_stage`.
  */
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -95,6 +101,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           <Link href="/admin/router" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Router Controls
+          </Link>
+          <Link href="/admin/feature-flags" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Feature Flags
           </Link>
           <Link href="/admin/billing" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Billing / Credits

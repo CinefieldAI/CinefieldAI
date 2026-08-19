@@ -355,6 +355,57 @@
         "resource": { "type": "generation", "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
       },
       "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 21: flag.set.operator is allowed for a route_admin, single-person - no two-person threshold",
+      "patch": {
+        "action": "flag.set.operator",
+        "resource": { "type": "feature_flag", "id": "uploads.enabled" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "Phase 21: flag.set.operator refuses a member",
+      "patch": {
+        "action": "flag.set.operator",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "resource": { "type": "feature_flag", "id": "uploads.enabled" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 21: flag.set.tier0 is allowed for a route_admin, single-person - an incident kill switch cannot wait on a second human",
+      "patch": {
+        "action": "flag.set.tier0",
+        "resource": { "type": "feature_flag", "id": "maintenance_mode" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed" }
+    },
+    {
+      "name": "Phase 21: release_stage.activate_public is allowed for a route_admin, two-person enforced downstream by Tier-0 - the highest-consequence flag flip in the system",
+      "patch": {
+        "action": "release_stage.activate_public",
+        "resource": { "type": "feature_flag", "id": "release_stage" }
+      },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
+    },
+    {
+      "name": "Phase 21: release_stage.activate_public refuses a member",
+      "patch": {
+        "action": "release_stage.activate_public",
+        "actor": { "id": "user_2", "role": "member", "kind": "human" },
+        "resource": { "type": "feature_flag", "id": "release_stage" }
+      },
+      "expect": { "decision": "DENY", "reason": "role_not_permitted" }
+    },
+    {
+      "name": "Phase 21: an AI agent cannot set a flag, even the operator-tier one - denied before the role check can help it",
+      "patch": {
+        "action": "flag.set.operator",
+        "actor": { "id": "agent_seer", "role": "route_admin", "kind": "ai_agent" },
+        "resource": { "type": "feature_flag", "id": "uploads.enabled" }
+      },
+      "expect": { "decision": "DENY", "reason": "ai_write_authority_off" }
     }
   ]
 }

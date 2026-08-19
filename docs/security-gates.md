@@ -6255,3 +6255,198 @@ outside every line this batch added or touched.
 **Not in this batch.** OpenAPI coverage of routes beyond the original two;
 a live GitHub branch-protection "required" setting for `contract-ci.yml`
 (unchanged deferred external action). **Phase 20 does not start Phase 21.**
+
+## Phase 21 — Runtime Feature Flags, Kill Switches & Safe Rollout
+
+**Authoritative roadmap source:** the same master DOCX already authoritative
+for Phases 17/19/20. Official title: "Phase 21 — Runtime Feature Flags,
+Kill Switches & Safe Rollout." Framing: "Phase 14-F remediation kill
+switch, Phase 7 provider circuit-breaker/kill-switch ve spend controls
+genel runtime feature flag/safe rollout sisteminin foundation'ıdır" — Phase
+21's job is to GENERALIZE what Phase 7/14-F already pioneered, never to
+re-implement it. Four official packages: 21-A (OpenFeature + LaunchDarkly
+dev/staging/prod integration), 21-B (critical flag set + Admin screen),
+21-C (audit + actor/reason/ticket/expiry + rollback metadata), 21-D
+(router health/canary/percentage rollout + SLO guardrails + MCP write
+approval/scope limit).
+
+### What already existed, and why none of it was reused as a NEW flag target
+
+A repository-wide reality audit (before any code was written) found real,
+narrower flag mechanisms already owned elsewhere: `src/lib/routing/
+circuit-breaker.ts` (Phase 7-C, a pure OPEN/HALF_OPEN/CLOSED state
+machine), `src/lib/routing/runtime-flags.ts` + `src/lib/redis/
+routing-control-store.ts` (Phase 7-E, a Redis A, TTL-bounded, policy-gated
+`RuntimeControl` for one provider/model/route/provider-model target), and
+`src/lib/deployment/remediation-guardrail.ts` (Phase 14-F, a single
+env-var-only `CINEFIELD_AUTO_REMEDIATION_ENABLED` kill switch, deliberately
+without a runtime setter). All three explicitly name Phase 21 as the
+generalization owner in their own file headers, and `runtime-flags.ts`
+already ships the exact seam this batch needed
+(`RuntimeFlagSource` — "so a real OpenFeature or LaunchDarkly client can be
+attached later without the router changing at all"). This batch registers
+NO provider/model/route flag — `src/lib/routing/**` and
+`src/lib/redis/routing-control-store.ts` are untouched by this phase (a
+structural test proves it), and reading provider/model/route state through
+the new generic evaluation core remains a real, available, UNTAKEN option
+rather than a gap: wiring it risks coupling a new module into Phase 7's
+live routing hot path for a done-criterion ("critical system killable
+without a deploy") Phase 7's own admin UI already satisfies.
+
+### 21-A — a vendor-neutral core, deliberately without the SDK dependency
+
+`src/test/e2e/phase-7e-runtime-flags.e2e.test.ts` ("no flag SDK credential
+exists and none is invented") already asserted, before this batch existed,
+that `package.json` contains neither `launchdarkly` nor `openfeature`, with
+the stated reason "the contract is an interface a real one can implement."
+`src/lib/feature-flags/flag-contract.ts` is that interface: `FlagProvider`,
+`FlagEvaluationContext`, `FlagEvaluationDetails` mirror OpenFeature's own
+shape as Cinefield's OWN types, no dependency installed. LaunchDarkly is
+therefore `BUSINESS_DECISION_REQUIRED`/`LIVE_DEFERRED` — a real backend
+service with cost, and this repository's established pattern (AWS Glue in
+Phase 20, an OPA sidecar in Phase 19) is to build the vendor-neutral seam
+honestly and defer the paid backend, not to fabricate a live connection.
+`src/lib/feature-flags/flag-store.ts`'s `LocalSupabaseFlagProvider` is the
+one real, live implementer today — `evaluateFlag()`'s 21-A done-criterion
+("server flag evaluation kontrollü çalışıyor") is satisfied by a real,
+durable, policy-gated Supabase-backed evaluator, not a stub.
+
+### 21-B — the critical flag set, registered narrowly
+
+Four flags, in `src/lib/feature-flags/flag-registry.ts`:
+`maintenance_mode` and `release_stage` (`alpha`/`beta`/`public`) are
+`HIGH_RISK_TIER0`; `feature.video.enabled` and `uploads.enabled` are
+`OPERATOR_MUTATION` — the SAME asymmetry Phase 9-E's own
+request/reject-vs-release split already established in this codebase (the
+kill direction stays fast and single-admin; the highest-blast-radius flags
+get step-up). `release_stage` specifically implements the roadmap's own
+cross-reference: "RELEASE_STAGE... Değeri public'e çeviren kod yolu Phase
+19 policy kontrolünden geçer" (moving it to "public" goes through Phase 19
+policy) — this is the single server-side value this document's own 12-gate
+table (top of this file) has always implicitly needed and never had; moving
+it to `"public"` uses a DEDICATED policy action
+(`release_stage.activate_public`, two-person-enforced) distinct from every
+other flag change, matching "public aşamasına geçiş pratikte... GERÇEK
+PARA EŞİĞİ" — real Stripe live keys, open signup, no Cloudflare Access
+wall — being the single highest-consequence flip this whole system can
+make.
+
+**Reused, never duplicated:** `src/lib/admin/feature-flag-admin-service.ts`
+calls `requirePolicy()` then `authorizeTier0Action()`, in that order,
+before any write — the identical composition `router-admin-service.ts`'s
+`setAdminRouteEnabled` already established for `route.disable`. Three new
+actions registered in BOTH `policies/data/actions.json` and
+`tier0-action-catalogue.ts`, in lockstep: `flag.set.operator`,
+`flag.set.tier0`, `release_stage.activate_public` — the last one
+`requiresTwoPerson: true` in both registries, activating the SAME generic
+dual-control mechanism (`admin_privileged_action_events`,
+20260829000000) `route.disable`/`queue.dlq.redrive`/
+`temporal.workflow.cancel` already use. `policies/cinefield/policy.rego`
+needed NO changes at all — it is fully data-driven over
+`policies/data/actions.json`, confirmed by `opa test policies/ -v`
+(13/13 pass, including 7 new Phase 21 conformance cases). `policyVersion`
+bumped `2026-08-14.1` → `2026-08-19.1`.
+
+`/admin/feature-flags` (page + `FeatureFlagsPanel.tsx`) and
+`GET /api/admin/feature-flags` / `POST /api/admin/feature-flags/set` match
+`/admin/router`'s established 8-layer stack exactly: layout-level
+`requireAdminAccess()`, route-level `requireAdminAccess()` (opaque 404 on
+denial), `guardPrivilegedMutation` (CSRF/origin), `guardRoute` rate limit,
+policy, Tier-0 role/step-up/two-person, execute, `recordTier0Execution`
+audit close-out. A new nav link, not a second "Router Controls."
+
+### 21-C — durable, append-only audit with rollback and lazy expiry
+
+New migration `20260901000000_feature_flags.sql`: `feature_flags` (current
+value per flag) + `feature_flag_audit` (append-only history, an
+UPDATE/DELETE trigger refuses — the same pattern
+`admin_privileged_action_events_append_only()` already established).
+`set_feature_flag()` (SECURITY DEFINER) writes both in ONE transaction,
+mirroring `emit_outbox_event()`'s own reasoning for why PostgREST cannot
+do this safely across two HTTP requests — and captures the pre-change value
+as the new `rollback_value` automatically when the caller does not supply
+one. This is a genuinely new table, not a reuse of
+`admin_privileged_action_events` (20260829000000, Phase 16) — that table
+already records, for free, WHO authorized a `flag.set.*` action and WHEN,
+but has no `value`/`rollback_value` columns and is not meant to; the two
+tables are complementary, the same relationship `model_routes.enabled` (the
+real state) already has with that same authorization table for
+`route.disable`.
+
+**Expiry is lazy, not scheduled.** `flag-store.ts`'s `effectiveRecord()`
+treats a flag whose `expiresAt` has passed as equal to its own
+`rollbackValue` on READ — never a background writer — the same
+"computed lazily from elapsed time" discipline
+`src/lib/routing/circuit-breaker.ts`'s OPEN→HALF_OPEN transition already
+uses. No `schedules.task()` exists anywhere in this repository (confirmed:
+`src/trigger/operational/operational-tasks.ts`'s own header states every
+task here is `task()`, never `schedules.task()`) to drive a real scheduled
+revert, and this batch does not invent one.
+
+### 21-D — canary guardrail: a real, tested decision layer, honestly scoped
+
+`src/lib/feature-flags/canary-guardrail.ts`'s `evaluateCanaryGuardrail()`
+is a PURE function — no Supabase, no Redis, no flag write — over Phase
+15-A's own `computeErrorBudget()` output (`src/lib/slo/error-budget.ts`),
+never a second SLO signal type. This is the same honest shape
+`src/lib/finops/cost-guard.ts` (Phase 15-B) already established in this
+codebase: a real, tested recommendation/decision layer with **no automated
+caller** — this repository has no `schedules.task()` anywhere to invoke
+anything unattended, so "Regression rollout'u otomatik geri alıyor" (21-D's
+own done-criterion, "automatically") cannot be honestly claimed as live
+today. Wiring a real Trigger.dev cron is `LIVE_DEFERRED` — new scheduled
+infrastructure, out of this batch's own authorization. Equally, no
+percentage-rollout-shaped flag was added to `flag-registry.ts`: all four
+Phase 21-owned flags are binary/enum kill switches, and Cinefield has no
+gradual-rollout product surface today to attach one to — inventing one
+would be exactly the fabricated future product surface this batch's own
+scope forbids.
+
+### Contract governance (Phase 20) composed, not duplicated
+
+One new domain event: `audit.flag-changed@1`, registered in
+`event-schemas.ts` reusing the EXISTING `audit` family/topic (already
+defined since Phase 6R.9, never previously populated) — no new family, no
+new topic. Payload carries only bounded, stringified scalars
+(`flagKey`, `riskTier`, `newValue`, `previousValue`) — never
+`reason_code`/`ticket_ref` operator free text. Emitted best-effort, AFTER
+the durable write and its audit row already committed — a failure here
+never changes what the admin mutation reports. Regenerating
+`openapi/cinefield.json`/`api-types.ts` for this new schema exposed a real,
+narrow gap in Phase 20's OWN generator: `scripts/generate-openapi.ts`'s
+`schemaComponentName()` didn't split a hyphenated event-type segment (this
+event type is `audit.flag-changed`, and `EVENT_TYPE_PATTERN` has always
+allowed a hyphen inside a segment), so it produced
+`AuditFlag-changedPayloadV1` — a string openapi-typescript could only emit
+as a quoted key, not a bare TypeScript identifier. Fixed in
+`generate-openapi.ts` (split on `-` too, matching how it already splits
+on `.`) — a narrow, targeted correctness fix this phase's own new event
+exposed, not a redesign.
+
+### Ownership preserved
+
+`PHASE_17_OWNER_PRESERVED`, `PHASE_19_OWNER_PRESERVED`,
+`TEMPORAL_OWNER_PRESERVED`, `ROUTER_OWNER_PRESERVED`,
+`PROVIDER_ADAPTER_OWNER_PRESERVED`, `BILLING_OWNER_PRESERVED`: all YES — a
+repository-wide grep of this batch's own diff for
+`startGenerationWorkflow|opa\.|creditWallet|settleCredit|reserveCredit|routeDecision|ProviderAdapter|temporal\.client|GenerationManifest`
+returns zero matches. No second policy engine, no second Tier-0 authority,
+no second contract registry.
+
+### Not in this batch
+
+LaunchDarkly (or any) live flag-vendor account/API key —
+`BUSINESS_DECISION_REQUIRED`. A live Trigger.dev `schedules.task()` driving
+the canary guardrail unattended — `LIVE_DEFERRED`, new scheduled
+infrastructure. Migrating Phase 7's provider/model/route kill switches or
+Phase 14-F's auto-remediation kill switch onto this new flag layer —
+available, real, deliberately UNTAKEN options, not gaps (Phase 14-F's own
+header frames its missing runtime setter as an intentional safety property;
+relaxing it is a real security tradeoff, not this batch's unilateral call).
+A percentage-rollout flag TYPE — no real gradual-rollout product surface
+exists to justify one yet. MCP write scope-limiting for a live MCP
+transport — no MCP server exists anywhere in this repository (confirmed:
+`docs/architecture/IMPLEMENTATION_ROADMAP.md`'s own line on this); the
+policy composition point (`requireAiWritePolicy`/`aiWriteAllowlist`, which
+already denies `flag.set.*` for any `ai_agent` actor) is real and ready,
+with no transport to attach it to. **Phase 21 does not start Phase 22.**

@@ -233,6 +233,39 @@
           }
         }
       },
+      "AuditFlagChangedPayloadV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flagKey",
+          "riskTier",
+          "newValue"
+        ],
+        "properties": {
+          "flagKey": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.]{1,80}$"
+          },
+          "riskTier": {
+            "type": "string",
+            "enum": [
+              "OPERATOR",
+              "HIGH_RISK_TIER0"
+            ]
+          },
+          "newValue": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "previousValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        }
+      },
       "CreditRefundedPayloadV1": {
         "type": "object",
         "additionalProperties": false,

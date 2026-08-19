@@ -55,7 +55,14 @@ const OUTPUT_PATH = path.join(ROOT, "openapi", "cinefield.json");
 
 function schemaComponentName(entry: RegisteredSchema): string {
   // "cinefield.generation.completed" @ 1 -> "GenerationCompletedPayloadV1"
-  const parts = entry.eventType.split(".").map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1));
+  // "cinefield.audit.flag-changed" @ 1 -> "AuditFlagChangedPayloadV1" — a
+  // hyphenated segment (EVENT_TYPE_PATTERN allows one) is split too, so the
+  // result is always a bare, valid TypeScript identifier — never emitted as
+  // a quoted property key.
+  const parts = entry.eventType
+    .split(".")
+    .flatMap((seg) => seg.split("-"))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
   return `${parts.join("")}PayloadV${entry.eventVersion}`;
 }
 

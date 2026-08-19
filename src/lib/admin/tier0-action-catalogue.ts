@@ -176,6 +176,35 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     owner: "phase-6rh (cancel-intent.ts, generation-starter.ts) via phase-16d (temporal-admin-service.ts)",
     note: "Stops a running generation on an admin's own initiative, distinct from the owner's cancel path. Named explicitly in the roadmap's Two-Person Approval list.",
   },
+  "flag.set.operator": {
+    classification: "OPERATOR_MUTATION",
+    minimumRole: "operator",
+    requiresStepUp: false,
+    requiresTwoPerson: false,
+    owner: "phase-21 (src/lib/feature-flags/flag-store.ts, writeFlag) via phase-21 (feature-flag-admin-service.ts)",
+    note: "Fast, reversible, single-target kill switches (feature.video.enabled, uploads.enabled) — the SAFE (kill) direction stays single-admin, mirroring media.quarantine.request/.reject's own asymmetry.",
+  },
+  "flag.set.tier0": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    requiresTwoPerson: false,
+    owner: "phase-21 (src/lib/feature-flags/flag-store.ts, writeFlag) via phase-21 (feature-flag-admin-service.ts)",
+    note: "maintenance_mode (whole-site blast radius) and every release_stage transition except the one below. Fast single-operator authorization is intentional — an incident kill switch that requires coordinating a second human defeats its own purpose.",
+  },
+  "release_stage.activate_public": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    // The single highest-consequence flag flip this system can make: real
+    // Stripe live keys, open signup, no Cloudflare Access wall — the
+    // roadmap's own "public aşamasına geçiş... GERÇEK PARA EŞİĞİ" language.
+    // Activates the same generic dual-control mechanism as
+    // route.disable/queue.dlq.redrive/temporal.workflow.cancel above.
+    requiresTwoPerson: true,
+    owner: "phase-21 (src/lib/feature-flags/flag-store.ts, writeFlag) via phase-21 (feature-flag-admin-service.ts)",
+    note: "release_stage -> \"public\" specifically. Every OTHER release_stage transition (alpha<->beta) uses flag.set.tier0 above, not this action.",
+  },
 } as const;
 
 export type Tier0ActionName = keyof typeof TIER0_ACTION_CATALOGUE;

@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-08-14.1",
+  "policyVersion": "2026-08-19.1",
   "environments": ["development", "preview", "production"],
   "roles": ["service", "route_admin", "member", "anonymous", "ai_agent"],
   "aiWriteAllowlist": ["code.pr.create"],
@@ -163,6 +163,30 @@
       "requiresHumanApproval": true,
       "implemented": true,
       "owner": "phase-19"
+    },
+    "flag.set.operator": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-21"
+    },
+    "flag.set.tier0": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": false,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-21"
+    },
+    "release_stage.activate_public": {
+      "critical": true,
+      "requiredRoles": ["route_admin"],
+      "requiresTwoPerson": true,
+      "requiresHumanApproval": false,
+      "implemented": true,
+      "owner": "phase-21"
     }
   }
 }

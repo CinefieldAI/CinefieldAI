@@ -171,6 +171,46 @@ request field, and a new optional response field as compatible. Wired
 into `contract-ci.yml` as a fifth required step. Full detail: see
 `security-gates.md`'s "Phase 20 corrective batch" subsection.
 
+**Phase 21 — Runtime Feature Flags, Kill Switches & Safe Rollout, official
+packages 21-A through 21-D (same master roadmap version):** generalizes,
+never re-implements, the narrower flag mechanisms Phase 7-C/7-E (circuit
+breaker, `RuntimeControl`) and Phase 14-F (the auto-remediation kill
+switch) already pioneered — a repository-wide audit confirmed none of the
+three was touched by this batch. 21-A is code-complete: a vendor-neutral
+`FlagProvider` interface (`src/lib/feature-flags/flag-contract.ts`)
+mirrors OpenFeature's own shape as Cinefield's OWN types, deliberately
+without installing `@openfeature/server-sdk` or any `launchdarkly`
+package — an existing Phase 7-E test already asserted `package.json`
+should contain neither string, "the contract is an interface a real one
+can implement." 21-B is code-complete: four new flags
+(`maintenance_mode`, `feature.video.enabled`, `uploads.enabled`,
+`release_stage`), admin-mutable at `/admin/feature-flags`, composed
+through the SAME `requirePolicy()` → `authorizeTier0Action()` chain
+`router-admin-service.ts` already established for `route.disable` — three
+new actions registered in lockstep across `policies/data/actions.json`
+and `tier0-action-catalogue.ts`, proven by `opa test` (13/13). Moving
+`release_stage` to `"public"` specifically requires its own dedicated,
+two-person-gated policy action, matching the roadmap's own "gerçek para
+eşiği" framing for that one transition. 21-C is code-complete: a new
+migration (`20260901000000_feature_flags.sql`) gives every flag change an
+append-only audit row with actor/reason/ticket/expiry/rollback-value,
+written atomically with the current-value update via one SECURITY
+DEFINER function — expiry is lazy (read-time reversion to
+`rollback_value`), never a scheduled writer, since no `schedules.task()`
+exists anywhere in this repository. 21-D is **honestly partial**: the
+canary-guardrail decision function
+(`src/lib/feature-flags/canary-guardrail.ts`) is real and tested, reusing
+Phase 15-A's own error-budget type — but its automatic, unattended
+trigger is `LIVE_DEFERRED` (would require standing up a live Trigger.dev
+schedule, new infrastructure this batch is not authorized to provision),
+and no percentage-rollout flag type was added since no gradual-rollout
+product surface exists yet to justify one. LaunchDarkly itself remains
+`BUSINESS_DECISION_REQUIRED` — the same deferred-paid-backend pattern
+already established for AWS Glue (Phase 20) and a live OPA sidecar
+(Phase 19). Full detail, evidence, and file-by-file citations: see
+`security-gates.md`'s "Phase 21 — Runtime Feature Flags, Kill Switches &
+Safe Rollout" section.
+
 ---
 
 ## Completed Implementation Checkpoints

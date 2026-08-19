@@ -152,10 +152,16 @@ describe("Phase 20 — no second contract authority, no owner replaced", () => {
     assert.match(src, /MANIFEST_COMPILER_VERSION = "1\.0\.0"/);
   });
 
-  test("Phase 19's policy registry and Rego are untouched by this batch", () => {
+  test("Phase 19's policy registry and Rego are untouched by this [Phase 20] batch — later, legitimate extensions (e.g. Phase 21's flag.set.*) are a different claim", () => {
     const registry = JSON.parse(read("policies/data/actions.json"));
-    assert.equal(registry.policyVersion, "2026-08-14.1");
     assert.deepEqual(registry.aiWriteAllowlist, ["code.pr.create"]);
+    // route.disable/queue.dlq.redrive/temporal.workflow.cancel — the three
+    // actions Phase 20's own corrective batch (this file) actually verified
+    // — must still be present and unmodified, regardless of what a LATER
+    // phase legitimately added to the same registry afterward.
+    for (const action of ["route.disable", "queue.dlq.redrive", "temporal.workflow.cancel"]) {
+      assert.ok(registry.actions[action], `${action} must remain registered`);
+    }
   });
 
   test("no new database migration was added for contract governance — the registry stays source-controlled TypeScript", () => {

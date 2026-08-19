@@ -258,6 +258,24 @@ const SECURITY_WARNING: JsonSchema = {
   },
 };
 
+// PHASE 21. Describes a fact `feature_flag_audit` (20260901000000) already
+// records — never a raw value bag. `newValue`/`previousValue` are bounded,
+// stringified scalars (a flag's value is always boolean or a short enum/
+// string, per flag-registry.ts's own valueType constraint), never the flag's
+// reason_code/ticket_ref (operator-authored free text, kept out of the wire
+// event the same way every other schema here excludes free-text fields).
+const AUDIT_FLAG_CHANGED: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["flagKey", "riskTier", "newValue"],
+  properties: {
+    flagKey: { type: "string", pattern: "^[a-z][a-z0-9_.]{1,80}$" },
+    riskTier: { type: "string", enum: ["OPERATOR", "HIGH_RISK_TIER0"] },
+    newValue: { type: "string", maxLength: 500 },
+    previousValue: { type: ["string", "null"], maxLength: 500 },
+  },
+};
+
 const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.generation.created", eventType: "generation.created", eventVersion: 1, payload: GENERATION_CREATED },
   { schemaName: "cinefield.generation.processing", eventType: "generation.processing", eventVersion: 1, payload: GENERATION_PROCESSING },
@@ -272,6 +290,7 @@ const REGISTERED: RegisteredSchema[] = [
   { schemaName: "cinefield.asset.released", eventType: "asset.released", eventVersion: 1, payload: ASSET_RELEASED },
   { schemaName: "cinefield.asset.rejected", eventType: "asset.rejected", eventVersion: 1, payload: ASSET_REJECTED },
   { schemaName: "cinefield.security.warning", eventType: "security.warning", eventVersion: 1, payload: SECURITY_WARNING },
+  { schemaName: "cinefield.audit.flag-changed", eventType: "audit.flag-changed", eventVersion: 1, payload: AUDIT_FLAG_CHANGED },
 ];
 
 export function schemaKey(eventType: string, eventVersion: number): SchemaKey {

@@ -68,6 +68,13 @@ export interface components {
             /** Format: uuid */
             assetId: string;
         };
+        AuditFlagChangedPayloadV1: {
+            flagKey: string;
+            /** @enum {string} */
+            riskTier: "OPERATOR" | "HIGH_RISK_TIER0";
+            newValue: string;
+            previousValue?: string | null;
+        };
         CreditRefundedPayloadV1: {
             /** Format: uuid */
             reservationId: string;
