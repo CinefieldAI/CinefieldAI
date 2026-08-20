@@ -129,6 +129,7 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
   { name: "CINEFIELD_ENV", class: "IDENTIFIER_NON_SECRET", requirement: "PRODUCTION_REQUIRED", group: "runtime", rotation: "NOT_A_SECRET", note: "Cinefield's own environment identity. See environment.ts." },
   { name: "CINEFIELD_LOCAL_PREVIEW", class: "LOCAL_ONLY", requirement: "OPTIONAL", group: "runtime", rotation: "NOT_A_SECRET", note: "Local media preview convenience." },
   { name: "GENERATION_DIRECT_DEV_EXECUTION", class: "LOCAL_ONLY", requirement: "OPTIONAL", group: "runtime", rotation: "NOT_A_SECRET", note: "Inline execution for local debugging. Ignored in production." },
+  { name: "CINEFIELD_FFMPEG_PATH", class: "LOCAL_ONLY", requirement: "OPTIONAL", group: "runtime", rotation: "NOT_A_SECRET", note: "Phase 9-C. Absolute path to the ffmpeg binary when it is not on PATH. A tool location, never a credential — the transform child process is spawned with an EMPTY environment, so this value is read here and never reaches it." },
   { name: "GENERATION_EXECUTION_MODE", class: "LOCAL_ONLY", requirement: "DEFERRED", group: "runtime", rotation: "NOT_A_SECRET", note: "RETIRED in 6R-B. Read by nothing; still present in some local files." },
   { name: "CINEFIELD_MEDIA_MODERATION_ENGINE", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "runtime", rotation: "NOT_A_SECRET", note: "Names the moderation engine; not a credential." },
 

@@ -47,11 +47,27 @@ export type RecordProvenanceOutcome =
   | { readonly outcome: "SOURCE_UNAVAILABLE"; readonly reasonCode: string }
   | { readonly outcome: "RECORDED"; readonly evidence: ProvenanceEvidence };
 
+/**
+ * Proof that an embedded C2PA manifest exists in the delivered bytes AND was
+ * read back as valid by the official ContentAuth library.
+ *
+ * Only `c2pa-embedder.ts` can produce this, and only after its own official
+ * re-read reported an empty `validation_status`. Supplying it is what elevates
+ * the record to `EMBEDDED_C2PA` — the state is unreachable any other way, so
+ * "embedded" can never be claimed by a caller that merely intended to embed.
+ */
+export interface EmbeddedProvenanceProof {
+  readonly officiallyVerified: true;
+  readonly signerIssuer: string;
+}
+
 export interface RecordProvenanceParams {
   readonly mediaAssetId: string;
   readonly digitalSourceType: DigitalSourceType;
   /** e.g. "Cinefield (model via provider)". Bounded — see manifest-builder. */
   readonly softwareAgent: string;
+  /** Present only when a manifest was embedded and officially verified. */
+  readonly embedded?: EmbeddedProvenanceProof;
   /**
    * Deepfake disclosure requirement. Defaults to `NOT_ASSESSED`, never to
    * `NONE_REQUIRED`: no deepfake classifier exists in this repository
@@ -122,9 +138,17 @@ export async function recordMediaProvenance(
   });
 
   const signed = currentProvenanceSigner().sign(claim);
+  // Marking state is derived from what actually happened, in strength order:
+  //   embedded + officially verified -> EMBEDDED_C2PA   (Phase 9-C pipeline)
+  //   detached signature produced     -> SIGNED_DETACHED
+  //   neither                         -> EVIDENCE_RECORDED
   // An unconfigured or failing signer yields UNSIGNED evidence, recorded
   // honestly — never a skipped record and never a fabricated signature.
-  const markingState: ProvenanceMarkingState = signed.ok ? "SIGNED_DETACHED" : "EVIDENCE_RECORDED";
+  const markingState: ProvenanceMarkingState = params.embedded?.officiallyVerified
+    ? "EMBEDDED_C2PA"
+    : signed.ok
+      ? "SIGNED_DETACHED"
+      : "EVIDENCE_RECORDED";
 
   const evidence: ProvenanceEvidence = {
     mediaAssetId: asset.id,

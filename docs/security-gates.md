@@ -7650,3 +7650,59 @@ The user-facing visible label (locked UI). Automatic invocation of
 but wiring it into `ingest-gate.ts` changes Phase 9-B's own behaviour and is
 deliberately left as a reviewed, separate decision.
 **Phase 27 does not start Phase 28.**
+
+### Phase 9-C prerequisite corrective (unblocks 27-A)
+
+The Phase 27 closure audit found 27-A blocked, not deferred: its criterion
+("Örnek çıktı verify aracında valid provenance gösteriyor") requires a real
+artifact validated by an official C2PA verifier, and REFERANS H marks C2PA
+marking `Evet — Yasal zorunluluk — canlı satıştan önce` (MVP-mandatory,
+unlike Chaos which the same table defers). The missing piece was Phase 9-C —
+**unbuilt code in this repository, not an external service**.
+
+This batch built the narrowest Phase 9-C that unblocks it, and nothing more:
+
+- `src/lib/media/media-transform.ts` — the FFmpeg step the roadmap's pipeline
+  diagram requires. Four fixed operation profiles; the caller supplies bytes
+  and a verified MIME and **cannot** supply a codec, filter, flag, path, or
+  URL. `execFile` with an argument array (no shell), `env: {}` so the child
+  inherits **no credential**, `-protocol_whitelist file` so a crafted
+  container cannot make FFmpeg fetch anything, SIGKILL timeout, hard byte
+  ceiling checked before any write, temp dirs removed in a `finally`.
+- `src/lib/provenance/c2pa-embedder.ts` — the missing consumer. Uses
+  `c2pa-node` (ContentAuth's own binding — the same c2pa-rs engine as
+  c2patool, not a third-party wrapper; the `c2patool-npm` and `@gsengai/c2pa`
+  packages on npm are individual-maintainer forks and were rejected). Feeds
+  it Phase 27's existing `buildC2paManifest()` output unmodified, then reads
+  the result back with the official reader and **fails unless
+  `validation_status` is empty** — never "sign() didn't throw".
+- `src/lib/media/media-processing-pipeline.ts` — the roadmap's exact ordering,
+  with the two digests kept apart by name (SOURCE = Phase 9-B's, FINAL MEDIA =
+  computed over the signed bytes). Creates a `role='derived'` asset with
+  `parent_asset_id`, which is what `media_assets.sql`'s own "9-C fills this
+  in" comment anticipated — no new table, **no migration**.
+- `worker/media-worker.ts` — the runtime. `MediaJob` carries no path, URL,
+  command, or codec field; ids must be UUIDs. Starts no workflow and
+  completes no generation: Temporal stays sole lifecycle owner.
+
+**Official verification proof** (`npm run c2pa:verify-sample`, and tests
+C9C-9/C9C-10): png, jpeg, mp4 and wav each embed and read back VALID under
+`c2pa-node` 0.5.26 / c2pa-rs 0.49.2, with the IPTC
+`trainedAlgorithmicMedia` assertion intact; a one-byte change is rejected in
+every case (`assertion.dataHash.mismatch`, `assertion.bmffHash.mismatch`,
+`claimSignature.mismatch`). Test C9C-11 confirms the roadmap's durability
+warning empirically: re-encoding a signed file strips the manifest entirely,
+which is precisely why signing is the last step.
+
+**What remains external, honestly.** Signing uses the official library's
+`createTestSigner()` — a DEVELOPMENT certificate the C2PA ecosystem does not
+trust; the official verifier reports its issuer as `C2PA Test Signing Cert`
+and the admin panel shows it. `C2paSignerMode` defaults to `"none"`, and with
+no signer the pipeline stops at `SIGNER_NOT_CONFIGURED` having stored
+nothing — no object, no derived row, no provenance record (test C9C-18). A
+production trust-list certificate is the remaining external step, and
+`recordMediaProvenance` is now a REAL_PRODUCTION_CALLER inside the pipeline
+rather than zero-caller. What is still not wired is automatic invocation from
+the ingest path: that changes Phase 9-B's behaviour on every ingest and is
+left as a reviewed decision.
+**This corrective does not start Phase 28.**

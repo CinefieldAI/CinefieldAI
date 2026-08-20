@@ -24,7 +24,9 @@
     "contracts:check-openapi-compat": "tsx --conditions=react-server scripts/check-openapi-compatibility.ts",
     "eval:run": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/run-model-eval.ts",
     "eval:check-regression": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/check-model-eval-regression.ts",
-    "eval:check-new-route-evidence": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/check-new-route-eval-evidence.ts"
+    "eval:check-new-route-evidence": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/check-new-route-eval-evidence.ts",
+    "media:worker": "tsx --conditions=react-server --env-file-if-exists=.env.local worker/media-worker.ts",
+    "c2pa:verify-sample": "tsx --conditions=react-server scripts/verify-c2pa-sample.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",
@@ -52,6 +54,7 @@
     "@trigger.dev/sdk": "4.5.9",
     "ai": "^6.0.209",
     "bullmq": "^6.0.11",
+    "c2pa-node": "^0.5.26",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

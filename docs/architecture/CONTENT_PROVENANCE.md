@@ -6,8 +6,10 @@ Vienna, so that obligation attaches to the system — not to where the user
 happens to be. This document says exactly what is marked, how, and what is
 still missing.
 
-**The one-line summary: provenance evidence here is DETACHED, not embedded.**
-Everything below explains why, and what it does and does not prove.
+**Cinefield embeds a real C2PA manifest into delivered image, video and audio
+bytes, and the official ContentAuth library verifies it as valid.** It also
+keeps a detached evidence row. Both layers are described below, and the parts
+that are still development-grade are named as such.
 
 ---
 
@@ -16,48 +18,108 @@ Everything below explains why, and what it does and does not prove.
 | Capability | State |
 | --- | --- |
 | C2PA manifest template (image/video/audio) | **REAL** — the roadmap's literal template, IPTC `digitalSourceType` |
-| Content digest binding | **REAL** — reuses Phase 9-B's `checksum_sha256` over canonical bytes |
-| ES256 detached signature | **REAL** — genuine crypto, tamper-evident |
+| **Media transform (FFmpeg)** | **REAL** — Phase 9-C, fixed operation profiles |
+| **C2PA embedded in delivered bytes** | **REAL** — png / jpeg / mp4 / wav |
+| **Official verification** | **REAL** — `c2pa-node` reads it back as valid |
+| **Tamper detection** | **REAL** — proven on all four formats |
+| Final-media digest | **REAL** — SHA-256 over the signed bytes actually stored |
+| Detached ES256 evidence | **REAL** — kept alongside the embedded manifest |
 | Verification engine | **REAL** — pure, fail-closed, no URL input |
 | Durable evidence store | **REAL** — `media_provenance`, append-only |
 | Admin marking-rate metric | **REAL** — `/admin/provenance` |
 | Signing key registered for rotation | **REAL** — Phase 25 `secret.rotate`, `DUAL_KEY_OVERLAP` |
-| A configured signer | **NOT CONFIGURED** — default signs nothing, honestly |
-| **C2PA embedded in delivered bytes** | **NOT BUILT** — blocked on Phase 9-C |
-| Production trust-list CA chain | **EXTERNAL** — no CA exists |
+| **Production trust-list CA chain** | **EXTERNAL** — signing uses a DEVELOPMENT certificate |
+| Automatic invocation from the ingest path | **NOT WIRED** — `runMediaJob` is the entry point |
 | Deepfake detection | **NOT BUILT** — Phase 28 owns T&S classification |
 | Visible deepfake label in product UI | **BLOCKED** — locked UI |
 | Soft-binding watermark | **NOT IN SCOPE** — roadmap: optional, second phase |
 
 ---
 
-## Why detached, not embedded
-
-The roadmap is specific about where signing belongs:
+## The pipeline, in the roadmap's own order
 
 ```
-Provider output → download → R2 original
-  → FFmpeg → final.mp4 / images
-  → C2PA sign        ◄── the roadmap's step
-  → signed file to R2 hot storage
-  → S3 backup
+validated bytes
+  → transform (FFmpeg, fixed profile)      src/lib/media/media-transform.ts
+  → FINAL BYTES                            nothing re-encodes after this
+  → embed C2PA                             src/lib/provenance/c2pa-embedder.ts
+  → official verify (validation_status)    c2pa-node, ContentAuth
+  → SHA-256 over the signed bytes          the FINAL MEDIA digest
+  → store derived asset                    Phase 9's storage seam
+  → record provenance                      media_provenance, EMBEDDED_C2PA
 ```
 
-**That FFmpeg step does not exist.** There is no `worker/media-worker.ts`, no
-ffmpeg or c2patool binding in `package.json`, and no transcode anywhere. The
-repository's own comments date it: `asset-keys.ts` says derived variants
-"arrive in 9-C"; `media-inspector.ts` says "When 9-C adds FFmpeg…". Phase 9-C
-is unbuilt.
+**Signing is last on purpose.** A re-encode strips the manifest — the roadmap
+warns about it, and this repository's own test proves it: FFmpeg-reprocessing
+a signed PNG leaves no manifest at all. So the manifest is applied to bytes
+nothing will touch again.
 
-`c2pa` (0.30.17) and `c2pa-node` (0.5.26) are real, official, currently
-published packages. They were **deliberately not added**. A native binding
-with no pipeline position to occupy is a dependency nothing can call, and
-this codebase has closed that defect class repeatedly.
+Run the proof yourself:
 
-So what is built binds a claim to the bytes *by digest* instead of embedding
-it *in* the bytes. That is weaker in one specific way — the evidence does not
-travel with the file — and identical in another: it proves the same facts
-about the same bytes, and it detects the same tampering.
+```bash
+npm run c2pa:verify-sample
+```
+
+It generates synthetic media with FFmpeg, embeds provenance, verifies with the
+official library, then tampers with one byte and confirms rejection.
+
+---
+
+## Two digests, never conflated
+
+| Name | What it covers | Owner |
+| --- | --- | --- |
+| **SOURCE digest** | the original downloaded bytes | Phase 9-B `ingest-gate.ts` |
+| **FINAL MEDIA digest** | the signed bytes actually delivered | Phase 9-C pipeline |
+
+The provenance row binds to the **derived** asset, so its
+`content_digest_sha256` is always the final-media digest. Reusing the source
+digest after a transform would produce evidence that verifies against bytes
+nobody was ever served.
+
+The derived asset uses Phase 9's own lineage design — `role = 'derived'` with
+`parent_asset_id` pointing at the original. `media_assets.sql` says of that
+column, verbatim, *"9-C fills this in"*. No new table, no new migration.
+
+---
+
+## Format support — measured, not assumed
+
+Every row below was verified by running the official library.
+
+| Final format | Transform profile | Embed | Official verify | Tamper code |
+| --- | --- | --- | --- | --- |
+| `image/png` | `image_normalize_png` | ✅ | VALID | `assertion.dataHash.mismatch` |
+| `image/jpeg` | `image_normalize_jpeg` | ✅ | VALID | `assertion.dataHash.mismatch` |
+| `video/mp4` | `video_normalize_mp4` | ✅ | VALID | `assertion.bmffHash.mismatch` |
+| `audio/wav` | `audio_normalize_wav` | ✅ | VALID | `claimSignature.mismatch` |
+| `image/gif` | — | ❌ | — | refused: animated, would be destroyed by a single-frame normalise |
+
+`webp`/`avif` normalise to PNG, and `webm`/`mpeg` to mp4/wav, so their final
+delivered form is markable even though the input container is not.
+
+---
+
+## Trust: what the signature does and does not mean
+
+Signing currently uses `c2pa-node`'s own `createTestSigner()` — a
+**development certificate that the C2PA ecosystem does not trust**. The
+official verifier reports its issuer as `C2PA Test Signing Cert`, and
+`/admin/provenance` shows it.
+
+So today:
+
+- the **mechanism** is proven end to end — real manifest, real embed, real
+  official verification, real tamper detection
+- the **trust** is not — a third party validating one of these files sees a
+  test certificate, not a trust-list identity
+
+`C2paSignerMode` defaults to `"none"`, and with no signer the pipeline stops
+at `SIGNER_NOT_CONFIGURED` and writes nothing at all: no stored object, no
+derived asset row, no provenance record. An unsigned artifact is never
+delivered as if it were marked.
+
+Obtaining a production certificate is the remaining external step.
 
 ---
 
@@ -134,17 +196,20 @@ exists. It does not mean Cinefield embeds anything today. Nothing does.
 
 ---
 
-## The honest durability warning
+## The honest durability warning — now measured
 
 Straight from the roadmap: a C2PA manifest lives in file metadata and is
 stripped by re-encoding — which is what Instagram and TikTok do to everything.
-The roadmap's answer is that C2PA is the defensible "state of the art" primary
+
+**This is confirmed here, not assumed.** Test `C9C-11` signs a PNG, runs it
+back through FFmpeg, and finds *no manifest at all* in the result. The
+roadmap's answer is that C2PA is the defensible "state of the art" primary
 solution, paired with an invisible watermark for real durability, and that the
 watermark is second-phase work.
 
-Detached evidence has the same exposure from the other direction: it survives
-re-encoding of the delivered copy (the record is in the database), but it no
-longer matches those re-encoded bytes, so verification correctly reports
+The detached record has the same exposure from the other direction: it
+survives re-encoding of the delivered copy (the row is in the database), but
+it no longer matches those re-encoded bytes, so verification correctly reports
 `DIGEST_MISMATCH`. That is the truthful answer, not a failure of the design.
 
 ---
