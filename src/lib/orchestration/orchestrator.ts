@@ -21,7 +21,16 @@ import { attachSignedUrls, type StoredOutput } from "./output-storage";
 // SIGNED bytes instead. A structural test fails if this import returns.
 import { reserveGenerationAsset, type MediaType } from "@/lib/media/asset-service";
 import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
-import { processFinalMedia, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
+// TYPE-ONLY. The Phase 9-C pipeline reaches `c2pa-node`, a NATIVE module, and
+// this file is in the import graph of `/api/generations/[id]/execute`. A
+// static import therefore drags a `.node` binary into the Vercel serverless
+// bundle — which broke the production build at c6e1ed4 — for code that never
+// runs there: in production `resolveGenerationOwner()` is "temporal", so
+// `executeGeneration` executes in the Temporal WORKER (a container that has
+// ffmpeg), never in a Next.js route. The implementation is loaded with a
+// dynamic import at the one call site instead, so the serverless graph never
+// contains it and the worker behaves exactly as before.
+import type { FinalMediaStore } from "@/lib/media/media-processing-pipeline";
 import { putAssetObject } from "@/lib/media/r2-client";
 import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
@@ -742,6 +751,11 @@ async function persistCanonicalOriginal(
   }
 
   // ---- Phase 9-C: transform → C2PA embed → official verify → ONE store ----
+  // Loaded here, not at module scope — see the import note at the top of this
+  // file. `serverExternalPackages` alone was not enough: it keeps the module
+  // out of the bundle but the route's graph still resolves it.
+  const { processFinalMedia } = await import("@/lib/media/media-processing-pipeline");
+
   const processed = await processFinalMedia(admin, {
     sourceAssetId: reserved.assetId,
     bytes: params.output.bytes,
