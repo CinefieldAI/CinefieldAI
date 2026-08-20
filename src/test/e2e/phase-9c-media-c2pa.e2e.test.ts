@@ -15,7 +15,7 @@ import {
   resetC2paSignerMode,
   currentC2paSignerMode,
 } from "@/lib/provenance/c2pa-embedder";
-import { processFinalMedia, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
+import { processFinalMedia, signMediaForDelivery, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
 import { validateMediaJob, runMediaJob, type MediaJob } from "../../../worker/media-worker";
 import { FakeSupabaseClient } from "./fake-supabase";
 
@@ -535,4 +535,143 @@ test("C9C-30  no raw prompt or provider payload can enter the manifest — softw
   assert.match(code, /SOFTWARE_AGENT_PATTERN/);
   const embedder = read("src/lib/provenance/c2pa-embedder.ts");
   assert.ok(!/prompt|negativePrompt|providerPayload/i.test(embedder));
+});
+
+// ---------------------------------------------------------------------------
+// THE DECISIVE DELIVERY PROOF (Phase 27 closure)
+// ---------------------------------------------------------------------------
+
+test("C9C-31  DELIVERY PROOF: the bytes handed to the delivery lane ARE the canonical stored bytes, and they verify VALID officially", { skip: !HAVE_FFMPEG }, async () => {
+  setC2paSignerMode("test");
+  try {
+    const db = dbWithSource();
+    const store = memoryStore();
+
+    const result = await processFinalMedia(db as never, {
+      sourceAssetId: SOURCE_ID,
+      bytes: await makeSample("png"),
+      verifiedMime: "image/png",
+      digitalSourceType: "trainedAlgorithmicMedia",
+      softwareAgent: "Cinefield (model via provider)",
+      store,
+      now: new Date("2026-01-01T00:00:00.000Z"),
+      target: { kind: "in_place" },
+    });
+
+    assert.equal(result.outcome, "COMPLETED");
+    if (result.outcome !== "COMPLETED") return;
+
+    // 1. What the canonical store actually received.
+    const storedBytes = store.puts[0].bytes;
+    const storedDigest = createHash("sha256").update(storedBytes).digest("hex");
+
+    // 2. What the orchestrator hands the delivery lane (`asset.signedBytes`).
+    const deliveredBytes = result.finalBytes;
+    const deliveredDigest = createHash("sha256").update(deliveredBytes).digest("hex");
+
+    // 3. They must be the SAME bytes — not merely the same identifier.
+    assert.equal(deliveredDigest, storedDigest, "delivered bytes must equal the canonical stored bytes");
+    assert.equal(deliveredDigest, result.finalDigestSha256, "and match the recorded provenance digest");
+    assert.equal(
+      result.evidence.contentDigestSha256,
+      deliveredDigest,
+      "the provenance row must describe the delivered artifact"
+    );
+
+    // 4. The delivered artifact verifies VALID with the OFFICIAL library.
+    const verified = await readEmbeddedProvenance({ bytes: deliveredBytes, mime: "image/png" });
+    assert.equal(verified.present, true, "the delivered file must carry an embedded manifest");
+    if (!verified.present) return;
+    assert.equal(verified.valid, true, "the DELIVERED bytes must verify as valid C2PA");
+    assert.equal(
+      verified.digitalSourceType,
+      "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"
+    );
+
+    // 5. And they are NOT the raw provider bytes.
+    assert.notEqual(deliveredDigest, "a".repeat(64));
+  } finally {
+    resetC2paSignerMode();
+  }
+});
+
+test("C9C-32  DELIVERY PROOF: video and audio delivery bytes also verify VALID officially", { skip: !HAVE_FFMPEG }, async () => {
+  setC2paSignerMode("test");
+  try {
+    for (const [kind, mime] of [
+      ["mp4", "video/mp4"],
+      ["wav", "audio/wav"],
+    ] as const) {
+      const db = new FakeSupabaseClient({
+        media_assets: [
+          {
+            id: SOURCE_ID,
+            clerk_user_id: "user_1",
+            generation_id: null,
+            attempt_id: null,
+            bucket: "cinefield-media",
+            object_key: `quarantine/output/user_1/src/original.${kind}`,
+            quarantine_status: "quarantined",
+            checksum_sha256: "a".repeat(64),
+            verified_mime: mime,
+            status: "finalized",
+          },
+        ],
+        media_provenance: [],
+      });
+      const store = memoryStore();
+      const result = await processFinalMedia(db as never, {
+        sourceAssetId: SOURCE_ID,
+        bytes: await makeSample(kind),
+        verifiedMime: mime,
+        digitalSourceType: "trainedAlgorithmicMedia",
+        softwareAgent: "Cinefield (model via provider)",
+        store,
+        now: new Date(),
+        target: { kind: "in_place" },
+      });
+      assert.equal(result.outcome, "COMPLETED", `${mime} must complete`);
+      if (result.outcome !== "COMPLETED") continue;
+
+      const delivered = createHash("sha256").update(result.finalBytes).digest("hex");
+      const stored = createHash("sha256").update(store.puts[0].bytes).digest("hex");
+      assert.equal(delivered, stored, `${mime}: delivered must equal stored`);
+
+      const verified = await readEmbeddedProvenance({ bytes: result.finalBytes, mime });
+      assert.equal(verified.present, true, `${mime}: manifest present`);
+      if (verified.present) assert.equal(verified.valid, true, `${mime}: delivered bytes verify VALID`);
+    }
+  } finally {
+    resetC2paSignerMode();
+  }
+});
+
+test("C9C-33  signMediaForDelivery marks a SECONDARY output and its bytes verify VALID", { skip: !HAVE_FFMPEG }, async () => {
+  setC2paSignerMode("test");
+  try {
+    const signed = await signMediaForDelivery({
+      bytes: await makeSample("png"),
+      verifiedMime: "image/png",
+      digitalSourceType: "trainedAlgorithmicMedia",
+      softwareAgent: "Cinefield (model via provider)",
+    });
+    assert.equal(signed.ok, true);
+    if (!signed.ok) return;
+    const verified = await readEmbeddedProvenance({ bytes: signed.bytes, mime: signed.mime });
+    assert.equal(verified.present, true);
+    if (verified.present) assert.equal(verified.valid, true, "a secondary output must also verify VALID");
+  } finally {
+    resetC2paSignerMode();
+  }
+});
+
+test("C9C-34  signMediaForDelivery fails closed with no signer — no unmarked secondary fallback", async () => {
+  resetC2paSignerMode();
+  const signed = await signMediaForDelivery({
+    bytes: new Uint8Array([1, 2, 3]),
+    verifiedMime: "image/png",
+    digitalSourceType: "trainedAlgorithmicMedia",
+    softwareAgent: "Cinefield (model via provider)",
+  });
+  assert.equal(signed.ok, false);
 });

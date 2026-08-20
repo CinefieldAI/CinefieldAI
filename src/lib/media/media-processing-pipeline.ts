@@ -62,6 +62,13 @@ export type MediaProcessingOutcome =
       readonly outcome: "COMPLETED";
       readonly derivedAssetId: string;
       readonly finalMime: string;
+      /**
+       * The exact stored bytes. Returned so the user-delivery lane can serve
+       * THESE bytes rather than re-signing — a second sign produces a
+       * different manifest instance and therefore a different digest, which
+       * would break the "delivered bytes == canonical bytes" invariant.
+       */
+      readonly finalBytes: Uint8Array;
       readonly finalDigestSha256: string;
       readonly finalByteLength: number;
       readonly signerIssuer: string;
@@ -273,6 +280,7 @@ export async function processFinalMedia(
     outcome: "COMPLETED",
     derivedAssetId: finalAssetId,
     finalMime: transformed.outputMime,
+    finalBytes,
     finalDigestSha256: finalDigest,
     finalByteLength: finalBytes.byteLength,
     signerIssuer: embedded.signerIssuer,
@@ -281,3 +289,56 @@ export async function processFinalMedia(
 }
 
 export { readEmbeddedProvenance };
+
+
+/**
+ * Signs one output for DELIVERY only — no asset row, no provenance row.
+ *
+ * A generation may resolve more than one output. Phase 9 records exactly one
+ * canonical `media_assets` row (the primary), but AI Act Article 50(2) applies
+ * to every delivered artifact, not just the one the database tracks. So every
+ * secondary output is transformed and C2PA-embedded through the same engine
+ * before it can be served; it simply has no row of its own to attach evidence
+ * to, which is Phase 9's model to change, not this function's.
+ *
+ * Fails closed exactly like the canonical path: an unmarkable secondary output
+ * returns an error and the caller refuses the generation.
+ */
+export type SignForDeliveryOutcome =
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly mime: string }
+  | { readonly ok: false; readonly outcome: string; readonly reasonCode: string };
+
+export async function signMediaForDelivery(params: {
+  readonly bytes: Uint8Array;
+  readonly verifiedMime: string;
+  readonly digitalSourceType: DigitalSourceType;
+  readonly softwareAgent: string;
+}): Promise<SignForDeliveryOutcome> {
+  const transformed = await transformToFinalMedia({
+    bytes: params.bytes,
+    verifiedMime: params.verifiedMime,
+  });
+  if (!transformed.ok) {
+    return {
+      ok: false,
+      outcome: transformed.reasonCode === "unsupported_format" ? "UNSUPPORTED_FORMAT" : "TRANSFORM_FAILED",
+      reasonCode: transformed.reasonCode,
+    };
+  }
+
+  const embedded = await embedC2paProvenance({
+    bytes: transformed.bytes,
+    mime: transformed.outputMime,
+    digitalSourceType: params.digitalSourceType,
+    softwareAgent: params.softwareAgent,
+  });
+  if (!embedded.ok) {
+    return {
+      ok: false,
+      outcome: embedded.reasonCode === "signer_not_configured" ? "SIGNER_NOT_CONFIGURED" : "C2PA_EMBED_FAILED",
+      reasonCode: embedded.reasonCode,
+    };
+  }
+
+  return { ok: true, bytes: embedded.bytes, mime: transformed.outputMime };
+}

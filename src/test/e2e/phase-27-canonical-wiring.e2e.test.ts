@@ -53,17 +53,64 @@ test("W27-3  the canonical path finalises IN PLACE — one asset, not an unmarke
   assert.match(source, /target: \{ kind: "in_place" \}/);
 });
 
-test("W27-4  exactly ONE storage call exists in the canonical path", () => {
+test("W27-4  the orchestrator writes through EXACTLY ONE storage owner per lane, and no third adapter exists", () => {
+  // REWRITTEN. The previous version counted `putAssetObject(` occurrences and
+  // was therefore structurally blind to `admin.storage.from().upload()` — it
+  // passed while the user-delivery lane was shipping unmarked raw bytes. A
+  // test that cannot fail for the defect it names is worse than no test.
+  //
+  // This version enumerates EVERY storage-write shape reachable from the
+  // orchestrator, so a new adapter cannot be introduced silently.
   const source = code(ORCHESTRATOR);
-  // The pipeline performs the write through the injected seam; the
-  // orchestrator itself must not also write an object.
-  const directPuts = source.match(/putAssetObject\(/g) ?? [];
-  assert.equal(
-    directPuts.length,
-    1,
-    "putAssetObject may appear exactly once — inside the canonicalMediaStore adapter, never as a second write"
+
+  // R2 canonical write: exactly one, inside the store adapter.
+  assert.equal((source.match(/putAssetObject\(/g) ?? []).length, 1);
+
+  // The orchestrator must never call an object store directly.
+  assert.ok(!/admin\.storage\.from\(/.test(source), "no direct Supabase Storage write from the orchestrator");
+  assert.ok(!/PutObjectCommand|S3Client|new Upload\(/.test(source), "no direct S3/R2 SDK use");
+  assert.ok(!/fetch\([^)]*PUT/.test(source), "no ad-hoc HTTP upload");
+
+  // Delivery goes through the ONE storage module, and it receives the SIGNED
+  // artifact — never `resolvedOutputs`, which holds the raw provider bytes.
+  assert.match(source, /uploadOutputs\(admin, deliverable,/, "delivery must upload the signed `deliverable` array");
+  assert.ok(
+    !/uploadOutputs\(admin, resolvedOutputs,/.test(source),
+    "uploading resolvedOutputs would ship the RAW provider bytes to the user"
   );
-  assert.match(source, /const canonicalMediaStore: FinalMediaStore/);
+});
+
+test("W27-4b  the delivery array is built from the canonical SIGNED bytes, never re-signed", () => {
+  const source = code(ORCHESTRATOR);
+  // The primary's delivery bytes are the exact bytes processFinalMedia stored.
+  assert.match(
+    source,
+    /deliverable[\s\S]{0,200}bytes: asset\.signedBytes/,
+    "the primary must be delivered as the canonical stored bytes"
+  );
+  // Re-signing would mint a different manifest instance and a different
+  // digest, breaking delivered==canonical.
+  const primaryBlock = source.slice(source.indexOf("const deliverable"), source.indexOf("uploadOutputs(admin, deliverable"));
+  assert.ok(
+    !/signMediaForDelivery\([\s\S]{0,80}primaryResolved/.test(primaryBlock),
+    "the primary must not be signed a second time"
+  );
+});
+
+test("W27-4c  every SECONDARY output is signed too — a multi-output generation cannot ship one marked and the rest raw", () => {
+  const source = code(ORCHESTRATOR);
+  assert.match(source, /for \(const output of resolvedOutputs\.slice\(1\)\)/, "secondary outputs must be iterated");
+  assert.match(source, /signMediaForDelivery\(\{/, "and each must be signed");
+  // And a failure on any of them refuses the generation.
+  const loop = source.slice(source.indexOf("resolvedOutputs.slice(1)"), source.indexOf("uploadOutputs(admin, deliverable"));
+  assert.match(loop, /throw new OrchestrationError\("MEDIA_PROVENANCE_FAILED"/, "an unmarkable secondary output must fail closed");
+});
+
+test("W27-4d  the canonical asset is persisted BEFORE the delivery upload, so delivery can only serve signed bytes", () => {
+  const source = code(ORCHESTRATOR);
+  const persist = source.indexOf("persistCanonicalOriginal(admin, {");
+  const upload = source.indexOf("uploadOutputs(admin, deliverable,");
+  assert.ok(persist > 0 && upload > persist, "signing must precede delivery upload");
 });
 
 // ---------------------------------------------------------------------------
@@ -83,7 +130,7 @@ test("W27-6  reserve precedes ingest, and provenance is the last step before ret
   const reserveIdx = source.indexOf("reserveGenerationAsset(");
   const ingestIdx = source.indexOf("ingestMediaAsset(");
   const processIdx = source.indexOf("processFinalMedia(");
-  const returnIdx = source.indexOf("return { assetId: processed.derivedAssetId");
+  const returnIdx = source.indexOf("assetId: processed.derivedAssetId");
   assert.ok(reserveIdx < ingestIdx, "a row must be reserved before the gate records against it");
   assert.ok(processIdx < returnIdx, "the canonical path returns only after Phase 9-C completed");
 });

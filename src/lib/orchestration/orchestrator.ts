@@ -21,7 +21,7 @@ import { attachSignedUrls, uploadOutputs } from "./output-storage";
 // SIGNED bytes instead. A structural test fails if this import returns.
 import { reserveGenerationAsset, type MediaType } from "@/lib/media/asset-service";
 import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
-import { processFinalMedia, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
+import { processFinalMedia, signMediaForDelivery, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
 import { putAssetObject } from "@/lib/media/r2-client";
 import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
@@ -704,7 +704,7 @@ async function persistCanonicalOriginal(
     mediaType: MediaType;
     output: ResolvedOutput;
   }
-): Promise<{ assetId: string; objectKey: string }> {
+): Promise<{ assetId: string; objectKey: string; signedBytes: Uint8Array; signedMime: string }> {
   const reserved = await reserveGenerationAsset(admin, {
     generationId: params.generationId,
     clerkUserId: params.clerkUserId,
@@ -772,7 +772,13 @@ async function persistCanonicalOriginal(
     });
   }
 
-  return { assetId: processed.derivedAssetId, objectKey: reserved.objectKey };
+  return {
+    assetId: processed.derivedAssetId,
+    objectKey: reserved.objectKey,
+    // Handed back so the delivery lane serves the EXACT canonical bytes.
+    signedBytes: processed.finalBytes,
+    signedMime: processed.finalMime,
+  };
 }
 
 /**
@@ -826,13 +832,7 @@ async function collectAndFinalize(params: {
   // ---- Upload ---------------------------------------------------------------
   metadata = await setStage(admin, generationId, metadata, { stage: "uploading" });
 
-  const uploaded = await uploadOutputs(admin, resolvedOutputs, {
-    clerkUserId,
-    projectId,
-    generationId,
-  });
-
-  // ---- R2 canonical original + asset record (Phase 9-A) --------------------
+  // ---- R2 canonical original + asset record (Phase 9-A/9-B/9-C) ----------
   //
   // THE COMPLETION BOUNDARY (M2). Provider success is not completion. Bytes
   // must reach hot storage and be recorded before this generation may be
@@ -842,14 +842,60 @@ async function collectAndFinalize(params: {
   // Every failure below throws, so `markCompleted` is simply never reached.
   // That is the whole mechanism: there is no flag to get wrong, only an
   // ordering that cannot be skipped.
-  const primary = uploaded[0];
+  //
+  // PHASE 27: this now runs BEFORE the delivery upload, because the delivery
+  // lane must serve the SIGNED bytes this produces. Uploading first would
+  // hand the user the raw provider artifact — marked archival copy, unmarked
+  // download — which is exactly the divergence Article 50(2) forbids.
+  const primaryResolved = resolvedOutputs[0];
   const asset = await persistCanonicalOriginal(admin, {
     generationId,
     clerkUserId,
     projectId,
-    mediaType: primary.type === "image" ? "image" : primary.type === "audio" ? "audio" : "video",
-    output: resolvedOutputs[0],
+    mediaType:
+      primaryResolved.type === "image" ? "image" : primaryResolved.type === "audio" ? "audio" : "video",
+    output: primaryResolved,
   });
+
+  // ---- Sign every REMAINING output for delivery ---------------------------
+  //
+  // Phase 9 records one canonical asset per generation, but Article 50(2)
+  // applies to every artifact a user receives. A generation resolving three
+  // images must not deliver one marked and two unmarked, so each secondary
+  // output goes through the same transform+embed+verify engine. Failure
+  // throws for the same reason the primary's does — there is no unmarked
+  // fallback anywhere.
+  const deliverable: ResolvedOutput[] = [
+    { ...primaryResolved, bytes: asset.signedBytes, mimeType: asset.signedMime },
+  ];
+  for (const output of resolvedOutputs.slice(1)) {
+    const signed = await signMediaForDelivery({
+      bytes: output.bytes,
+      verifiedMime: output.mimeType,
+      digitalSourceType: "trainedAlgorithmicMedia",
+      softwareAgent: "Cinefield (model via provider)",
+    });
+    if (!signed.ok) {
+      throw new OrchestrationError("MEDIA_PROVENANCE_FAILED", {
+        context: {
+          operation: "c2pa_provenance_secondary",
+          generationId,
+          outcome: signed.outcome,
+          reason: signed.reasonCode,
+        },
+      });
+    }
+    deliverable.push({ ...output, bytes: signed.bytes, mimeType: signed.mime });
+  }
+
+  // ---- Upload the SIGNED bytes -------------------------------------------
+  const uploaded = await uploadOutputs(admin, deliverable, {
+    clerkUserId,
+    projectId,
+    generationId,
+  });
+
+  const primary = uploaded[0];
 
   // ---- Finalize -------------------------------------------------------------
   metadata = await setStage(admin, generationId, metadata, { stage: "finalizing" });

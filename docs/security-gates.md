@@ -7719,4 +7719,32 @@ unmarked media. One deliberate consequence, recorded in
 bytes are no longer retained in R2 for post-hoc inspection; the gate still
 records the rejection reason, checksum and detection outcome on the row, so
 the finding survives even though the hostile bytes do not.
+
+**User-delivery lane (final corrective).** The closure re-audit found a second
+lane: `uploadOutputs()` wrote RAW provider bytes to Supabase Storage
+`generation-outputs`, and both `markCompleted(outputUrl)` and
+`attachSignedUrls` pointed there — so the archived copy was marked and the
+DOWNLOADED file was not. `collectAndFinalize` now signs first and delivers the
+same bytes: `persistCanonicalOriginal` runs before `uploadOutputs`, returns
+`signedBytes`, and the delivery array is built from those exact bytes (never
+re-signed — a second sign mints a different manifest instance and a different
+digest). Multi-output generations sign every secondary artifact through
+`signMediaForDelivery`, failing closed on any of them, so a three-image
+generation cannot ship one marked and two raw. Test C9C-31 proves
+digest(delivered) == digest(stored) == provenance digest and that the
+DELIVERED bytes verify VALID under the official library; C9C-32 repeats it for
+mp4 and wav.
+
+`W27-4` was rewritten: the original counted `putAssetObject(` occurrences and
+was structurally blind to `admin.storage.from().upload()`, so it passed while
+the defect existed. It now enumerates every storage-write shape reachable from
+the orchestrator and asserts the delivery array is the signed one.
+
+**One duplicate remains, deliberately.** The signed bytes live in both R2 and
+Supabase Storage. They are byte-identical, so no marked/unmarked divergence is
+possible. Eliminating the second copy requires changing
+`src/hooks/useGeneration.ts`, which mints its own Supabase Storage signed URL
+and is consumed by four LOCKED workspaces — that needs explicit authorization
+to touch locked-page-dependent code, so it is recorded as a future decision
+rather than done unilaterally.
 **This corrective does not start Phase 28.**

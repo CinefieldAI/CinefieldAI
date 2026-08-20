@@ -6,9 +6,10 @@ Vienna, so that obligation attaches to the system — not to where the user
 happens to be. This document says exactly what is marked, how, and what is
 still missing.
 
-**Every canonical generated output is C2PA-marked.** The orchestrator's only
-storage path runs transform → embed → official verify → store, so there is no
-code path that writes an unmarked canonical artifact. Production fails closed:
+**Every generated output a user receives is C2PA-marked.** The orchestrator
+signs first, then delivers the *same* signed bytes — the canonical R2 object
+and the user download are byte-identical, so a marked archive and an unmarked
+download cannot diverge. Production fails closed:
 if the media cannot be marked, the generation does not complete. A detached
 ES256 evidence row is kept alongside the embedded manifest. The parts that are
 still development-grade are named as such below.
@@ -32,6 +33,9 @@ still development-grade are named as such below.
 | Signing key registered for rotation | **REAL** — Phase 25 `secret.rotate`, `DUAL_KEY_OVERLAP` |
 | **Production trust-list CA chain** | **EXTERNAL** — signing uses a DEVELOPMENT certificate |
 | **Automatic marking of every canonical output** | **REAL** — the orchestrator's only storage path is the C2PA pipeline |
+| **User-delivered bytes are the signed bytes** | **REAL** — delivery serves `asset.signedBytes`, digest-proven identical |
+| **Secondary outputs marked** | **REAL** — multi-output generations sign every artifact |
+| Duplicate physical copy (R2 + Supabase Storage) | **REMAINS** — see "Two copies, one artifact" |
 | Deepfake detection | **NOT BUILT** — Phase 28 owns T&S classification |
 | Visible deepfake label in product UI | **BLOCKED** — locked UI |
 | Soft-binding watermark | **NOT IN SCOPE** — roadmap: optional, second phase |
@@ -69,6 +73,26 @@ npm run c2pa:verify-sample
 
 It generates synthetic media with FFmpeg, embeds provenance, verifies with the
 official library, then tampers with one byte and confirms rejection.
+
+---
+
+## Two copies, one artifact
+
+The signed bytes are stored twice: the canonical R2 object (Phase 9's owner,
+which `media_assets` and `media_provenance` describe) and a Supabase Storage
+copy in `generation-outputs` that the delivery lane serves.
+
+**They are byte-identical** — the delivery lane receives `asset.signedBytes`,
+the exact array `processFinalMedia` stored, and a test proves the digests
+match. So there is no marked/unmarked divergence, which was the actual danger.
+
+The duplicate persists for one concrete reason: `src/hooks/useGeneration.ts`
+mints its own Supabase Storage signed URL from `generations.output_url`, and
+that hook is consumed by four **locked** workspaces (`/generate`,
+`/audio/create`, `/image`, `/marketing-studio/product`). Collapsing to a
+single R2-backed delivery identity means changing that hook's data flow, which
+requires explicit authorization to touch locked-page-dependent code. It is a
+real architectural cleanup, not a correctness gap.
 
 ---
 
