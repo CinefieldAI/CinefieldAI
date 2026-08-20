@@ -216,6 +216,22 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     owner: "phase-23 (src/lib/privacy/privacy-execution-service.ts, AccountDeletionWorkflow)",
     note: "Irreversible account erasure across Postgres/R2/Clerk. The single highest-consequence data mutation this system can make against one user's own data.",
   },
+  "secret.rotate": {
+    classification: "HIGH_RISK_TIER0",
+    minimumRole: "tier0_admin",
+    requiresStepUp: true,
+    // Phase 25. Already registered in policies/data/actions.json
+    // (requiresTwoPerson: true, requiresHumanApproval: true, owner:
+    // "phase-25") — that gate keeps running, unmodified, as the composed
+    // OPA-mirrored condition this file's own header describes. Activates
+    // the SAME generic dual-control mechanism as data.export/data.delete/
+    // route.disable/queue.dlq.redrive above — an automated credential
+    // revoker/rotator is itself a denial-of-service tool if it can act
+    // alone (docs/runbooks/secret-leak.md's own stated reasoning).
+    requiresTwoPerson: true,
+    owner: "phase-25 (src/lib/secrets/rotation-execution-service.ts, src/lib/secrets/leak-runbook.ts)",
+    note: "Rotates or revokes a live provider/infrastructure credential. The single highest-consequence action this system can take against its own operational integrity — a wrong rotation can take every dependent worker down at once.",
+  },
   "release_stage.activate_public": {
     classification: "HIGH_RISK_TIER0",
     minimumRole: "tier0_admin",

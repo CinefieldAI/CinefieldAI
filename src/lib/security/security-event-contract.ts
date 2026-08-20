@@ -38,7 +38,14 @@ export type SecurityEventKind =
   // its own: two append-only stores would mean two retention policies, two
   // sets of grants, and a second place nobody remembers to check.
   | "policy_decision_allowed"
-  | "policy_decision_denied";
+  | "policy_decision_denied"
+  // Phase 25-D. An anomalous KMS decrypt / Secrets Manager read, reported by
+  // the CloudTrail bridge (POST /api/internal/secrets/access-anomaly).
+  | "secret_access_anomaly"
+  // Phase 25-D/C. A rotation reached ACTIVE. Not suspicious — recorded for
+  // the same reason media_release_approved is: the highest-privilege class
+  // of action this system has belongs in the trail regardless of outcome.
+  | "secret_rotation_completed";
 
 /** Which subsystem observed it. */
 export type SecuritySource =
@@ -48,7 +55,13 @@ export type SecuritySource =
   | "media_safety"
   | "realtime_dispatcher"
   | "auth"
-  | "policy_gate";
+  | "policy_gate"
+  // Phase 25-D. The CloudTrail->security.events ingest route
+  // (/api/internal/secrets/access-anomaly, mirroring Phase 18-D's
+  // drift-report bridge exactly) and the rotation execution service, which
+  // records its own completed rotations here.
+  | "kms_cloudtrail_bridge"
+  | "secret_rotation_service";
 
 export type SecuritySeverity = "info" | "low" | "medium" | "high";
 
@@ -104,6 +117,16 @@ export const KIND_SEVERITY: Readonly<Record<SecurityEventKind, SecuritySeverity>
   //                                     script; a pattern is worth a look.
   policy_decision_allowed: "medium",
   policy_decision_denied: "medium",
+  //   secret_access_anomaly     high    same reasoning as
+  //                                     outbound_fetch_blocked — either a
+  //                                     credential is compromised or
+  //                                     someone is probing KMS/Secrets
+  //                                     Manager, and neither is routine.
+  //   secret_rotation_completed medium  a legitimate, rare, privileged
+  //                                     action — same tier as
+  //                                     media_release_approved.
+  secret_access_anomaly: "high",
+  secret_rotation_completed: "medium",
 };
 
 /**
@@ -148,6 +171,13 @@ export const KIND_SUBJECT_IS_ACTOR: Readonly<Record<SecurityEventKind, boolean>>
   // refusals warn and escalate to review — they never lock an operator out of
   // the system they are trying to operate.
   policy_decision_denied: true,
+  // The IAM principal/process that read the secret IS the subject being
+  // flagged for its own behavior — CloudTrail names it directly, there is
+  // no separate "who this happened to".
+  secret_access_anomaly: true,
+  // A privileged operator/service action, recorded for the trail — the same
+  // reasoning media_release_approved and policy_decision_allowed use.
+  secret_rotation_completed: false,
 };
 
 /**
@@ -170,6 +200,12 @@ export const KIND_WINDOW_SECONDS: Readonly<Record<SecurityEventKind, number>> = 
   // deliberate actions and every one of them is its own audit record.
   policy_decision_allowed: 1,
   policy_decision_denied: 1,
+  // Short, matching outbound_fetch_blocked's reasoning: a burst of anomalous
+  // KMS/Secrets Manager reads is the pattern that matters, and a short
+  // window keeps that burst visible instead of smothered.
+  secret_access_anomaly: 30,
+  // One second — a rare, deliberate action, its own audit record every time.
+  secret_rotation_completed: 1,
 };
 
 /**
@@ -233,6 +269,13 @@ export const KIND_DEDUPE_INCLUDES_RESOURCE: Readonly<Record<SecurityEventKind, b
   // where the interesting actions are.
   policy_decision_allowed: true,
   policy_decision_denied: true,
+  // An attacker/anomalous process controls how many resources it reads; the
+  // key must stay bounded to (subject, kind) alone, same reasoning as
+  // rate_limit_denied/outbound_fetch_blocked above.
+  secret_access_anomaly: false,
+  // Every rotation is its own audit record — same reasoning as the media/
+  // policy decisions above.
+  secret_rotation_completed: true,
 };
 
 export interface SecurityEventInput {
@@ -298,6 +341,8 @@ const SOURCES: ReadonlySet<string> = new Set<SecuritySource>([
   "realtime_dispatcher",
   "auth",
   "policy_gate",
+  "kms_cloudtrail_bridge",
+  "secret_rotation_service",
 ]);
 
 /**

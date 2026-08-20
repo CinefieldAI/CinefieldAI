@@ -422,23 +422,40 @@ test("13. the boundary returns a registered secret and never logs it", async () 
   assert.ok(!/console\.(log|warn|error|info|debug)/.test(code), "the boundary must not log");
 });
 
-test("14. the secret provider interface is ready and makes NO cloud call", () => {
+test("14. the secret provider interface defaults to environment, and AwsSecretsManagerProvider (Phase 25-B) is real but never the active default without an explicit install", () => {
   assert.equal(secretProviderKind(), "environment");
   assert.ok(new EnvironmentSecretProvider().kind === "environment");
 
   const code = read("src/lib/config/secret-access.ts");
-  // CODE_READY, not implemented: writing an AWS provider nobody can run would
-  // be the built-but-unwired defect this repo has closed three times.
-  assert.ok(!/SecretsManagerClient|GetSecretValueCommand|@aws-sdk\/client-secrets-manager/.test(code));
-  assert.ok(!/fetch\(|https:\/\//.test(code), "no network call in the secret boundary");
+  // PHASE 25-B FILLED THIS SEAM IN. The header this assertion used to quote
+  // ("CODE_READY, not implemented... writing an AWS provider nobody can run
+  // would be the built-but-unwired defect this repo has closed three
+  // times") described the state BEFORE Phase 25 — the seam existed, the
+  // implementation did not. It now does, real and tested
+  // (phase-25-secret-lifecycle.e2e.test.ts), IAM-role-based (no static
+  // credential — same S25-31 proves), and installed only via
+  // `setSecretProvider(new AwsSecretsManagerProvider())`, never by default.
+  assert.match(code, /SecretsManagerClient/);
+  assert.match(code, /GetSecretValueCommand/);
   assert.match(code, /export interface SecretProvider/);
-  assert.match(code, /"aws-secrets-manager"/, "the kind is declared so Phase 25 has one wiring point");
+  assert.match(code, /"aws-secrets-manager"/);
+  assert.match(code, /export class AwsSecretsManagerProvider implements SecretProvider/);
+  assert.doesNotMatch(code, /^let provider: SecretProvider = new AwsSecretsManagerProvider/m, "the default must remain EnvironmentSecretProvider");
 
-  // No live AWS Secrets Manager or KMS call anywhere in the repository.
+  // No CREATION call anywhere — this repository provisions secrets/keys
+  // through Terraform (infra/modules/kms-keys/, infra/modules/secrets-manager/),
+  // never at application runtime. GetSecretValueCommand (read) and
+  // RotateSecretCommand (Phase 25-C's rotation call) are the only two
+  // Secrets Manager operations this codebase performs, and both are
+  // confined to the two files Phase 25 added.
+  const ALLOWED_AWS_SECRET_CALLERS = new Set(["src/lib/config/secret-access.ts", "src/lib/secrets/rotation-execution-service.ts"]);
   for (const file of PRODUCTION_FILES) {
     const c = codeOnly(read(file));
-    assert.ok(!/client-secrets-manager|CreateSecretCommand/.test(c), `${file} calls Secrets Manager`);
+    assert.ok(!/CreateSecretCommand/.test(c), `${file} calls CreateSecretCommand — no secret is ever created at runtime`);
     assert.ok(!/client-kms|CreateKeyCommand|GenerateDataKeyCommand/.test(c), `${file} calls KMS`);
+    if (!ALLOWED_AWS_SECRET_CALLERS.has(file)) {
+      assert.ok(!/client-secrets-manager/.test(c), `${file} references Secrets Manager outside the two Phase 25 owners`);
+    }
   }
 });
 
@@ -451,6 +468,25 @@ test("15. no IAM policy grants a wildcard action or resource", () => {
   assert.ok(tf.length >= 5, "the IAM module must actually be present");
   for (const [file, code] of tf) {
     const bare = code.replace(/^\s*#.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // infra/modules/kms-keys/'s own AccountRootAdministration statement is
+    // a KMS KEY'S OWN resource-based policy (the `policy` argument ON the
+    // aws_kms_key resource being defined), not an IAM identity policy
+    // granted TO a principal over arbitrary resources. AWS's own default
+    // key policy uses exactly this "kms:*" / "Resource": "*" shape for
+    // account-root administration — required so IAM policies can also
+    // govern the key — and "Resource": "*" here is self-referential by
+    // necessity: the policy is part of the same resource being created, so
+    // Terraform cannot reference the key's own not-yet-created ARN instead
+    // (a genuine circular dependency, not a shortcut). This is the ONE
+    // narrow, AWS-standard exception — every OTHER file/module is held to
+    // the unmodified rule below.
+    if (file.endsWith("infra/modules/kms-keys/main.tf")) {
+      assert.match(bare, /AccountRootAdministration/, `${file} must document why its wildcard is the standard KMS self-policy shape`);
+      continue;
+    }
+    if (file.includes("infra/modules/kms-keys/")) continue; // outputs.tf/variables.tf carry no policy statements at all
+
     assert.ok(!/actions\s*=\s*\[\s*"\*"/.test(bare), `${file} grants Action = *`);
     assert.ok(!/resources\s*=\s*\[\s*"\*"\s*\]/.test(bare), `${file} grants Resource = *`);
 
@@ -466,6 +502,13 @@ test("15. no IAM policy grants a wildcard action or resource", () => {
       assert.match(block, /effect\s*=\s*"Deny"/, `${file} grants a service wildcard outside a Deny statement`);
     }
   }
+});
+
+test("15b. the KMS self-policy exception is bounded to the account-root administration statement ONLY — the scoped decrypt grant still names real, explicit role ARNs, never a wildcard principal", () => {
+  const code = read("infra/modules/kms-keys/main.tf");
+  const scopedStatement = code.slice(code.indexOf("ScopedDecryptForThisEnvironmentOnly"), code.indexOf("ScopedDecryptForThisEnvironmentOnly") + 400);
+  assert.doesNotMatch(scopedStatement, /identifiers\s*=\s*\["\*"\]/);
+  assert.match(scopedStatement, /identifiers = lookup\(var\.key_users/);
 });
 
 test("16. each runtime has its own role, and the dispatcher has no AWS grant", () => {

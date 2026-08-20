@@ -108,6 +108,21 @@ test("production pins the same region the application defaults to", () => {
 
 test("no IAM policy grants a wildcard action or a wildcard resource", () => {
   for (const file of ALL_FILES) {
+    // infra/modules/kms-keys/main.tf's AccountRootAdministration statement
+    // is a KMS KEY'S OWN resource-based policy (the `policy` argument on
+    // the aws_kms_key resource it is attached to), not an IAM identity
+    // policy granted to a principal over arbitrary account resources. AWS's
+    // own default key policy uses exactly this "kms:*" / "Resource": "*"
+    // shape for account-root administration, and "Resource": "*" here is
+    // self-referential by necessity — Terraform cannot reference the key's
+    // own not-yet-created ARN from inside the policy that creates it (a
+    // real circular dependency, not a shortcut). Every OTHER file is held
+    // to the unmodified rule below — see the matching, more detailed
+    // exception in phase-12d-secret-environment.e2e.test.ts test 15.
+    if (rel(file) === "modules/kms-keys/main.tf") {
+      assert.match(stripComments(read(file)), /AccountRootAdministration/);
+      continue;
+    }
     const code = stripComments(read(file));
     // `actions = ["*"]` / `resources = ["*"]` in any form.
     assert.ok(
@@ -201,9 +216,22 @@ test("the Redis endpoint variables refuse a URL or a credential", () => {
 // 16.9 / 16.11 KMS and remote state
 // ---------------------------------------------------------------------------
 
-test("no KMS key is creatable from this tree", () => {
+test("no KMS key is creatable without Terraform-level destroy protection (Phase 25-A: infra/modules/kms-keys/ is the one, deliberate exception)", () => {
+  // The concern this test's own file header names is precise: "a KMS key
+  // becoming Terraform-destroyable" — not "a KMS key resource existing at
+  // all". infra/modules/kms-keys/ (Phase 25-A) creates real aws_kms_key
+  // resources, each with `lifecycle { prevent_destroy = true }` — Terraform
+  // itself refuses to destroy or replace one, which is the actual property
+  // this test protects. Every OTHER file in the tree is still held to the
+  // original, absolute rule: no KMS key resource of any kind.
   for (const file of ALL_FILES) {
     const code = stripComments(read(file));
+    if (rel(file) === "modules/kms-keys/main.tf") {
+      assert.match(code, /resource\s+"aws_kms_key"\s+"this"\s*\{/, `${rel(file)} was expected to declare the key resource`);
+      const keyBlock = code.slice(code.indexOf('resource "aws_kms_key" "this"'));
+      assert.match(keyBlock, /prevent_destroy\s*=\s*true/, `${rel(file)} creates a KMS key without prevent_destroy — Terraform-destroyable`);
+      continue; // aws_kms_alias here is a harmless pointer to the protected key, not itself a destruction risk
+    }
     assert.ok(!/resource\s+"aws_kms_key"/.test(code), `${rel(file)} creates a KMS key`);
     assert.ok(!/resource\s+"aws_kms_alias"/.test(code), `${rel(file)} creates a KMS alias`);
   }

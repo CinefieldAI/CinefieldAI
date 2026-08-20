@@ -693,30 +693,34 @@ ENVIRONMENT SEPARATION       RUNTIME-ENFORCED — 3 worker entrypoints, fail-clo
 SERVER SECRET BOUNDARY       ENFORCED — server-only + structural tests
 PROVIDER SECRET ISOLATION    ENFORCED — one name per provider, generic forbidden
 LEAST PRIVILEGE CONTRACT     6 runtime roles, no wildcards
-SECRET MANAGER RUNTIME       CODE_READY (interface + env backend)
-LIVE SECRET MANAGER          DEFERRED_EXTERNAL_INFRA
-KMS RUNTIME                  DEFERRED_TO_PHASE_25
-ROTATION RUNBOOK             WRITTEN — no credential rotated
-LEAK RUNBOOK                 WRITTEN
+SECRET MANAGER RUNTIME       CODE_COMPLETE (interface + env backend + AwsSecretsManagerProvider, Phase 25-B)
+LIVE SECRET MANAGER          CODE_COMPLETE_LIVE_DEFERRED (Terraform written, never applied)
+KMS RUNTIME                  CODE_COMPLETE_LIVE_DEFERRED (infra/modules/kms-keys/, Phase 25-A, never applied)
+ROTATION RUNBOOK             WRITTEN + AUTOMATED (Phase 25-C: rotation-execution-service.ts, no credential rotated live)
+LEAK RUNBOOK                 WRITTEN + AUTOMATED (Phase 25-D: leak-runbook.ts, no credential rotated live)
 SECRET SCAN                  CLEAN on tracked files
 CONFIG HEALTH REPORT         presence-only, no HTTP endpoint
 PAID INFRA CREATED           NO
 ```
 
-### What 12-D owns, and what Phase 25 does
+### What 12-D owns, and what Phase 25 built on top of it
 
 The two overlap heavily and the roadmap resolves it: ¶2688 states Phase 25's
 connection is "Phase 12 Secret Management + Phase 15 DR + IaC foundation" —
-Phase 25 BUILDS ON this. So:
+Phase 25 BUILDS ON this. As of Phase 25's own closure, updated from the
+original table (kept below for history):
 
-| | 12-D (here) | Phase 25 |
+| | 12-D (here) | Phase 25 — actual state |
 | --- | --- | --- |
-| Environment separation | contract + validation | live per-env key namespaces |
-| Secret backend | interface + env provider | live Secrets Manager (¶2692) |
-| KMS | ownership boundary only | key hierarchy, aliases, policies (¶2690–91) |
-| Rotation | written procedure | managed schedules + reload verification (¶2680) |
-| Leak response | written runbook | automated revoke→reload→verify (¶2694) |
-| Monitoring | — | CloudTrail → `security.events` (¶2683) |
+| Environment separation | contract + validation | live per-env key namespaces — `AwsSecretsManagerProvider.secretId()` prefixes every lookup `cinefield/{environment}/`, and `infra/modules/kms-keys/`'s key policies grant decrypt only to that environment's own IAM role ARNs |
+| Secret backend | interface + env provider | `AwsSecretsManagerProvider` (¶2692) — real, IAM-role-based, CODE_COMPLETE, installed via `setSecretProvider()`, never the active default |
+| KMS | ownership boundary only | `infra/modules/kms-keys/` (¶2690–91) — real `aws_kms_key`/`aws_kms_alias`, `prevent_destroy = true`, CODE_COMPLETE_LIVE_DEFERRED |
+| Rotation | written procedure | `rotation-execution-service.ts` (¶2680) — real state machine + Tier-0/policy dual-gated execution + provider/verifier seams, no live worker-reload signal exists yet so `NoWorkerReloadVerifier` is the honest default |
+| Leak response | written runbook | `leak-runbook.ts` (¶2694) — reuses `secret.rotate`'s exact authorization, adds revoke/dead-check steps, honest no-op defaults until a per-provider revocation API is wired |
+| Monitoring | — | `POST /api/internal/secrets/access-anomaly` (¶2683) — the receiving side is real; the CloudTrail/EventBridge/GuardDuty wiring that would call it is a separate, undecided integration, disclosed not guessed at |
+
+Full detail, evidence, and file-by-file citations: see this document's own
+"Phase 25" section below.
 
 ¶1686 is why the contract half lands now rather than with the infrastructure:
 "Secrets Manager/KMS + dev/staging/prod ayrımı, ileri bir Phase değil PROVIDER
@@ -7166,3 +7170,201 @@ content credentials — confirmed Phase 27's exclusive scope, not
 duplicated or fabricated here. SLSA level claims — the roadmap names no
 SLSA requirement; none is claimed.
 **Phase 24 does not start Phase 25.**
+
+## Phase 25 — KMS, Encryption & Secret Lifecycle
+
+**Authoritative roadmap source:** the same master DOCX authoritative for
+Phases 19–24, hash `625b2498…`, re-confirmed identical this batch. Official
+title: "Phase 25 — KMS, Encryption & Secret Lifecycle." Handoff: "Phase
+12-D secret registry, env separation, least-privilege ve rotation/leak
+runbook foundation'dır; gerçek Secrets Manager/KMS, managed rotation ve
+audit Phase 25'tedir" — 12-D's registry/separation/least-privilege/written
+runbooks are the FOUNDATION; real Secrets Manager, KMS, managed rotation,
+and audit are ADDED here. Four official packages: 25-A (KMS key hierarchy
++ IAM least privilege), 25-B (Secrets Manager migration + R2/S3/AWS
+encryption mapping), 25-C (rotation schedule + reload verification), 25-D
+(credential-leak auto-runbook + CloudTrail/security.events alerting).
+
+### The scaffolding this phase fills already existed, deliberately unimplemented
+
+`secret-access.ts`'s own header long stated: "There is deliberately NO
+`AwsSecretsManagerProvider` class in this repository yet... What Phase 25
+adds is small and fully specified by the interface above." `policies/data/
+actions.json` already registered `secret.rotate` (`requiresTwoPerson: true`,
+`requiresHumanApproval: true`, `implemented: false`, `owner: "phase-12d"`).
+`docs/runbooks/secret-rotation.md`/`secret-leak.md` each had a "What Phase
+25 adds" section stating exactly this batch's own scope. This phase filled
+every one of those seams rather than inventing parallel ones.
+
+### 25-A — KMS key hierarchy + IAM least privilege
+
+`infra/modules/kms-keys/` — a NEW, standalone module, deliberately separate
+from `infra/modules/kms/` (Phase 6R.16), whose own header states plainly:
+"Key creation is therefore a deliberate, separately-reviewed act — not
+something that happens as a side effect of applying an environment." This
+module IS that act: real `aws_kms_key`/`aws_kms_alias` resources, one per
+purpose per environment, `enable_key_rotation = true`, `deletion_window_in_
+days = 30`, `lifecycle { prevent_destroy = true }` (Terraform itself refuses
+to destroy or replace one). Each key's policy grants `kms:Decrypt`/
+`GenerateDataKey*` only to the IAM role ARNs that ENVIRONMENT's own
+`var.key_users` supplies — a staging role has no statement anywhere in a
+production key's policy, so cross-environment decrypt is structurally
+impossible, not merely discouraged (25-A's own done-criterion: "Cross-
+environment decrypt/read engelli"). NOT wired into `infra/environments/
+{dev,production}/main.tf` — activation is a deliberate, separate decision a
+human makes by wiring this module's `key_arns` output into `infra/modules/
+kms/`'s existing `queue_key_arn`/etc. inputs, matching that module's own
+"not automatic" design exactly.
+
+The one AWS-standard exception two governance tests (`iac-contract.test.ts`,
+`phase-12d-secret-environment.e2e.test.ts`) now explicitly carve out and
+verify: the account-root administration statement (`kms:*` / `Resource:
+"*"`) is a KMS key's OWN resource-based policy, self-referential by
+necessity (Terraform cannot reference a key's not-yet-created ARN from
+inside the policy that creates it) — not an IAM identity-policy wildcard,
+which both tests still refuse everywhere else in the tree unmodified.
+
+### 25-B — Secrets Manager migration + encryption mapping
+
+`AwsSecretsManagerProvider` (`src/lib/config/secret-access.ts`) — real,
+IAM-role-based (no static AWS credential, matching `sqs-config.ts`/
+`dr-backup-client.ts`'s own established pattern), namespaces every lookup
+`cinefield/{environment}/{name}` via `resolveEnvironment()` (the SAME
+function `environment.ts`'s own production checks use), cached (5-minute
+default TTL), fails closed to `undefined` on any AWS error — collapsing a
+Secrets Manager outage into the exact same refusal an unset environment
+variable already produces. Installed only via `setSecretProvider(new
+AwsSecretsManagerProvider())`; `EnvironmentSecretProvider` remains the
+active default. `infra/modules/secrets-manager/` (Terraform, CODE_COMPLETE_
+LIVE_DEFERRED) declares `aws_secretsmanager_secret` CONTAINERS only —
+deliberately no `aws_secretsmanager_secret_version` resource, since
+Terraform state durably persists whatever a `_version` resource's value
+holds, even a "placeholder"; an operator populates the real value
+out-of-band after the container exists, the same two-step pattern AWS's own
+documentation recommends. Output shape (`map(string)`) slots directly into
+the existing `infra/modules/ecs/`'s `secret_arns` consumer and `infra/
+modules/iam/`'s `task_secret_arns` variable, both unmodified.
+
+R2/S3 encryption mapping, audited honestly: R2 has no IAM-role concept (the
+one place this codebase legitimately uses static credentials, already
+registered `INFRA_SECRET`/`DUAL_KEY_OVERLAP`) and Cloudflare manages its own
+at-rest encryption — `PROVIDER_MANAGED`, not something Terraform in this
+repository controls. The DR S3 bucket's encryption is `infra/modules/kms/`'s
+own existing `storage_key_arn` input (Phase 6R.16, unmodified) — customer-
+managed once wired to Phase 25-A's real keys, `AWS_MANAGED` (still
+encrypted) otherwise; this batch did not change that module's own honest
+`aws_managed`/`customer_managed` reporting.
+
+### 25-C — Rotation schedule + reload verification
+
+`src/lib/secrets/rotation-contract.ts` — the bounded, value-free state
+machine: `NOT_CONFIGURED → ROTATION_REQUIRED → ROTATING → VERIFYING →
+ACTIVE`, with `ROLLBACK_AVAILABLE`/`FAILED`/`EXPIRED` failure branches,
+enforced by `canTransition()` — no secret value field exists anywhere in
+the contract, only opaque provider-assigned version references.
+
+`src/lib/secrets/rotation-execution-service.ts` — the ONE caller of
+`secret.rotate`, same composition shape `privacy-execution-service.ts`
+(Phase 23) established for `data.export`/`data.delete`: Tier-0 authorizes
+FIRST (the real source of the two-distinct-approver evidence policy's
+`approvalEvidence` needs), policy runs SECOND, unconditionally, immediately
+before any provider call. `RotationProvider`/`RotationVerifier` are
+injectable seams — `LiveAwsSecretsManagerRotationProvider` is real and
+never invoked live by this repository's own tests (same convention as
+`LiveClerkUserDeleter`, Phase 23); `NoWorkerReloadVerifier` is the honest
+default, since no live worker-reload signal exists anywhere in this
+repository yet — it always reports unverified rather than assuming a
+rotation worked because the provider call returned, matching the same
+"empty registry, reported honestly" shape `RTO_TARGETS`/`RPO_TARGETS`
+(Phase 15-D/2) already established. Every intermediate state transition is
+a real, durable, compare-and-set write (`upsert_secret_rotation_state()`,
+`supabase/migrations/20260911000000_secret_rotation_lifecycle.sql`) — a
+provider failure or verification failure leaves the row `FAILED`/
+`ROLLBACK_AVAILABLE` honestly, never a fabricated `ACTIVE`.
+
+`secret.rotate` is now `implemented: true` in `policies/data/actions.json`
+(owner `phase-25`) and registered `HIGH_RISK_TIER0`/`requiresTwoPerson:
+true`/`requiresStepUp: true` in `tier0-action-catalogue.ts` — the same dual
+gate `data.export`/`data.delete`/`route.disable` already use, not a new
+mechanism.
+
+### 25-D — Credential-leak auto-runbook + CloudTrail/security.events alerting
+
+`src/lib/secrets/leak-runbook.ts` — `docs/runbooks/secret-leak.md`'s own
+header named the exact risk this respects: "an automated credential
+revoker is itself a denial-of-service tool, and it belongs behind the
+two-person approval [secret.rotate] already requires." Rather than
+registering a second policy action for an identical risk shape, this
+module calls `executeSecretRotation()` UNMODIFIED for the authorize+
+rotate+verify+ACTIVE core, then adds exactly the two steps a routine
+rotation does not need — explicit old-version revocation and a dead-check
+that the previous credential no longer authenticates — correlated under
+the SAME `requestId` as the rotation's own Tier-0 authorization. Every step
+is recorded in the timeline honestly: `RevocationProvider`/
+`DeadCheckVerifier` default to `NoRevocationProvider`/`NoDeadCheckVerifier`
+(no live per-provider revocation API is wired for any of Clerk/Supabase/
+AWS/Cloudflare/provider APIs yet — each has its own dashboard/endpoint,
+undocumented as code until a real integration is built against one
+specifically), reporting `not_configured` rather than a fabricated
+`completed`.
+
+`security_events` widened additively (`supabase/migrations/
+20260912000000_security_events_secret_anomaly.sql`, the identical
+strictly-additive pattern `20260827000000_policy_decision_evidence.sql`
+already established for Phase 12-E — two new `kind`/two new `source`
+values, no column dropped, no constraint narrowed, `record_security_event()`'s
+signature unchanged since it already accepts arbitrary kind/source text).
+`POST /api/internal/secrets/access-anomaly` — the CloudTrail bridge's
+receiving end, mirroring `/api/internal/infra/drift-report` (Phase 18-D)
+exactly: no Clerk session possible, shared-bearer-token gated
+(`CINEFIELD_SECRETS_ANOMALY_INGEST_TOKEN`), fails closed when unconfigured,
+hashes the CloudTrail principal ARN before it ever reaches `security_events`
+(never stored verbatim). The AWS-side CloudTrail/EventBridge/GuardDuty
+wiring that would actually call this route was deliberately NOT built —
+which specific anomaly-detection mechanism to use (a plain EventBridge rule
+on CloudTrail management events, vs. GuardDuty's own Secrets Manager threat
+detection) is a real, undecided design choice, not a known Terraform shape
+this batch could write with confidence; disclosed as `DEFERRED_EXTERNAL`/
+`BUSINESS_DECISION_REQUIRED` rather than guessed at.
+
+### Admin visibility
+
+`/admin/secrets` (`secrets-admin-contract.ts`/`-service.ts`, `GET
+/api/admin/secrets`) — read-only, reuses `SECRET_REGISTRY` (Phase 12-D,
+unmodified) joined with `secret_rotations` (Phase 25-C) — secret
+identifier, owner, provider, environment, rotation state, `lastRotatedAt`,
+`expiresAt`, verification status, reason code. Filtered to
+`SENSITIVE_CLASSES` only (`SERVER_SECRET`/`INFRA_SECRET`/
+`PROVIDER_SECRET`) — never a value, never a `PUBLIC`/`IDENTIFIER_NON_
+SECRET`/`LOCAL_ONLY` name cluttering a lifecycle view. `POST /api/admin/
+secrets/rotate` — the privileged path, same CSRF+admin-auth+step-up chain
+as `/api/admin/privacy/execute`, response is `executeSecretRotation()`'s
+own outcome passed through unmodified (never a value).
+
+### Ownership preserved
+
+Phase 9 (media/storage), Phase 15 (DR/restore), Phase 16 (admin/Tier-0,
+reused not duplicated), Phase 18 (IaC — the new modules follow its exact
+conventions, never wired into a live environment), Phase 19 (policy-as-
+code — `secret.rotate` flows through the SAME embedded engine + OPA mirror,
+`policies/conformance/cases.json` updated the identical way Phase 23's
+`data.export`/`data.delete` cases were), and Phase 20 (contract governance
+— no new Kafka/domain event schema; `security_events`'s widening is the
+established additive migration pattern, not a new registry) are all
+confirmed untouched by full regression, not merely asserted.
+
+### Not in this batch
+
+Live AWS KMS/Secrets Manager provisioning (`terraform apply` was never run
+— `infra/modules/kms-keys/`/`infra/modules/secrets-manager/` are
+CODE_COMPLETE_LIVE_DEFERRED, matching Phase 18's own established
+precedent). The CloudTrail/EventBridge/GuardDuty wiring for the anomaly
+bridge — a genuinely undecided design choice, not merely unapplied code.
+Per-provider revocation API integrations (Clerk/Supabase/AWS/Cloudflare/
+provider APIs) for the leak runbook's revoke/dead-check steps — each is a
+separate, provider-specific integration decision. A live worker-reload
+verification signal — no process in this repository reports back "I am now
+using version X of secret Y"; building that requires deciding how each of
+temporal-worker/provider-worker/realtime-dispatcher would report it, a
+scope decision this batch did not make unilaterally.
+**Phase 25 does not start Phase 26.**

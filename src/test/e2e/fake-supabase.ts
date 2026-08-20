@@ -241,7 +241,62 @@ export class FakeSupabaseClient {
     if (fn === "record_deletion_tombstone") {
       return { data: this.recordDeletionTombstone(args ?? {}), error: null };
     }
+    if (fn === "upsert_secret_rotation_state") {
+      return { data: this.upsertSecretRotationState(args ?? {}), error: null };
+    }
     return { data: null, error: null };
+  }
+
+  /** Mirrors upsert_secret_rotation_state() (Phase 25, 20260911000000_secret_rotation_lifecycle.sql). */
+  private upsertSecretRotationState(args: Record<string, unknown>): Record<string, unknown> {
+    if (!this.state.secret_rotations) this.state.secret_rotations = [];
+    const rows = this.state.secret_rotations as Row[];
+    const secretName = args.p_secret_name as string;
+    const environment = args.p_environment as string;
+    const expectedState = (args.p_expected_state as string | null) ?? null;
+
+    const existing = rows.find((r) => r.secret_name === secretName && r.environment === environment);
+
+    if (!existing) {
+      if (expectedState !== null) return { applied: false, reason: "no_existing_row" };
+      const row: Row = {
+        id: randomUUID(),
+        secret_name: secretName,
+        environment,
+        owner: args.p_owner,
+        rotation_class: args.p_rotation_class,
+        state: args.p_new_state,
+        reason_code: args.p_reason_code,
+        tier0_request_id: args.p_tier0_request_id ?? null,
+        current_version_ref: args.p_current_version_ref ?? null,
+        previous_version_ref: args.p_previous_version_ref ?? null,
+        rotated_at: args.p_rotated_at ?? null,
+        expires_at: args.p_expires_at ?? null,
+        verified_at: args.p_verified_at ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      rows.push(row);
+      return { applied: true, rotation_id: row.id, created: true };
+    }
+
+    if (expectedState !== null && existing.state !== expectedState) {
+      return { applied: false, reason: "state_mismatch", rotation_id: existing.id };
+    }
+
+    existing.state = args.p_new_state;
+    existing.reason_code = args.p_reason_code;
+    existing.owner = args.p_owner;
+    existing.rotation_class = args.p_rotation_class;
+    if (args.p_tier0_request_id !== undefined && args.p_tier0_request_id !== null) existing.tier0_request_id = args.p_tier0_request_id;
+    if (args.p_current_version_ref !== undefined && args.p_current_version_ref !== null) existing.current_version_ref = args.p_current_version_ref;
+    if (args.p_previous_version_ref !== undefined && args.p_previous_version_ref !== null) existing.previous_version_ref = args.p_previous_version_ref;
+    if (args.p_rotated_at !== undefined && args.p_rotated_at !== null) existing.rotated_at = args.p_rotated_at;
+    if (args.p_expires_at !== undefined && args.p_expires_at !== null) existing.expires_at = args.p_expires_at;
+    if (args.p_verified_at !== undefined && args.p_verified_at !== null) existing.verified_at = args.p_verified_at;
+    existing.updated_at = new Date().toISOString();
+
+    return { applied: true, rotation_id: existing.id, created: false };
   }
 
   /** Mirrors create_privacy_request() (Phase 23, 20260910000000_privacy_lifecycle.sql). */

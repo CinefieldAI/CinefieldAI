@@ -96,10 +96,19 @@ correctness failure that presents as an unrelated outage.
 ## What is not covered here
 
 - **No IAM is applied.** These are Terraform definitions and a matrix.
-- **KMS key policies** beyond the `kms:ViaService`-conditioned grants above
-  are Phase 25 (¶2691).
-- **CloudTrail alerting on anomalous secret reads** is Phase 25 (¶2683, ¶2696).
+- **KMS key policies** beyond the `kms:ViaService`-conditioned grants above —
+  Phase 25-A built `infra/modules/kms-keys/` (real `aws_kms_key`/
+  `aws_kms_alias` resources, environment-scoped decrypt grants,
+  `prevent_destroy = true`), CODE_COMPLETE and never applied by that batch;
+  wiring it into a live environment remains a deliberate, separate decision.
+- **CloudTrail alerting on anomalous secret reads** — the receiving side is
+  real (Phase 25-D: `POST /api/internal/secrets/access-anomaly`,
+  `security_events.kind = 'secret_access_anomaly'`); the AWS-side
+  CloudTrail/EventBridge/GuardDuty wiring that would call it is a genuinely
+  separate, undecided integration (which anomaly-detection mechanism to use
+  is itself a real decision), disclosed rather than guessed at.
 - **Human access** — who may assume these roles — is Phase 16's admin plane
   (¶1954), and secret/key operations are already on the two-person list
-  (¶2284), registered in the 12-E policy gate as `secret.rotate` and currently
-  denying.
+  (¶2284), registered in the 12-E policy gate as `secret.rotate` and, as of
+  Phase 25-C, IMPLEMENTED — `src/lib/secrets/rotation-execution-service.ts`
+  is its only caller, gated by the same policy + Tier-0 dual-control chain.

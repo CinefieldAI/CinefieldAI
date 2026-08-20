@@ -223,6 +223,9 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
 
   // ---- infra (Phase 18-D) --------------------------------------------------
   { name: "CINEFIELD_INFRA_DRIFT_INGEST_TOKEN", class: "SERVER_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "CUT_OVER", note: "Shared bearer secret for POST /api/internal/infra/drift-report — the only caller is the infra-drift.yml GitHub Actions job, never a browser. Unset means every request is refused (fail closed), which is the correct state until infra/bootstrap/ is applied for real." },
+
+  // ---- infra (Phase 25-D) --------------------------------------------------
+  { name: "CINEFIELD_SECRETS_ANOMALY_INGEST_TOKEN", class: "SERVER_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "CUT_OVER", note: "Shared bearer secret for POST /api/internal/secrets/access-anomaly — the CloudTrail->security.events bridge. The only intended caller is a live EventBridge/Lambda forwarder, never a browser. Unset means every request is refused (fail closed), the same convention CINEFIELD_INFRA_DRIFT_INGEST_TOKEN already uses, correct until the real EventBridge rule (infra/modules/secrets-manager/, CODE_COMPLETE_LIVE_DEFERRED) is applied." },
 ] as const;
 
 const BY_NAME = new Map(SECRET_REGISTRY.map((e) => [e.name, e]));

@@ -1,5 +1,5 @@
 {
-  "policyVersion": "2026-08-19.2",
+  "policyVersion": "2026-08-20.1",
   "environments": ["development", "preview", "production"],
   "roles": ["service", "route_admin", "member", "anonymous", "ai_agent"],
   "aiWriteAllowlist": ["code.pr.create"],
@@ -129,8 +129,8 @@
       "requiredRoles": ["route_admin"],
       "requiresTwoPerson": true,
       "requiresHumanApproval": true,
-      "implemented": false,
-      "owner": "phase-12d"
+      "implemented": true,
+      "owner": "phase-25"
     },
     "account.suspend": {
       "critical": true,

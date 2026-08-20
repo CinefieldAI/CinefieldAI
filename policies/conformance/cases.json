@@ -63,9 +63,14 @@
       "expect": { "decision": "DENY", "reason": "not_implemented" }
     },
     {
-      "name": "secret.rotate is denied - Phase 12-D is not started",
+      "name": "secret.rotate is now implemented (Phase 25) - without human approval evidence it blocks on approval, never a silent allow",
       "patch": { "action": "secret.rotate" },
-      "expect": { "decision": "DENY", "reason": "not_implemented" }
+      "expect": { "decision": "REQUIRE_APPROVAL", "reason": "human_approval_required" }
+    },
+    {
+      "name": "secret.rotate with human approval evidence allows, but two-person is enforced downstream - policy alone never satisfies dual control",
+      "patch": { "action": "secret.rotate", "approvalEvidence": { "humanApproved": true } },
+      "expect": { "decision": "ALLOW", "reason": "allowed_two_person_enforced_downstream" }
     },
     {
       "name": "account.suspend is denied - there is no ban mechanism to authorise",

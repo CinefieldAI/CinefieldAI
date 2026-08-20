@@ -377,6 +377,39 @@ deferred integration decision. Full detail, evidence, and file-by-file
 citations: see `security-gates.md`'s "Phase 24 — Software Supply Chain
 Security & Build Provenance" section.
 
+**Phase 25 — KMS, Encryption & Secret Lifecycle, official packages 25-A
+through 25-D:** builds on Phase 12-D's secret registry/environment-
+separation/least-privilege/written-runbook foundation exactly as that
+phase's own header long anticipated ("What Phase 25 adds is small and
+fully specified by the interface above"). 25-A adds
+`infra/modules/kms-keys/` — a new, standalone Terraform module (deliberately
+separate from the pre-existing `infra/modules/kms/`, which by its own
+design never creates keys) declaring real `aws_kms_key`/`aws_kms_alias`
+resources with `prevent_destroy = true` and environment-scoped decrypt
+policies, CODE_COMPLETE_LIVE_DEFERRED, never wired into a live environment
+by this batch. 25-B implements `AwsSecretsManagerProvider` (real,
+IAM-role-based, no static credential) filling the exact seam
+`secret-access.ts` had reserved, plus `infra/modules/secrets-manager/`
+(container-only resources — deliberately no `_version` resource, so no
+value can ever land in Terraform state). 25-C adds a real, tested rotation
+state machine and `rotation-execution-service.ts`, the sole caller of
+`secret.rotate` (now `implemented: true`, dual-gated by Tier-0-then-policy
+exactly as `data.export`/`data.delete` already established in Phase 23) —
+ships honestly inert for live workers since no worker-reload verification
+signal exists yet. 25-D adds `leak-runbook.ts` (reuses `secret.rotate`'s
+exact authorization rather than a second policy action, adds revoke/
+dead-check steps with honest no-op defaults) and the CloudTrail bridge's
+receiving endpoint (`POST /api/internal/secrets/access-anomaly`, mirroring
+Phase 18-D's drift-report route) — the AWS-side CloudTrail/EventBridge
+wiring was deliberately not fabricated, since which anomaly-detection
+mechanism to use is a genuine, undecided design choice. Two pre-existing
+governance tests (`iac-contract.test.ts`, `phase-12d-secret-environment.
+e2e.test.ts`) were updated to recognize the one AWS-standard exception a
+KMS key's own self-referential resource policy requires, while continuing
+to refuse a wildcard everywhere else in the tree unmodified. Full detail,
+evidence, and file-by-file citations: see `security-gates.md`'s "Phase 25
+— KMS, Encryption & Secret Lifecycle" section.
+
 ---
 
 ## Completed Implementation Checkpoints

@@ -1,5 +1,7 @@
 import "server-only";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { isSensitive, secretEntry } from "./secret-registry";
+import { resolveEnvironment } from "./environment";
 
 /**
  * The server-only secret access boundary (Phase 12-D).
@@ -75,19 +77,8 @@ export interface SecretProvider {
 export type SecretProviderKind = "environment" | "aws-secrets-manager";
 
 /**
- * The environment-backed provider — the only implementation that exists.
- *
- * There is deliberately NO `AwsSecretsManagerProvider` class in this
- * repository yet. Writing one now would produce a module nobody can run, that
- * no test can exercise against a real backend, and that would sit unwired
- * until Phase 25 — the exact defect this project has already closed three
- * times (D-11-1, D-12-1, and the unwired security logger 12-C nearly shipped).
- *
- * What Phase 25 adds is small and fully specified by the interface above:
- * a second class with `kind: "aws-secrets-manager"`, a cached fetch against a
- * per-environment namespace, and one line in `resolveSecretProvider`. No
- * consumer changes. The contract is the deliverable; the implementation
- * belongs with the infrastructure it talks to.
+ * The environment-backed provider — the default, and the only one active
+ * until an operator calls `setSecretProvider(new AwsSecretsManagerProvider())`.
  */
 export class EnvironmentSecretProvider implements SecretProvider {
   readonly kind = "environment" as const;
@@ -99,6 +90,93 @@ export class EnvironmentSecretProvider implements SecretProvider {
 
   async has(name: string): Promise<boolean> {
     return (await this.get(name)) !== undefined;
+  }
+}
+
+/**
+ * The real AWS Secrets Manager backend (Phase 25-B) — exactly the class this
+ * file's own header long documented as the seam's eventual second
+ * implementation, now filled in.
+ *
+ * ---------------------------------------------------------------------------
+ * NO STATIC AWS CREDENTIAL, MATCHING EVERY OTHER AWS CLIENT IN THIS REPOSITORY
+ * ---------------------------------------------------------------------------
+ * `new SecretsManagerClient({ region })` — no `credentials` field. The SDK's
+ * default provider chain resolves the identity: the ECS task role in
+ * production, a named profile locally. Identical to `sqs-config.ts` and
+ * `dr-backup-client.ts`'s own documented reasoning. No AWS access key is
+ * read, required, or stored by this class.
+ *
+ * ---------------------------------------------------------------------------
+ * PER-ENVIRONMENT NAMESPACE, NEVER A CROSS-ENVIRONMENT READ
+ * ---------------------------------------------------------------------------
+ * `secretId(name)` prefixes every lookup with `cinefield/{environment}/` —
+ * `resolveEnvironment()` (Phase 12-D), the SAME function `environment.ts`'s
+ * own production checks already use. A `staging` process asking for a name
+ * can only ever resolve `cinefield/staging/<name>`; the IAM policy Phase
+ * 25-A's Terraform defines additionally denies it the KEY needed to decrypt
+ * `cinefield/production/*` even if the ARN were guessed — defense at both
+ * the namespace and the KMS-key layer, not naming alone.
+ *
+ * ---------------------------------------------------------------------------
+ * CACHED, BOUNDED, AND FAILS CLOSED
+ * ---------------------------------------------------------------------------
+ * A hit is cached for `cacheTtlMs` (default 5 minutes) so a hot code path
+ * does not turn into a Secrets Manager API call per request — real cost and
+ * real latency, unlike the environment backend. A miss or any AWS error
+ * returns `undefined`, exactly like `EnvironmentSecretProvider` returns
+ * `undefined` for an unset variable; `getServerSecret` already turns that
+ * into `SecretUnavailableError(name, "not_present")`, so a Secrets Manager
+ * outage degrades a caller into the same refusal an unset env var would —
+ * never a thrown AWS SDK error leaking into a route handler, and never a
+ * cached failure masquerading as success.
+ */
+export class AwsSecretsManagerProvider implements SecretProvider {
+  readonly kind = "aws-secrets-manager" as const;
+
+  private readonly client: SecretsManagerClient;
+  private readonly cacheTtlMs: number;
+  private readonly cache = new Map<string, { value: string; expiresAt: number }>();
+
+  constructor(options: { region?: string; cacheTtlMs?: number } = {}) {
+    this.client = new SecretsManagerClient({ region: options.region ?? process.env.AWS_REGION ?? "us-east-1" });
+    this.cacheTtlMs = options.cacheTtlMs ?? 5 * 60 * 1000;
+  }
+
+  private secretId(name: string): string {
+    return `cinefield/${resolveEnvironment()}/${name}`;
+  }
+
+  async get(name: string): Promise<string | undefined> {
+    const secretId = this.secretId(name);
+    const cached = this.cache.get(secretId);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+    try {
+      const result = await this.client.send(new GetSecretValueCommand({ SecretId: secretId }));
+      const value = result.SecretString;
+      if (typeof value !== "string" || value.length === 0) return undefined;
+      this.cache.set(secretId, { value, expiresAt: Date.now() + this.cacheTtlMs });
+      return value;
+    } catch {
+      // Never distinguishes "not found" from "AWS unreachable" from "denied"
+      // in the return value — all three collapse to `undefined`, the same
+      // as an unset environment variable. Distinguishing them would mean
+      // returning (or logging) enough AWS error detail to be useful for
+      // debugging, which risks the secret ID or account context ending up
+      // somewhere this file's own header forbids values from reaching.
+      return undefined;
+    }
+  }
+
+  async has(name: string): Promise<boolean> {
+    return (await this.get(name)) !== undefined;
+  }
+
+  /** Test/rotation-verification seam — never called from request-path code. */
+  invalidateCache(name?: string): void {
+    if (name) this.cache.delete(this.secretId(name));
+    else this.cache.clear();
   }
 }
 

@@ -279,10 +279,18 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // `POST /api/admin/privacy/execute` (the privileged data.export/data.delete
   // execution path — `requireAdminAccess()` ahead of the shared `guardRoute`
   // boundary, same convention as every other Phase 16 admin mutation route).
+  // Phase 24 added no HTTP routes (its work was a GitHub Actions workflow +
+  // CI-only scripts). PHASE 25 adds three more: `GET /api/admin/secrets`
+  // (read-only lifecycle view, same admin convention), `POST
+  // /api/admin/secrets/rotate` (the privileged secret.rotate execution
+  // path, same convention as `/api/admin/privacy/execute`), and `POST
+  // /api/internal/secrets/access-anomaly` (the CloudTrail->security.events
+  // bridge — shared-secret-authenticated, not Clerk, same convention as
+  // `/api/internal/infra/drift-report`).
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 49, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 52, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {
