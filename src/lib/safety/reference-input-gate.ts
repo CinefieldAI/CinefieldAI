@@ -28,16 +28,31 @@ import { getReferenceInputEvaluator } from "./reference-input-contract";
  * This gate has NO such carve-out. Not-configured, unavailable, malformed, an
  * unreadable upload — every one of them refuses, in every environment.
  *
- * Two reasons, and neither is caution for its own sake:
+ * The reason is REFERANS M.1, which names this the strictest lane there is:
+ * "referans görsel yükleme EN RİSKLİ özelliktir (kullanıcı gerçek bir insanın
+ * fotoğrafını yükleyebilir) — orayı en sıkı tut."
  *
- *   REFERANS M.1 names this the strictest lane there is: "referans görsel
- *   yükleme EN RİSKLİ özelliktir ... orayı en sıkı tut."
+ * ---------------------------------------------------------------------------
+ * AND IT IS NOT FREE — THIS LANE IS LIVE
+ * ---------------------------------------------------------------------------
+ * An earlier reading of the registry concluded that every enabled non-mock
+ * model declared `maxInputs: 0`, which would have made this gate a precaution
+ * for a feature nobody could reach. That reading was WRONG: it came from a
+ * regex over the registry SOURCE, and `GEMINI_MODELS` is built by a `.map()`
+ * over an id array rather than written as object literals, so the pattern
+ * never saw it.
  *
- *   It costs nothing today. Every enabled non-mock model declares
- *   `maxInputs: 0`, and `capability-validator.ts` refuses inputs before this
- *   gate is ever reached — so unconditional fail-closed breaks nothing, while
- *   leaving the gate open in development would mean shipping a lane that has
- *   never been exercised in its refusing state.
+ * `nano-banana-pro`, `nano-banana-2` and `nano-banana-2-lite` are enabled,
+ * non-mock, `maxInputs: 1`, and support `image-to-image` with exactly the
+ * three image MIME types this gate accepts. A user can upload a real person's
+ * face to a live model today.
+ *
+ * So the honest statement is the opposite of "costs nothing": with no
+ * evaluator configured, image-to-image on those three models is now REFUSED
+ * at admission. That is a real, user-visible consequence of a gate the
+ * roadmap requires, and the way to lift it is to configure an evaluator — not
+ * to weaken the posture. `R28-19` pins this by asking the registry's own
+ * resolver rather than its text, so the mistake cannot recur silently.
  *
  * ---------------------------------------------------------------------------
  * THE GATE FIRES ON THE PRESENCE OF A REFERENCE, NOT ON ITS PARSEABILITY

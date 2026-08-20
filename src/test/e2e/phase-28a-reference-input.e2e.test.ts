@@ -1,10 +1,12 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import { createGeneration } from "@/lib/orchestration/generation-create-service";
+import { findModel } from "@/lib/orchestration/model-registry";
 import { installPromptModerationEngine } from "@/lib/safety/prompt-moderation";
 import {
   installReferenceInputEvaluator,
@@ -48,6 +50,15 @@ const REF_PATH = `${USER}/${PROJECT}/1700000000-abc1234.png`;
 const REF_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6, 7, 8]);
 const REF_DIGEST = createHash("sha256").update(REF_BYTES).digest("hex");
 
+/**
+ * The models that accept a reference image TODAY, in production.
+ *
+ * Named explicitly so R28-19 asks the resolver about real ids rather than
+ * re-deriving them from the registry's source text — the derivation that
+ * produced the wrong answer in the closure audit.
+ */
+const REFERENCE_CAPABLE_MODEL_IDS = ["nano-banana-pro", "nano-banana-2", "nano-banana-2-lite"] as const;
+
 function db(seedReference = true) {
   const client = new FakeSupabaseClient({
     generations: [],
@@ -89,8 +100,9 @@ async function admit(client: FakeSupabaseClient, withReference: boolean) {
     await createGeneration(client as unknown as SupabaseClient, USER, {
       // A reference-carrying request must name a model that ACCEPTS inputs.
       // `mock-image` declares maxInputs: 0, so capability validation refuses
-      // it before the safety gates run — which is exactly the production
-      // reachability finding, and not what these tests are measuring.
+      // it before the safety gates run — which would measure the validator,
+      // not this gate. A mock is used rather than one of the three live
+      // Gemini models (see R28-19) so these tests exercise no real provider.
       model: withReference ? "mock-image-edit" : "mock-image",
       prompt: "a lighthouse",
       projectId: PROJECT,
@@ -589,12 +601,43 @@ test("R28-18  ownership boundaries are preserved: no new authority, no capabilit
     assert.doesNotMatch(code, /quarantine_status|releaseAfterModeration|approveMediaRelease/, `${file} must not release anything`);
   }
 
-  // §17: capability rules are NOT relaxed to make the lane reachable.
-  const registry = read("src/lib/orchestration/model-registry.ts");
-  const entries = [...registry.matchAll(/id:\s*"([^"]+)"[\s\S]*?maxInputs:\s*(\d+)/g)];
-  const enabledNonMockWithInputs = entries.filter((m) => {
-    const block = m[0];
-    return /enabled:\s*true/.test(block) && !/isMock:\s*true/.test(block) && Number(m[2]) > 0;
+  // §17: this batch relaxes no capability rule — it adds no model and raises
+  // no maxInputs. Asserted below through the registry's OWN resolver.
+  const before = execFileSync("git", ["show", "53f89e1:src/lib/orchestration/model-registry.ts"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
   });
-  assert.equal(enabledNonMockWithInputs.length, 0, "no enabled non-mock model may gain reference-media capability");
+  assert.equal(before, read("src/lib/orchestration/model-registry.ts"), "the model registry is byte-identical to pre-batch");
+});
+
+test("R28-19  the reference lane IS reachable in production, and the gate is what closes it", () => {
+  // A CORRECTION, recorded as a test so it cannot be lost again.
+  //
+  // The Phase 28 closure audit reported "all enabled non-mock models have
+  // maxInputs: 0" and concluded the reference lane was unreachable. That was
+  // WRONG. It came from a regex over the registry SOURCE, and the three Gemini
+  // entries are produced by a `.map()` over an id array rather than written as
+  // object literals — so the pattern never saw them.
+  //
+  // This test therefore asks the registry's own resolver instead of its text.
+  // A source-shape assumption is exactly what failed the first time.
+  const reachable = REFERENCE_CAPABLE_MODEL_IDS.map(findModel).filter(
+    (model): model is NonNullable<typeof model> => Boolean(model)
+  );
+
+  assert.equal(reachable.length, 3, "the three Gemini image models must still resolve");
+  for (const model of reachable) {
+    assert.equal(model.enabled, true, `${model.id} is enabled in production`);
+    assert.equal(model.isMock, false, `${model.id} is a real provider`);
+    assert.ok(model.maxInputs > 0, `${model.id} accepts a reference image`);
+    assert.ok(model.supportedWorkflows.includes("image-to-image"));
+  }
+
+  // Which means the gate is not a precaution for a future feature: without it,
+  // a user could upload a real person's face to a live model and no code would
+  // examine it. With no evaluator configured, admission now refuses instead.
+  const service = strip(read("src/lib/orchestration/generation-create-service.ts"));
+  assert.match(service, /if \(request\.inputUrl\) \{/, "the gate fires on any reference-carrying request");
+  assert.match(service, /evaluateReferenceInputSafety\(admin, \{/);
 });
