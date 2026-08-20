@@ -162,9 +162,36 @@ export class FakeSupabaseClient {
     return new FakeQueryBuilder(this.state[table], table, this.state);
   }
 
+  /**
+   * Objects a test has placed in the storage double, keyed `bucket/path`.
+   *
+   * Phase 28-A: the reference-input gate READS a user's upload, so the double
+   * needs something to read. Seeded per test rather than shared, and the
+   * download below returns `not found` for anything unseeded — which is the
+   * fail-closed case the gate must handle.
+   */
+  storageObjects = new Map<string, Uint8Array>();
+
+  /** Every download the run performed — asserted on, so a test can prove the gate read real bytes. */
+  storageDownloads: { bucket: string; path: string }[] = [];
+
   /** Minimal Supabase Storage double — records intent, never touches a real bucket. */
   storage = {
     from: (bucket: string) => ({
+      download: async (path: string) => {
+        this.storageDownloads.push({ bucket, path });
+        const bytes = this.storageObjects.get(`${bucket}/${path}`);
+        if (!bytes) return { data: null, error: { message: "Object not found" } };
+        // Mirrors the real client's Blob-bodied response closely enough for
+        // the one thing the caller does with it: `arrayBuffer()`.
+        return {
+          data: {
+            arrayBuffer: async () =>
+              bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+          } as unknown as Blob,
+          error: null,
+        };
+      },
       upload: async (path: string, body: ArrayBuffer | Uint8Array | Blob) => {
         const bytes =
           body instanceof Uint8Array

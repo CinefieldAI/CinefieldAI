@@ -10,6 +10,7 @@ import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
 import { DurableEvalQualityProvider } from "@/lib/eval/eval-quality-provider";
 import { createFieldLogger } from "@/lib/observability/logger";
 import { evaluatePromptSafety } from "@/lib/safety/prompt-gate";
+import { evaluateReferenceInputSafety } from "@/lib/safety/reference-input-gate";
 import { evaluateAgeGate } from "@/lib/safety/age-gate";
 import { recordSafetyDecision } from "@/lib/safety/safety-decision-store";
 import { SAFETY_POLICY_VERSION } from "@/lib/safety/safety-contract";
@@ -105,6 +106,21 @@ function canonicalForm(request: GenerationCreateRequest): Record<string, unknown
     inputUrl: request.inputUrl ?? null,
     metadata: request.metadata ?? {},
   };
+}
+
+/**
+ * The client-declared MIME of an attached reference, when the settings mapper
+ * could not produce an input at all.
+ *
+ * A fallback that exists ONLY so the reference gate still sees something to
+ * refuse: `mapMetadataToInputs` returns an empty list when `mime_type` is
+ * absent, and the gate must not be skippable by omitting it. Returns
+ * `undefined` when nothing was declared, which the gate treats as an
+ * unevaluable reference rather than as permission.
+ */
+function readDeclaredMime(metadata: Record<string, unknown> | undefined): string | undefined {
+  const value = metadata?.mime_type;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /** Validates product inputs. Throws typed errors; never guesses a value. */
@@ -254,6 +270,58 @@ export async function createGeneration(
       userMessage: refusal.userMessage,
       context: { operation: "prompt_safety_gate" },
     });
+  }
+
+  // ---- PHASE 28-A: THE REFERENCE-IMAGE GATE -------------------------------
+  //
+  // The other half of 28-A, which the roadmap names three separate times: the
+  // "NCII/Real-Person Policy — Reference face/deepfake risk" component, the
+  // package's own "prompt input moderation + reference-image
+  // real-person/NCII policy gate'i BİRLİKTE kur", and step 3's "kullanıcı
+  // gerçek bir yüz yüklediğinde ... riskini ÖZEL DEĞERLENDİR."
+  //
+  // "Özel değerlendir" means the IMAGE is examined. The gate reads the actual
+  // uploaded bytes out of private storage — after verifying the path belongs
+  // to this caller — and hands them to an evaluator. It is not the boolean the
+  // prompt classifier receives above.
+  //
+  // KEYED ON `inputUrl`, NOT ON THE PARSED INPUT LIST. `mapMetadataToInputs`
+  // returns nothing when `mime_type` is absent, so a gate keyed on `inputs`
+  // could be skipped by attaching a face and omitting the declared type. This
+  // fires whenever a reference is present at all, and an unevaluable one is
+  // refused.
+  //
+  // STRICTER THAN THE PROMPT GATE, deliberately: no environment carve-out for
+  // not-knowing. See reference-input-gate.ts for why that costs nothing today.
+  if (request.inputUrl) {
+    const referenceGate = await evaluateReferenceInputSafety(admin, {
+      clerkUserId,
+      storagePath: request.inputUrl,
+      // The type the client declared alongside the upload. The gate refuses
+      // anything it cannot evaluate rather than guessing from the extension.
+      declaredMime: inputs[0]?.mimeType ?? readDeclaredMime(request.metadata),
+      // REFERANS M.1's rule is a COMBINATION — "gerçek kişi + müstehcen
+      // kombinasyonu reddedilir" — so the evaluator is told what the prompt
+      // gate already concluded.
+      promptCategories: promptGate.decision.categories,
+    });
+
+    // Durable evidence for the reference decision too, under its own stage.
+    // Written before any refusal so a blocked reference still leaves a record,
+    // and using the SAME pre-row pattern the prompt decision above uses:
+    // `clerk_user_id` with a null generation, because no row exists yet. No
+    // orphan generation is created merely to hold safety evidence.
+    await recordSafetyDecision(admin, {
+      clerkUserId,
+      decision: referenceGate.decision,
+    });
+
+    if (!referenceGate.allowed) {
+      throw new OrchestrationError("CONTENT_POLICY_REFUSED", {
+        userMessage: referenceGate.userMessage,
+        context: { operation: "reference_input_safety_gate" },
+      });
+    }
   }
 
   // ---- PHASE 7-B: where will this run? ------------------------------------
