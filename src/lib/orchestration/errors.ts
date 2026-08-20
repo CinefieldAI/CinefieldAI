@@ -24,6 +24,7 @@ export type OrchestrationErrorCode =
   | "ASSET_STORAGE_FAILED"
   | "ASSET_RECORD_FAILED"
   | "MEDIA_INGEST_REJECTED"
+  | "MEDIA_PROVENANCE_FAILED"
   | "DR_CONFIGURATION_INVALID"
   | "DR_BACKUP_FAILED"
   | "PROVIDER_NOT_CONFIGURED"
@@ -109,6 +110,20 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
   // breaker. Not retryable — the same bytes will be refused again.
   MEDIA_INGEST_REJECTED: {
     message: "The generated media did not pass safety validation.",
+    status: 422,
+    retryable: false,
+  },
+  // Phase 27 / 9-C. The media could not be marked with C2PA provenance, or
+  // the embedded manifest did not verify. AI Act Article 50(2) marking is a
+  // provider obligation, so an unmarkable output is a REFUSAL rather than a
+  // quiet unmarked success — production fails closed. Not retryable: an
+  // unconfigured signer or an unmarkable format produces the identical
+  // failure on every attempt, so a retry would only burn attempts. Kept
+  // distinct from MEDIA_INGEST_REJECTED (the bytes were safe) and from
+  // PROVIDER_FAILED (the provider did its job) so neither a healthy provider
+  // nor the safety gate is blamed for a provenance problem.
+  MEDIA_PROVENANCE_FAILED: {
+    message: "The generated media could not be marked with content provenance.",
     status: 422,
     retryable: false,
   },

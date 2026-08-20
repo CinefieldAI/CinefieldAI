@@ -89,7 +89,10 @@ export async function runMediaJob(params: {
 
   return processFinalMedia(params.admin, {
     sourceAssetId: params.job.sourceAssetId,
-    derivedAssetId: params.job.derivedAssetId,
+    // The standalone worker produces a DERIVED artifact: its source object
+    // already exists in R2 on its own. The canonical generation path uses
+    // `in_place` instead — see media-processing-pipeline.ts's FinalMediaTarget.
+    target: { kind: "derived", derivedAssetId: params.job.derivedAssetId },
     bytes: params.job.bytes,
     verifiedMime: params.job.verifiedMime,
     digitalSourceType: params.job.digitalSourceType,

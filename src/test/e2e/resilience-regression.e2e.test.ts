@@ -14,6 +14,17 @@ import { generationWorkflowId } from "@/lib/temporal/workflow-ids";
 import { TASK_QUEUES } from "@/lib/temporal/task-queues";
 import { handleProviderCommand } from "../../../worker/provider-command-handler";
 import * as activities from "../../../worker/activities/generation-activities";
+import { setC2paSignerMode } from "@/lib/provenance/c2pa-embedder";
+
+// ---------------------------------------------------------------------------
+// PHASE 27 / 9-C: this suite drives the REAL finalization tail, which now
+// embeds C2PA provenance into every canonical output. Production FAILS CLOSED
+// with no signer configured, so these tests install the DEVELOPMENT signer to
+// reach completion. c2pa-node's test certificate is never production trust
+// and is never the default (C2paSignerMode defaults to "none").
+// ---------------------------------------------------------------------------
+setC2paSignerMode("test");
+
 
 /**
  * SECURITY / IDEMPOTENCY RESILIENCE REGRESSION (Phase 6R.13).

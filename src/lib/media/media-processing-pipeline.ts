@@ -82,6 +82,24 @@ export interface FinalMediaStore {
   }): Promise<{ ok: boolean; reasonCode?: string }>;
 }
 
+/**
+ * Where the final signed artifact is persisted.
+ *
+ *   `derived`   a NEW media_assets row pointing at `sourceAssetId` via
+ *               parent_asset_id. Used by the standalone media worker, where
+ *               the source object already exists in R2 on its own.
+ *   `in_place`  the ALREADY-RESERVED row is finalised with the signed bytes.
+ *               Used by the canonical generation path, where the raw provider
+ *               output is never stored at all — so there is exactly one R2
+ *               object, one media_assets row, and no unmarked artifact
+ *               anywhere for anyone to serve.
+ *
+ * One engine, two persistence targets — not two media-processing paths.
+ */
+export type FinalMediaTarget =
+  | { readonly kind: "derived"; readonly derivedAssetId: string }
+  | { readonly kind: "in_place" };
+
 export interface ProcessFinalMediaParams {
   readonly sourceAssetId: string;
   readonly bytes: Uint8Array;
@@ -90,8 +108,7 @@ export interface ProcessFinalMediaParams {
   readonly softwareAgent: string;
   readonly store: FinalMediaStore;
   readonly now: Date;
-  /** Supplied by the caller; never derived from user input. */
-  readonly derivedAssetId: string;
+  readonly target: FinalMediaTarget;
 }
 
 interface SourceAssetRow {
@@ -170,11 +187,18 @@ export async function processFinalMedia(
   const finalBytes = embedded.bytes;
   const finalDigest = createHash("sha256").update(finalBytes).digest("hex");
 
-  // ---- 5. Persist the derived asset row (Phase 9's own shape) ------------
+  // ---- 5. Persist — exactly ONE R2 write, exactly ONE media_assets row ---
   const extension = EXTENSION_FOR_MIME[transformed.outputMime] ?? "bin";
-  const objectKey = source.object_key
-    ? derivedObjectKey(source.object_key, params.derivedAssetId, extension)
-    : `derived/${params.derivedAssetId}/final.${extension}`;
+  const inPlace = params.target.kind === "in_place";
+  const finalAssetId = inPlace ? source.id : params.target.derivedAssetId;
+
+  // in_place reuses the key already reserved for this asset, so the signed
+  // artifact IS the canonical object. Nothing unmarked was ever written to it.
+  const objectKey = inPlace
+    ? (source.object_key ?? `asset/${finalAssetId}/final.${extension}`)
+    : source.object_key
+      ? derivedObjectKey(source.object_key, finalAssetId, extension)
+      : `derived/${finalAssetId}/final.${extension}`;
 
   const stored = await params.store.put({
     objectKey,
@@ -184,39 +208,57 @@ export async function processFinalMedia(
   if (!stored.ok) return { outcome: "STORAGE_FAILED", reasonCode: stored.reasonCode ?? "store_failed" };
 
   try {
-    const { error } = await admin.from("media_assets").insert({
-      id: params.derivedAssetId,
-      clerk_user_id: source.clerk_user_id,
-      generation_id: source.generation_id,
-      attempt_id: source.attempt_id,
-      source: "internal",
-      role: "derived",
-      parent_asset_id: source.id,
-      variant: "final",
-      media_type: transformed.outputMime.split("/")[0],
-      storage_backend: "r2",
-      bucket: source.bucket,
-      object_key: objectKey,
-      verified_mime: transformed.outputMime,
-      // The FINAL MEDIA digest — distinct from the source asset's own
-      // Phase 9-B checksum, which stays untouched on the parent row.
-      checksum_sha256: finalDigest,
-      byte_size: finalBytes.byteLength,
-      // Quarantine posture is INHERITED from the parent, never relaxed.
-      // Phase 9-E remains the only authority that may release anything.
-      quarantine_status: source.quarantine_status ?? "quarantined",
-      status: "finalized",
-      stored_at: params.now.toISOString(),
-      finalized_at: params.now.toISOString(),
-    });
-    if (error) return { outcome: "STORAGE_FAILED", reasonCode: "derived_asset_insert_failed" };
+    if (inPlace) {
+      // Finalise the reserved row onto the SIGNED bytes. `checksum_sha256`
+      // becomes the FINAL MEDIA digest, replacing whatever the ingest gate
+      // recorded for the raw provider bytes — those bytes were never stored,
+      // so a digest describing them would describe an object nobody holds.
+      const { error } = await admin
+        .from("media_assets")
+        .update({
+          object_key: objectKey,
+          verified_mime: transformed.outputMime,
+          checksum_sha256: finalDigest,
+          byte_size: finalBytes.byteLength,
+          status: "finalized",
+          stored_at: params.now.toISOString(),
+          finalized_at: params.now.toISOString(),
+        })
+        .eq("id", finalAssetId);
+      if (error) return { outcome: "STORAGE_FAILED", reasonCode: "canonical_asset_update_failed" };
+    } else {
+      const { error } = await admin.from("media_assets").insert({
+        id: finalAssetId,
+        clerk_user_id: source.clerk_user_id,
+        generation_id: source.generation_id,
+        attempt_id: source.attempt_id,
+        source: "internal",
+        role: "derived",
+        parent_asset_id: source.id,
+        variant: "final",
+        media_type: transformed.outputMime.split("/")[0],
+        storage_backend: "r2",
+        bucket: source.bucket,
+        object_key: objectKey,
+        verified_mime: transformed.outputMime,
+        checksum_sha256: finalDigest,
+        byte_size: finalBytes.byteLength,
+        // Quarantine posture is INHERITED from the parent, never relaxed.
+        // Phase 9-E remains the only authority that may release anything.
+        quarantine_status: source.quarantine_status ?? "quarantined",
+        status: "finalized",
+        stored_at: params.now.toISOString(),
+        finalized_at: params.now.toISOString(),
+      });
+      if (error) return { outcome: "STORAGE_FAILED", reasonCode: "derived_asset_insert_failed" };
+    }
   } catch {
-    return { outcome: "STORAGE_FAILED", reasonCode: "derived_asset_insert_failed" };
+    return { outcome: "STORAGE_FAILED", reasonCode: "asset_persist_failed" };
   }
 
   // ---- 6. Record provenance — the REAL production caller -----------------
   const recorded = await recordMediaProvenance(admin, {
-    mediaAssetId: params.derivedAssetId,
+    mediaAssetId: finalAssetId,
     digitalSourceType: params.digitalSourceType,
     softwareAgent: params.softwareAgent,
     embedded: { officiallyVerified: true, signerIssuer: embedded.signerIssuer },
@@ -229,7 +271,7 @@ export async function processFinalMedia(
 
   return {
     outcome: "COMPLETED",
-    derivedAssetId: params.derivedAssetId,
+    derivedAssetId: finalAssetId,
     finalMime: transformed.outputMime,
     finalDigestSha256: finalDigest,
     finalByteLength: finalBytes.byteLength,

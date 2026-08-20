@@ -311,7 +311,7 @@ test("C9C-15  END TO END: the pipeline produces a derived asset whose digest is 
 
     const result = await processFinalMedia(db as never, {
       sourceAssetId: SOURCE_ID,
-      derivedAssetId: DERIVED_ID,
+      target: { kind: "derived", derivedAssetId: DERIVED_ID },
       bytes,
       verifiedMime: "image/png",
       digitalSourceType: "trainedAlgorithmicMedia",
@@ -343,7 +343,7 @@ test("C9C-16  the provenance row is EMBEDDED_C2PA and binds to the derived asset
     const db = dbWithSource();
     const result = await processFinalMedia(db as never, {
       sourceAssetId: SOURCE_ID,
-      derivedAssetId: DERIVED_ID,
+      target: { kind: "derived", derivedAssetId: DERIVED_ID },
       bytes: await makeSample("png"),
       verifiedMime: "image/png",
       digitalSourceType: "trainedAlgorithmicMedia",
@@ -372,7 +372,7 @@ test("C9C-17  the derived asset preserves lineage (parent_asset_id) and INHERITS
     const db = dbWithSource();
     await processFinalMedia(db as never, {
       sourceAssetId: SOURCE_ID,
-      derivedAssetId: DERIVED_ID,
+      target: { kind: "derived", derivedAssetId: DERIVED_ID },
       bytes: await makeSample("png"),
       verifiedMime: "image/png",
       digitalSourceType: "trainedAlgorithmicMedia",
@@ -396,7 +396,7 @@ test("C9C-18  with no signer, the pipeline stops at SIGNER_NOT_CONFIGURED and wr
   const store = memoryStore();
   const result = await processFinalMedia(db as never, {
     sourceAssetId: SOURCE_ID,
-    derivedAssetId: DERIVED_ID,
+    target: { kind: "derived", derivedAssetId: DERIVED_ID },
     bytes: await makeSample("png"),
     verifiedMime: "image/png",
     digitalSourceType: "trainedAlgorithmicMedia",
@@ -414,7 +414,7 @@ test("C9C-19  an unknown source asset is refused", async () => {
   const db = new FakeSupabaseClient({ media_assets: [], media_provenance: [] });
   const result = await processFinalMedia(db as never, {
     sourceAssetId: SOURCE_ID,
-    derivedAssetId: DERIVED_ID,
+    target: { kind: "derived", derivedAssetId: DERIVED_ID },
     bytes: new Uint8Array([1]),
     verifiedMime: "image/png",
     digitalSourceType: "trainedAlgorithmicMedia",

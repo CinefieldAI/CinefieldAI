@@ -7702,7 +7702,21 @@ no signer the pipeline stops at `SIGNER_NOT_CONFIGURED` having stored
 nothing — no object, no derived row, no provenance record (test C9C-18). A
 production trust-list certificate is the remaining external step, and
 `recordMediaProvenance` is now a REAL_PRODUCTION_CALLER inside the pipeline
-rather than zero-caller. What is still not wired is automatic invocation from
-the ingest path: that changes Phase 9-B's behaviour on every ingest and is
-left as a reviewed decision.
+rather than zero-caller.
+
+**Canonical wiring (final corrective).** `orchestrator.ts`'s
+`persistCanonicalOriginal` no longer calls `storeAndFinalizeAsset` at all —
+that import is gone, and a structural test fails if it returns. The order is
+now reserve → Phase 9-B gate on the RAW bytes → Phase 9-C transform/embed/
+official-verify → ONE store of the SIGNED bytes → provenance row. The raw
+provider bytes are never stored, so no unmarked canonical artifact exists for
+anything to serve. Any non-COMPLETED pipeline outcome throws
+`MEDIA_PROVENANCE_FAILED` (registered, non-retryable, distinct from
+`MEDIA_INGEST_REJECTED` and from any provider fault), which makes
+`markCompleted` unreachable — production fails closed rather than shipping
+unmarked media. One deliberate consequence, recorded in
+`phase-9b-ingest-gate.e2e.test.ts`'s own updated ordering test: rejected raw
+bytes are no longer retained in R2 for post-hoc inspection; the gate still
+records the rejection reason, checksum and detection outcome on the row, so
+the finding survives even though the hostile bytes do not.
 **This corrective does not start Phase 28.**

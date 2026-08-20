@@ -15,6 +15,19 @@ import { executeGenerationRequest } from "@/lib/orchestration/generation-executi
 import { startGenerationWorkflow } from "@/lib/temporal/generation-starter";
 import { handleProviderCommand } from "../../../worker/provider-command-handler";
 import * as activities from "../../../worker/activities/generation-activities";
+import { setC2paSignerMode } from "@/lib/provenance/c2pa-embedder";
+
+// ---------------------------------------------------------------------------
+// PHASE 27 / 9-C: this suite drives the REAL finalization tail, which now
+// embeds C2PA provenance into every canonical output. Production FAILS CLOSED
+// with no signer configured — an unmarkable output is refused rather than
+// completed unmarked — so these tests must install the DEVELOPMENT signer to
+// exercise completion at all. That is exactly the dev/test allowance: it uses
+// c2pa-node's own test certificate, which is never a production trust
+// identity and is never the default (C2paSignerMode defaults to "none").
+// ---------------------------------------------------------------------------
+setC2paSignerMode("test");
+
 
 /**
  * PRODUCTION GENERATION OWNERSHIP CUTOVER (Phase 6R-B).

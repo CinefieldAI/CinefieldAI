@@ -6,10 +6,12 @@ Vienna, so that obligation attaches to the system — not to where the user
 happens to be. This document says exactly what is marked, how, and what is
 still missing.
 
-**Cinefield embeds a real C2PA manifest into delivered image, video and audio
-bytes, and the official ContentAuth library verifies it as valid.** It also
-keeps a detached evidence row. Both layers are described below, and the parts
-that are still development-grade are named as such.
+**Every canonical generated output is C2PA-marked.** The orchestrator's only
+storage path runs transform → embed → official verify → store, so there is no
+code path that writes an unmarked canonical artifact. Production fails closed:
+if the media cannot be marked, the generation does not complete. A detached
+ES256 evidence row is kept alongside the embedded manifest. The parts that are
+still development-grade are named as such below.
 
 ---
 
@@ -29,7 +31,7 @@ that are still development-grade are named as such.
 | Admin marking-rate metric | **REAL** — `/admin/provenance` |
 | Signing key registered for rotation | **REAL** — Phase 25 `secret.rotate`, `DUAL_KEY_OVERLAP` |
 | **Production trust-list CA chain** | **EXTERNAL** — signing uses a DEVELOPMENT certificate |
-| Automatic invocation from the ingest path | **NOT WIRED** — `runMediaJob` is the entry point |
+| **Automatic marking of every canonical output** | **REAL** — the orchestrator's only storage path is the C2PA pipeline |
 | Deepfake detection | **NOT BUILT** — Phase 28 owns T&S classification |
 | Visible deepfake label in product UI | **BLOCKED** — locked UI |
 | Soft-binding watermark | **NOT IN SCOPE** — roadmap: optional, second phase |
@@ -45,9 +47,14 @@ validated bytes
   → embed C2PA                             src/lib/provenance/c2pa-embedder.ts
   → official verify (validation_status)    c2pa-node, ContentAuth
   → SHA-256 over the signed bytes          the FINAL MEDIA digest
-  → store derived asset                    Phase 9's storage seam
+  → store (ONE write, signed bytes)        Phase 9's storage seam
   → record provenance                      media_provenance, EMBEDDED_C2PA
 ```
+
+The canonical generation path finalises the reserved asset **in place**, so
+one R2 object and one `media_assets` row exist and both hold the signed
+artifact. The standalone media worker instead produces a `role='derived'` row
+with `parent_asset_id` — same engine, two persistence targets.
 
 **Signing is last on purpose.** A re-encode strips the manifest — the roadmap
 warns about it, and this repository's own test proves it: FFmpeg-reprocessing
@@ -72,7 +79,7 @@ official library, then tampers with one byte and confirms rejection.
 | **SOURCE digest** | the original downloaded bytes | Phase 9-B `ingest-gate.ts` |
 | **FINAL MEDIA digest** | the signed bytes actually delivered | Phase 9-C pipeline |
 
-The provenance row binds to the **derived** asset, so its
+The provenance row binds to whichever asset holds the signed bytes, so its
 `content_digest_sha256` is always the final-media digest. Reusing the source
 digest after a transform would produce evidence that verifies against bytes
 nobody was ever served.
@@ -116,8 +123,13 @@ So today:
 
 `C2paSignerMode` defaults to `"none"`, and with no signer the pipeline stops
 at `SIGNER_NOT_CONFIGURED` and writes nothing at all: no stored object, no
-derived asset row, no provenance record. An unsigned artifact is never
-delivered as if it were marked.
+asset finalisation, no provenance record. The orchestrator turns that into
+`MEDIA_PROVENANCE_FAILED` and the generation does not complete.
+
+**Operational consequence, stated plainly: a deployment with no signer
+configured cannot complete any generation.** That is the fail-closed policy
+working, not a bug — but it means installing a signer is a prerequisite for
+serving traffic, not an optional hardening step.
 
 Obtaining a production certificate is the remaining external step.
 

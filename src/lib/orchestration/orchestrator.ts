@@ -15,12 +15,14 @@ import {
 import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
 import { attachSignedUrls, uploadOutputs } from "./output-storage";
-import {
-  reserveGenerationAsset,
-  storeAndFinalizeAsset,
-  type MediaType,
-} from "@/lib/media/asset-service";
+// `storeAndFinalizeAsset` is deliberately NOT imported here any more. It
+// writes raw provider bytes straight to R2, which is exactly the unmarked
+// canonical artifact Phase 27 forbids; the Phase 9-C pipeline stores the
+// SIGNED bytes instead. A structural test fails if this import returns.
+import { reserveGenerationAsset, type MediaType } from "@/lib/media/asset-service";
 import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
+import { processFinalMedia, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
+import { putAssetObject } from "@/lib/media/r2-client";
 import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
 import type { ProviderAdapter } from "./providers/provider-adapter";
@@ -635,16 +637,63 @@ export async function executeGeneration(params: {
 }
 
 /**
- * Persists the canonical original into R2 and records it (Phase 9-A).
+ * The Phase 9-C pipeline's storage seam, bound to Phase 9's real R2 owner.
  *
- * Reserve → store → finalize, in that order, all before the caller may
- * complete the generation. Any failure throws, which is how the completion
- * boundary is enforced: `markCompleted` is unreachable rather than guarded by
- * a flag somebody could forget to check.
+ * A thin adapter, deliberately: the pipeline must not import an S3 client,
+ * and `putAssetObject` must stay the single place this application writes a
+ * media object. Its own OrchestrationError is caught and flattened into the
+ * seam's bounded result so the pipeline keeps returning outcomes rather than
+ * throwing through two layers.
+ */
+const canonicalMediaStore: FinalMediaStore = {
+  async put(params) {
+    try {
+      await putAssetObject({
+        objectKey: params.objectKey,
+        bytes: params.bytes,
+        declaredContentType: params.contentType,
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false, reasonCode: "asset_storage_failed" };
+    }
+  },
+};
+
+/**
+ * Persists the canonical output into R2 and records it (Phase 9-A/9-B/9-C).
  *
- * The bytes handed to R2 are the SAME opaque bytes the outbound gateway
- * downloaded. Nothing here decodes, sniffs or re-encodes them — the content
- * type travels as the provider's declaration and is stored as such.
+ * ---------------------------------------------------------------------------
+ * EVERY CANONICAL OUTPUT IS C2PA-MARKED. THERE IS NO UNMARKED PATH.
+ * ---------------------------------------------------------------------------
+ * Phase 27 requires the roadmap's "Üretilen HER görsel/video/ses çıktısına …
+ * iz gömmek" — a mark embedded in EVERY generated output, not a sample. That
+ * is enforced structurally here: this function performs exactly one R2 write,
+ * and the bytes it writes are the SIGNED bytes returned by the Phase 9-C
+ * pipeline. `storeAndFinalizeAsset` is deliberately NOT called — the raw
+ * provider bytes are never stored at all, so there is no unmarked artifact in
+ * existence for anything downstream to serve.
+ *
+ * Order (roadmap Phase 27, "Nasıl yapılacak" step 1):
+ *   reserve            a key and a pending row
+ *   ingest gate        Phase 9-B sandbox on the RAW bytes — hostile input is
+ *                      rejected BEFORE FFmpeg ever sees it
+ *   transform          Phase 9-C fixed profile
+ *   C2PA embed         official ContentAuth library
+ *   official verify    manifest read back as valid, or this throws
+ *   store              ONE write, of the signed bytes, to the reserved key
+ *   provenance         media_provenance row, marking_state EMBEDDED_C2PA
+ *
+ * ---------------------------------------------------------------------------
+ * FAIL CLOSED IN PRODUCTION
+ * ---------------------------------------------------------------------------
+ * A missing signer, a failed embed, a failed official verification, or a
+ * format that cannot be marked all THROW here, so `markCompleted` is
+ * unreachable — the same structural guarantee the ingest gate already had,
+ * extended to provenance. A generation never completes as a normal success
+ * carrying media that could not be marked. `MEDIA_PROVENANCE_FAILED` is
+ * classified non-retryable: retrying an unconfigured signer or an unmarkable
+ * format produces the identical failure and would only burn attempts.
  */
 async function persistCanonicalOriginal(
   admin: SupabaseClient,
@@ -665,18 +714,13 @@ async function persistCanonicalOriginal(
     declaredContentType: params.output.mimeType,
   });
 
-  const stored = await storeAndFinalizeAsset(admin, reserved, {
-    bytes: params.output.bytes,
-    declaredContentType: params.output.mimeType,
-  });
-
-  // ---- Phase 9-B ingest gate ---------------------------------------------
-  // Runs AFTER the object exists, so a rejected asset still has its bytes for
-  // an operator to examine, and BEFORE completion, so nothing serves media
-  // nobody has read. The inspection happens in a disposable child process —
-  // see media-inspector.ts for what that does and does not contain.
+  // ---- Phase 9-B ingest gate, on the RAW provider bytes -------------------
+  // Runs BEFORE any transform, so hostile input is refused before it reaches
+  // FFmpeg, and BEFORE completion, so nothing serves media nobody has read.
+  // The inspection happens in a disposable child process — see
+  // media-inspector.ts for what that does and does not contain.
   const ingest = await ingestMediaAsset(admin, {
-    assetId: stored.assetId,
+    assetId: reserved.assetId,
     ownerId: params.clerkUserId,
     bytes: params.output.bytes,
     declaredContentType: params.output.mimeType,
@@ -697,7 +741,38 @@ async function persistCanonicalOriginal(
     });
   }
 
-  return { assetId: stored.assetId, objectKey: stored.objectKey };
+  // ---- Phase 9-C: transform → C2PA embed → official verify → ONE store ----
+  const processed = await processFinalMedia(admin, {
+    sourceAssetId: reserved.assetId,
+    bytes: params.output.bytes,
+    verifiedMime: ingest.verifiedMime,
+    // Cinefield output is wholly model-generated. The IPTC term is the
+    // machine-readable half of AI Act Article 50(2).
+    digitalSourceType: "trainedAlgorithmicMedia",
+    softwareAgent: "Cinefield (model via provider)",
+    store: canonicalMediaStore,
+    now: new Date(),
+    // The reserved row IS the canonical asset — the signed bytes finalise it.
+    target: { kind: "in_place" },
+  });
+
+  if (processed.outcome !== "COMPLETED") {
+    throw new OrchestrationError("MEDIA_PROVENANCE_FAILED", {
+      context: {
+        operation: "c2pa_provenance",
+        generationId: params.generationId,
+        outcome: processed.outcome,
+        reason:
+          "reasonCode" in processed
+            ? processed.reasonCode
+            : "validationCodes" in processed
+              ? processed.validationCodes.join(",").slice(0, 120)
+              : processed.outcome,
+      },
+    });
+  }
+
+  return { assetId: processed.derivedAssetId, objectKey: reserved.objectKey };
 }
 
 /**

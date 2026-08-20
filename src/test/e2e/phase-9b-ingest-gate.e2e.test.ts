@@ -450,16 +450,42 @@ test("completion now requires BOTH finalized storage and a verified ingest", asy
   assert.equal(await hasVerifiedOriginal(completionAdmin(null), "g"), false);
 });
 
-test("the orchestrator runs store -> ingest -> gate -> complete, in that order", () => {
+test("the orchestrator runs reserve -> ingest -> process/store -> gate -> complete, in that order", () => {
+  // ORDERING CHANGED BY PHASE 27 (canonical C2PA wiring), deliberately.
+  //
+  // This test previously pinned `store -> ingest`: the raw provider bytes
+  // were written to R2 first so that a REJECTED asset still had its bytes in
+  // storage for an operator to examine. Phase 27 requires that every
+  // canonical artifact carry an embedded C2PA manifest, which makes storing
+  // the raw bytes unacceptable — an unmarked object in the canonical key is
+  // exactly the artifact the AI Act Article 50(2) marking obligation forbids
+  // shipping, and leaving one there "for inspection" would mean the unmarked
+  // copy is the one anything downstream could serve.
+  //
+  // So the gate now runs on the raw bytes BEFORE anything is written, and the
+  // only object ever stored is the signed one. This is strictly safer in two
+  // further ways: hostile input is refused before it reaches FFmpeg, and a
+  // rejected generation writes no object at all.
+  //
+  // TRADE-OFF, STATED: rejected raw bytes are no longer retained in R2 for
+  // post-hoc operator examination. The rejection reason, checksum and
+  // detection outcome are still recorded on the media_assets row by the gate
+  // itself, so the FINDING survives; the hostile bytes do not.
   const source = readFileSync(path.join(ROOT, "src/lib/orchestration/orchestrator.ts"), "utf8");
 
-  const store = source.indexOf("await storeAndFinalizeAsset(");
+  const reserve = source.indexOf("await reserveGenerationAsset(");
   const ingest = source.indexOf("await ingestMediaAsset(");
+  const process = source.indexOf("await processFinalMedia(");
   const gate = source.indexOf("await hasVerifiedOriginal(");
   const complete = source.indexOf("await markCompleted(");
 
-  assert.ok(store > 0 && ingest > store, "ingest reads bytes that are already stored");
+  assert.ok(reserve > 0 && ingest > reserve, "a row is reserved before the gate records against it");
+  assert.ok(process > ingest, "the gate refuses hostile bytes BEFORE the transform touches them");
   assert.ok(gate > ingest && complete > gate, "and completion comes last");
+  assert.ok(
+    !/await storeAndFinalizeAsset\(/.test(source),
+    "the raw-bytes store path must not return — it would recreate an unmarked canonical object"
+  );
 });
 
 test("a media-safety refusal is not reported as a provider failure", () => {
