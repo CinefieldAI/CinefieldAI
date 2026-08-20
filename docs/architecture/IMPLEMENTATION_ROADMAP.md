@@ -410,6 +410,39 @@ to refuse a wildcard everywhere else in the tree unmodified. Full detail,
 evidence, and file-by-file citations: see `security-gates.md`'s "Phase 25
 — KMS, Encryption & Secret Lifecycle" section.
 
+**Phase 26 — Chaos Engineering, RTO/RPO & Resilience Validation, official
+packages 26-A through 26-D:** orchestrates existing owners rather than
+creating new ones. The entire RTO/RPO measurement core already existed —
+Phase 15-D/2's `recovery-contract.ts`, `recovery-target-registry.ts`
+(`RTO_TARGETS`/`RPO_TARGETS`, still empty; a target is a business decision
+nobody has approved), `recovery-measurement-engine.ts`, and
+`recovery-alert-bridge.ts` are imported verbatim, and tests enforce that no
+second registry, engine, or alert path was created. 26-A adds
+`src/lib/chaos/game-day-catalogue.ts`: the ten failure scenarios the roadmap
+names, each linked to the EXISTING mechanism expected to handle it (Phase 7
+routing, Phase 15-D DLQ redrive, Phase 14 rollback) and to Phase 15-D/2's
+own recovery vocabulary. 26-B adds `infra/modules/fis-experiments/` — real
+`aws_fis_experiment_template` resources whose Terraform `validation` blocks
+structurally require a CloudWatch stop-condition alarm and an explicit,
+wildcard-free target ARN per experiment, plus `account_targeting =
+"single-account"`; CODE_COMPLETE_LIVE_DEFERRED, never applied, not wired
+into any environment root. 26-D adds `classifyGameDayOutcome()` (PASS/FAIL/
+INCONCLUSIVE/NO_TARGET_CONFIGURED — a failed guardrail downgrades an
+otherwise-met recovery, and a non-conclusive measurement can never become
+PASS), `game-day-execution-service.ts` (the caller submits raw timestamps
+and never a verdict; the outcome is always recomputed server-side), the
+append-only `game_day_exercises` table, and the read-only `/admin/game-day`
+surface. **26-C is the one package that cannot close here:** its own
+done-criterion requires at least one staging AND one controlled production
+drill, and no staging environment, live AWS credentials, or applied FIS
+infrastructure exist anywhere this code runs. What is real is the boundary —
+`chaos-environment-guard.ts` refuses `production` unconditionally with no
+override parameter in its signature, and the database CHECK on
+`game_day_exercises.environment` restates that independently. Full detail,
+evidence, and file-by-file citations: see `security-gates.md`'s "Phase 26 —
+Chaos Engineering, RTO/RPO & Resilience Validation" section, and the
+operator procedure in `docs/runbooks/game-day.md`.
+
 ---
 
 ## Completed Implementation Checkpoints

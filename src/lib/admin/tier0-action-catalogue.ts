@@ -245,6 +245,18 @@ export const TIER0_ACTION_CATALOGUE: Readonly<Record<string, Tier0ActionEntry>> 
     owner: "phase-21 (src/lib/feature-flags/flag-store.ts, writeFlag) via phase-21 (feature-flag-admin-service.ts)",
     note: "release_stage -> \"public\" specifically. Every OTHER release_stage transition (alpha<->beta) uses flag.set.tier0 above, not this action.",
   },
+  "chaos.game_day.record": {
+    classification: "OPERATOR_MUTATION",
+    minimumRole: "operator",
+    requiresStepUp: false,
+    requiresTwoPerson: false,
+    owner: "phase-26 (src/lib/chaos/game-day-execution-service.ts)",
+    note:
+      "Records the server-recomputed outcome of an already-completed local/test/staging drill — never triggers fault " +
+      "injection, never accepts a caller-supplied verdict. Lower risk than a destructive/irreversible action, so single-" +
+      "operator authorization is intentional: over-gating evidence recording would discourage the frequent drilling the " +
+      "roadmap wants. No production-targeting path exists to classify — chaos-environment-guard.ts refuses it unconditionally.",
+  },
 } as const;
 
 export type Tier0ActionName = keyof typeof TIER0_ACTION_CATALOGUE;

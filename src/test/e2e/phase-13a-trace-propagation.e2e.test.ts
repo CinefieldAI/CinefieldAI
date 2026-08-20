@@ -286,11 +286,15 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // path, same convention as `/api/admin/privacy/execute`), and `POST
   // /api/internal/secrets/access-anomaly` (the CloudTrail->security.events
   // bridge — shared-secret-authenticated, not Clerk, same convention as
-  // `/api/internal/infra/drift-report`).
+  // `/api/internal/infra/drift-report`). PHASE 26 adds two more: `GET
+  // /api/admin/game-day` (read-only chaos/resilience evidence view, same
+  // admin convention) and `POST /api/admin/game-day/record` (records an
+  // already-completed drill's measured outcome — same CSRF+admin+
+  // `durable_write` convention as every other Phase 16 admin mutation route).
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 52, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 54, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

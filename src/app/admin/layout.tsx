@@ -118,6 +118,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/secrets" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Secrets / Rotation
           </Link>
+          <Link href="/admin/game-day" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
+            Chaos / Game Day
+          </Link>
           <Link href="/admin/billing" className="rounded px-2 py-1.5 text-neutral-100 hover:bg-neutral-900">
             Billing / Credits
           </Link>

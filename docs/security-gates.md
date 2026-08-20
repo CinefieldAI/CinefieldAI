@@ -7368,3 +7368,149 @@ using version X of secret Y"; building that requires deciding how each of
 temporal-worker/provider-worker/realtime-dispatcher would report it, a
 scope decision this batch did not make unilaterally.
 **Phase 25 does not start Phase 26.**
+
+## Phase 26 — Chaos Engineering, RTO/RPO & Resilience Validation
+
+**Authoritative roadmap source:** the same master DOCX authoritative for
+Phases 19–25, canonical extraction hash `625b2498…`, re-confirmed
+byte-identical this batch. Official title: "Phase 26 — Chaos Engineering,
+RTO/RPO & Resilience Validation." Handoff: "Phase 13 Health, Phase 9 DR ve Phase 15 SLO/DR
+çıktıları chaos/failure injection, RTO/RPO proof ve restore/recovery
+validation için kaynak olur" — Phase 13 health, Phase 9 DR, and Phase 15
+SLO/DR outputs are the SOURCE this phase orchestrates, never a second
+authority it creates. Four official packages: 26-A (RTO/RPO matrix + game-
+day catalogue), 26-B (AWS FIS templates + stop conditions/blast-radius
+guardrails), 26-C (staging then controlled production game-day), 26-D
+(recovery metrics + postmortem/runbook-update flow into the incident
+knowledge base).
+
+### The RTO/RPO engine this phase reuses already existed
+
+Phase 15-D/2 built the entire measurement core before Phase 26 started:
+`src/lib/recovery/recovery-contract.ts` (the closed `RecoveryClass`/
+`RecoveryResultState` vocabularies), `recovery-target-registry.ts`
+(`RTO_TARGETS`/`RPO_TARGETS`, shipping EMPTY on purpose — a target is a
+business decision no approval exists for), `recovery-measurement-engine.ts`
+(`measureRecovery()`, pure and deterministic, `now` always an explicit
+input), and `recovery-alert-bridge.ts` (wired into Phase 13-D's existing
+alert router). Phase 26 imports every one of these unmodified — no second
+registry, no second measurement engine, no second alert path exists
+anywhere in this batch (enforced by tests G26-26/27/28, not merely stated).
+
+### 26-A — RTO/RPO matrix + game-day scenario catalogue
+
+The RTO/RPO matrix is Phase 15-D/2's own registry, reused as-is — still
+empty, still `BUSINESS_DECISION_REQUIRED` for every class/component. What
+this package actually adds is new: `src/lib/chaos/game-day-catalogue.ts`, a
+bounded, typed list of the ten scenarios the roadmap's own "Nasıl yapılacak"
+step 2 names (provider outage, 429/5xx, worker loss, SQS backlog/DLQ, Redis
+degradation, DB connection pressure, webhook loss, R2 issue, S3 DR issue,
+bad deploy). Each entry names the EXISTING mechanism expected to handle it
+(Phase 7 routing/circuit-breaker, Phase 15-D DLQ redrive, Phase 14 rollback)
+and links to Phase 15-D/2's own `recoveryClass`/`affectedComponent` so a
+recorded drill's outcome is measured by the real engine, never a new one.
+Every scenario ships `productionAllowed: false` — no scenario in this batch
+can be marked production-eligible until 26-B/26-C's live guardrail wiring
+exists for real.
+
+### 26-B — AWS FIS templates + stop conditions
+
+`infra/modules/fis-experiments/` (Terraform, CODE_COMPLETE_LIVE_DEFERRED,
+`terraform fmt`/`validate` both pass, never applied) — real
+`aws_fis_experiment_template` resources, `for_each` over `var.experiments`
+(ships empty from every environment root). Every experiment structurally
+requires at least one CloudWatch stop-condition alarm ARN and at least one
+explicit target resource ARN — both enforced by Terraform `validation`
+blocks, not merely documented, and no target ARN may contain a wildcard.
+`experiment_options.account_targeting = "single-account"` refuses the
+org/account-wide blast radius FIS otherwise permits. Not wired into `infra/
+environments/{dev,production}/main.tf` — no environment root references
+this module yet (test G26-39).
+
+### 26-C — staging then controlled production game-day
+
+**This package's own roadmap done-criterion — "En az bir staging ve bir
+kontrollü production game-day tamamlanmış" (at least one staging AND one
+controlled production drill completed) — cannot be satisfied by an
+implementation batch in this repository.** No staging AWS environment, no
+live AWS credentials, and no applied FIS/CloudWatch infrastructure exist
+anywhere this code runs. What IS real and code-can-do-now: the execution
+boundary itself. `src/lib/chaos/chaos-environment-guard.ts` refuses
+`production` unconditionally — no parameter, flag, or "explicit approval"
+override exists anywhere in its signature; permitting a real controlled
+production drill is a future, reviewed EDIT to that one file, never a
+caller-supplied boolean. The database CHECK constraint on `game_day_
+exercises.environment` restates the same boundary independently (`IN
+('local', 'test', 'staging')` — `production` is not a legal value at the
+storage layer either). This package is `PASS_WITH_DEFERRED_EXTERNAL` at
+best: the boundary that makes a future production drill safe is real; the
+drill itself has not happened and cannot happen in this environment.
+
+### 26-D — recovery metrics + postmortem → incident knowledge base
+
+`src/lib/chaos/game-day-contract.ts` — `classifyGameDayOutcome()` layers
+exactly one new question on Phase 15-D/2's own `RecoveryEvidence`: given the
+measured result and whichever guardrails failed during the drill, did the
+EXERCISE pass, fail, or stay inconclusive (`PASS`/`FAIL`/`INCONCLUSIVE`/
+`NO_TARGET_CONFIGURED`, matching the roadmap's own vocabulary exactly)? It
+never touches `rtoMet`/`rpoMet` beyond reading them, and a failed guardrail
+downgrades an otherwise-met recovery to `FAIL` — a drill that "worked" only
+by violating its own safety boundary did not prove anything safe.
+
+`src/lib/chaos/game-day-execution-service.ts` — the same "claim != proof"
+discipline Phase 25's rotation-verification split established: a caller
+submits raw incident timestamps, never a verdict; `recordGameDayExercise()`
+ALWAYS recomputes via `measureRecovery()` server-side (test G26-21 submits
+evidence shaped like a claimed success with no `serviceRestoredAt` at all,
+and the server still records `RECOVERY_INCOMPLETE`/`INCONCLUSIVE`). This
+service does not inject any fault — it records the outcome of a drill that
+already happened, locally today.
+
+`supabase/migrations/20260913000000_game_day_exercises.sql` — one new,
+narrow, append-only table (no `UPDATE` grant, matching `credit_ledger`'s own
+"history, not a mutable record" shape), justified because "Recovery
+Metrics/Postmortem" is Phase 26's OWN named component with its own written-
+report done-criterion, not a duplicate of any existing incident store.
+`/admin/game-day` (`GET /api/admin/game-day`, read-only) and `POST /api/
+admin/game-day/record` — the same `guardPrivilegedMutation`+
+`requireAdminAccess`+`guardRoute` chain every other admin mutation route
+uses. `chaos.game_day.record` is catalogued `OPERATOR_MUTATION` in `tier0-
+action-catalogue.ts` (not `HIGH_RISK_TIER0` — recording an already-completed
+drill's evidence is far lower risk than a destructive/irreversible action,
+and over-gating it would discourage the frequent drilling the roadmap
+wants) and deliberately NOT registered in `policies/data/actions.json` —
+not a "critical" action in that registry's sense, matching `flag.set.
+operator`'s own precedent.
+
+### Ownership preserved
+
+Phase 9 (media/storage/DR), Phase 13 (health/alert router, reused not
+duplicated), Phase 14 (rollback — this batch measures its outcome, never
+re-implements it), Phase 15-A/C/D (SLO, restore validation, recovery/DLQ —
+all imported unmodified), Phase 16 (admin/Tier-0 catalogue, extended with
+one new low-risk entry), Phase 18 (IaC — `fis-experiments/` follows the
+exact `main.tf`/`variables.tf`/`outputs.tf` convention `kms-keys/` and
+`secrets-manager/` established), Phase 19 (policy-as-code — no OPA action
+registered, by design), Phase 20 (no new Kafka/domain event schema), Phase
+21 (kill switches — not invoked; a game-day scenario measures recovery, it
+does not flip a flag), and Phase 25 (secrets/KMS — a `kms_secret_chaos`
+scenario was deliberately NOT catalogued this batch; Phase 25's own rotation
+verification already covers "secret provider unavailable", and duplicating
+it here would be a second owner) are all confirmed untouched by full
+regression, not merely asserted.
+
+### Not in this batch
+
+Any live AWS FIS provisioning (`terraform apply` was never run —
+`infra/modules/fis-experiments/` is CODE_COMPLETE_LIVE_DEFERRED). Wiring the
+FIS module into any environment root. Any staging environment or CloudWatch
+stop-condition infrastructure. **The staging and production game-day drills
+themselves** — 26-C's own done-criterion cannot be met without live infra
+this repository does not have; this is the one Phase 26 package that stays
+structurally `PARTIAL`/`DEFERRED_EXTERNAL` regardless of code quality, not a
+gap this batch could have closed by writing more code. A `kms_secret_chaos`
+scenario (Phase 25 already owns secret/KMS-unavailable behavior). Any
+change to `recovery-contract.ts`/`recovery-target-registry.ts`/
+`recovery-measurement-engine.ts`/`recovery-alert-bridge.ts` — all four are
+Phase 15-D/2's, imported verbatim.
+**Phase 26 does not start Phase 27.**
