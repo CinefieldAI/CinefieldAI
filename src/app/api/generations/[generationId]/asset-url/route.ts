@@ -36,7 +36,7 @@ import { guardRoute, privateJson } from "@/lib/security/response-headers";
  * trusting this route to have checked.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ generationId: string }> }
 ): Promise<NextResponse> {
   const { userId } = await auth();
@@ -73,6 +73,20 @@ export async function GET(
     return privateJson({ error: "not_found" }, { status: 404 });
   }
 
-  const result = await mintCanonicalAssetUrl(admin, generationId);
+  // Which output. A generation may own several canonical assets; the caller
+  // names the one it wants by INDEX rather than getting whichever row the
+  // database returned first. Bounded and integer-only — an out-of-range index
+  // resolves to no asset and is refused by the minter, never coerced to 0.
+  const rawIndex = new URL(request.url).searchParams.get("index");
+  let outputIndex = 0;
+  if (rawIndex !== null) {
+    const parsed = Number(rawIndex);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 99) {
+      return privateJson({ signedUrl: null, reasonCode: "invalid_output_index" }, { status: 400 });
+    }
+    outputIndex = parsed;
+  }
+
+  const result = await mintCanonicalAssetUrl(admin, generationId, outputIndex);
   return privateJson(result);
 }

@@ -72,14 +72,28 @@ export async function reserveGenerationAsset(
     mediaType: MediaType;
     fileExtension?: string;
     declaredContentType?: string | null;
+    /**
+     * Which output of this generation this asset is. A generation may resolve
+     * to several outputs (/generate batches 3 by default; fal image models
+     * declare maxOutputCount: 4), and each gets its own asset, object and
+     * provenance row. Defaults to 0 so every existing single-output caller
+     * keeps its exact previous identity.
+     */
+    outputIndex?: number;
   }
 ): Promise<ReservedAsset> {
   const config = getR2Config();
+  const outputIndex = params.outputIndex ?? 0;
 
+  // (generation_id, output_index) is the idempotency key — the widened form of
+  // the original (generation_id) one. A retry for output i still finds output
+  // i's row rather than creating a rival; it just no longer collides with
+  // output j.
   const existing = await admin
     .from("media_assets")
     .select("id,object_key,bucket,status")
     .eq("generation_id", params.generationId)
+    .eq("output_index", outputIndex)
     .eq("role", "original")
     .maybeSingle();
 
@@ -106,6 +120,7 @@ export async function reserveGenerationAsset(
       clerk_user_id: params.clerkUserId,
       project_id: params.projectId ?? null,
       generation_id: params.generationId,
+      output_index: outputIndex,
       generation_attempt_id: params.generationAttemptId ?? null,
       source: "provider_output" satisfies AssetSource,
       role: "original",
@@ -126,6 +141,7 @@ export async function reserveGenerationAsset(
       .from("media_assets")
       .select("id,object_key,bucket,status")
       .eq("generation_id", params.generationId)
+      .eq("output_index", outputIndex)
       .eq("role", "original")
       .maybeSingle();
 

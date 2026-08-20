@@ -709,6 +709,8 @@ async function persistCanonicalOriginal(
     projectId: string;
     mediaType: MediaType;
     output: ResolvedOutput;
+    /** Which output of this generation this is. Its durable identity. */
+    outputIndex: number;
   }
 ): Promise<{ assetId: string; objectKey: string; signedBytes: Uint8Array; signedMime: string }> {
   const reserved = await reserveGenerationAsset(admin, {
@@ -718,6 +720,7 @@ async function persistCanonicalOriginal(
     mediaType: params.mediaType,
     fileExtension: params.output.fileExtension,
     declaredContentType: params.output.mimeType,
+    outputIndex: params.outputIndex,
   });
 
   // ---- Phase 9-B ingest gate, on the RAW provider bytes -------------------
@@ -741,6 +744,7 @@ async function persistCanonicalOriginal(
       context: {
         operation: "ingest_gate",
         generationId: params.generationId,
+        outputIndex: params.outputIndex,
         outcome: ingest.status,
         reason: ingest.reason,
       },
@@ -757,6 +761,7 @@ async function persistCanonicalOriginal(
       context: {
         operation: "c2pa_provenance",
         generationId: params.generationId,
+        outputIndex: params.outputIndex,
         outcome: "PROCESSOR_NOT_INSTALLED",
         reason: "media_processor_not_installed",
       },
@@ -782,6 +787,7 @@ async function persistCanonicalOriginal(
       context: {
         operation: "c2pa_provenance",
         generationId: params.generationId,
+        outputIndex: params.outputIndex,
         outcome: processed.outcome,
         reason:
           "reasonCode" in processed
@@ -868,49 +874,51 @@ async function collectAndFinalize(params: {
   // lane must serve the SIGNED bytes this produces. Uploading first would
   // hand the user the raw provider artifact — marked archival copy, unmarked
   // download — which is exactly the divergence Article 50(2) forbids.
-  const primaryResolved = resolvedOutputs[0];
-  const asset = await persistCanonicalOriginal(admin, {
-    generationId,
-    clerkUserId,
-    projectId,
-    mediaType:
-      primaryResolved.type === "image" ? "image" : primaryResolved.type === "audio" ? "audio" : "video",
-    output: primaryResolved,
-  });
-
-  // ---- The delivered outputs ARE the canonical asset -----------------------
+  // EVERY output, each its own canonical asset. A generation may legitimately
+  // resolve to several outputs — /generate batches 3 by default and the fal
+  // image models declare maxOutputCount: 4 — and Article 50(2) applies to
+  // every artifact a user receives, not just the first. So each output is
+  // reserved, gated, transformed, C2PA-signed, officially verified and stored
+  // as its own asset with its own provenance row.
   //
-  // There is no second upload. The C2PA-signed object `persistCanonicalOriginal`
-  // just wrote to R2 is the one and only artifact; delivery mints a presigned
-  // URL against it (attachSignedUrls -> Phase 9's createPresignedDownload).
-  // Writing a second copy anywhere would reintroduce the two-storage-truths
-  // problem Phase 27 exists to remove — and, before the signing fix, that
-  // second copy was the unmarked one users actually downloaded.
+  // Sequential, not concurrent, and deliberately: each iteration runs FFmpeg
+  // and a native signing pass, and a 4-image batch fanned out in parallel
+  // would multiply peak memory and CPU on the worker for no ordering benefit.
   //
-  // Secondary outputs: Phase 9 records ONE canonical asset per generation, so
-  // only the primary has an object of its own to deliver. A multi-output
-  // generation is refused rather than delivering marked-plus-unmarked, which
-  // is the same fail-closed posture every other provenance failure uses.
-  if (resolvedOutputs.length > 1) {
-    throw new OrchestrationError("MEDIA_PROVENANCE_FAILED", {
-      context: {
-        operation: "c2pa_provenance_multi_output",
-        generationId,
-        outcome: "MULTI_OUTPUT_UNSUPPORTED",
-        reason: "one_canonical_asset_per_generation",
-      },
+  // FAIL CLOSED FOR THE WHOLE BATCH. Any output that cannot be marked throws,
+  // so `markCompleted` is unreachable and the user never receives a partially
+  // marked set. Assets already written stay `quarantined` (the ingest gate's
+  // default, never released here), so nothing orphaned becomes deliverable —
+  // `isGenerationAssetDeliverable` requires EVERY output to have cleared, and
+  // a failed batch has at least one that has not.
+  const assets: { assetId: string; objectKey: string; signedBytes: Uint8Array; signedMime: string }[] = [];
+  for (const [outputIndex, resolved] of resolvedOutputs.entries()) {
+    const asset = await persistCanonicalOriginal(admin, {
+      generationId,
+      clerkUserId,
+      projectId,
+      mediaType: resolved.type === "image" ? "image" : resolved.type === "audio" ? "audio" : "video",
+      output: resolved,
+      outputIndex,
     });
+    assets.push(asset);
   }
 
-  const uploaded: StoredOutput[] = [
-    {
-      // The R2 object key — the durable delivery identity. Never a signed URL.
-      storagePath: asset.objectKey,
-      mimeType: asset.signedMime,
-      type: primaryResolved.type,
-      signedUrl: null,
-    },
-  ];
+  // ---- The delivered outputs ARE the canonical assets ----------------------
+  //
+  // There is no second upload. The C2PA-signed objects `persistCanonicalOriginal`
+  // wrote to R2 are the only artifacts; delivery mints presigned URLs against
+  // them (attachSignedUrls -> Phase 9's createPresignedDownload). Writing a
+  // second copy anywhere would reintroduce the two-storage-truths problem
+  // Phase 27 exists to remove — and, before the signing fix, that second copy
+  // was the unmarked one users actually downloaded.
+  const uploaded: StoredOutput[] = assets.map((asset, index) => ({
+    // The R2 object key — the durable delivery identity. Never a signed URL.
+    storagePath: asset.objectKey,
+    mimeType: asset.signedMime,
+    type: resolvedOutputs[index].type,
+    signedUrl: null,
+  }));
 
   const primary = uploaded[0];
 

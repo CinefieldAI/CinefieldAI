@@ -100,19 +100,25 @@ export async function attachSignedUrls(
  */
 export async function mintCanonicalAssetUrl(
   admin: SupabaseClient,
-  generationId: string
+  generationId: string,
+  outputIndex = 0
 ): Promise<{ signedUrl: string | null; reasonCode?: string }> {
   if (!(await isGenerationAssetDeliverable(admin, generationId))) {
     return { signedUrl: null, reasonCode: "not_deliverable" };
   }
 
-  const { data } = await admin
+  // Addressed by OUTPUT INDEX, never "whichever row came back first". A
+  // multi-output generation has several canonical assets; picking by
+  // arrival order would make delivery non-deterministic.
+  const { data, error } = await admin
     .from("media_assets")
     .select("object_key")
     .eq("generation_id", generationId)
+    .eq("output_index", outputIndex)
     .eq("role", "original")
     .maybeSingle();
 
+  if (error) return { signedUrl: null, reasonCode: "asset_lookup_failed" };
   const objectKey = (data as { object_key?: string } | null)?.object_key;
   if (!objectKey) return { signedUrl: null, reasonCode: "asset_not_found" };
 
@@ -128,35 +134,44 @@ export async function mintCanonicalAssetUrl(
 }
 
 /**
- * Whether this generation's canonical original has left quarantine.
+ * Whether EVERY canonical output of this generation has left quarantine.
  *
  * Read here rather than imported from the safety module, to keep the storage
- * layer free of a dependency on the admin layer. The question is one row and
- * four columns; duplicating a `select` is cheaper than an import cycle.
+ * layer free of a dependency on the admin layer.
+ *
+ * A generation may resolve to several outputs, each with its own asset row.
+ * This asks about all of them: releasing the batch because one output cleared
+ * moderation would be exactly the bypass Phase 9-E exists to prevent. It also
+ * can no longer use `maybeSingle()`, which throws once more than one row
+ * exists.
  */
 async function isGenerationAssetDeliverable(
   admin: SupabaseClient,
   generationId: string
 ): Promise<boolean> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("media_assets")
     .select("quarantine_status,ingest_status,status,tombstoned_at")
     .eq("generation_id", generationId)
-    .eq("role", "original")
-    .maybeSingle();
+    .eq("role", "original");
 
-  const row = data as {
+  if (error) return false;
+
+  const rows = (data ?? []) as {
     quarantine_status?: string;
     ingest_status?: string;
     status?: string;
     tombstoned_at?: string | null;
-  } | null;
+  }[];
 
-  if (!row || row.tombstoned_at) return false;
+  // No rows is not "nothing to refuse" — it means nothing was stored.
+  if (rows.length === 0) return false;
 
-  return (
-    row.quarantine_status === "released" &&
-    row.ingest_status === "verified" &&
-    row.status === "finalized"
+  return rows.every(
+    (row) =>
+      !row.tombstoned_at &&
+      row.quarantine_status === "released" &&
+      row.ingest_status === "verified" &&
+      row.status === "finalized"
   );
 }

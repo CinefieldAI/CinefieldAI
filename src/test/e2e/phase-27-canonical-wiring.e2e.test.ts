@@ -118,11 +118,27 @@ test("W27-4c  the delivered output IS the canonical R2 asset — its storagePath
   );
 });
 
-test("W27-4d  a multi-output generation fails closed rather than delivering marked-plus-unmarked", () => {
+test("W27-4d  EVERY output is signed and stored — multi-output is supported, not refused", () => {
+  // SUPERSEDED BY PHASE 9 MULTI-OUTPUT. This test previously asserted that a
+  // multi-output generation FAILED CLOSED. That was the correct posture only
+  // while Phase 9 allowed one canonical asset per generation — and it broke a
+  // real product path: /generate batches 3 by default and six enabled fal
+  // models declare maxOutputCount: 4. Phase 9 now gives each output its own
+  // asset (media_assets.output_index), so the right invariant is that every
+  // output is processed, never that the batch is rejected.
   const source = code(ORCHESTRATOR);
-  assert.match(source, /resolvedOutputs\.length > 1/, "multi-output must be detected");
-  const block = source.slice(source.indexOf("resolvedOutputs.length > 1"));
-  assert.match(block.slice(0, 500), /throw new OrchestrationError\("MEDIA_PROVENANCE_FAILED"/);
+  assert.match(
+    source,
+    /for \(const \[outputIndex, resolved\] of resolvedOutputs\.entries\(\)\)/,
+    "every resolved output must be iterated"
+  );
+  assert.match(source, /outputIndex,/, "and each must carry its own durable output identity");
+  assert.ok(
+    !/resolvedOutputs\.length > 1/.test(source),
+    "the multi-output refusal must not return — it breaks /generate's default batch of 3"
+  );
+  // The delivery array is built from the per-output assets, not a single one.
+  assert.match(source, /assets\.map\(\(asset, index\) =>/, "delivery must cover every canonical asset");
 });
 
 test("W27-4e  the browser cannot sign for itself — delivery goes through the server route", () => {

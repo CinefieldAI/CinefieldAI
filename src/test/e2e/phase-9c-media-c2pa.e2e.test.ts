@@ -514,7 +514,11 @@ test("C9C-27  no new migration was created by this batch", () => {
   const files = readFileSync(join(ROOT, "package.json"), "utf8");
   assert.ok(files.length > 0);
   const migrations = readdirSync(join(ROOT, "supabase/migrations"));
-  assert.ok(!migrations.some((m) => m > "20260914000000_media_provenance.sql"), "no migration after Phase 27's own");
+  // Phase 9 multi-output added exactly one migration after Phase 27's own:
+  // media_assets gains `output_index` so a generation can own one asset per
+  // output. Anything BEYOND that is unaccounted for.
+  const after = migrations.filter((m) => m > "20260914000000_media_provenance.sql");
+  assert.deepEqual(after, ["20260915000000_media_assets_output_index.sql"]);
 });
 
 test("C9C-28  no signing key or certificate material is committed", () => {

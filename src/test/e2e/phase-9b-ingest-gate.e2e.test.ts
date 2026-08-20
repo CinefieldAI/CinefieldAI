@@ -420,11 +420,20 @@ test("no paid or external moderation call was introduced", () => {
 // Completion boundary
 // ---------------------------------------------------------------------------
 
-function completionAdmin(row: Record<string, unknown> | null) {
+/**
+ * PHASE 9 MULTI-OUTPUT: `hasVerifiedOriginal` no longer calls `maybeSingle()`
+ * — a generation may own several `role='original'` assets, one per output, and
+ * completion means ALL of them passed. The double is therefore awaitable and
+ * takes rows, not a row. `null` still models "nothing stored".
+ */
+function completionAdmin(rows: Record<string, unknown> | Record<string, unknown>[] | null) {
+  const list = rows === null ? [] : Array.isArray(rows) ? rows : [rows];
   const table = {
     select: () => table,
     eq: () => table,
-    maybeSingle: async () => ({ data: row, error: null }),
+    maybeSingle: async () => ({ data: list[0] ?? null, error: null }),
+    then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
+      resolve({ data: list, error: null }),
   };
   return { from: () => table } as unknown as SupabaseClient;
 }
@@ -448,6 +457,31 @@ test("completion now requires BOTH finalized storage and a verified ingest", asy
     false
   );
   assert.equal(await hasVerifiedOriginal(completionAdmin(null), "g"), false);
+
+  // MULTI-OUTPUT: every output must pass, not just one of them.
+  assert.equal(
+    await hasVerifiedOriginal(
+      completionAdmin([
+        { status: "finalized", ingest_status: "verified" },
+        { status: "finalized", ingest_status: "verified" },
+        { status: "finalized", ingest_status: "verified" },
+      ]),
+      "g"
+    ),
+    true,
+    "three verified outputs complete"
+  );
+  assert.equal(
+    await hasVerifiedOriginal(
+      completionAdmin([
+        { status: "finalized", ingest_status: "verified" },
+        { status: "finalized", ingest_status: "rejected" },
+      ]),
+      "g"
+    ),
+    false,
+    "one rejected output must not ride in on another's verification"
+  );
 });
 
 test("the orchestrator runs reserve -> ingest -> process/store -> gate -> complete, in that order", () => {

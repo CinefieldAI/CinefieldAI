@@ -239,13 +239,22 @@ export async function hasVerifiedOriginal(
   admin: SupabaseClient,
   generationId: string
 ): Promise<boolean> {
-  const { data } = await admin
+  // EVERY output, not "the" output. A generation may resolve to several
+  // outputs, each with its own asset row, and completion means all of them
+  // passed the gate. `maybeSingle()` would now throw on a multi-output
+  // generation, and taking the first row would let one rejected output ride
+  // in on another's verification.
+  const { data, error } = await admin
     .from("media_assets")
     .select("status,ingest_status")
     .eq("generation_id", generationId)
-    .eq("role", "original")
-    .maybeSingle();
+    .eq("role", "original");
 
-  const row = data as { status?: string; ingest_status?: string } | null;
-  return row?.status === "finalized" && row?.ingest_status === "verified";
+  if (error) return false;
+  const rows = (data ?? []) as { status?: string; ingest_status?: string }[];
+
+  // No rows is not "nothing to refuse" — it means nothing was stored.
+  if (rows.length === 0) return false;
+
+  return rows.every((row) => row.status === "finalized" && row.ingest_status === "verified");
 }
