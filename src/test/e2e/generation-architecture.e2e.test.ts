@@ -5,7 +5,10 @@ import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
 import { WorkflowIdConflictPolicy } from "@temporalio/client";
 import { FakeSupabaseClient } from "./fake-supabase";
-import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration } from "./e2e-harness";
+import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration,
+  fakeR2Puts,
+  resetFakeR2Puts,
+} from "./e2e-harness";
 import { setCommandBus } from "@/lib/contracts/command-bus";
 import { generationWorkflowId } from "@/lib/temporal/workflow-ids";
 import { TASK_QUEUES } from "@/lib/temporal/task-queues";
@@ -463,7 +466,8 @@ function terminalShape(db: FakeSupabaseClient) {
     attemptStatus: attempt?.status,
     attemptEvidence: attempt?.submission_evidence,
     attemptHasProviderJob: typeof attempt?.provider_job_id === "string",
-    uploads: db.storageUploads.length,
+    // PHASE 27: the canonical artifact is the ONE R2 object.
+    uploads: fakeR2Puts.length,
   };
 }
 
@@ -493,9 +497,13 @@ test("E2E: polling drives the real workflow to a terminal generation through the
   assert.ok(shape.attemptHasProviderJob, "the provider job id was correlated onto the attempt");
 
   // The finalization tail genuinely ran: getResult → normalize → upload.
-  assert.equal(shape.uploads, 1, "the real finalization uploaded exactly one output");
-  assert.equal(db.storageUploads[0].bucket, "generation-outputs");
-  assert.ok(db.storageUploads[0].bytes > 0, "real encoded PNG bytes reached the storage boundary");
+  assert.equal(shape.uploads, 1, "the real finalization stored exactly one canonical object");
+  assert.ok(fakeR2Puts[0].byteLength > 0, "real C2PA-signed bytes reached the storage boundary");
+  assert.equal(
+    db.storageUploads.length,
+    0,
+    "PHASE 27: the duplicate Supabase Storage copy must no longer be written"
+  );
 
   // And it got there without ever submitting twice.
   assert.equal(sqs.enqueueCount, 1, "exactly one provider command was ever dispatched");
@@ -646,7 +654,7 @@ test("E2E: a duplicate poll after completion does not finalize a second time", {
       args: [{ generationId, clerkUserId }],
     })
   );
-  assert.equal(db.storageUploads.length, 1);
+  assert.equal(fakeR2Puts.length, 1);
   const completedAt = db.state.generations[0].completed_at;
 
   // Exactly what a redelivered poll does — the real continuation entry point.
@@ -654,7 +662,7 @@ test("E2E: a duplicate poll after completion does not finalize a second time", {
   const again = await checkAsyncGeneration({ generationId, clerkUserId, source: "poll" });
 
   assert.equal(again.status, "completed", "the terminal row is reported idempotently");
-  assert.equal(db.storageUploads.length, 1, "no second upload");
+  assert.equal(fakeR2Puts.length, 1, "no second canonical write");
   assert.equal(db.state.generations[0].completed_at, completedAt, "completion was not restamped");
 });
 
@@ -671,7 +679,7 @@ test("E2E: a duplicate verified callback after completion does not finalize a se
       args: [{ generationId, clerkUserId }],
     })
   );
-  assert.equal(db.storageUploads.length, 1);
+  assert.equal(fakeR2Puts.length, 1);
 
   let signalCalls = 0;
   const late = await bridgeVerifiedWebhookToTemporal(
@@ -693,7 +701,7 @@ test("E2E: a duplicate verified callback after completion does not finalize a se
 
   assert.equal(late.outcome, "already_processed", "a post-terminal callback is a no-op");
   assert.equal(signalCalls, 0, "a terminal attempt is never signalled again");
-  assert.equal(db.storageUploads.length, 1, "no second upload");
+  assert.equal(fakeR2Puts.length, 1, "no second canonical write");
   assert.equal(db.state.generations[0].status, "completed", "terminal state preserved");
 });
 
@@ -734,7 +742,7 @@ test("E2E: two concurrent completion observations finalize exactly once (single-
     checkAsyncGeneration({ generationId, clerkUserId, source: "webhook" }),
   ]);
 
-  assert.equal(db.storageUploads.length, 1, "the lease admitted exactly one finalizer");
+  assert.equal(fakeR2Puts.length, 1, "the lease admitted exactly one finalizer");
   assert.equal(db.state.generations[0].status, "completed");
   const completed = results.filter(
     (r) => r.status === "fulfilled" && r.value.status === "completed"
@@ -763,7 +771,7 @@ test("E2E: submitted -> processing -> provider-reported failure drives the workf
   assert.equal(db.state.generation_attempts[0].status, "failed", "the attempt is terminally failed");
 
   // A failure must never masquerade as, or leave behind, a success.
-  assert.equal(db.storageUploads.length, 0, "no output was finalized for a failed job");
+  assert.equal(fakeR2Puts.length, 0, "no output was finalized for a failed job");
   assert.equal(db.state.generations[0].output_url, null, "no output url on a failed generation");
 
   // And it must never cost a second submission.
@@ -787,7 +795,7 @@ test("E2E: a submit-time provider failure is terminal and never resubmitted", { 
   assert.equal(db.state.generations[0].status, "failed");
   assert.equal(db.state.generation_attempts[0].status, "failed");
   assert.equal(sqs.enqueueCount, 1, "the failure did not trigger a second dispatch");
-  assert.equal(db.storageUploads.length, 0);
+  assert.equal(fakeR2Puts.length, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -846,7 +854,7 @@ test("E2E: a stale claim with no evidence is recorded as ambiguous and never bli
     "ambiguous",
     "the uncertainty is recorded durably rather than guessed away"
   );
-  assert.equal(db.storageUploads.length, 0, "no provider work was performed");
+  assert.equal(fakeR2Puts.length, 0, "no provider work was performed");
   assert.equal(db.state.generation_attempts.length, 1, "no second attempt was opened");
 });
 
@@ -854,8 +862,8 @@ test("E2E COST: no real provider, AWS, storage, or credit side effect occurred",
   const db = new FakeSupabaseClient();
   await installFakeSupabase(db);
 
-  // The storage double records intent; a zero-cost run uploads nothing real.
-  assert.equal(db.storageUploads.length, 0);
+  // The storage double records intent; a zero-cost run stores nothing real.
+  assert.equal(fakeR2Puts.length, 0);
   // The mock adapter is the only provider in play, and it performs no HTTP.
   const { mockProvider } = await import("@/lib/orchestration/providers/mock-provider");
   assert.equal(mockProvider.providerId, "mock");

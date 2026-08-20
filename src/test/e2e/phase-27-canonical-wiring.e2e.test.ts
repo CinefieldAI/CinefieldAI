@@ -53,64 +53,72 @@ test("W27-3  the canonical path finalises IN PLACE — one asset, not an unmarke
   assert.match(source, /target: \{ kind: "in_place" \}/);
 });
 
-test("W27-4  the orchestrator writes through EXACTLY ONE storage owner per lane, and no third adapter exists", () => {
-  // REWRITTEN. The previous version counted `putAssetObject(` occurrences and
-  // was therefore structurally blind to `admin.storage.from().upload()` — it
-  // passed while the user-delivery lane was shipping unmarked raw bytes. A
-  // test that cannot fail for the defect it names is worse than no test.
-  //
-  // This version enumerates EVERY storage-write shape reachable from the
-  // orchestrator, so a new adapter cannot be introduced silently.
+test("W27-4  EXACTLY ONE canonical storage write exists — no second copy through any adapter", () => {
+  // REWRITTEN TWICE. v1 counted `putAssetObject(` and was structurally blind
+  // to `admin.storage.from().upload()`, so it passed while the delivery lane
+  // shipped unmarked raw bytes. v2 caught that. This version pins the end
+  // state: the Supabase Storage copy is GONE, so exactly one object exists.
   const source = code(ORCHESTRATOR);
 
-  // R2 canonical write: exactly one, inside the store adapter.
+  // The single R2 write, inside the store adapter.
   assert.equal((source.match(/putAssetObject\(/g) ?? []).length, 1);
 
-  // The orchestrator must never call an object store directly.
-  assert.ok(!/admin\.storage\.from\(/.test(source), "no direct Supabase Storage write from the orchestrator");
+  // No second storage adapter of ANY shape may appear here.
+  assert.ok(!/admin\.storage\.from\(/.test(source), "no Supabase Storage write");
+  assert.ok(!/uploadOutputs\(/.test(source), "the duplicate upload lane must stay deleted");
   assert.ok(!/PutObjectCommand|S3Client|new Upload\(/.test(source), "no direct S3/R2 SDK use");
   assert.ok(!/fetch\([^)]*PUT/.test(source), "no ad-hoc HTTP upload");
-
-  // Delivery goes through the ONE storage module, and it receives the SIGNED
-  // artifact — never `resolvedOutputs`, which holds the raw provider bytes.
-  assert.match(source, /uploadOutputs\(admin, deliverable,/, "delivery must upload the signed `deliverable` array");
-  assert.ok(
-    !/uploadOutputs\(admin, resolvedOutputs,/.test(source),
-    "uploading resolvedOutputs would ship the RAW provider bytes to the user"
-  );
 });
 
-test("W27-4b  the delivery array is built from the canonical SIGNED bytes, never re-signed", () => {
+test("W27-4b  the module that used to write the duplicate copy no longer can", () => {
+  const storage = code("src/lib/orchestration/output-storage.ts");
+  assert.ok(!/uploadOutputs/.test(storage), "uploadOutputs must be deleted, not merely unused");
+  assert.ok(!/admin\.storage\.from\(/.test(storage), "no Supabase Storage dependency may remain");
+  assert.ok(!/OUTPUT_BUCKET/.test(storage), "the duplicate bucket constant must be gone");
+  // And delivery signs through Phase 9's own owner, not a second implementation.
+  assert.match(storage, /createPresignedDownload\(/);
+  assert.ok(!/getSignedUrl\(|new GetObjectCommand/.test(storage), "no second signing implementation");
+});
+
+test("W27-4c  the delivered output IS the canonical R2 asset — its storagePath is the asset object key", () => {
   const source = code(ORCHESTRATOR);
-  // The primary's delivery bytes are the exact bytes processFinalMedia stored.
   assert.match(
     source,
-    /deliverable[\s\S]{0,200}bytes: asset\.signedBytes/,
-    "the primary must be delivered as the canonical stored bytes"
+    /storagePath: asset\.objectKey/,
+    "delivery identity must be the canonical R2 object key, not a second path"
   );
-  // Re-signing would mint a different manifest instance and a different
-  // digest, breaking delivered==canonical.
-  const primaryBlock = source.slice(source.indexOf("const deliverable"), source.indexOf("uploadOutputs(admin, deliverable"));
   assert.ok(
-    !/signMediaForDelivery\([\s\S]{0,80}primaryResolved/.test(primaryBlock),
-    "the primary must not be signed a second time"
+    !/uploadOutputs\(admin, resolvedOutputs,/.test(source),
+    "raw provider bytes must never be uploaded"
   );
 });
 
-test("W27-4c  every SECONDARY output is signed too — a multi-output generation cannot ship one marked and the rest raw", () => {
+test("W27-4d  a multi-output generation fails closed rather than delivering marked-plus-unmarked", () => {
   const source = code(ORCHESTRATOR);
-  assert.match(source, /for \(const output of resolvedOutputs\.slice\(1\)\)/, "secondary outputs must be iterated");
-  assert.match(source, /signMediaForDelivery\(\{/, "and each must be signed");
-  // And a failure on any of them refuses the generation.
-  const loop = source.slice(source.indexOf("resolvedOutputs.slice(1)"), source.indexOf("uploadOutputs(admin, deliverable"));
-  assert.match(loop, /throw new OrchestrationError\("MEDIA_PROVENANCE_FAILED"/, "an unmarkable secondary output must fail closed");
+  assert.match(source, /resolvedOutputs\.length > 1/, "multi-output must be detected");
+  const block = source.slice(source.indexOf("resolvedOutputs.length > 1"));
+  assert.match(block.slice(0, 500), /throw new OrchestrationError\("MEDIA_PROVENANCE_FAILED"/);
 });
 
-test("W27-4d  the canonical asset is persisted BEFORE the delivery upload, so delivery can only serve signed bytes", () => {
-  const source = code(ORCHESTRATOR);
-  const persist = source.indexOf("persistCanonicalOriginal(admin, {");
-  const upload = source.indexOf("uploadOutputs(admin, deliverable,");
-  assert.ok(persist > 0 && upload > persist, "signing must precede delivery upload");
+test("W27-4e  the browser cannot sign for itself — delivery goes through the server route", () => {
+  const hook = code("src/hooks/useGeneration.ts");
+  assert.ok(
+    !/from\("generation-outputs"\)/.test(hook),
+    "the client must not mint its own Supabase Storage URL for generated media"
+  );
+  assert.match(hook, /\/api\/generations\/\$\{generationId\}\/asset-url/, "it must call the server delivery seam");
+});
+
+test("W27-4f  the delivery route enforces auth, rate limiting, ownership and the quarantine gate", () => {
+  const route = code("src/app/api/generations/[generationId]/asset-url/route.ts");
+  assert.match(route, /await auth\(\)/);
+  assert.match(route, /guardRoute\(\{\s*routeClass: "authenticated_read"/);
+  assert.match(route, /clerk_user_id[\s\S]*!== userId/, "ownership must come from the durable row");
+  assert.match(route, /mintCanonicalAssetUrl\(/);
+  // The minter re-asks the quarantine question itself.
+  const storage = code("src/lib/orchestration/output-storage.ts");
+  const minter = storage.slice(storage.indexOf("export async function mintCanonicalAssetUrl"));
+  assert.match(minter.slice(0, 400), /isGenerationAssetDeliverable\(/);
 });
 
 // ---------------------------------------------------------------------------

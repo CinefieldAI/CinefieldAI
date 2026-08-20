@@ -7,7 +7,9 @@ import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
 import { WorkflowIdConflictPolicy } from "@temporalio/client";
 import { FakeSupabaseClient } from "./fake-supabase";
-import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration } from "./e2e-harness";
+import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration,
+  fakeR2Puts,
+} from "./e2e-harness";
 import { setCommandBus } from "@/lib/contracts/command-bus";
 import type { CommandBus, CommandEnvelope } from "@/lib/contracts/command-bus";
 import { generationWorkflowId } from "@/lib/temporal/workflow-ids";
@@ -180,7 +182,7 @@ test("13.2 an attempt already carrying ambiguous evidence is never resubmitted",
 
   assert.equal(outcome.reason, "evidence_already_recorded");
   assert.equal(outcome.action, "delete", "the message retires rather than being retried into a submit");
-  assert.equal(db.storageUploads.length, 0, "no provider work happened");
+  assert.equal(fakeR2Puts.length, 0, "no provider work happened");
   assert.equal(
     db.state.generation_attempts[0].submission_evidence,
     "ambiguous",
@@ -290,7 +292,7 @@ test("13.5 the same provider event signalled repeatedly still finalizes exactly 
   const result = await runWorkflow(s.generationId, s.clerkUserId);
 
   assert.equal(result.outcome, "completed");
-  assert.equal(s.db.storageUploads.length, 1, "five signals produced one finalization");
+  assert.equal(fakeR2Puts.length, 1, "five signals produced one finalization");
   assert.equal(s.db.state.generation_attempts.length, 1, "no signal created an attempt");
   assert.equal(s.sqs.enqueueCount, 1, "no signal caused a resubmission");
 });
@@ -418,7 +420,7 @@ test("13.6 a provider completion arriving AFTER cancellation does not resurrect 
 
   assert.equal(late.status, "failed", "a cancelled row is reported as terminal, not completed");
   assert.equal(db.state.generations[0].status, "cancelled", "the terminal state is unchanged");
-  assert.equal(db.storageUploads.length, 0, "a cancelled generation never finalizes an output");
+  assert.equal(fakeR2Puts.length, 0, "a cancelled generation never finalizes an output");
 });
 
 test("13.6 a cancel signal before submission ends the real workflow as cancelled, with nothing sent", { timeout: 180_000 }, async () => {
@@ -449,7 +451,7 @@ test("13.6 a cancel signal before submission ends the real workflow as cancelled
     `a cancelled generation must never report success, got: ${result.outcome}`
   );
   assert.notEqual(db.state.generations[0].status, "completed");
-  assert.equal(db.storageUploads.length, 0, "nothing was finalized");
+  assert.equal(fakeR2Puts.length, 0, "nothing was finalized");
 });
 
 // ===========================================================================
@@ -498,7 +500,7 @@ test("13.7 a transient dispatch failure is retried and still yields exactly one 
   assert.equal(result.outcome, "completed", "a transient transport failure did not strand the generation");
   assert.equal(db.state.generation_attempts.length, 1, "the retry reused the existing attempt");
   assert.equal(real.enqueueCount, 1, "only the successful dispatch reached the queue");
-  assert.equal(db.storageUploads.length, 1, "exactly one finalization");
+  assert.equal(fakeR2Puts.length, 1, "exactly one finalization");
 });
 
 test("13.7 a dispatch failure leaves no phantom evidence behind", async () => {

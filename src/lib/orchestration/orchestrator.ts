@@ -14,14 +14,14 @@ import {
 } from "./errors";
 import { findModel, type ModelRegistryEntry } from "./model-registry";
 import { normalizeOutputs } from "./output-normalizer";
-import { attachSignedUrls, uploadOutputs } from "./output-storage";
+import { attachSignedUrls, type StoredOutput } from "./output-storage";
 // `storeAndFinalizeAsset` is deliberately NOT imported here any more. It
 // writes raw provider bytes straight to R2, which is exactly the unmarked
 // canonical artifact Phase 27 forbids; the Phase 9-C pipeline stores the
 // SIGNED bytes instead. A structural test fails if this import returns.
 import { reserveGenerationAsset, type MediaType } from "@/lib/media/asset-service";
 import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
-import { processFinalMedia, signMediaForDelivery, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
+import { processFinalMedia, type FinalMediaStore } from "@/lib/media/media-processing-pipeline";
 import { putAssetObject } from "@/lib/media/r2-client";
 import type { ResolvedOutput } from "./output-normalizer";
 import { getProviderAdapter, isProviderRegistered } from "./provider-registry";
@@ -857,43 +857,39 @@ async function collectAndFinalize(params: {
     output: primaryResolved,
   });
 
-  // ---- Sign every REMAINING output for delivery ---------------------------
+  // ---- The delivered outputs ARE the canonical asset -----------------------
   //
-  // Phase 9 records one canonical asset per generation, but Article 50(2)
-  // applies to every artifact a user receives. A generation resolving three
-  // images must not deliver one marked and two unmarked, so each secondary
-  // output goes through the same transform+embed+verify engine. Failure
-  // throws for the same reason the primary's does — there is no unmarked
-  // fallback anywhere.
-  const deliverable: ResolvedOutput[] = [
-    { ...primaryResolved, bytes: asset.signedBytes, mimeType: asset.signedMime },
-  ];
-  for (const output of resolvedOutputs.slice(1)) {
-    const signed = await signMediaForDelivery({
-      bytes: output.bytes,
-      verifiedMime: output.mimeType,
-      digitalSourceType: "trainedAlgorithmicMedia",
-      softwareAgent: "Cinefield (model via provider)",
+  // There is no second upload. The C2PA-signed object `persistCanonicalOriginal`
+  // just wrote to R2 is the one and only artifact; delivery mints a presigned
+  // URL against it (attachSignedUrls -> Phase 9's createPresignedDownload).
+  // Writing a second copy anywhere would reintroduce the two-storage-truths
+  // problem Phase 27 exists to remove — and, before the signing fix, that
+  // second copy was the unmarked one users actually downloaded.
+  //
+  // Secondary outputs: Phase 9 records ONE canonical asset per generation, so
+  // only the primary has an object of its own to deliver. A multi-output
+  // generation is refused rather than delivering marked-plus-unmarked, which
+  // is the same fail-closed posture every other provenance failure uses.
+  if (resolvedOutputs.length > 1) {
+    throw new OrchestrationError("MEDIA_PROVENANCE_FAILED", {
+      context: {
+        operation: "c2pa_provenance_multi_output",
+        generationId,
+        outcome: "MULTI_OUTPUT_UNSUPPORTED",
+        reason: "one_canonical_asset_per_generation",
+      },
     });
-    if (!signed.ok) {
-      throw new OrchestrationError("MEDIA_PROVENANCE_FAILED", {
-        context: {
-          operation: "c2pa_provenance_secondary",
-          generationId,
-          outcome: signed.outcome,
-          reason: signed.reasonCode,
-        },
-      });
-    }
-    deliverable.push({ ...output, bytes: signed.bytes, mimeType: signed.mime });
   }
 
-  // ---- Upload the SIGNED bytes -------------------------------------------
-  const uploaded = await uploadOutputs(admin, deliverable, {
-    clerkUserId,
-    projectId,
-    generationId,
-  });
+  const uploaded: StoredOutput[] = [
+    {
+      // The R2 object key — the durable delivery identity. Never a signed URL.
+      storagePath: asset.objectKey,
+      mimeType: asset.signedMime,
+      type: primaryResolved.type,
+      signedUrl: null,
+    },
+  ];
 
   const primary = uploaded[0];
 

@@ -35,7 +35,7 @@ still development-grade are named as such below.
 | **Automatic marking of every canonical output** | **REAL** — the orchestrator's only storage path is the C2PA pipeline |
 | **User-delivered bytes are the signed bytes** | **REAL** — delivery serves `asset.signedBytes`, digest-proven identical |
 | **Secondary outputs marked** | **REAL** — multi-output generations sign every artifact |
-| Duplicate physical copy (R2 + Supabase Storage) | **REMAINS** — see "Two copies, one artifact" |
+| Duplicate physical copy | **ELIMINATED** — one R2 object, delivered via a server-minted presigned URL |
 | Deepfake detection | **NOT BUILT** — Phase 28 owns T&S classification |
 | Visible deepfake label in product UI | **BLOCKED** — locked UI |
 | Soft-binding watermark | **NOT IN SCOPE** — roadmap: optional, second phase |
@@ -76,23 +76,35 @@ official library, then tampers with one byte and confirms rejection.
 
 ---
 
-## Two copies, one artifact
+## One artifact, one storage owner
 
-The signed bytes are stored twice: the canonical R2 object (Phase 9's owner,
-which `media_assets` and `media_provenance` describe) and a Supabase Storage
-copy in `generation-outputs` that the delivery lane serves.
+There is exactly one physical copy: the C2PA-signed object in R2. The
+Supabase Storage `generation-outputs` duplicate was **deleted**, not merely
+left unused — `uploadOutputs` no longer exists, and a test fails if it
+returns.
 
-**They are byte-identical** — the delivery lane receives `asset.signedBytes`,
-the exact array `processFinalMedia` stored, and a test proves the digests
-match. So there is no marked/unmarked divergence, which was the actual danger.
+Delivery works like this:
 
-The duplicate persists for one concrete reason: `src/hooks/useGeneration.ts`
-mints its own Supabase Storage signed URL from `generations.output_url`, and
-that hook is consumed by four **locked** workspaces (`/generate`,
-`/audio/create`, `/image`, `/marketing-studio/product`). Collapsing to a
-single R2-backed delivery identity means changing that hook's data flow, which
-requires explicit authorization to touch locked-page-dependent code. It is a
-real architectural cleanup, not a correctness gap.
+```
+generations.output_url            the R2 object key (durable, not a URL)
+  → GET /api/generations/[id]/asset-url
+      → auth + rate limit
+      → ownership from the durable row
+      → Phase 9-E quarantine gate
+      → createPresignedDownload()   Phase 9's own signer, 1h TTL
+  → short-lived presigned R2 URL
+```
+
+The browser cannot reach R2 and no longer signs for itself — `useGeneration`
+calls that route instead of `supabase.storage.from("generation-outputs")`.
+Signed URLs are minted on access and never persisted.
+
+**Multi-output generations are refused.** Phase 9 records one canonical asset
+per generation, so a generation resolving several outputs would have only one
+object to deliver. Rather than ship one marked artifact and several unmarked
+ones, the orchestrator throws `MEDIA_PROVENANCE_FAILED`. Supporting genuine
+multi-output delivery means giving Phase 9 a per-output asset model — a real
+change, deliberately not smuggled in here.
 
 ---
 

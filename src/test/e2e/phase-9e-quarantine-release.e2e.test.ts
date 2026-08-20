@@ -323,8 +323,20 @@ test("15/16. neither provider output nor browser upload can bypass the gate", ()
   assert.ok(/if \(!gate\)/.test(fn), "no gate argument means no URL");
   assert.ok(/isGenerationAssetDeliverable/.test(fn));
 
+  // PHASE 27 added a SECOND minter for the browser delivery route. It must
+  // answer the same question itself rather than trusting its caller.
+  const minter = storage.slice(storage.indexOf("export async function mintCanonicalAssetUrl"));
+  const minterGate = minter.indexOf("isGenerationAssetDeliverable(admin, generationId)");
+  const minterMint = minter.indexOf("createPresignedDownload");
+  assert.ok(minterGate > 0 && minterMint > minterGate, "the delivery minter must gate before signing too");
+
+  // PHASE 27: minting moved from Supabase Storage's `createSignedUrl` to
+  // Phase 9's own `createPresignedDownload` against the canonical R2 object —
+  // the duplicate Supabase copy was removed. The PROPERTY is unchanged and is
+  // what this asserts: the quarantine question is answered BEFORE any URL is
+  // produced.
   const gateCheck = fn.indexOf("isGenerationAssetDeliverable(admin, gate.generationId)");
-  const mint = fn.indexOf("createSignedUrl");
+  const mint = fn.indexOf("createPresignedDownload");
   assert.ok(gateCheck > 0 && mint > gateCheck, "the check must precede minting");
 
   assert.ok(/quarantine_status === "released"/.test(fn));

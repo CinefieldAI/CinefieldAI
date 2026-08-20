@@ -294,11 +294,15 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // PHASE 27 adds exactly one: `GET /api/admin/provenance` (read-only
   // AI-marking coverage view). There is deliberately no provenance WRITE
   // route — recording provenance belongs to the media ingest path (the
-  // Phase 9-B seam), never to an admin clicking a button.
+  // Phase 9-B seam), never to an admin clicking a button. The Phase 27
+  // delivery corrective adds one more: `GET /api/generations/[id]/asset-url`,
+  // the seam that mints a presigned R2 URL for the C2PA-signed canonical
+  // object — the browser can no longer sign for itself because the duplicate
+  // Supabase Storage copy was removed.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 55, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 56, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

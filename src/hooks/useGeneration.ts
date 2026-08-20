@@ -469,12 +469,30 @@ export function useGeneration({ sourcePage }: UseGenerationOptions) {
               } else if (finalRow.status !== "completed") {
                 setError(finalRow.error_message ?? "Generation failed.");
               } else {
+                // PHASE 27: the finished artifact is the C2PA-signed canonical
+                // object in R2, which the browser cannot reach and cannot sign
+                // for itself. `output_url` is now an R2 object key, not a
+                // Supabase Storage path, so the URL is minted server-side by a
+                // route that re-checks ownership and the Phase 9-E quarantine
+                // gate immediately before signing.
                 let signedUrl: string | null = null;
                 if (finalRow.output_url) {
-                  const { data: signedData } = await supabase.storage
-                    .from("generation-outputs")
-                    .createSignedUrl(finalRow.output_url, 3600);
-                  signedUrl = signedData?.signedUrl ?? null;
+                  try {
+                    const assetResponse = await fetch(
+                      `/api/generations/${generationId}/asset-url`,
+                      { cache: "no-store" }
+                    );
+                    if (assetResponse.ok) {
+                      const assetJson = (await assetResponse.json()) as {
+                        signedUrl?: string | null;
+                      };
+                      signedUrl = assetJson.signedUrl ?? null;
+                    }
+                  } catch {
+                    // A URL that cannot be minted right now is "not
+                    // deliverable yet", never a failed generation.
+                    signedUrl = null;
+                  }
                 }
                 safeSet(() => {
                   setStatus("success");

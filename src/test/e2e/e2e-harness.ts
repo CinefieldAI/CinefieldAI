@@ -126,6 +126,11 @@ export class FakeSqsTransport implements CommandBus {
  * line of production code.
  */
 export async function installFakeSupabase(db: FakeSupabaseClient): Promise<void> {
+  // Each test installs a fresh database double, so the canonical-write
+  // recorder is reset alongside it — otherwise "exactly one object stored"
+  // would accumulate across tests and stop meaning anything.
+  resetFakeR2Puts();
+
   // isSupabaseAdminConfigured() gates several code paths on these being
   // present. Non-secret placeholders pointing at an unroutable host — the
   // double intercepts every call, so nothing is ever sent anywhere.
@@ -149,6 +154,21 @@ export async function installFakeSupabase(db: FakeSupabaseClient): Promise<void>
  * the key derivation, the reserve→store→finalize ordering and the completion
  * gate all run as production code. Only the socket is replaced.
  */
+/**
+ * Every canonical object write the fake R2 socket received.
+ *
+ * PHASE 27: the canonical artifact now goes ONLY to R2 — the duplicate
+ * Supabase Storage copy was removed — so "exactly one output was stored" is a
+ * question about THIS array, not about `FakeSupabaseClient.storageUploads`.
+ * Recording it keeps those assertions as strong as they were instead of
+ * letting them decay into `=== 0`.
+ */
+export const fakeR2Puts: { objectKey: string; byteLength: number }[] = [];
+
+export function resetFakeR2Puts(): void {
+  fakeR2Puts.length = 0;
+}
+
 export async function installFakeR2(): Promise<void> {
   // Well-formed and entirely fake. Validation runs for real against these.
   process.env.CLOUDFLARE_R2_ACCESS_KEY_ID ??= "e2e-double-not-a-real-key";
@@ -160,9 +180,17 @@ export async function installFakeR2(): Promise<void> {
   __resetR2ClientForTesting({
     // PutObjectCommand and HeadObjectCommand both land here. Head answers
     // with a plausible size so a verification path has something to read.
-    send: async (command: { input?: { Body?: Uint8Array } }) => ({
-      ContentLength: command?.input?.Body?.byteLength ?? 0,
-    }),
+    send: async (command: { constructor?: { name?: string }; input?: { Body?: Uint8Array; Key?: string } }) => {
+      // Only PutObject carries a Body; Head/Get do not, so this records
+      // writes without also counting reads.
+      if (command?.input?.Body) {
+        fakeR2Puts.push({
+          objectKey: String(command.input.Key ?? ""),
+          byteLength: command.input.Body.byteLength,
+        });
+      }
+      return { ContentLength: command?.input?.Body?.byteLength ?? 0 };
+    },
   } as never);
 }
 

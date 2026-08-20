@@ -7740,11 +7740,25 @@ was structurally blind to `admin.storage.from().upload()`, so it passed while
 the defect existed. It now enumerates every storage-write shape reachable from
 the orchestrator and asserts the delivery array is the signed one.
 
-**One duplicate remains, deliberately.** The signed bytes live in both R2 and
-Supabase Storage. They are byte-identical, so no marked/unmarked divergence is
-possible. Eliminating the second copy requires changing
-`src/hooks/useGeneration.ts`, which mints its own Supabase Storage signed URL
-and is consumed by four LOCKED workspaces — that needs explicit authorization
-to touch locked-page-dependent code, so it is recorded as a future decision
-rather than done unilaterally.
+**The duplicate is now eliminated (authorized follow-up).** `uploadOutputs`
+and the `generation-outputs` constant were DELETED from
+`output-storage.ts` — a function that writes a second canonical copy is
+exactly what must not exist for Article 50(2) marking to be guaranteed.
+`generations.output_url` now holds the R2 object key, `attachSignedUrls` mints
+through Phase 9's own `createPresignedDownload`, and a new
+`GET /api/generations/[id]/asset-url` (auth → rate limit → ownership from the
+durable row → Phase 9-E quarantine gate → presign) is the browser's delivery
+seam. `useGeneration.ts` — consumed by four locked workspaces — was changed
+with explicit user authorization to call that route instead of signing for
+itself; the locked pages themselves were not touched. Multi-output
+generations now fail closed (`MEDIA_PROVENANCE_FAILED`) because Phase 9
+records one canonical asset per generation and shipping one marked plus
+several unmarked artifacts is precisely the divergence this phase removes.
+
+Three test suites had assertions pinned to the removed lane and were updated
+rather than deleted: the E2E harness now records canonical R2 writes
+(`fakeR2Puts`) so "exactly one output was stored" keeps its original strength
+instead of decaying to `=== 0`; `phase-9e`'s gate-before-mint check follows
+the rename to `createPresignedDownload` and gained coverage of the second
+minter; `plane-isolation`'s GATE0 now anchors on `persistCanonicalOriginal`.
 **This corrective does not start Phase 28.**

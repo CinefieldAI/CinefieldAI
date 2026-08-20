@@ -497,7 +497,12 @@ test("GATE0: the storage upload stays OUTSIDE the finalization transaction", () 
   const orchestrator = strip(readSource("src/lib/orchestration/orchestrator.ts"));
   const tail = orchestrator.match(/async function collectAndFinalize[\s\S]*?\n}\n/)![0];
 
-  const uploadAt = tail.indexOf("uploadOutputs(");
+  // PHASE 27: `uploadOutputs` was deleted with the duplicate Supabase Storage
+  // copy. The canonical object is now written inside `persistCanonicalOriginal`
+  // (transform -> C2PA embed -> official verify -> ONE R2 write). The PROPERTY
+  // is unchanged: the storage write happens before, and outside, the
+  // finalization transaction.
+  const uploadAt = tail.indexOf("persistCanonicalOriginal(");
   const completeAt = tail.indexOf("markCompleted(");
   assert.ok(uploadAt >= 0 && completeAt >= 0, "both steps are in the tail");
   assert.ok(

@@ -5,7 +5,9 @@ import { test, before, after, beforeEach } from "node:test";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
 import { FakeSupabaseClient } from "./fake-supabase";
-import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration } from "./e2e-harness";
+import { FakeSqsTransport, installFakeSupabase, uninstallFakeSupabase, seedGeneration,
+  fakeR2Puts,
+} from "./e2e-harness";
 import { setCommandBus } from "@/lib/contracts/command-bus";
 import { generationWorkflowId } from "@/lib/temporal/workflow-ids";
 import { TASK_QUEUES } from "@/lib/temporal/task-queues";
@@ -247,7 +249,7 @@ test("6R-B: the production execution service starts the REAL GenerationWorkflow,
     // The command plane was genuinely used on the way.
     assert.equal(sqs.enqueueCount, 1, "the workflow dispatched through the SQS command boundary");
     assert.deepEqual(sqs.consumedReasons, ["submitted:processing"]);
-    assert.equal(db.storageUploads.length, 1, "the real finalization ran exactly once");
+    assert.equal(fakeR2Puts.length, 1, "the real finalization stored exactly one canonical object");
   } finally {
     restoreEnv();
     __setTemporalClientForTesting(null);
@@ -391,7 +393,7 @@ test("6R-B: Temporal unavailable fails closed - no provider call, no Trigger dis
     assert.equal(sqs.enqueueCount, 0, "nothing was dispatched to the command plane");
     assert.equal(db.state.generation_attempts.length, 0, "no attempt was opened");
     assert.equal(db.state.generations[0].status, "queued", "the row is untouched and recoverable");
-    assert.equal(db.storageUploads.length, 0);
+    assert.equal(fakeR2Puts.length, 0);
   } finally {
     restoreEnv();
     __setTemporalClientForTesting(null);
