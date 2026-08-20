@@ -855,6 +855,29 @@ test("P28-34  the review queue shows what is waiting, is bounded, and cannot rel
   assert.doesNotMatch(queueFn, /approveMediaRelease|releaseAfterModeration/, "a queue that could release would be a second authority");
 });
 
+test("P28-34b  the queue panel distinguishes denied / unavailable / empty — an auth failure never looks like a clean queue", async () => {
+  const { interpretModerationQueueResponse } = await import("@/lib/admin/moderation-admin-client-state");
+
+  // The failure that matters: a 404 access denial rendered as an empty list
+  // would tell a reviewer nothing is waiting when in fact they cannot see.
+  assert.equal(interpretModerationQueueResponse(404, { error: "not_found" }).kind, "denied");
+  assert.equal(interpretModerationQueueResponse(503, {}).kind, "unavailable");
+  assert.equal(interpretModerationQueueResponse(200, {}).kind, "unavailable", "a body with no queue is malformed, not empty");
+
+  const loaded = interpretModerationQueueResponse(200, { queue: { outcome: "FOUND", items: [] } });
+  assert.equal(loaded.kind, "loaded");
+  assert.equal(loaded.kind === "loaded" && loaded.queue.outcome, "FOUND");
+
+  // The panel reads the queue and can only READ it: no release path exists in
+  // the component, so the two-person lane stays the only way out.
+  const panel = strip(read("src/components/admin/ModerationPanel.tsx"));
+  assert.match(panel, /fetchModerationQueue\(\)/);
+  assert.match(panel, /appealOpen && /, "an appealed asset must be visible to the reviewer");
+  assert.match(panel, /providerSignalFlagged === true/, "the vendor's opinion is shown as distinct from Cinefield's");
+  const queueRegion = panel.slice(panel.indexOf("Awaiting human review"), panel.indexOf("<form onSubmit={onLoad}"));
+  assert.doesNotMatch(queueRegion, /moderation\/release/, "the queue must not be able to release anything");
+});
+
 // ===========================================================================
 // K. PERSISTENCE BOUNDARY (§8, §28)
 // ===========================================================================
