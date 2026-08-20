@@ -6,7 +6,7 @@ import { getModerationEngine } from "./moderation-contract";
 import { evaluateOutputSafety } from "@/lib/safety/output-safety";
 import { recordSafetyDecision } from "@/lib/safety/safety-decision-store";
 import { reportMandatoryCase } from "@/lib/safety/mandatory-reporting";
-import { permitsDelivery } from "@/lib/safety/safety-contract";
+import { disclosureRequirementFor, permitsDelivery } from "@/lib/safety/safety-contract";
 
 /**
  * THE ingest gate (Phase 9-B).
@@ -65,6 +65,14 @@ export type IngestOutcome =
        * they depict. An asset can be perfectly well-formed and still refused.
        */
       safetyCleared: boolean;
+      /**
+       * What Phase 28's classification means for Phase 27's disclosure field.
+       *
+       * Reported, never written here: `media_provenance` has exactly one
+       * writer and it is Phase 27's. `NONE_REQUIRED` is unreachable — see
+       * `disclosureRequirementFor`.
+       */
+      disclosureRequirement: "VISIBLE_LABEL_REQUIRED" | "NOT_ASSESSED";
     }
   | { status: "rejected"; reason: IngestRejection; checksumSha256?: string }
   | { status: "failed"; reason: IngestFailure };
@@ -254,6 +262,10 @@ export async function ingestMediaAsset(
     // an incident record EXISTS; if the write failed we cannot prove the
     // evaluation happened, so the asset is not cleared for delivery.
     safetyCleared: recorded && permitsDelivery(assessment.decision),
+    // Handed to Phase 27's own recorder through the pipeline. Derived from
+    // the classification rather than decided here, and it can only ever
+    // strengthen the default — never relax it to NONE_REQUIRED.
+    disclosureRequirement: disclosureRequirementFor(assessment.decision),
   };
 }
 

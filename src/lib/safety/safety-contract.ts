@@ -261,3 +261,47 @@ export function permitsDelivery(decision: SafetyDecision): boolean {
   if (decision.categories.some(isZeroTolerance)) return false;
   return permitsProceeding(decision.verdict);
 }
+
+/**
+ * The categories that make a VISIBLE deepfake label the deployer's obligation.
+ *
+ * AI Act Article 50(4) attaches to content depicting a real person or
+ * presenting as a real event. Phase 27 states the split precisely: 50(2)
+ * (machine-readable marking) is the PROVIDER's — Cinefield's — and it is
+ * implemented; 50(4) falls on the deployer and is transferred contractually,
+ * with Cinefield's job being to PROVIDE the mechanism.
+ */
+const DISCLOSURE_TRIGGERING_CATEGORIES: ReadonlySet<SafetyRiskCategory> = new Set<SafetyRiskCategory>([
+  "real_person",
+  "deepfake",
+  "ncii",
+]);
+
+/**
+ * Feeds a Phase 28 classification into Phase 27's existing disclosure field.
+ *
+ * ---------------------------------------------------------------------------
+ * `NONE_REQUIRED` IS UNREACHABLE FROM HERE, AND THAT IS THE WHOLE POINT
+ * ---------------------------------------------------------------------------
+ * This function returns exactly two of the three `DisclosureRequirement`
+ * members. A content-safety classifier answers "is this permitted", not "does
+ * this depict a real person" — so an `ALLOW` verdict is NOT evidence that a
+ * visible label is unnecessary. Phase 27's own contract says the same thing
+ * about its default: claiming "no label needed" would be "a legal-shaped
+ * assertion made from no evidence at all".
+ *
+ * So an unflagged output stays `NOT_ASSESSED`, which is what it honestly is,
+ * and Phase 28 makes no legal conclusion. It reports a technical flag, and
+ * Phase 29 owns what that flag obliges anyone to do.
+ *
+ * Returning a value rather than writing one keeps ownership intact too: Phase
+ * 27 remains the only writer of `media_provenance`, and there is no second
+ * provenance authority anywhere in this package.
+ */
+export function disclosureRequirementFor(
+  decision: SafetyDecision
+): "VISIBLE_LABEL_REQUIRED" | "NOT_ASSESSED" {
+  return decision.categories.some((category) => DISCLOSURE_TRIGGERING_CATEGORIES.has(category))
+    ? "VISIBLE_LABEL_REQUIRED"
+    : "NOT_ASSESSED";
+}

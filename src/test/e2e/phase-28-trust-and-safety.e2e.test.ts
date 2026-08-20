@@ -957,6 +957,48 @@ test("P28-37  Phase 27 keeps provenance, Phase 19 keeps policy, Phase 12 keeps i
   }
 });
 
+test("P28-37b  a real-person/deepfake classification reaches Phase 27's disclosure field — and NONE_REQUIRED stays unreachable", async () => {
+  const { disclosureRequirementFor } = await import("@/lib/safety/safety-contract");
+
+  const decide = (categories: readonly string[], verdict = "ALLOW") =>
+    disclosureRequirementFor({
+      stage: "output",
+      verdict: verdict as never,
+      categories: categories as never,
+      reasonCode: "x",
+      policyVersion: "cinefield-safety-1",
+      classifierVersion: "t",
+      signalSource: "cinefield_classifier",
+    });
+
+  assert.equal(decide(["real_person"]), "VISIBLE_LABEL_REQUIRED");
+  assert.equal(decide(["deepfake"]), "VISIBLE_LABEL_REQUIRED");
+  assert.equal(decide(["ncii"]), "VISIBLE_LABEL_REQUIRED");
+
+  // THE CRITICAL HALF. A clean content-safety verdict is not evidence that a
+  // visible label is unnecessary — the classifier answered a different
+  // question. So an unflagged output stays NOT_ASSESSED, exactly as Phase 27's
+  // own default does, and NONE_REQUIRED is never produced from a safety
+  // verdict at all.
+  assert.equal(decide([]), "NOT_ASSESSED");
+  assert.equal(decide(["violence"], "ALLOW"), "NOT_ASSESSED");
+  const contract = strip(read("src/lib/safety/safety-contract.ts"));
+  const fn = contract.slice(contract.indexOf("export function disclosureRequirementFor"));
+  assert.doesNotMatch(fn, /NONE_REQUIRED/, "Phase 28 must not be able to write the permissive value");
+
+  // Wired end to end, through the seam Phase 27 already built — and Phase 27
+  // stays the ONLY writer of media_provenance.
+  const gate = strip(read("src/lib/media/ingest-gate.ts"));
+  assert.match(gate, /disclosureRequirement: disclosureRequirementFor\(assessment\.decision\)/);
+  const orchestrator = strip(read("src/lib/orchestration/orchestrator.ts"));
+  assert.match(orchestrator, /disclosureRequirement: ingest\.disclosureRequirement/);
+  const pipeline = strip(read("src/lib/media/media-processing-pipeline.ts"));
+  assert.match(pipeline, /params\.disclosureRequirement \? \{ disclosureRequirement: params\.disclosureRequirement \}/);
+  for (const file of ["src/lib/media/ingest-gate.ts", "src/lib/orchestration/orchestrator.ts"]) {
+    assert.doesNotMatch(strip(read(file)), /recordMediaProvenance\(/, `${file} must not write provenance itself`);
+  }
+});
+
 test("P28-38  C2PA ordering is unchanged: the disclosure fact is not inside the signed manifest", () => {
   // The question §29 asks is whether classification must precede signing. It
   // must not, and the reason is structural rather than a judgement call: the

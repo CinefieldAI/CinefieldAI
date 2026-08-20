@@ -116,6 +116,20 @@ export interface ProcessFinalMediaParams {
   readonly store: FinalMediaStore;
   readonly now: Date;
   readonly target: FinalMediaTarget;
+  /**
+   * PHASE 28 → PHASE 27. What the safety classification implies for the
+   * Article 50(4) disclosure field, forwarded to `recordMediaProvenance`.
+   *
+   * FORWARDED, NOT DECIDED. This pipeline classifies nothing; it carries a
+   * value the Phase 28 gate already produced, and Phase 27's recorder remains
+   * the only writer of `media_provenance`. Omitted, the recorder's own
+   * `NOT_ASSESSED` default applies — unchanged from before Phase 28.
+   *
+   * Note what this CANNOT carry: `NONE_REQUIRED`. A content-safety verdict is
+   * not evidence that a visible label is unnecessary, so the permissive value
+   * is absent from the type rather than merely unused.
+   */
+  readonly disclosureRequirement?: "VISIBLE_LABEL_REQUIRED" | "NOT_ASSESSED";
 }
 
 interface SourceAssetRow {
@@ -269,6 +283,9 @@ export async function processFinalMedia(
     digitalSourceType: params.digitalSourceType,
     softwareAgent: params.softwareAgent,
     embedded: { officiallyVerified: true, signerIssuer: embedded.signerIssuer },
+    // Phase 28's classification, when there was one. Absent, the recorder's
+    // own NOT_ASSESSED default applies — the pre-Phase-28 behaviour, unchanged.
+    ...(params.disclosureRequirement ? { disclosureRequirement: params.disclosureRequirement } : {}),
     now: params.now,
   });
 

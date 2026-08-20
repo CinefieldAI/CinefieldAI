@@ -786,6 +786,12 @@ async function persistCanonicalOriginal(
     digitalSourceType: "trainedAlgorithmicMedia",
     softwareAgent: "Cinefield (model via provider)",
     store: canonicalMediaStore,
+    // PHASE 28 → PHASE 27, through the seam Phase 27 already built for it.
+    // The safety gate above classified these bytes; if it named a real-person
+    // or deepfake risk, Article 50(4)'s visible-label flag travels with the
+    // provenance record. Otherwise it stays NOT_ASSESSED — never
+    // NONE_REQUIRED, which no classifier here is entitled to conclude.
+    disclosureRequirement: ingest.disclosureRequirement,
     now: new Date(),
     // The reserved row IS the canonical asset — the signed bytes finalise it.
     target: { kind: "in_place" },
