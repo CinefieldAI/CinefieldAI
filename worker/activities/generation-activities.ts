@@ -26,6 +26,8 @@ import { getSupabaseAdminClient } from "@/lib/supabase/supabaseAdmin";
 import { toOrchestrationError } from "@/lib/orchestration/errors";
 import { findModel } from "@/lib/orchestration/model-registry";
 import { checkAsyncGeneration } from "@/lib/orchestration/orchestrator";
+import { processFinalMedia } from "@/lib/media/media-processing-pipeline";
+import { setMediaProcessor } from "@/lib/media/media-processor-seam";
 import { markCancelled, readPersistedProviderJob } from "@/lib/orchestration/status-manager";
 import { submitAttempt } from "@/lib/orchestration/attempt-submission-service";
 import {
@@ -76,6 +78,19 @@ function readRoutingSelection(
 }
 
 /** What the workflow learns about a generation before doing anything. */
+
+// ---------------------------------------------------------------------------
+// PHASE 9-C / 27: install the media processor for THIS runtime.
+// ---------------------------------------------------------------------------
+// The orchestrator depends on a seam rather than importing the pipeline, so
+// the native `c2pa-node` binary never enters the Vercel serverless graph (see
+// media-processor-seam.ts). This file runs only inside the Temporal worker —
+// a container that has ffmpeg and can load a native module — so it is the
+// correct and only place to install the real implementation. Done at module
+// load so every activity in this process has it, and so no individual
+// activity can forget.
+setMediaProcessor(processFinalMedia);
+
 export interface GenerationDescriptor {
   generationId: string;
   clerkUserId: string;

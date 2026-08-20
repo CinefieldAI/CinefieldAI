@@ -475,7 +475,8 @@ test("the orchestrator runs reserve -> ingest -> process/store -> gate -> comple
 
   const reserve = source.indexOf("await reserveGenerationAsset(");
   const ingest = source.indexOf("await ingestMediaAsset(");
-  const process = source.indexOf("await processFinalMedia(");
+  // Reached through the media-processor seam now — see media-processor-seam.ts.
+  const process = source.indexOf("await processMedia(admin, {");
   const gate = source.indexOf("await hasVerifiedOriginal(");
   const complete = source.indexOf("await markCompleted(");
 

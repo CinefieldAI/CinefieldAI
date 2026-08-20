@@ -42,10 +42,35 @@ test("W27-1  the orchestrator no longer imports storeAndFinalizeAsset — the di
   );
 });
 
-test("W27-2  the canonical path calls the Phase 9-C pipeline", () => {
+test("W27-2  the canonical path routes through Phase 9-C — via the seam, never a direct native import", () => {
   const source = code(ORCHESTRATOR);
-  assert.match(source, /processFinalMedia\(/, "the canonical path must route through Phase 9-C");
-  assert.match(source, /from "@\/lib\/media\/media-processing-pipeline"/);
+  // The orchestrator is in the Vercel route graph, so it must reach the
+  // pipeline through the seam. A runtime import of the implementation would
+  // drag c2pa-node's .node binary into every lambda — which is exactly what
+  // broke production at c6e1ed4.
+  assert.match(source, /currentMediaProcessor\(\)/, "the canonical path must resolve the processor seam");
+  assert.match(source, /processMedia\(admin, \{/, "and invoke it");
+  assert.ok(
+    !/await import\("@\/lib\/media\/media-processing-pipeline"\)/.test(source),
+    "not even a dynamic import — bundlers still trace those"
+  );
+  // Only a type import may cross to the pipeline.
+  const runtimeImport = /^import \{[^}]*\} from "@\/lib\/media\/media-processing-pipeline"/m;
+  assert.ok(!runtimeImport.test(source), "no runtime import of the native-reaching pipeline");
+});
+
+test("W27-2b  the worker — the runtime that can actually run it — installs the processor", () => {
+  const worker = code("worker/activities/generation-activities.ts");
+  assert.match(worker, /setMediaProcessor\(processFinalMedia\)/, "the worker must install the real pipeline");
+});
+
+test("W27-2c  an uninstalled processor refuses the generation rather than completing it unmarked", () => {
+  const source = code(ORCHESTRATOR);
+  assert.match(
+    source,
+    /if \(!processMedia\) \{[\s\S]{0,300}MEDIA_PROVENANCE_FAILED/,
+    "no processor must fail closed, exactly like an unavailable signer"
+  );
 });
 
 test("W27-3  the canonical path finalises IN PLACE — one asset, not an unmarked original plus a marked copy", () => {
@@ -128,7 +153,7 @@ test("W27-4f  the delivery route enforces auth, rate limiting, ownership and the
 test("W27-5  the ingest safety gate runs BEFORE the transform, so hostile bytes never reach FFmpeg", () => {
   const source = code(ORCHESTRATOR);
   const ingestIdx = source.indexOf("ingestMediaAsset(");
-  const processIdx = source.indexOf("processFinalMedia(");
+  const processIdx = source.indexOf("processMedia(admin, {");
   assert.ok(ingestIdx > 0 && processIdx > 0);
   assert.ok(ingestIdx < processIdx, "Phase 9-B must gate the raw bytes before Phase 9-C transforms them");
 });
@@ -137,7 +162,7 @@ test("W27-6  reserve precedes ingest, and provenance is the last step before ret
   const source = code(ORCHESTRATOR);
   const reserveIdx = source.indexOf("reserveGenerationAsset(");
   const ingestIdx = source.indexOf("ingestMediaAsset(");
-  const processIdx = source.indexOf("processFinalMedia(");
+  const processIdx = source.indexOf("processMedia(admin, {");
   const returnIdx = source.indexOf("assetId: processed.derivedAssetId");
   assert.ok(reserveIdx < ingestIdx, "a row must be reserved before the gate records against it");
   assert.ok(processIdx < returnIdx, "the canonical path returns only after Phase 9-C completed");
