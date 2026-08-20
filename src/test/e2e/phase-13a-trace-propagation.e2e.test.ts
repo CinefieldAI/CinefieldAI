@@ -299,10 +299,19 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // the seam that mints a presigned R2 URL for the C2PA-signed canonical
   // object — the browser can no longer sign for itself because the duplicate
   // Supabase Storage copy was removed.
+  // PHASE 28 adds exactly one: `POST /api/generations/[id]/appeal`, the
+  // owner-facing human-review request (28-D). It takes no exemption — same
+  // `durable_write` class as every other authenticated mutation, and the
+  // reason code is fixed rather than accepted from a body, so the route
+  // parses no input beyond a bounded output index. There is deliberately no
+  // NEW admin route: the Phase 28-D review queue extends the existing `GET
+  // /api/admin/moderation` surface (asset-id absent means "what is waiting"),
+  // because a queue and an item read are the same surface with the same admin
+  // authority and the same rate-limit class.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 56, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 57, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {

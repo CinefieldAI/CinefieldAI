@@ -60,6 +60,46 @@ export type ModerationActionResult =
   | { readonly outcome: "REJECTED"; readonly assetId: string; readonly eventId: string | null }
   | { readonly outcome: "REJECT_REFUSED"; readonly reason: string };
 
+/**
+ * ---------------------------------------------------------------------------
+ * PHASE 28-D — THE REVIEW QUEUE
+ * ---------------------------------------------------------------------------
+ * Phase 16-C gave administrators the three ACTIONS and the audit read, but
+ * every one of them needs an asset id the operator already has. There was no
+ * way to find out WHICH assets were waiting — the queue 28-D asks for
+ * ("Admin moderation/quarantine/report status queue"), and the thing a
+ * false-positive appeal needs in order to reach a human at all.
+ *
+ * The item below is deliberately narrow. It carries identifiers, a verdict, a
+ * bounded category list and a reason CODE. It carries no prompt, no thumbnail,
+ * no object key, no signed URL and no provider payload — a reviewer decides
+ * from the asset itself through the existing asset surface, not from a queue
+ * row that would otherwise become a second place media metadata leaks from.
+ */
+export interface ModerationQueueItem {
+  readonly decisionId: string;
+  readonly mediaAssetId: string | null;
+  readonly generationId: string | null;
+  readonly outputIndex: number | null;
+  readonly stage: string;
+  readonly verdict: string;
+  readonly riskCategories: readonly string[];
+  readonly reasonCode: string;
+  readonly createdAt: string;
+  /** What the PROVIDER said, kept distinct from Cinefield's verdict above. */
+  readonly providerSignalSource: string;
+  readonly providerSignalFlagged: boolean | null;
+  /** Whether the owner has an appeal open on this asset. */
+  readonly appealOpen: boolean;
+}
+
+export type ModerationQueueResult =
+  | { readonly outcome: "QUEUE_UNAVAILABLE"; readonly reasonCode: string }
+  | { readonly outcome: "FOUND"; readonly items: readonly ModerationQueueItem[] };
+
+/** Bounded. A queue read must never become an unpaged table scan. */
+export const MODERATION_QUEUE_MAX_ITEMS = 100;
+
 export const MODERATION_REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{1,64}$/;
 
 export function isValidModerationReasonCode(value: unknown): value is string {

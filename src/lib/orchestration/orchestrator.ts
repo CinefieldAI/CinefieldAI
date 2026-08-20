@@ -21,6 +21,7 @@ import { attachSignedUrls, type StoredOutput } from "./output-storage";
 // SIGNED bytes instead. A structural test fails if this import returns.
 import { reserveGenerationAsset, type MediaType } from "@/lib/media/asset-service";
 import { hasVerifiedOriginal, ingestMediaAsset } from "@/lib/media/ingest-gate";
+import { releaseAfterModeration } from "@/lib/media/quarantine-release";
 // The Phase 9-C pipeline reaches `c2pa-node`, a native module. This file is in
 // the import graph of `/api/generations/[id]/execute`, so it must not import
 // the implementation at all — see media-processor-seam.ts for the full reason
@@ -733,6 +734,14 @@ async function persistCanonicalOriginal(
     ownerId: params.clerkUserId,
     bytes: params.output.bytes,
     declaredContentType: params.output.mimeType,
+    // PHASE 28: the gate evaluates safety inside this call and needs the
+    // output's own identity to attribute the decision, plus its metadata,
+    // which is where an adapter puts a provider-native safety flag.
+    safetyContext: {
+      generationId: params.generationId,
+      outputIndex: params.outputIndex,
+      outputMetadata: params.output.metadata,
+    },
   });
 
   if (ingest.status !== "verified") {
@@ -797,6 +806,30 @@ async function persistCanonicalOriginal(
               : processed.outcome,
       },
     });
+  }
+
+  // ---- PHASE 28: release ONLY what a classifier actually cleared ---------
+  //
+  // Runs here, after the pipeline, because release requires `status =
+  // 'finalized'` and the asset only becomes finalized when the signed bytes
+  // are stored. Attempting it at ingest time would always be refused.
+  //
+  // This is the missing half of the Phase 9 lifecycle. Before Phase 28 nothing
+  // could produce `moderation_status = 'passed'`, so nothing could ever leave
+  // quarantine and every generation completed with no deliverable output.
+  //
+  // FAIL-CLOSED BY OMISSION, NOT BY BRANCHING. When the gate did not clear the
+  // asset this simply does not call release, and the asset stays quarantined —
+  // there is no code path here that sets a status. And the SQL refuses
+  // independently: `release_media_after_moderation` re-reads the row and
+  // returns `moderation_not_passed` regardless of what this function believes.
+  //
+  // A failed release does NOT fail the generation. The output exists, is
+  // C2PA-signed, and is quarantined; that is a safety outcome, not an error.
+  // Throwing would also take the SAFE siblings of a multi-output batch down
+  // with it, which is exactly the per-output independence Phase 28 requires.
+  if (ingest.safetyCleared) {
+    await releaseAfterModeration(admin, { assetId: reserved.assetId });
   }
 
   return {

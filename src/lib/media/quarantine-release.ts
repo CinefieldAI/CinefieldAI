@@ -247,40 +247,112 @@ export async function rejectMediaAsset(
 }
 
 /**
- * THE DELIVERY GATE.
+ * THE DELIVERY GATE — implementation moved, authority unchanged.
  *
- * Asked immediately before any normal user-facing access URL is minted, and
- * answered by the database rather than by a cached flag — a stale `true` here
- * would serve media that was rejected a second ago.
- *
- * `released` is the only state that qualifies. Quarantined, rejected, failed,
- * unverified, moderation-pending: all of them mean not yet.
+ * The predicate now lives in `asset-delivery-gate.ts` so the storage layer and
+ * the URL route can ask it without importing this file's policy gate,
+ * route-admin allowlist and signal emitter. Re-exported here because this is
+ * where a reader looks for it, and because there must remain exactly ONE
+ * implementation rather than two copies that agree today.
  */
-export async function isAssetDeliverable(
+export { isAssetDeliverable, deliverableOutputIndexes } from "./asset-delivery-gate";
+
+/**
+ * AUTOMATED RELEASE — the normal lifecycle, and narrower than the human lane.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS NOT A HOLE IN THE TWO-PERSON RULE
+ * ---------------------------------------------------------------------------
+ * Read this function next to `approveMediaRelease` above, which is why it is
+ * placed here rather than in the Phase 28 package. The header of this file
+ * states the rule it must not break: "An admin has authority to release a
+ * CLEARED asset, never to declare one cleared." Two people are required
+ * because a HUMAN must not single-handedly release media.
+ *
+ * This releases only what a classifier ALREADY cleared, and it declares
+ * nothing. Three properties make that structural:
+ *
+ *   `moderation_status = 'passed'` ONLY, checked in SQL. Not `approved` —
+ *   that value belongs to the human lane, and consuming it here would let an
+ *   automated path finish a job two administrators started.
+ *
+ *   NO ACTOR PARAMETER. There is no argument through which a human identity
+ *   could be supplied, so this cannot be used to launder an admin decision.
+ *
+ *   No policy gate and no `assertRouteAdmin`, because there is no actor to
+ *   authorize. The authority is the classifier verdict, and the verdict is
+ *   re-read from the row inside the transaction rather than passed in.
+ *
+ * Before Phase 28 nothing could produce `passed`, so nothing could ever be
+ * released. This is the missing half of that lifecycle, not a relaxation of it.
+ */
+export async function releaseAfterModeration(
   admin: SupabaseClient,
-  assetId: string
-): Promise<boolean> {
-  const { data } = await admin
-    .from("media_assets")
-    .select("quarantine_status,ingest_status,status,tombstoned_at")
-    .eq("id", assetId)
-    .maybeSingle();
+  params: { assetId: string; traceId?: string | null }
+): Promise<{ released: boolean; reason?: string }> {
+  const { data, error } = await admin.rpc("release_media_after_moderation", {
+    p_asset_id: params.assetId,
+    p_trace_id: params.traceId ?? null,
+  });
 
-  const row = data as {
-    quarantine_status?: string;
-    ingest_status?: string;
-    status?: string;
-    tombstoned_at?: string | null;
-  } | null;
+  // A failed release is NOT a failed generation. The asset simply stays
+  // quarantined, which is the safe state — so this reports rather than throws.
+  if (error) return { released: false, reason: "release_call_failed" };
 
-  if (!row) return false;
-  if (row.tombstoned_at) return false;
+  const result = data as { released?: boolean; reason?: string };
+  if (result?.released) {
+    reportMediaSafetyDecision({
+      decision: "released",
+      assetId: params.assetId,
+      traceId: params.traceId ?? null,
+    });
+    return { released: true };
+  }
 
-  return (
-    row.quarantine_status === "released" &&
-    row.ingest_status === "verified" &&
-    row.status === "finalized"
-  );
+  return { released: false, reason: result?.reason ?? "not_released" };
+}
+
+/**
+ * An owner asks for a human to look at a decision (Phase 28-D).
+ *
+ * ---------------------------------------------------------------------------
+ * AN APPEAL RELEASES NOTHING
+ * ---------------------------------------------------------------------------
+ * The line in this file's own header — "the roadmap defines no appeal or
+ * reopen flow, so none exists here" — was true for Phase 9-E. Phase 28-D
+ * defines one, and its done-criterion is deliberately modest: "False-positive
+ * case insan incelemesine gidebiliyor" — a false positive can REACH human
+ * review. Not "is released", not "is re-classified".
+ *
+ * So this records a request and nothing else. The SQL changes no quarantine
+ * status, no moderation status, and has no path to `released`; the two-person
+ * human lane above remains the only way anything leaves quarantine by hand.
+ * One open appeal per asset, so the review queue cannot be flooded.
+ *
+ * NOT ADMIN-GATED, and that is correct: the appellant is the OWNER, not an
+ * administrator. Ownership is verified in SQL against the durable row rather
+ * than trusted from the caller, and a non-owner is answered `not_found` — the
+ * same disclosure posture the asset-url route uses.
+ */
+export async function requestMediaAppeal(
+  admin: SupabaseClient,
+  params: { assetId: string; ownerClerkUserId: string; reasonCode?: string }
+): Promise<{ recorded: boolean; reason?: string }> {
+  validateReason(params.reasonCode);
+
+  const { data, error } = await admin.rpc("request_media_appeal", {
+    p_asset_id: params.assetId,
+    p_owner_clerk_user_id: params.ownerClerkUserId,
+    p_reason_code: params.reasonCode ?? null,
+  });
+
+  if (error) {
+    throw new OrchestrationError("DATABASE_UPDATE_FAILED", {
+      context: { operation: "request_media_appeal" },
+    });
+  }
+
+  return data as { recorded: boolean; reason?: string };
 }
 
 /**

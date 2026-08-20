@@ -156,10 +156,16 @@ test("W27-4f  the delivery route enforces auth, rate limiting, ownership and the
   assert.match(route, /guardRoute\(\{\s*routeClass: "authenticated_read"/);
   assert.match(route, /clerk_user_id[\s\S]*!== userId/, "ownership must come from the durable row");
   assert.match(route, /mintCanonicalAssetUrl\(/);
-  // The minter re-asks the quarantine question itself.
+  // The minter re-asks the quarantine question itself. PHASE 28 made it a
+  // PER-ASSET question — the property asserted is unchanged (the gate is
+  // answered before any URL is produced), but it now addresses the specific
+  // asset requested rather than the whole generation.
   const storage = code("src/lib/orchestration/output-storage.ts");
   const minter = storage.slice(storage.indexOf("export async function mintCanonicalAssetUrl"));
-  assert.match(minter.slice(0, 400), /isGenerationAssetDeliverable\(/);
+  const gate = minter.indexOf("isAssetDeliverable(admin, assetId)");
+  const mint = minter.indexOf("createPresignedDownload");
+  assert.ok(gate > 0, "the minter must ask the per-asset delivery gate");
+  assert.ok(mint > gate, "and it must ask before signing");
 });
 
 // ---------------------------------------------------------------------------

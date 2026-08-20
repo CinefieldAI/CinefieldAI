@@ -280,9 +280,36 @@ test("11b. a released asset cannot be rejected back into quarantine", () => {
   assert.ok(/quarantine_status = 'released'[\s\S]{0,160}already_released/.test(reject));
 });
 
-test("no appeal or reopen flow was invented", () => {
+test("no reopen flow was invented, and Phase 28's appeal cannot become one", () => {
+  // PHASE 9-E asserted "no appeal or reopen flow was invented" because the
+  // roadmap defined none. Phase 28-D defines an APPEAL — and its criterion is
+  // deliberately modest: "False-positive case insan incelemesine gidebiliyor",
+  // a false positive can REACH human review. Not "is released".
+  //
+  // So the half of this test that still holds is asserted here, harder: 9-E's
+  // own migration invents no reopen path, and Phase 28's appeal cannot release
+  // anything either.
   const code = stripComments(SERVICE) + stripSqlComments(MIGRATION);
-  assert.ok(!/reopen|appeal|unreject|restore_quarantine/i.test(code));
+  assert.ok(!/reopen|unreject|restore_quarantine/i.test(code), "9-E must still contain no reopen path");
+  assert.ok(!/appeal/i.test(stripSqlComments(MIGRATION)), "9-E's own SQL still knows nothing about appeals");
+
+  // Phase 28's appeal function changes no state and has no path to released.
+  const phase28 = stripSqlComments(
+    readFileSync(path.join(ROOT, "supabase/migrations/20260916000000_trust_and_safety.sql"), "utf8")
+  );
+  const appeal = phase28.slice(
+    phase28.indexOf('CREATE OR REPLACE FUNCTION "public"."request_media_appeal"'),
+    phase28.indexOf('ALTER FUNCTION "public"."request_media_appeal"')
+  );
+  assert.ok(appeal.length > 0, "the appeal function must exist to be constrained");
+  // The only write it performs is one audit row. No UPDATE, no DELETE — so
+  // there is no statement through which an appeal could change asset state,
+  // whatever a future edit to its branches might do.
+  assert.ok(!/\bUPDATE\b/.test(appeal), "an appeal must change no asset state");
+  assert.ok(!/\bDELETE\b/.test(appeal), "and must void nothing");
+  const writes = appeal.match(/\bINSERT INTO\s+(\w+)/g) ?? [];
+  assert.deepEqual(writes, ["INSERT INTO media_safety_audit"], "one audit row is the whole effect");
+  assert.ok(!/reopen|unreject/i.test(appeal));
 });
 
 // ---------------------------------------------------------------------------
@@ -321,25 +348,38 @@ test("15/16. neither provider output nor browser upload can bypass the gate", ()
   const fn = storage.slice(storage.indexOf("export async function attachSignedUrls"));
 
   assert.ok(/if \(!gate\)/.test(fn), "no gate argument means no URL");
-  assert.ok(/isGenerationAssetDeliverable/.test(fn));
+  assert.ok(/deliverableOutputIndexes\(/.test(fn));
 
   // PHASE 27 added a SECOND minter for the browser delivery route. It must
   // answer the same question itself rather than trusting its caller.
   const minter = storage.slice(storage.indexOf("export async function mintCanonicalAssetUrl"));
-  const minterGate = minter.indexOf("isGenerationAssetDeliverable(admin, generationId)");
+  const minterGate = minter.indexOf("isAssetDeliverable(admin, assetId)");
   const minterMint = minter.indexOf("createPresignedDownload");
   assert.ok(minterGate > 0 && minterMint > minterGate, "the delivery minter must gate before signing too");
 
   // PHASE 27: minting moved from Supabase Storage's `createSignedUrl` to
   // Phase 9's own `createPresignedDownload` against the canonical R2 object —
-  // the duplicate Supabase copy was removed. The PROPERTY is unchanged and is
-  // what this asserts: the quarantine question is answered BEFORE any URL is
-  // produced.
-  const gateCheck = fn.indexOf("isGenerationAssetDeliverable(admin, gate.generationId)");
+  // the duplicate Supabase copy was removed.
+  //
+  // PHASE 28: the gate became PER OUTPUT. The PROPERTY these two assertions
+  // protect is unchanged and is the whole point — the quarantine question is
+  // answered BEFORE any URL is produced, and an output with no answer gets
+  // none. What changed is that the answer is now specific to the output being
+  // served rather than shared across the batch.
+  const gateCheck = fn.indexOf("deliverableOutputIndexes(admin, gate.generationId)");
   const mint = fn.indexOf("createPresignedDownload");
   assert.ok(gateCheck > 0 && mint > gateCheck, "the check must precede minting");
+  assert.ok(/if \(!deliverable\.get\(index\)\)/.test(fn), "an output with no clearance gets no URL");
 
-  assert.ok(/quarantine_status === "released"/.test(fn));
+  // The rule itself still lives in exactly one place, and still names
+  // `released` as the only qualifying state.
+  const gateModule = readFileSync(path.join(ROOT, "src/lib/media/asset-delivery-gate.ts"), "utf8");
+  assert.ok(/quarantine_status === "released"/.test(gateModule));
+  assert.equal(
+    (gateModule.match(/quarantine_status === "released"/g) ?? []).length,
+    1,
+    "one implementation of the delivery rule, never two copies that agree today"
+  );
 });
 
 test("the orchestrator passes the gate argument", () => {

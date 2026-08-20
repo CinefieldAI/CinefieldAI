@@ -2,6 +2,7 @@ import "server-only";
 import { createFalClient, ApiError, type FalClient } from "@fal-ai/client";
 import { OrchestrationError } from "../errors";
 import { findModel } from "../model-registry";
+import { providerSafetyMetadata } from "@/lib/safety/provider-native-safety";
 import type { ProviderAdapter, ProviderReconciliation } from "./provider-adapter";
 import type { ProviderCapabilityMatrix } from "./provider-capabilities";
 import type {
@@ -158,6 +159,39 @@ function extractImages(data: unknown): FalImage[] {
     });
   }
   return result;
+}
+
+/**
+ * fal's own NSFW flags, one per image (Phase 28, §7).
+ *
+ * ---------------------------------------------------------------------------
+ * A REAL SIGNAL THAT WAS BEING DROPPED
+ * ---------------------------------------------------------------------------
+ * `has_nsfw_concepts` is a sibling key of `images` on the same `data` object,
+ * and the installed SDK declares it for the enabled endpoints — see
+ * `@fal-ai/client`'s `unoOutput`, which both `FluxDevOutput` and
+ * `FluxSchnellOutput` alias: "Whether the generated images contain NSFW
+ * concepts." It arrives index-aligned with `images`, and `extractImages`
+ * stepped straight over it.
+ *
+ * ---------------------------------------------------------------------------
+ * CAPTURED AS EVIDENCE, NEVER AS A DECISION
+ * ---------------------------------------------------------------------------
+ * REFERANS M.1 calls the provider's own moderation "Kapı A" and says outright
+ * not to trust it: "GÜVENME: açık ağırlıklı modeller (SDXL, Wan) daha
+ * gevşektir." So this is normalized into Phase 28 evidence and nothing more.
+ * A `true` sends that output to human review; a `false` grants nothing at all
+ * and cannot bypass Cinefield's own output gate.
+ *
+ * Returns an empty array when the field is absent or the wrong shape — a
+ * missing flag is SILENCE, not a clean bill of health, and the difference is
+ * preserved by emitting no signal rather than a negative one.
+ */
+function extractNsfwFlags(data: unknown): boolean[] {
+  if (typeof data !== "object" || data === null || !("has_nsfw_concepts" in data)) return [];
+  const flags = (data as { has_nsfw_concepts: unknown }).has_nsfw_concepts;
+  if (!Array.isArray(flags)) return [];
+  return flags.map((flag) => flag === true);
 }
 
 function extensionForMimeType(mimeType: string): string {
@@ -433,12 +467,17 @@ class FalProvider implements ProviderAdapter {
     }
 
     let images: FalImage[];
+    let nsfwFlags: boolean[];
     try {
       const client = getFalClient();
       const result = await client.queue.result(endpointId as never, {
         requestId: submission.providerJobId,
       });
-      images = extractImages((result as { data?: unknown }).data);
+      const payload = (result as { data?: unknown }).data;
+      images = extractImages(payload);
+      // Phase 28: read alongside the images, from the same payload, so the
+      // index alignment fal guarantees is preserved.
+      nsfwFlags = extractNsfwFlags(payload);
     } catch (error) {
       throw mapFalError(error);
     }
@@ -467,6 +506,18 @@ class FalProvider implements ProviderAdapter {
         metadata: {
           provider: "fal",
           outputIndex: index,
+          // Phase 28 evidence. Emitted ONLY when fal actually returned a flag
+          // for this index: an absent flag means the provider said nothing,
+          // and recording that as `flagged: false` would manufacture a clean
+          // verdict fal never gave.
+          ...(index < nsfwFlags.length
+            ? providerSafetyMetadata({
+                provider: "fal",
+                flagged: nsfwFlags[index],
+                category: nsfwFlags[index] ? "sexual_content" : null,
+                reasonCode: "fal_has_nsfw_concepts",
+              })
+            : {}),
         },
       };
     });

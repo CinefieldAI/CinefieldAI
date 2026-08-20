@@ -2,6 +2,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { inspectUntrustedMedia } from "./sandbox/media-inspector";
 import { ALLOWED_VERIFIED_MIMES, declarationMatches, type VerifiedMime } from "./mime-detect";
+import { getModerationEngine } from "./moderation-contract";
+import { evaluateOutputSafety } from "@/lib/safety/output-safety";
+import { recordSafetyDecision } from "@/lib/safety/safety-decision-store";
+import { reportMandatoryCase } from "@/lib/safety/mandatory-reporting";
+import { permitsDelivery } from "@/lib/safety/safety-contract";
 
 /**
  * THE ingest gate (Phase 9-B).
@@ -46,29 +51,39 @@ export type IngestOutcome =
       checksumSha256: string;
       byteLength: number;
       duplicateOfAssetId: string | null;
-      /** Always quarantined in 9-B — no moderation engine exists to release it. */
-      moderationStatus: "not_evaluated" | "pending";
+      /**
+       * What the Phase 28 output gate concluded, in the Phase 9-E column's own
+       * vocabulary. `not_evaluated` remains the honest value when no engine is
+       * configured — it is no longer the ONLY reachable value.
+       */
+      moderationStatus: string;
+      /**
+       * Whether the Phase 28 gate cleared these bytes for user delivery.
+       *
+       * NOT the same as `status: "verified"`. Verified means the bytes are what
+       * they claim to be; this means a classifier raised no objection to what
+       * they depict. An asset can be perfectly well-formed and still refused.
+       */
+      safetyCleared: boolean;
     }
   | { status: "rejected"; reason: IngestRejection; checksumSha256?: string }
   | { status: "failed"; reason: IngestFailure };
 
 /**
- * Moderation, as it honestly stands.
+ * Which moderation engine is installed, if any.
  *
- * The repository has ONE classifier: `content-moderation.ts`, Llama Guard via
- * Cloudflare — text only, gated behind `CLOUDFLARE_AI_ENABLED` (currently
- * false), and documented as "never called by the generation pipeline". There
- * is no image, video or audio moderation engine, and this batch does not
- * invent one or sign up for a paid service.
+ * DERIVED IN PHASE 28, NOT HARDCODED. In 9-B this was a literal `null` with a
+ * comment explaining that no engine existed and none could be invented. That
+ * was true then, and the value is still `null` today because the registry in
+ * `moderation-contract.ts` is still empty — but it is now READ from the
+ * registry rather than asserted, so configuring an engine can no longer leave
+ * this constant lying about it.
  *
- * So moderation is a CONTRACT here, not a verdict. `not_evaluated` is the
- * truth and it is fail-closed by construction: the release constraint demands
- * `passed`, which nothing can currently produce. An asset therefore stays
- * quarantined no matter how clean it is — which is the correct posture for a
- * private beta, and is stated in docs/security-gates.md rather than papered
- * over with a default that reads like approval.
+ * The fail-closed property is unchanged and still enforced by the database:
+ * `media_assets_release_requires_checks` demands `passed`, and only a real
+ * classifier verdict produces that.
  */
-export const MODERATION_ENGINE: string | null = null;
+export const MODERATION_ENGINE: string | null = getModerationEngine()?.name ?? null;
 
 export interface IngestParams {
   assetId: string;
@@ -77,6 +92,19 @@ export interface IngestParams {
   declaredContentType?: string | null;
   maxBytes?: number;
   timeoutMs?: number;
+  /**
+   * Phase 28 context for the output safety decision.
+   *
+   * Optional because a browser upload has no generation behind it. The gate
+   * still runs without it — the bytes are what is being judged — and the
+   * decision is simply recorded without a generation to attribute it to.
+   */
+  safetyContext?: {
+    generationId?: string | null;
+    outputIndex?: number | null;
+    /** The provider output's own metadata, carrying any native safety flag. */
+    outputMetadata?: unknown;
+  };
 }
 
 /**
@@ -156,15 +184,63 @@ export async function ingestMediaAsset(
 
   const duplicateOfAssetId = await findOwnerDuplicate(admin, params.ownerId, checksum, params.assetId);
 
+  // ---- PHASE 28 GATE C: the output safety evaluation ----------------------
+  //
+  // THE REAL CALLER Phase 9-E's moderation contract never had. It runs here,
+  // inside the ingest gate, for one structural reason: the verdict is written
+  // in the SAME `record_media_ingest` call as the verification facts. That RPC
+  // is guarded on `ingest_status IN ('pending','inspecting')`, so it may only
+  // fire once — an asset therefore cannot exist in a state where ingest
+  // succeeded but moderation was never attempted. Evaluating afterwards would
+  // leave exactly that window, and a crash inside it would strand the asset
+  // as verified-but-unjudged forever.
+  //
+  // The evaluation itself never throws; every failure resolves to a
+  // non-permissive verdict inside `evaluateOutputSafety`.
+  const assessment = await evaluateOutputSafety({
+    assetId: params.assetId,
+    bytes: params.bytes,
+    verifiedMime: detection.mime,
+    contentDigestSha256: checksum,
+    outputMetadata: params.safetyContext?.outputMetadata,
+  });
+
+  // A positive known-hash match creates a reporting obligation. The seam is
+  // honest about having no reporter installed: this records that a report is
+  // OWED, and cannot record one as filed.
+  const reportOutcome = assessment.mandatoryReportRequired
+    ? await reportMandatoryCase({
+        mediaAssetId: params.assetId,
+        category: "csam",
+        listId: assessment.hashOutcome.outcome === "POSITIVE_MATCH" ? assessment.hashOutcome.listId : null,
+      })
+    : null;
+
+  const moderationStatus = assessment.moderationStatus ?? "not_evaluated";
+
   await record(admin, params.assetId, {
     ingestStatus: "verified",
     verifiedMime: detection.mime,
     checksum,
     duplicateOf: duplicateOfAssetId,
     // Recorded explicitly rather than left at its default, so the row says
-    // "we looked and there is no engine" instead of "nobody got round to it".
-    moderationStatus: MODERATION_ENGINE ? "pending" : "not_evaluated",
-    moderationEngine: MODERATION_ENGINE,
+    // "we looked and this is what came back" instead of "nobody got round to
+    // it". `not_evaluated` still means exactly that, and still cannot release.
+    moderationStatus,
+    moderationEngine: assessment.decision.classifierVersion ?? MODERATION_ENGINE,
+  });
+
+  // Durable evidence, per output. Written AFTER the status so a reader of the
+  // decision log never sees a decision for a row that does not yet carry it.
+  const recorded = await recordSafetyDecision(admin, {
+    clerkUserId: params.ownerId,
+    decision: assessment.decision,
+    generationId: params.safetyContext?.generationId ?? null,
+    mediaAssetId: params.assetId,
+    outputIndex: params.safetyContext?.outputIndex ?? null,
+    providerSignal: assessment.providerSignal,
+    hashOutcome: assessment.hashOutcome,
+    reportOutcome,
   });
 
   return {
@@ -173,7 +249,11 @@ export async function ingestMediaAsset(
     checksumSha256: checksum,
     byteLength: inspection.byteLength ?? params.bytes.byteLength,
     duplicateOfAssetId,
-    moderationStatus: MODERATION_ENGINE ? "pending" : "not_evaluated",
+    moderationStatus,
+    // An unrecorded decision is not a clearance. 28-B's done-criterion is that
+    // an incident record EXISTS; if the write failed we cannot prove the
+    // evaluation happened, so the asset is not cleared for delivery.
+    safetyCleared: recorded && permitsDelivery(assessment.decision),
   };
 }
 

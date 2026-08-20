@@ -25,6 +25,7 @@ export type OrchestrationErrorCode =
   | "ASSET_RECORD_FAILED"
   | "MEDIA_INGEST_REJECTED"
   | "MEDIA_PROVENANCE_FAILED"
+  | "CONTENT_POLICY_REFUSED"
   | "DR_CONFIGURATION_INVALID"
   | "DR_BACKUP_FAILED"
   | "PROVIDER_NOT_CONFIGURED"
@@ -124,6 +125,22 @@ const ERROR_DEFINITIONS: Record<OrchestrationErrorCode, ErrorDefinition> = {
   // nor the safety gate is blamed for a provenance problem.
   MEDIA_PROVENANCE_FAILED: {
     message: "The generated media could not be marked with content provenance.",
+    status: 422,
+    retryable: false,
+  },
+  // Phase 28-A. The prompt gate refused before any provider was contacted.
+  //
+  // THE MESSAGE IS DELIBERATELY UNINFORMATIVE. REFERANS M.1: "Reddederken
+  // NASIL atlatılacağını anlatma ... Aksi halde filtreni kendi ellerinle
+  // öğretmiş olursun." It names no category, no matched term and no
+  // threshold, and it is identical for a content refusal and an age refusal.
+  //
+  // Not retryable: the same prompt is refused again, and a retry would only
+  // burn attempts. Kept distinct from INVALID_INPUT — which tells a user their
+  // SETTINGS were wrong — because reporting a policy refusal as a settings
+  // problem sends the user to change the one thing that is not the issue.
+  CONTENT_POLICY_REFUSED: {
+    message: "This request is not permitted under Cinefield's content policy.",
     status: 422,
     retryable: false,
   },
@@ -379,6 +396,10 @@ const PROVES_NO_PROVIDER_JOB: OrchestrationErrorCode[] = [
   "REQUIRED_INPUT_MISSING",
   "UNSUPPORTED_INPUT_TYPE",
   "CAPABILITY_NOT_SUPPORTED",
+  // Phase 28-A. The prompt gate refused inside createGeneration, before a row
+  // exists and before any adapter is reachable. That is the whole point of
+  // gate B: "Riskli request provider'a gönderilmiyor."
+  "CONTENT_POLICY_REFUSED",
   // The provider refused the request instead of starting work: no job, no
   // charge. (A credentials rejection or an exhausted quota is a gate answer,
   // not a partially-executed job.)

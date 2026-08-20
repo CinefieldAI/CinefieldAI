@@ -9,6 +9,10 @@ import { resolveWorkflow } from "./workflow-router";
 import { resolveHealthyRoute } from "@/lib/routing/health-aware-router";
 import { DurableEvalQualityProvider } from "@/lib/eval/eval-quality-provider";
 import { createFieldLogger } from "@/lib/observability/logger";
+import { evaluatePromptSafety } from "@/lib/safety/prompt-gate";
+import { evaluateAgeGate } from "@/lib/safety/age-gate";
+import { recordSafetyDecision } from "@/lib/safety/safety-decision-store";
+import { SAFETY_POLICY_VERSION } from "@/lib/safety/safety-contract";
 
 /**
  * Phase 13-E: delegates to the Sensitive Data Guard.
@@ -185,6 +189,72 @@ export async function createGeneration(
     inputs,
     settings: mapMetadataToSettings(request.metadata),
   });
+
+  // ---- PHASE 28-A: GATE B — the prompt never reaches a provider unchecked --
+  //
+  // REFERANS M.1 places this before generation and says why: "En ucuz yer:
+  // reddedilen istek için GPU parası ödemezsin." 28-A's done-criterion is
+  // stronger than cost, though — "Riskli request provider'a gönderilmiyor."
+  //
+  // POSITION IS THE ENFORCEMENT. This runs before the row is created, before
+  // credit is reserved, before a route is chosen and before any adapter is
+  // contacted. Both real callers of this function — /api/generate and
+  // /api/product-intelligence/execute — pass through here, so there is no
+  // admission path that skips it.
+  //
+  // It is placed AFTER capability validation on purpose: an unsupported aspect
+  // ratio is a malformed request rather than a policy question, and refusing
+  // it first means a broken request never produces a safety decision that
+  // would then be counted toward the user's violation history.
+  const promptGate = await evaluatePromptSafety({
+    prompt: request.prompt,
+    negativePrompt: request.negativePrompt ?? null,
+    // The riskiest shape, in REFERANS M.1's own words: "referans görsel
+    // yükleme EN RİSKLİ özelliktir". The classifier is told so it can weigh a
+    // real-person prompt differently when a face may accompany it.
+    hasReferenceInput: Boolean(request.inputUrl),
+  });
+
+  // 28-C: an age-restricted category requires a verified adult. With no
+  // verification method configured this refuses rather than fabricating adult
+  // confidence — and it does not fire at all unless a restricted category was
+  // actually flagged, so no age signal is collected for requests that did not
+  // need one.
+  const ageGate = await evaluateAgeGate({
+    clerkUserId,
+    categories: promptGate.decision.categories,
+  });
+
+  const refusal = !promptGate.allowed ? promptGate : !ageGate.allowed ? ageGate : null;
+
+  // Durable evidence for EVERY prompt decision, not only refusals. A log
+  // holding only blocks cannot answer "was this request evaluated at all",
+  // which is the question an appeal actually asks. Written before the refusal
+  // is thrown so a blocked request still leaves a record.
+  await recordSafetyDecision(admin, {
+    clerkUserId,
+    decision: refusal === null
+      ? promptGate.decision
+      : {
+          ...promptGate.decision,
+          // The age gate's own refusal is recorded under its reason, so an
+          // operator can tell a content block from an age block.
+          verdict: promptGate.allowed ? "BLOCK" : promptGate.decision.verdict,
+          reasonCode: promptGate.allowed ? ageGate.reasonCode : promptGate.decision.reasonCode,
+          policyVersion: SAFETY_POLICY_VERSION,
+        },
+  });
+
+  if (refusal !== null) {
+    // ONE message, identical for every category. REFERANS M.1: "Reddederken
+    // NASIL atlatılacağını anlatma ... sadece 'bu istek politikamıza aykırı'
+    // de." The bounded category and reason stay server-side, in the decision
+    // store and the admin queue.
+    throw new OrchestrationError("CONTENT_POLICY_REFUSED", {
+      userMessage: refusal.userMessage,
+      context: { operation: "prompt_safety_gate" },
+    });
+  }
 
   // ---- PHASE 7-B: where will this run? ------------------------------------
   //

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ResolvedOutput } from "./output-normalizer";
 import { createPresignedDownload } from "@/lib/media/r2-client";
+import { deliverableOutputIndexes, isAssetDeliverable } from "@/lib/media/asset-delivery-gate";
 
 /**
  * Cinefield output delivery (Phase 27 — ONE canonical artifact).
@@ -44,7 +45,7 @@ export async function attachSignedUrls(
   outputs: StoredOutput[],
   gate?: { generationId: string }
 ): Promise<StoredOutput[]> {
-  // ---- PHASE 9-E DELIVERY GATE -------------------------------------------
+  // ---- THE DELIVERY GATE — PER OUTPUT (Phase 9-E, Phase 28) ---------------
   //
   // A signed URL is usable media. Minting one for an asset that has not left
   // quarantine hands the user bytes no moderation has cleared, which is what
@@ -56,6 +57,14 @@ export async function attachSignedUrls(
   // immediately before minting — a cached answer could serve media that was
   // rejected a second ago.
   //
+  // PHASE 28 MADE IT PER OUTPUT. This used to ask one generation-wide question
+  // (`every` output released) and withhold the whole batch on a single
+  // failure. That was conservative rather than dangerous, but it was still
+  // wrong: a user whose four-image batch had one output flagged received none
+  // of them, and no roadmap rule requires generation-wide blocking. Each
+  // output now carries its own asset, its own safety decision and its own
+  // answer here — SAFE / BLOCK / SAFE delivers the two safe siblings.
+  //
   // A caller that passes no `gate` gets no URLs. Fail-closed: a request that
   // does not say which generation these outputs belong to cannot be checked,
   // and an uncheckable request is not a safe one.
@@ -63,13 +72,19 @@ export async function attachSignedUrls(
     return outputs.map((output) => ({ ...output, signedUrl: null }));
   }
 
-  if (!(await isGenerationAssetDeliverable(admin, gate.generationId))) {
-    return outputs.map((output) => ({ ...output, signedUrl: null }));
-  }
+  // One query for the batch, an independent answer per index. An index the
+  // map does not contain is NOT deliverable — absent means unknown, and
+  // unknown is never a clearance.
+  const deliverable = await deliverableOutputIndexes(admin, gate.generationId);
 
   const withUrls: StoredOutput[] = [];
 
-  for (const output of outputs) {
+  for (const [index, output] of outputs.entries()) {
+    if (!deliverable.get(index)) {
+      withUrls.push({ ...output, signedUrl: null });
+      continue;
+    }
+
     // Phase 9's own presigned-download owner. This module mints nothing
     // itself — a second signing implementation would be a second set of
     // expiry and credential decisions to keep in step.
@@ -103,24 +118,33 @@ export async function mintCanonicalAssetUrl(
   generationId: string,
   outputIndex = 0
 ): Promise<{ signedUrl: string | null; reasonCode?: string }> {
-  if (!(await isGenerationAssetDeliverable(admin, generationId))) {
-    return { signedUrl: null, reasonCode: "not_deliverable" };
-  }
-
   // Addressed by OUTPUT INDEX, never "whichever row came back first". A
   // multi-output generation has several canonical assets; picking by
   // arrival order would make delivery non-deterministic.
   const { data, error } = await admin
     .from("media_assets")
-    .select("object_key")
+    .select("id,object_key")
     .eq("generation_id", generationId)
     .eq("output_index", outputIndex)
     .eq("role", "original")
     .maybeSingle();
 
   if (error) return { signedUrl: null, reasonCode: "asset_lookup_failed" };
-  const objectKey = (data as { object_key?: string } | null)?.object_key;
-  if (!objectKey) return { signedUrl: null, reasonCode: "asset_not_found" };
+  const row = data as { id?: string; object_key?: string } | null;
+  const objectKey = row?.object_key;
+  const assetId = row?.id;
+  if (!objectKey || !assetId) return { signedUrl: null, reasonCode: "asset_not_found" };
+
+  // ---- THE GATE, ON THIS ASSET (Phase 28) --------------------------------
+  //
+  // Asked about the SPECIFIC asset being requested, not about the generation.
+  // A blocked sibling must not withhold this output, and — far more
+  // importantly — a cleared sibling must never let this one through. The
+  // lookup happens first so the question is asked about a real row rather
+  // than about an index that may not exist.
+  if (!(await isAssetDeliverable(admin, assetId))) {
+    return { signedUrl: null, reasonCode: "not_deliverable" };
+  }
 
   try {
     const { downloadUrl } = await createPresignedDownload({
@@ -134,44 +158,23 @@ export async function mintCanonicalAssetUrl(
 }
 
 /**
- * Whether EVERY canonical output of this generation has left quarantine.
+ * THE GENERATION-WIDE GATE IS GONE — DELIBERATELY, NOT BY OVERSIGHT.
  *
- * Read here rather than imported from the safety module, to keep the storage
- * layer free of a dependency on the admin layer.
+ * This module used to hold a private `isGenerationAssetDeliverable` that asked
+ * whether EVERY output of a generation had left quarantine, and withheld the
+ * whole batch otherwise. Phase 28 replaced it with the per-output gate in
+ * `asset-delivery-gate.ts`, for two reasons:
  *
- * A generation may resolve to several outputs, each with its own asset row.
- * This asks about all of them: releasing the batch because one output cleared
- * moderation would be exactly the bypass Phase 9-E exists to prevent. It also
- * can no longer use `maybeSingle()`, which throws once more than one row
- * exists.
+ *   Phase 28 decides safety PER OUTPUT. A generation-wide answer discards that
+ *   granularity at the last step, so an unsafe sibling withheld safe ones —
+ *   conservative, but not what the roadmap requires, and a real product defect
+ *   for a user whose four-image batch had one output flagged.
+ *
+ *   There must be ONE delivery authority. Keeping a local copy alongside
+ *   Phase 9-E's `isAssetDeliverable` meant two implementations of the same
+ *   rule; they agreed, until they would not have.
+ *
+ * The property that mattered is unchanged and still enforced here: the
+ * quarantine question is answered by the database immediately before any URL
+ * is minted, and an unanswerable question yields no URL.
  */
-async function isGenerationAssetDeliverable(
-  admin: SupabaseClient,
-  generationId: string
-): Promise<boolean> {
-  const { data, error } = await admin
-    .from("media_assets")
-    .select("quarantine_status,ingest_status,status,tombstoned_at")
-    .eq("generation_id", generationId)
-    .eq("role", "original");
-
-  if (error) return false;
-
-  const rows = (data ?? []) as {
-    quarantine_status?: string;
-    ingest_status?: string;
-    status?: string;
-    tombstoned_at?: string | null;
-  }[];
-
-  // No rows is not "nothing to refuse" — it means nothing was stored.
-  if (rows.length === 0) return false;
-
-  return rows.every(
-    (row) =>
-      !row.tombstoned_at &&
-      row.quarantine_status === "released" &&
-      row.ingest_status === "verified" &&
-      row.status === "finalized"
-  );
-}

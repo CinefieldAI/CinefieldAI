@@ -217,6 +217,15 @@ export class FakeSupabaseClient {
     if (fn === "record_media_ingest") {
       return { data: this.recordMediaIngest(args ?? {}), error: null };
     }
+    if (fn === "record_safety_decision") {
+      return { data: this.recordSafetyDecision(args ?? {}), error: null };
+    }
+    if (fn === "release_media_after_moderation") {
+      return { data: this.releaseMediaAfterModeration(args ?? {}), error: null };
+    }
+    if (fn === "request_media_appeal") {
+      return { data: this.requestMediaAppeal(args ?? {}), error: null };
+    }
     if (fn === "record_admin_privileged_action_approval") {
       return { data: this.recordAdminPrivilegedActionApproval(args ?? {}), error: null };
     }
@@ -537,6 +546,121 @@ export class FakeSupabaseClient {
     row.finalized_at = now;
 
     return { finalized: true, asset_id: assetId, status: "finalized" };
+  }
+
+  /**
+   * Mirrors record_safety_decision() (Phase 28).
+   *
+   * Append-only in the same sense the real table is: it only ever inserts, and
+   * nothing in this double can update or delete a decision row.
+   */
+  private recordSafetyDecision(args: Record<string, unknown>) {
+    if (!this.state.media_safety_decisions) this.state.media_safety_decisions = [];
+    const id = `decision_${this.state.media_safety_decisions.length + 1}`;
+    this.state.media_safety_decisions.push({
+      id,
+      clerk_user_id: args.p_clerk_user_id ?? null,
+      generation_id: args.p_generation_id ?? null,
+      media_asset_id: args.p_media_asset_id ?? null,
+      output_index: args.p_output_index ?? null,
+      decision_stage: args.p_decision_stage ?? null,
+      verdict: args.p_verdict ?? null,
+      risk_categories: args.p_risk_categories ?? [],
+      reason_code: args.p_reason_code ?? null,
+      policy_version: args.p_policy_version ?? null,
+      classifier_version: args.p_classifier_version ?? null,
+      provider_signal_source: args.p_provider_signal_source ?? "none",
+      provider_signal_flagged: args.p_provider_signal_flagged ?? null,
+      provider_signal_reason: args.p_provider_signal_reason ?? null,
+      hash_check_outcome: args.p_hash_check_outcome ?? "not_configured",
+      mandatory_report_state: args.p_mandatory_report_state ?? "not_required",
+      created_at: new Date().toISOString(),
+    });
+    return { recorded: true, decision_id: id };
+  }
+
+  /**
+   * Mirrors release_media_after_moderation() (Phase 28).
+   *
+   * Every refusal the real SQL makes is reproduced, INCLUDING the one that
+   * matters most: `moderation_status` must be exactly `passed`. `approved`
+   * belongs to the human two-person lane and is refused here, so a test cannot
+   * accidentally prove a release the real database would deny.
+   */
+  private releaseMediaAfterModeration(args: Record<string, unknown>) {
+    const assetId = args.p_asset_id as string;
+    const row = (this.state.media_assets ?? []).find((a) => a.id === assetId);
+    if (!row) return { released: false, reason: "not_found" };
+    if (row.quarantine_status === "released") return { released: false, reason: "already_released" };
+    if (row.quarantine_status === "rejected") return { released: false, reason: "asset_rejected" };
+    if (row.tombstoned_at) return { released: false, reason: "asset_tombstoned" };
+    if (row.moderation_status !== "passed") {
+      return { released: false, reason: "moderation_not_passed", moderation_status: row.moderation_status };
+    }
+    if (row.ingest_status !== "verified") return { released: false, reason: "ingest_not_verified" };
+    if (row.status !== "finalized") return { released: false, reason: "asset_not_finalized" };
+    if (!row.verified_mime) return { released: false, reason: "missing_verified_mime" };
+    if (!row.checksum_sha256) return { released: false, reason: "missing_checksum" };
+
+    const prior = row.quarantine_status;
+    row.quarantine_status = "released";
+
+    if (!this.state.media_safety_audit) this.state.media_safety_audit = [];
+    this.state.media_safety_audit.push({
+      asset_id: assetId,
+      actor_clerk_user_id: "system:phase28_moderation",
+      action: "auto_released",
+      prior_quarantine_status: prior,
+      resulting_quarantine_status: "released",
+      prior_moderation_status: row.moderation_status,
+      reason_code: "automated_moderation_pass",
+      created_at: new Date().toISOString(),
+    });
+
+    // The canonical family (Phase 11-A retired `media.asset.released`), and
+    // the SAME event the human lane emits — the audit trail is where the
+    // human/automated distinction lives, not the event type.
+    const eventId = `evt_${this.outboxEvents.length + 1}`;
+    this.outboxEvents.push({ id: eventId, event_type: "asset.released", resource_id: assetId });
+    return { released: true, asset_id: assetId, event_id: eventId };
+  }
+
+  /**
+   * Mirrors request_media_appeal() (Phase 28-D).
+   *
+   * Records a request and NOTHING else — no quarantine change, no moderation
+   * change. A test that expected an appeal to release something must fail here
+   * exactly as it would against the real function.
+   */
+  private requestMediaAppeal(args: Record<string, unknown>) {
+    const assetId = args.p_asset_id as string;
+    const owner = args.p_owner_clerk_user_id as string;
+    const row = (this.state.media_assets ?? []).find((a) => a.id === assetId);
+    if (!row) return { recorded: false, reason: "not_found" };
+    if (row.clerk_user_id !== owner) return { recorded: false, reason: "not_found" };
+    if (row.quarantine_status === "released") return { recorded: false, reason: "already_released" };
+
+    if (!this.state.media_safety_audit) this.state.media_safety_audit = [];
+    const open = this.state.media_safety_audit.filter(
+      (e) => e.asset_id === assetId && e.action === "appeal_requested"
+    ).length;
+    const reviewed = this.state.media_safety_audit.filter(
+      (e) => e.asset_id === assetId && e.action === "appeal_reviewed"
+    ).length;
+    if (open > reviewed) return { recorded: false, reason: "appeal_already_open" };
+
+    this.state.media_safety_audit.push({
+      asset_id: assetId,
+      actor_clerk_user_id: owner,
+      action: "appeal_requested",
+      prior_quarantine_status: row.quarantine_status,
+      resulting_quarantine_status: row.quarantine_status,
+      prior_moderation_status: row.moderation_status,
+      reason_code: (args.p_reason_code as string | null) ?? "owner_disputes_decision",
+      created_at: new Date().toISOString(),
+    });
+
+    return { recorded: true, asset_id: assetId };
   }
 
   /**

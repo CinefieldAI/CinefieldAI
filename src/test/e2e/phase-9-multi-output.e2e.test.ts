@@ -144,10 +144,22 @@ test("M9-9  the completion and delivery gates evaluate EVERY output, not one row
   assert.ok(!/maybeSingle\(\)/.test(hasVerified.slice(0, 700)), "maybeSingle throws once a generation has several outputs");
   assert.match(hasVerified.slice(0, 900), /rows\.every\(/, "completion requires every output verified");
 
+  // PHASE 28 CHANGED THE DELIVERY HALF, DELIBERATELY.
+  //
+  // This used to assert `rows.every(...)` — one generation-wide answer, so a
+  // single unsafe output withheld the whole batch. Phase 28 decides safety per
+  // output, and collapsing that to a batch answer at the last step is a real
+  // product defect: a four-image generation with one flagged output delivered
+  // nothing. The safety property is not weakened — an output with no clearance
+  // still gets no URL — it is now answered independently per output.
+  const deliveryGate = strip(read("src/lib/media/asset-delivery-gate.ts"));
+  const perOutput = deliveryGate.slice(deliveryGate.indexOf("export async function deliverableOutputIndexes"));
+  assert.ok(!/maybeSingle\(\)/.test(perOutput), "maybeSingle throws once a generation has several outputs");
+  assert.match(perOutput, /result\.set\(index, rowIsDeliverable\(row\)\)/, "one answer per output index");
+
   const storage = strip(read("src/lib/orchestration/output-storage.ts"));
-  const deliverable = storage.slice(storage.indexOf("async function isGenerationAssetDeliverable"));
-  assert.match(deliverable.slice(0, 1200), /rows\.every\(/, "delivery requires every output released");
-  assert.match(deliverable.slice(0, 1200), /if \(rows\.length === 0\) return false/);
+  const attach = storage.slice(storage.indexOf("export async function attachSignedUrls"));
+  assert.match(attach, /if \(!deliverable\.get\(index\)\)/, "an uncleared output gets no URL");
 });
 
 test("M9-10  delivery addresses an output by index, never 'the first row'", () => {

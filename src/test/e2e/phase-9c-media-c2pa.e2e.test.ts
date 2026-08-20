@@ -514,11 +514,30 @@ test("C9C-27  no new migration was created by this batch", () => {
   const files = readFileSync(join(ROOT, "package.json"), "utf8");
   assert.ok(files.length > 0);
   const migrations = readdirSync(join(ROOT, "supabase/migrations"));
-  // Phase 9 multi-output added exactly one migration after Phase 27's own:
-  // media_assets gains `output_index` so a generation can own one asset per
-  // output. Anything BEYOND that is unaccounted for.
+  // Every migration after Phase 27's own, enumerated so that a new one has to
+  // be ACCOUNTED FOR here rather than appearing unnoticed. Anything BEYOND
+  // this list is unaccounted for.
+  //
+  //   20260915  Phase 9 multi-output — media_assets gains `output_index`, so a
+  //             generation can own one asset per output.
+  //   20260916  Phase 28 Trust & Safety — the safety decision log, the
+  //             automated post-moderation release (the missing half of the
+  //             Phase 9 lifecycle: nothing could produce `passed`, so nothing
+  //             could ever leave quarantine), and the appeal record. It adds
+  //             no provenance table and touches no Phase 27 object.
   const after = migrations.filter((m) => m > "20260914000000_media_provenance.sql");
-  assert.deepEqual(after, ["20260915000000_media_assets_output_index.sql"]);
+  assert.deepEqual(after, [
+    "20260915000000_media_assets_output_index.sql",
+    "20260916000000_trust_and_safety.sql",
+  ]);
+
+  // And Phase 28 really did not touch provenance: the C2PA tables, functions
+  // and constraints stay exactly where Phase 27 put them.
+  // Comments stripped first: Phase 28's own header explains that provenance
+  // stays Phase 27's, and prose saying so must not read as an SQL reference.
+  const phase28 = readFileSync(join(ROOT, "supabase/migrations/20260916000000_trust_and_safety.sql"), "utf8")
+    .replace(/^\s*--.*$/gm, "");
+  assert.ok(!/media_provenance/.test(phase28), "Phase 28 must not touch Phase 27's provenance store");
 });
 
 test("C9C-28  no signing key or certificate material is committed", () => {

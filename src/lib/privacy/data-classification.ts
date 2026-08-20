@@ -216,6 +216,25 @@ export const DATA_CLASSIFICATION_MATRIX: readonly DataClassificationEntry[] = [
     deletionPolicy: "retain_for_audit_window",
   },
   {
+    table: "media_safety_decisions",
+    dataClass: "security_audit",
+    purpose:
+      "Trust & Safety decision log: prompt-stage and per-output verdicts, risk categories, and the provider's native signal recorded separately from Cinefield's own.",
+    legalBasis: "legal_obligation",
+    owner: "phase-28",
+    storageLocation: "supabase_postgres",
+    // PHASE 28. Real append-only trigger, this table's own migration
+    // (20260916000000_trust_and_safety.sql). A safety finding — above all a
+    // zero-tolerance one — must outlive the account it was about, which is
+    // why the generation and asset foreign keys are ON DELETE SET NULL
+    // rather than CASCADE: deleting the evidence must not delete the finding.
+    // Same posture as credit_ledger and deletion_tombstones, and for the same
+    // reason: the record exists to satisfy an obligation the subject cannot
+    // waive on their own behalf.
+    retentionPolicy: "append_only_permanent",
+    deletionPolicy: "retain_immutable",
+  },
+  {
     table: "deletion_tombstones",
     dataClass: "sensitive",
     purpose: "Durable proof an account was deleted — must survive the account's own deletion.",
