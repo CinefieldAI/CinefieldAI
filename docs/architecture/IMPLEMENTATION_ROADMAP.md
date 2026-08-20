@@ -443,6 +443,36 @@ evidence, and file-by-file citations: see `security-gates.md`'s "Phase 26 —
 Chaos Engineering, RTO/RPO & Resilience Validation" section, and the
 operator procedure in `docs/runbooks/game-day.md`.
 
+**Phase 27 — İçerik Provenansı & AI Act İşaretleme (C2PA), official packages
+27-A through 27-D:** implements AI Act Article 50(2) — the machine-readable
+"this was AI-generated" mark, which the roadmap identifies as the *provider's*
+obligation and therefore Cinefield's own. Article 50(4)'s visible deepfake
+label is the *deployer's* duty, transferred contractually (Phase 29 owns the
+legal interpretation; this phase provides the mechanism). The phase does not
+merge with Phase 24: that attests the SBOM of the software, this attests the
+media the software produced, and tests assert neither package references the
+other. **The embed step the roadmap specifies ("FFmpeg sonrası, R2 öncesi")
+could not be built: Phase 9-C is unbuilt, so there is no media worker, no
+FFmpeg step, and nowhere for an embed to run** — `c2pa`/`c2pa-node` were
+verified available on npm and deliberately not added rather than shipping a
+native binding nothing can call. What was built is real and precisely named:
+`src/lib/provenance/` records **detached** provenance evidence bound to Phase
+9-B's existing `checksum_sha256` over canonical bytes, with the roadmap's own
+literal C2PA manifest template (IPTC `digitalSourceType`), genuine ES256
+signing over a byte-stable canonical claim that includes the digest, and a
+pure fail-closed verifier whose digest check precedes any signature work and
+which accepts no URL input at all. `EMBEDDED_C2PA` exists as a state that no
+code path constructs, asserted by test. 27-B's criterion ("signing key not in
+the repo, rotation owner defined") is met structurally — no PEM anywhere in
+the tree, and the key registered under Phase 25's `secret.rotate` as
+`DUAL_KEY_OVERLAP`, with a runbook explaining why the old *public* key must
+never be retired. 27-D's watermark is `NOT_IN_SCOPE` by the roadmap's own
+"Opsiyonel … ikinci fazda ekle"; its admin marking-rate metric is built at
+`/admin/provenance` and reports `null` rather than a fabricated ratio when
+there is nothing to divide. Full detail, evidence, and file-by-file
+citations: see `security-gates.md`'s "Phase 27 — İçerik Provenansı & AI Act
+İşaretleme (C2PA)" section.
+
 ---
 
 ## Completed Implementation Checkpoints

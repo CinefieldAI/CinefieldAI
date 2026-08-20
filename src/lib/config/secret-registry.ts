@@ -226,6 +226,16 @@ export const SECRET_REGISTRY: readonly SecretEntry[] = [
 
   // ---- infra (Phase 25-D) --------------------------------------------------
   { name: "CINEFIELD_SECRETS_ANOMALY_INGEST_TOKEN", class: "SERVER_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "CUT_OVER", note: "Shared bearer secret for POST /api/internal/secrets/access-anomaly — the CloudTrail->security.events bridge. The only intended caller is a live EventBridge/Lambda forwarder, never a browser. Unset means every request is refused (fail closed), the same convention CINEFIELD_INFRA_DRIFT_INGEST_TOKEN already uses, correct until the real EventBridge rule (infra/modules/secrets-manager/, CODE_COMPLETE_LIVE_DEFERRED) is applied." },
+
+  // ---- provenance (Phase 27-B) ---------------------------------------------
+  // 27-B's done criterion is literally "Signing key repoda yok ve rotation
+  // sahibi tanımlı". This entry IS the second half: registering the key here
+  // gives it a rotation class and puts it under Phase 25's `secret.rotate`
+  // (Tier-0, two-person) — Phase 27 never becomes a key lifecycle owner. The
+  // first half is structural: no PEM exists anywhere in this tree, asserted
+  // by a repo-wide test.
+  { name: "CINEFIELD_PROVENANCE_SIGNING_KEY_PEM", class: "SERVER_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "DUAL_KEY_OVERLAP", note: "ES256 private key that signs detached generated-media provenance claims (Phase 27). Never in the repository; supplied at runtime through the Phase 25 secret provider and held only for the lifetime of an Es256Signer. Unset means provenance is recorded UNSIGNED (marking_state EVIDENCE_RECORDED) rather than fabricated — fail closed. DUAL_KEY_OVERLAP because verification of already-signed evidence must keep working against the previous key while new output is signed with the new one." },
+  { name: "CINEFIELD_PROVENANCE_SIGNING_KEY_ID", class: "IDENTIFIER_NON_SECRET", requirement: "OPTIONAL", group: "infra", rotation: "NOT_A_SECRET", note: "Bounded public identifier naming which provenance signing key produced a signature. Stored in media_provenance.signer_key_id and used to select a trusted public key at verification time. Not secret — it is the lookup handle, never key material." },
 ] as const;
 
 const BY_NAME = new Map(SECRET_REGISTRY.map((e) => [e.name, e]));

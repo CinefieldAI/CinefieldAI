@@ -7514,3 +7514,139 @@ change to `recovery-contract.ts`/`recovery-target-registry.ts`/
 `recovery-measurement-engine.ts`/`recovery-alert-bridge.ts` — all four are
 Phase 15-D/2's, imported verbatim.
 **Phase 26 does not start Phase 27.**
+
+## Phase 27 — İçerik Provenansı & AI Act İşaretleme (C2PA)
+
+**Authoritative roadmap source:** the same master DOCX, canonical extraction
+hash `625b2498…`, re-confirmed byte-identical this batch. Official title:
+"PHASE 27 — İçerik Provenansı & AI Act İşaretleme (C2PA)." Handoff: "Phase 9
+media pipeline üzerine content provenance/C2PA signing/AI labeling eklenir;
+**artifact provenance ile karıştırılmaz**" — generated-media provenance is
+added on top of Phase 9, and is explicitly NOT to be confused with Phase 24's
+software/artifact provenance. Four packages: 27-A (media worker C2PA sign
+step + image/video/audio manifest template), 27-B (dev self-signed → prod
+trust-list CA chain, private key in KMS/Secrets), 27-C (deepfake visible
+label + ToS/AUP deployer disclosure), 27-D (optional soft-binding watermark +
+admin marking-rate metric).
+
+**Legal basis, as the roadmap states it:** AI Act Article 50 transparency
+obligations in force 2 August 2026. Cinefield is an EU (Vienna) established
+provider, so the obligation attaches to the system, not the user's geography.
+Crucially the roadmap splits the duty: "Madde 50/2 (makine-okunur işaret)
+**provider** yükümlülüğüdür; Madde 50/4 (görünür deepfake etiketi)
+**deployer** yükümlülüğüdür." This phase implements 50(2) — the
+machine-readable mark — because that is Cinefield's own obligation, and
+provides the 50(4) mechanism while the duty itself is transferred
+contractually. EK F confirms the ownership split: "Phase 27 = AI
+provenance/C2PA teknik uygulama sahibi", "Phase 29 = hukuk/politika sahibi."
+Nothing in this batch makes a legal determination.
+
+### The blocker this phase must state plainly
+
+The roadmap places the signing step at a specific pipeline position:
+"Provider output → download → R2 original → **FFmpeg** → final.mp4/images →
+**C2PA sign** → signed dosyayı R2 hot storage'a kopyala." **That position does
+not exist.** There is no `worker/media-worker.ts`, no FFmpeg or c2patool
+binding in `package.json`, and no transcode step anywhere — the repository's
+own comments say so (`asset-keys.ts`: "derived variants (thumbnail, preview,
+transcode) arrive in **9-C**"; `media-inspector.ts`: "When **9-C** adds
+FFmpeg…"). Phase 9-C is unbuilt, so an embed step written now would have
+nowhere to run. `c2pa` (0.30.17) and `c2pa-node` (0.5.26) were verified
+available on npm and deliberately NOT added: a native binding that nothing
+can call is precisely the built-but-unwired defect this codebase has closed
+repeatedly.
+
+### What was built instead — real, and honestly named
+
+`src/lib/provenance/` implements **detached** provenance evidence,
+cryptographically bound to the SAME `media_assets.checksum_sha256` that Phase
+9-B's sandboxed inspector already computes over canonical bytes. Section 12's
+rule is honoured literally: an ETag, an object key, or a provider job id is
+not a content digest, and none of them can reach the recording service — the
+only digest it accepts is Phase 9-B's, and it refuses to record without one.
+
+- `provenance-contract.ts` — bounded types. `ProvenanceMarkingState` keeps the
+  distinction unfakeable: `EVIDENCE_RECORDED` / `SIGNED_DETACHED` are
+  reachable; **`EMBEDDED_C2PA` is declared but constructed by no code path in
+  `src/`**, asserted by a test that greps for the assignment. `DigitalSourceType`
+  is the real IPTC controlled vocabulary
+  (`cv.iptc.org/newscodes/digitalsourcetype/`).
+- `manifest-builder.ts` — emits the roadmap's own literal manifest template
+  field for field (`claim_generator: "cinefield/1.0"`, one `c2pa.actions`
+  assertion, `c2pa.created`, `digitalSourceType`, `softwareAgent`). One
+  template for image/video/audio deliberately: what differs between an MP4 and
+  a WAV is the container's ability to carry a manifest, never the assertion.
+  `canonicalClaim()` is a fixed, ordered, newline-delimited field list — not
+  `JSON.stringify` — because the signature must cover the content digest (or a
+  signed manifest could be lifted onto other bytes) and must be byte-stable.
+- `content-signer.ts` — real ES256 (the algorithm the roadmap names). Default
+  is `UnconfiguredSigner`, which signs nothing and says so, exactly like Phase
+  25's `NoWorkerReloadVerifier`. `Es256Signer` receives a PEM it never
+  persists, never logs, and never returns; its catch block discards the
+  underlying error because an OpenSSL message can echo key material.
+- `provenance-verifier.ts` — pure, no I/O, **no URL input of any kind**, so no
+  SSRF path exists. Call order is the fail-closed guarantee, and the digest
+  check runs before any signature work: if the bytes changed, the answer is
+  "these are not the bytes that were signed", regardless of the signature.
+- `supabase/migrations/20260914000000_media_provenance.sql` — append-only (no
+  UPDATE grant), one row per asset, `ON DELETE CASCADE` from `media_assets`,
+  **no `clerk_user_id` column** (ownership is reachable by join; duplicating a
+  personal identifier would enlarge Phase 23's deletion blast radius for no
+  gain). CHECK constraints refuse a non-SHA-256 digest, a signature without a
+  key id, and a `SIGNED_DETACHED` state with no signature.
+
+### 27-B — the key boundary
+
+27-B's criterion is literally "Signing key repoda yok ve rotation sahibi
+tanımlı", and both halves are satisfied structurally. No PEM exists anywhere
+in the tree (a repo-wide test greps `src/`, `supabase/`, `infra/`, `docs/`
+for `BEGIN … PRIVATE KEY`). `CINEFIELD_PROVENANCE_SIGNING_KEY_PEM` is
+registered in the Phase 12-D/25 registry as `DUAL_KEY_OVERLAP` with a rotation
+procedure, which puts it under Phase 25's `secret.rotate` (Tier-0,
+two-person) — Phase 27 never becomes a key lifecycle owner. The overlap is
+mandatory rather than nice-to-have, and the runbook says why: every already
+signed row must keep verifying, so the old PUBLIC key stays trusted
+indefinitely while only the old PRIVATE key is retired. **The production
+trust-list CA chain remains external** — no CA exists, and fabricating a
+trusted issuer would be worse than having none.
+
+### 27-C / 27-D
+
+`DisclosureRequirement` defaults to `NOT_ASSESSED`, never `NONE_REQUIRED`: no
+deepfake classifier exists in this repository (`MODERATION_ENGINE` is `null`,
+Phase 9-B) and Phase 28 owns Trust & Safety classification, so asserting "no
+label needed" would be a legal-shaped claim made from no evidence. The visible
+label surface is **BLOCKED** — every user-facing generation page is under the
+locked-UI rule, and Phase 27 does not touch locked UI to close itself.
+
+27-D's watermark half is `NOT_IN_SCOPE` by the roadmap's own words —
+"**Opsiyonel** soft-binding watermark", and "MVP'de C2PA imzalama ile başla,
+watermark'ı ikinci fazda ekle." The metric half is built: `/admin/provenance`
++ `GET /api/admin/provenance` report marked/signed/embedded counts and a
+marked ratio that is `null` — never a fabricated 1.0 or 0 — when there are no
+finalized assets to divide by.
+
+### Ownership preserved
+
+Phase 9 (storage — the provenance package touches no R2 client, no object
+key, and never mutates `media_assets`; tests enforce all three), Phase 9-E
+(quarantine — provenance neither reads it as permission nor writes it; a
+verified record is evidence, never a release authority), Phase 20 (no new
+shared event or schema registry), Phase 23 (privacy — no personal identifier
+stored; evidence survives tombstoning because it contains none), Phase 24
+(software provenance — tests assert neither package references the other),
+and Phase 25 (key lifecycle) are all confirmed untouched by full regression.
+
+### Not in this batch
+
+The C2PA **embed** step and any `c2patool`/`c2pa-node` integration — blocked
+on Phase 9-C (FFmpeg / media worker), which does not exist. A production
+trust-list CA certificate chain. Any live signer (the default signs nothing;
+the crypto is proven with ephemeral in-memory keypairs in tests, which is
+`LOCAL_CRYPTO_PROOF`, explicitly not production trust). Soft-binding
+watermark (roadmap: optional, second phase). Deepfake detection (Phase 28).
+The user-facing visible label (locked UI). Automatic invocation of
+`recordMediaProvenance` from the ingest path — the seam is real and tested,
+but wiring it into `ingest-gate.ts` changes Phase 9-B's own behaviour and is
+deliberately left as a reviewed, separate decision.
+**Phase 27 does not start Phase 28.**

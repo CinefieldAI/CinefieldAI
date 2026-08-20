@@ -291,10 +291,14 @@ test("7. the HTTP edge binds a trace for every route, at the common boundary", (
   // admin convention) and `POST /api/admin/game-day/record` (records an
   // already-completed drill's measured outcome — same CSRF+admin+
   // `durable_write` convention as every other Phase 16 admin mutation route).
+  // PHASE 27 adds exactly one: `GET /api/admin/provenance` (read-only
+  // AI-marking coverage view). There is deliberately no provenance WRITE
+  // route — recording provenance belongs to the media ingest path (the
+  // Phase 9-B seam), never to an admin clicking a button.
   const routes = walkApiRoutes(path.join(ROOT, "src/app/api")).filter((file) =>
     /guardRoute/.test(readFileSync(file, "utf8"))
   );
-  assert.equal(routes.length, 54, `every API route must reach guardRoute: ${routes.join(", ")}`);
+  assert.equal(routes.length, 55, `every API route must reach guardRoute: ${routes.join(", ")}`);
 });
 
 test("8. the generation workflow carries the trace in durable history", () => {
