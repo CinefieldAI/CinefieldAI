@@ -59,6 +59,17 @@ jobs:
       - name: Build provider-worker image (local only, never pushed)
         run: docker build -f Dockerfile.provider-worker -t cinefield-provider-worker:ci .
 
+      - name: Prove provider-worker runtime excludes the development toolchain
+        run: |
+          docker run --rm --entrypoint /bin/sh cinefield-provider-worker:ci -c '
+            set -eu
+            test -f /app/provider-worker.cjs
+            test ! -e /app/node_modules
+            test ! -e /app/package.json
+            test ! -e /app/package-lock.json
+            node --check /app/provider-worker.cjs
+          '
+
       - name: Trivy container scan — retain machine-readable evidence
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # v0.24.0
         with:
