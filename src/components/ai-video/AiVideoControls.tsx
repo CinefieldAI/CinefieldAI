@@ -13,7 +13,7 @@ import { useListboxNav } from "@/hooks/useListboxNav";
  * the page background.
  */
 export const GLASS_PANEL =
-  "border border-white/[0.06] bg-white/[0.07] backdrop-blur-[64px] backdrop-saturate-150";
+  "border border-white/[0.06] bg-white/[0.05] backdrop-blur-[24px] backdrop-saturate-150";
 
 /** Shared look for every pill in the prompt bar's control row. */
 const CONTROL_CLASS =
