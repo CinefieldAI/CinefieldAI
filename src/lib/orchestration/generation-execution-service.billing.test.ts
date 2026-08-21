@@ -10,7 +10,6 @@ function baseDeps(): GenerationExecutionDeps {
   return {
     resolveOwner: () => "temporal",
     startWorkflow: async ({ generationId }) => ({
-      generationId,
       workflowId: `generation:${generationId}`,
       runId: "run-test",
     }),
@@ -34,7 +33,6 @@ test("billing refusal happens before Temporal starts", async () => {
   deps.startWorkflow = async (params) => {
     workflowStarts += 1;
     return {
-      generationId: params.generationId,
       workflowId: `generation:${params.generationId}`,
       runId: "must-not-run",
     };
@@ -77,7 +75,6 @@ test("Temporal starts only after billing authorization succeeds", async () => {
   deps.startWorkflow = async ({ generationId }) => {
     order.push("temporal");
     return {
-      generationId,
       workflowId: `generation:${generationId}`,
       runId: "run-after-billing",
     };
