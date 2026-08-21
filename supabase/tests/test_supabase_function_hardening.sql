@@ -56,15 +56,6 @@ BEGIN
     RAISE EXCEPTION 'FUNCTION HARDENING FAILED: rls_auto_enable search_path is not pinned to pg_catalog';
   END IF;
 
-  FOREACH v_config SLICE 1 IN ARRAY ARRAY[
-    ARRAY['search_path=public']::text[],
-    ARRAY['search_path=public']::text[],
-    ARRAY['search_path=public']::text[]
-  ]
-  LOOP
-    NULL;
-  END LOOP;
-
   PERFORM 1
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
