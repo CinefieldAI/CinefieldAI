@@ -1,3 +1,5 @@
+import { spaceGrotesk } from "@/lib/fonts/spaceGrotesk";
+
 interface FooterColumn {
   heading: string;
   items: string[];
@@ -5,7 +7,7 @@ interface FooterColumn {
 
 const FOOTER_COLUMNS: FooterColumn[] = [
   {
-    heading: "Cinefield",
+    heading: "Cinefield AI",
     items: [
       "About",
       "Trust",
@@ -96,7 +98,9 @@ export default function ExploreCameraFooterBanner() {
   return (
     <section className="mt-16 rounded-3xl bg-[#D97757] px-6 py-10 text-white md:px-10 md:py-16">
       <div className="grid gap-10 xl:grid-cols-[auto_1fr] xl:items-start xl:gap-16">
-        <h2 className="max-w-sm font-grotesk text-2xl font-bold uppercase leading-tight md:text-4xl xl:max-w-96">
+        <h2
+          className={`${spaceGrotesk.className} max-w-sm text-2xl uppercase leading-[1.05] md:text-4xl xl:max-w-96`}
+        >
           The ultimate AI-powered camera control for filmmakers &amp; creators
         </h2>
 
@@ -109,7 +113,7 @@ export default function ExploreCameraFooterBanner() {
                   <button
                     key={item}
                     type="button"
-                    className="inline-grid h-8 items-center rounded-full bg-black/10 px-3 text-left text-sm font-medium text-white"
+                    className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-left text-sm font-medium text-white shadow-none outline-none"
                   >
                     {item}
                   </button>
@@ -125,7 +129,7 @@ export default function ExploreCameraFooterBanner() {
           <button
             key={label}
             type="button"
-            className="inline-grid h-8 items-center rounded-full bg-black/10 px-3 text-sm font-medium text-white"
+            className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-sm font-medium text-white shadow-none outline-none"
           >
             {label}
           </button>
