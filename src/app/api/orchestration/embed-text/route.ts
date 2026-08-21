@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { OrchestrationError } from "@/lib/orchestration/errors";
 import { embedText } from "@/lib/orchestration/text-embeddings";
 
+import { guardBrowserMutation } from "@/lib/security/privileged-mutation-guard";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/orchestration/embed-text
@@ -17,6 +18,14 @@ import { guardRoute, privateJson } from "@/lib/security/response-headers";
 const MAX_TEXTS = 100;
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // SECURITY_FINDINGS_9751bd11, finding 3. Same-origin check BEFORE any
+  // side effect: this route mutates durable state or spends compute under an
+  // ambient Clerk session, so a cross-site request must be refused before it
+  // reaches auth, not after. Additive — auth and the rate-limit class below
+  // are unchanged.
+  const crossOrigin = guardBrowserMutation(request);
+  if (crossOrigin) return crossOrigin;
+
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");

@@ -4,6 +4,7 @@ import { OrchestrationError, toOrchestrationError } from "@/lib/orchestration/er
 import { classifyAndEnhancePrompt } from "@/lib/orchestration/prompt-intelligence";
 import type { GenerationType } from "@/lib/orchestration/types";
 
+import { guardBrowserMutation } from "@/lib/security/privileged-mutation-guard";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/orchestration/enhance-prompt
@@ -30,6 +31,14 @@ function isGenerationType(value: unknown): value is GenerationType {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // SECURITY_FINDINGS_9751bd11, finding 3. Same-origin check BEFORE any
+  // side effect: this route mutates durable state or spends compute under an
+  // ambient Clerk session, so a cross-site request must be refused before it
+  // reaches auth, not after. Additive — auth and the rate-limit class below
+  // are unchanged.
+  const crossOrigin = guardBrowserMutation(request);
+  if (crossOrigin) return crossOrigin;
+
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");

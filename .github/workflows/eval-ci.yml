@@ -9,11 +9,19 @@ name: Model Eval Regression Gate (Phase 22-C)
 #      (provider, provider model) pair can ever enter the router's table —
 #      audited directly against admin-route-service.ts, whose three live
 #      mutations can enable/disable/reprioritize/kill-switch an EXISTING
-#      route but never create a new pair) must name only pairs that already
-#      have completed golden-dataset evidence. Missing evidence blocks the
-#      PR. See scripts/check-new-route-eval-evidence.ts's own header for the
-#      full reasoning and what this deliberately does not attempt (an
-#      automatic regression comparison).
+#      route but never create a new pair) STOPS THE PR. See
+#      scripts/check-new-route-eval-evidence.ts's own header for the full
+#      reasoning and what this deliberately does not attempt.
+#
+#      CHANGED BY SECURITY_FINDINGS_9751bd11 (finding 1). This job used to
+#      look the evidence up itself, in Supabase, using
+#      SUPABASE_SERVICE_ROLE_KEY — a credential that bypasses RLS, handed to
+#      code checked out from the pull request. The lookup was removed rather
+#      than re-credentialed. The job now answers only the question it can
+#      answer from repository text — "does this PR introduce a new pair?" —
+#      and reports MANUAL_MODEL_EVAL_EVIDENCE_VERIFICATION_REQUIRED, which a
+#      human resolves before merge. That is STRICTER than before: a new pair
+#      no longer auto-passes just because evidence happened to exist.
 #
 #   2. eval-regression-gate (workflow_dispatch, manual) — the real,
 #      fail-closed candidate-vs-baseline quality comparison
@@ -71,23 +79,31 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # check-new-route-eval-evidence.ts reads the PR base ref's migration
           # tree via `git diff ... --diff-filter=A` — needs real history.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
       - run: npm ci
 
+      # SECURITY_FINDINGS_9751bd11, finding 1. This step runs an npm script
+      # from the PR's OWN checkout. It therefore receives NO database
+      # credential: SUPABASE_SERVICE_ROLE_KEY bypasses RLS entirely, and
+      # PR-authored code could read it straight out of the environment by
+      # editing this repository's package.json or the script itself.
+      #
+      # The gate is now static — it parses the migration diff and stops on any
+      # NEW (provider, provider model) pair, handing the evidence question to a
+      # human. See scripts/check-new-route-eval-evidence.ts's SECRET BOUNDARY
+      # section. Do not add secrets back to this job.
       - name: New-route eval-evidence gate (PR base vs HEAD)
         env:
           EVAL_GATE_BASE_REF: origin/${{ github.event.pull_request.base.ref || 'main' }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run eval:check-new-route-evidence
 
       - name: extractRoutePairs unit tests
@@ -103,14 +119,25 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
       - run: npm ci
 
+      # SECURITY_FINDINGS_9751bd11, finding 1 — why the credential STAYS here.
+      #
+      # This job is guarded by `if: github.event_name == 'workflow_dispatch'`,
+      # so it never runs on a pull request; a skipped job receives nothing.
+      # Dispatching it is a deliberate act by someone with repository write
+      # access, and it genuinely needs the database — it IS the real
+      # candidate-vs-baseline comparison against `model_eval_runs`.
+      #
+      # The residual exposure is a write-access principal dispatching against
+      # their own branch. That principal can already push to main, so this is
+      # not an escalation. The PR job above is the one that was.
       - name: Regression gate — candidate vs baseline
         env:
           EVAL_CANDIDATE_PROVIDER_ID: ${{ inputs.candidate_provider_id }}

@@ -1,10 +1,36 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/supabaseAdmin";
-import { latestCompletedRun } from "@/lib/eval/eval-store";
 
 /**
  * Cinefield new-route eval-evidence gate (Phase 22 corrective batch, 22-C).
+ *
+ * ---------------------------------------------------------------------------
+ * SECRET BOUNDARY — WHY THIS SCRIPT TOUCHES NO DATABASE
+ * ---------------------------------------------------------------------------
+ * SECURITY_FINDINGS_9751bd11, finding 1. This gate runs from a
+ * `pull_request`-triggered job, which checks out the PR's own code and runs
+ * `npm ci` and an npm script from that checkout. It used to receive
+ * SUPABASE_SERVICE_ROLE_KEY so it could look up `model_eval_runs`.
+ *
+ * That combination is the defect: PR-authored code executing with a
+ * credential that BYPASSES RLS ENTIRELY — the highest-value secret this
+ * system has, by its own registry's description. A PR could edit this file,
+ * or `package.json`'s script target, and read the key straight out of the
+ * environment.
+ *
+ * The trigger is `pull_request`, not `pull_request_target`, so GitHub
+ * withholds secrets from FORK PRs — the exposure is to a principal that can
+ * push a branch to this repository, i.e. someone with write access. That
+ * narrows who can exploit it; it does not make an RLS-bypassing credential in
+ * PR-controlled execution acceptable.
+ *
+ * So the database question was REMOVED rather than re-credentialed. What
+ * remains is answerable from repository-controlled text alone: does this PR
+ * introduce a new (provider, provider model) pair? The evidence question is
+ * handed to a human. See the end of `main()` for the trade this makes.
+ *
+ * Nothing here may reintroduce a Supabase client, a service-role read, or any
+ * other live credential — `check-new-route-eval-evidence.test.ts` asserts it.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS EXISTS
@@ -193,35 +219,38 @@ async function main(): Promise<void> {
 
   const uniquePairs = [...new Map(allPairs.map((p) => [`${p.providerId} ${p.providerModelId}`, p])).values()];
 
-  if (!isSupabaseAdminConfigured()) {
-    console.error("check-new-route-eval-evidence: NOT_CONFIGURED — Supabase admin credentials are unavailable.");
-    process.exit(2);
-  }
-  const admin = getSupabaseAdminClient();
-
-  const missing: RoutePair[] = [];
-  for (const pair of uniquePairs) {
-    const run = await latestCompletedRun(admin, pair.providerId, pair.providerModelId);
-    if (!run) missing.push(pair);
-  }
-
-  console.log(
-    `check-new-route-eval-evidence: ${uniquePairs.length} new (provider, provider_model) pair(s) found in ${addedFiles.length} new migration(s).`
+  // ---- A NEW PAIR EXISTS. THAT IS WHERE AUTOMATION STOPS. ----------------
+  //
+  // This gate used to ask a second question here — "does this pair already
+  // have a completed golden-dataset run?" — by querying `model_eval_runs`
+  // with SUPABASE_SERVICE_ROLE_KEY. That query is gone, and the credential
+  // with it. See the SECRET BOUNDARY section in this file's header.
+  //
+  // What replaces it is deliberately MORE conservative, not less: a new pair
+  // never auto-passes now. Previously a pair that already had evidence merged
+  // unattended; today every new pair stops for a human. That cost is paid
+  // once per new model integration — a rare event — and it buys the removal
+  // of an RLS-bypassing credential from PR-controlled execution.
+  console.error(
+    `check-new-route-eval-evidence: MANUAL_MODEL_EVAL_EVIDENCE_VERIFICATION_REQUIRED — ` +
+      `${uniquePairs.length} new (provider, provider_model) pair(s) across ${addedFiles.length} new migration file(s):`
   );
-
-  if (missing.length > 0) {
-    console.error("check-new-route-eval-evidence: MISSING EVAL EVIDENCE — this change cannot merge:");
-    for (const pair of missing) {
-      console.error(`  - ${pair.providerId}/${pair.providerModelId} has no completed golden-dataset eval run.`);
-    }
-    console.error(
-      "A new (provider, provider model) pair may not enter model_routes without being measured first — run 'npm run eval:run' " +
-        "against it and re-push. See docs/security-gates.md's Phase 22 section."
-    );
-    process.exit(1);
+  for (const pair of uniquePairs) {
+    console.error(`  - ${pair.providerId}/${pair.providerModelId}`);
   }
-
-  console.log("check-new-route-eval-evidence: every new route pair already has completed eval evidence. PASS.");
+  console.error("New migration file(s) inspected:");
+  for (const file of addedFiles) {
+    console.error(`  - ${file}`);
+  }
+  console.error(
+    "A new (provider, provider model) pair may not enter model_routes without being measured first. " +
+      "Before merging, an operator must confirm every pair above has a completed golden-dataset eval run — " +
+      "the admin Model Quality surface shows them, or run 'npm run eval:run' against the pair. " +
+      "This check deliberately cannot confirm it: PR CI holds no database credential. " +
+      "There is no bypass flag; the confirmation is a human decision recorded in the PR. " +
+      "See docs/security-gates.md's Phase 22 section."
+  );
+  process.exit(1);
 }
 
 /**

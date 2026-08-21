@@ -89,3 +89,66 @@ export function guardPrivilegedMutation(request: Request): NextResponse | null {
 
   return null;
 }
+
+/**
+ * The same boundary, for AUTHENTICATED BROWSER mutations that are not
+ * privileged admin actions (SECURITY_FINDINGS_9751bd11, finding 3).
+ *
+ * ---------------------------------------------------------------------------
+ * WHY A SIBLING RATHER THAN A SECOND FRAMEWORK
+ * ---------------------------------------------------------------------------
+ * `guardPrivilegedMutation` above protected admin routes only, so
+ * `/api/generate`, the orchestration routes, `/api/media/upload-url` and the
+ * generation lifecycle routes — all of which spend credits, mint storage
+ * authority or mutate durable state under an ambient Clerk session — had no
+ * repository-owned origin check at all.
+ *
+ * This function lives in the same module and reuses the same
+ * `requestOwnOrigin`/`isSameOrigin` primitives deliberately: there is ONE
+ * definition of "same origin" in this codebase, and adding a parallel CSRF
+ * helper elsewhere is how two definitions drift apart.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ONE DIFFERENCE, AND WHY IT IS NOT A WEAKENING
+ * ---------------------------------------------------------------------------
+ * `guardPrivilegedMutation` requires `application/json` unconditionally. Some
+ * legitimate browser mutations carry NO BODY — `POST /api/generations/[id]/
+ * execute` is called by the Cinema Studio workspace as a bare `fetch(url,
+ * { method: "POST" })`, which sends no Content-Type at all. Requiring one
+ * there would reject the app's own working call.
+ *
+ * So the content-type hurdle applies WHEN A BODY IS DECLARED, and the Origin
+ * check applies ALWAYS. That ordering matches what each check actually buys:
+ *
+ *   Origin        the real control. A cross-site request carries the
+ *                 attacker's origin and is refused, body or no body.
+ *   JSON type     forces a CORS preflight for requests that DO carry a body,
+ *                 closing the `text/plain`-smuggled-JSON hole the header
+ *                 above describes. With no body there is nothing to smuggle.
+ *
+ * An HTML form — the classic CSRF vehicle — always sets one of three
+ * form content types, so it is caught by the body branch; and it cannot
+ * forge Origin either way.
+ *
+ * ADDITIVE, NEVER A REPLACEMENT. Callers still run `auth()`, their rate-limit
+ * class, and any policy/Tier-0/two-person control they already had.
+ */
+export function guardBrowserMutation(request: Request): NextResponse | null {
+  const origin = request.headers.get("origin");
+  if (!origin) {
+    return privateJson({ error: "missing_origin" }, { status: 403 });
+  }
+  if (!isSameOrigin(origin, requestOwnOrigin(request))) {
+    return privateJson({ error: "cross_origin_mutation_rejected" }, { status: 403 });
+  }
+
+  // A declared body must be JSON. Absent Content-Type means no body was sent,
+  // which is a shape an HTML form cannot produce and which nothing here
+  // parses.
+  const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
+  if (contentType.length > 0 && !contentType.startsWith("application/json")) {
+    return privateJson({ error: "invalid_content_type" }, { status: 415 });
+  }
+
+  return null;
+}

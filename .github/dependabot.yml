@@ -1,0 +1,29 @@
+# SECURITY_FINDINGS_9751bd11 — finding 4.
+#
+# Every GitHub Action in this repository is pinned to an immutable commit SHA
+# rather than a moving tag, so a compromised or retagged upstream release
+# cannot silently change what runs in CI — including in `infra-apply.yml`,
+# which holds AWS OIDC credentials, and `supply-chain-ci.yml`, which produces
+# this project's own build attestations.
+#
+# SHA pinning without update automation is how a repository ends up running
+# an action version with a known vulnerability for a year, because nothing
+# ever nudges it. This file is the other half of the fix: Dependabot proposes
+# SHA bumps as reviewable pull requests, so updates stay deliberate and
+# visible instead of ambient.
+#
+# Scoped to github-actions ONLY. npm and the other ecosystems are deliberately
+# absent — adding them here would open a dependency-update stream this batch
+# has not agreed to review, which is a separate decision.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"

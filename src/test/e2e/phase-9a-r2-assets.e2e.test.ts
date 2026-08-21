@@ -470,3 +470,121 @@ test("22. the Supabase legacy path is documented as compatibility, not a rival t
   assert.ok(/Phase 9-A/.test(contract), "the doc must name the phase that owns R2");
   assert.ok(!/R2 is a future migration phase \(see Phase 12/.test(contract), "the stale Phase 12 claim must be gone");
 });
+
+// ===========================================================================
+// SECURITY_FINDINGS_9751bd11 — finding 2: upload size is signed, not advised
+// ===========================================================================
+//
+// These are behavioural: they sign real requests with the installed SDK and
+// inspect the result. A source-presence check ("does the code pass
+// ContentLength?") would pass even if the presigner silently dropped it.
+
+async function signProbe(contentLength?: number): Promise<URL> {
+  process.env.CLOUDFLARE_R2_ACCOUNT_ID ??= "probe";
+  process.env.CLOUDFLARE_R2_ACCESS_KEY_ID ??= "AKIAPROBE";
+  process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY ??= "probe-secret";
+  process.env.CLOUDFLARE_R2_BUCKET ??= "probe-bucket";
+  process.env.CLOUDFLARE_R2_ENDPOINT ??= "https://probe.r2.cloudflarestorage.com";
+
+  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({
+    region: "auto",
+    endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+    credentials: { accessKeyId: "AKIAPROBE", secretAccessKey: "probe-secret" },
+  });
+  const url = await getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: "b",
+      Key: "k",
+      ContentType: "image/png",
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
+    }),
+    { expiresIn: 300 }
+  );
+  return new URL(url);
+}
+
+test("S2-1  the presigner really binds Content-Length — verified, not assumed", async () => {
+  const without = await signProbe();
+  const withLen = await signProbe(1234);
+
+  const signedWithout = without.searchParams.get("X-Amz-SignedHeaders") ?? "";
+  const signedWith = withLen.searchParams.get("X-Amz-SignedHeaders") ?? "";
+
+  // Without it, only host is signed — which is exactly the pre-fix state.
+  assert.ok(!/(^|;)content-length(;|$)/.test(signedWithout), "baseline: no length in the signed set");
+  // With it, the SDK adds it to the signed set on its own.
+  assert.ok(/(^|;)content-length(;|$)/.test(signedWith), "ContentLength must enter X-Amz-SignedHeaders");
+});
+
+test("S2-2  a different size produces a different signature — binding, not decoration", async () => {
+  const a = await signProbe(1234);
+  const b = await signProbe(9999);
+  assert.notEqual(
+    a.searchParams.get("X-Amz-Signature"),
+    b.searchParams.get("X-Amz-Signature"),
+    "if these matched, the length would be cosmetic and a client could upload any size"
+  );
+});
+
+test("S2-3  createPresignedUpload refuses missing, non-integer, zero, negative and over-limit sizes", async () => {
+  const { createPresignedUpload, MAX_UPLOAD_BYTES } = await import("@/lib/media/r2-client");
+
+  const bad: unknown[] = [undefined, null, "1024", 0, -1, 1.5, NaN, MAX_UPLOAD_BYTES + 1, Infinity];
+  for (const value of bad) {
+    await assert.rejects(
+      () =>
+        createPresignedUpload({
+          objectKey: "k",
+          declaredContentType: "image/png",
+          contentLength: value as number,
+        }),
+      `contentLength ${String(value)} must be refused`
+    );
+  }
+
+  // The ceiling itself is accepted — the boundary is inclusive.
+  const ok = await createPresignedUpload({
+    objectKey: "k",
+    declaredContentType: "image/png",
+    contentLength: MAX_UPLOAD_BYTES,
+  });
+  assert.equal(ok.contentLength, MAX_UPLOAD_BYTES);
+  assert.ok(
+    /(^|;)content-length(;|$)/.test(new URL(ok.uploadUrl).searchParams.get("X-Amz-SignedHeaders") ?? ""),
+    "the URL this function returns must carry a signed length"
+  );
+});
+
+test("S2-4  the route requires byteSize — an omitted size can never be treated as small", () => {
+  const route = readFileSync(path.join(ROOT, "src/app/api/media/upload-url/route.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  // The defective form was `typeof body.byteSize === "number" && ... >` —
+  // a conjunction that skipped entirely when the field was absent.
+  assert.ok(
+    !/typeof body\.byteSize === "number" &&/.test(route),
+    "the optional-and-only-if-numeric form must not come back"
+  );
+  assert.match(route, /typeof body\.byteSize !== "number"/);
+  assert.match(route, /!Number\.isInteger\(body\.byteSize\)/);
+  assert.match(route, /body\.byteSize <= 0/);
+  assert.match(route, /body\.byteSize > MAX_UPLOAD_BYTES/);
+
+  // And the size actually reaches the signer.
+  assert.match(route, /contentLength: body\.byteSize/);
+});
+
+test("S2-5  no presign can be minted without a length — the parameter is required by type", () => {
+  const client = readFileSync(path.join(ROOT, "src/lib/media/r2-client.ts"), "utf8");
+  const fn = client.slice(client.indexOf("export async function createPresignedUpload"));
+  const signature = fn.slice(0, fn.indexOf("): Promise<"));
+
+  // Required, not `contentLength?:` — a caller cannot omit it.
+  assert.match(signature, /contentLength: number;/);
+  assert.ok(!/contentLength\?:/.test(signature), "the length must not be optional");
+  assert.match(fn.slice(0, 2000), /ContentLength: params\.contentLength/);
+});

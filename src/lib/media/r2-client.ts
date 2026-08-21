@@ -141,20 +141,61 @@ export const DOWNLOAD_URL_TTL_SECONDS = 300;
 export const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 
 /**
- * Issues a presigned PUT for exactly one key.
+ * Issues a presigned PUT for exactly one key, of exactly one size.
  *
- * Bound to bucket, key, method and content type — the client cannot redirect
- * it at another object, and cannot upload as a different type than it
- * declared. It does NOT validate the bytes: a presign says "you may write
+ * Bound to bucket, key, method, content type AND CONTENT LENGTH — the client
+ * cannot redirect it at another object, cannot upload as a different type than
+ * it declared, and cannot upload a different number of bytes than it declared.
+ * It does NOT validate the bytes themselves: a presign says "you may write
  * here", never "what you wrote is safe". Ingest verification is 9-B.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY contentLength IS REQUIRED (SECURITY_FINDINGS_9751bd11, finding 2)
+ * ---------------------------------------------------------------------------
+ * This function used to sign bucket, key and content type only. The route
+ * above it checked a client-declared `byteSize` against MAX_UPLOAD_BYTES — but
+ * that field was OPTIONAL, so omitting it skipped the check entirely, and the
+ * signature bound nothing about size. An authenticated caller could take the
+ * URL and PUT an object of any size.
+ *
+ * Making the parameter required is the fix, not a convenience: there is now no
+ * way to obtain an upload URL without stating the size, and no way to state a
+ * size the signature does not enforce.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SIGNATURE REALLY BINDS IT — VERIFIED, NOT ASSUMED
+ * ---------------------------------------------------------------------------
+ * Probed against the installed @aws-sdk/s3-request-presigner rather than taken
+ * on trust. Without ContentLength the signed set is `host`; with it the set
+ * becomes `content-length;host` automatically — no `signableHeaders` option
+ * needed — and signing 1234 versus 9999 produces DIFFERENT signatures. So a
+ * client that alters the length invalidates the request rather than smuggling
+ * bytes past a decorative field. `phase-9a-media-storage.e2e.test.ts` re-runs
+ * that check, so a future SDK upgrade that stopped signing it would fail.
  */
 export async function createPresignedUpload(params: {
   objectKey: string;
   declaredContentType: string;
+  /** Exact byte count. Signed, so the upload must match it. */
+  contentLength: number;
   expiresInSeconds?: number;
-}): Promise<{ uploadUrl: string; expiresInSeconds: number; method: "PUT" }> {
+}): Promise<{ uploadUrl: string; expiresInSeconds: number; method: "PUT"; contentLength: number }> {
   const config = getR2Config();
   const expiresIn = Math.min(params.expiresInSeconds ?? UPLOAD_URL_TTL_SECONDS, UPLOAD_URL_TTL_SECONDS);
+
+  // Refused here as well as at the route. A presign is a bearer credential for
+  // one write; the ceiling belongs on the thing that mints it, so a future
+  // caller cannot obtain an unbounded one by forgetting to check.
+  if (
+    !Number.isInteger(params.contentLength) ||
+    params.contentLength <= 0 ||
+    params.contentLength > MAX_UPLOAD_BYTES
+  ) {
+    throw new OrchestrationError("INVALID_INPUT", {
+      userMessage: "File is too large.",
+      context: { operation: "presign_upload", maxBytes: MAX_UPLOAD_BYTES },
+    });
+  }
 
   const uploadUrl = await getSignedUrl(
     client(),
@@ -162,11 +203,12 @@ export async function createPresignedUpload(params: {
       Bucket: config.bucket,
       Key: params.objectKey,
       ContentType: params.declaredContentType,
+      ContentLength: params.contentLength,
     }),
     { expiresIn }
   );
 
-  return { uploadUrl, expiresInSeconds: expiresIn, method: "PUT" };
+  return { uploadUrl, expiresInSeconds: expiresIn, method: "PUT", contentLength: params.contentLength };
 }
 
 /**

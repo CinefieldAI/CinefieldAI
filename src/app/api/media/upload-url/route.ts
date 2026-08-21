@@ -6,6 +6,7 @@ import { buildAssetObjectKey, safeExtension } from "@/lib/media/asset-keys";
 import { createPresignedUpload, MAX_UPLOAD_BYTES, UPLOAD_URL_TTL_SECONDS } from "@/lib/media/r2-client";
 import { getR2Config } from "@/lib/media/r2-config";
 
+import { guardBrowserMutation } from "@/lib/security/privileged-mutation-guard";
 import { guardRoute, privateJson } from "@/lib/security/response-headers";
 /**
  * POST /api/media/upload-url — server-authorized browser upload (Phase 9-A).
@@ -36,7 +37,13 @@ interface UploadUrlRequest {
   contentType?: string;
   /** Cosmetic only — reduced to an extension, kept as sanitized metadata. */
   filename?: string;
-  /** Client's expected size, checked against the ceiling before signing. */
+  /**
+   * Exact byte count. REQUIRED, and bound into the presigned signature.
+   *
+   * Optional until SECURITY_FINDINGS_9751bd11 finding 2: omitting it skipped
+   * the ceiling check entirely and the signature bound no length, so any size
+   * could be uploaded. A missing size is now refused, never treated as small.
+   */
   byteSize?: number;
   projectId?: string;
 }
@@ -65,6 +72,14 @@ function mediaTypeFor(contentType: string): "image" | "video" | "audio" | "other
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // SECURITY_FINDINGS_9751bd11, finding 3. Same-origin check BEFORE any
+  // side effect: this route mutates durable state or spends compute under an
+  // ambient Clerk session, so a cross-site request must be refused before it
+  // reaches auth, not after. Additive — auth and the rate-limit class below
+  // are unchanged.
+  const crossOrigin = guardBrowserMutation(request);
+  if (crossOrigin) return crossOrigin;
+
   const { userId } = await auth();
   if (!userId) {
     const error = new OrchestrationError("AUTH_REQUIRED");
@@ -91,7 +106,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     return privateJson(error.toResponseBody(), { status: error.status });
   }
 
-  if (typeof body.byteSize === "number" && body.byteSize > MAX_UPLOAD_BYTES) {
+  // ---- SIZE IS REQUIRED, AND IT IS SIGNED ---------------------------------
+  //
+  // SECURITY_FINDINGS_9751bd11, finding 2. This check used to read
+  // `typeof body.byteSize === "number" && body.byteSize > MAX_UPLOAD_BYTES` —
+  // so a caller who OMITTED byteSize, or sent a string, skipped it entirely.
+  // The presigned PUT then bound no length either, and an authenticated user
+  // could upload an object of any size to R2.
+  //
+  // Now the size must be stated, must be a positive integer within the
+  // ceiling, and is bound into the signature by `createPresignedUpload` — a
+  // client that uploads a different number of bytes invalidates the request.
+  // Absence is refused rather than defaulted: a missing size is not "small".
+  if (
+    typeof body.byteSize !== "number" ||
+    !Number.isInteger(body.byteSize) ||
+    body.byteSize <= 0 ||
+    body.byteSize > MAX_UPLOAD_BYTES
+  ) {
     const error = new OrchestrationError("INVALID_INPUT", { userMessage: "File is too large." });
     return privateJson(error.toResponseBody(), { status: error.status });
   }
@@ -142,6 +174,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const presigned = await createPresignedUpload({
       objectKey,
       declaredContentType: contentType,
+      contentLength: body.byteSize,
       expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
     });
 
@@ -151,10 +184,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         uploadUrl: presigned.uploadUrl,
         method: presigned.method,
         expiresInSeconds: presigned.expiresInSeconds,
-        // Echoed so the client can set the header it was signed with. It is
-        // NOT an instruction the client chose — it is the value the server
-        // bound into the signature.
+        // Echoed so the client can set the headers it was signed with. Neither
+        // is an instruction the client chose — both are values the server
+        // bound into the signature, and a PUT that disagrees with either is
+        // rejected by the storage provider rather than accepted.
         requiredContentType: contentType,
+        requiredContentLength: presigned.contentLength,
         maxBytes: MAX_UPLOAD_BYTES,
       },
       {

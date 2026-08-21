@@ -44,9 +44,9 @@ jobs:
     name: SBOM + dependency scan + container scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
@@ -56,7 +56,7 @@ jobs:
         run: npx tsx scripts/generate-sbom.ts --out sbom-out
 
       - name: Upload SBOM + audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom-${{ github.sha }}
           path: sbom-out/
@@ -66,7 +66,7 @@ jobs:
         run: docker build -f Dockerfile.provider-worker -t cinefield-provider-worker:ci .
 
       - name: Trivy container scan (reports, does not gate — same reasoning as the dependency scan above)
-        uses: aquasecurity/trivy-action@v0.24.0
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # v0.24.0
         with:
           image-ref: cinefield-provider-worker:ci
           format: table
@@ -83,9 +83,9 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
@@ -96,7 +96,7 @@ jobs:
 
       - name: Issue GitHub Artifact Attestation (keyless — no signing key in this repository)
         id: attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: sbom-out/sbom.json
 
@@ -119,7 +119,7 @@ jobs:
           } | tee release-metadata.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload release metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-metadata-${{ github.sha }}
           path: release-metadata.txt

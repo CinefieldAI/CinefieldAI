@@ -241,10 +241,29 @@ describe("Phase 22 — every new component has a real caller", () => {
     assert.match(src, /from "@\/lib\/eval\/eval-store"/);
   });
 
-  test("check-new-route-eval-evidence.ts imports the real eval store and admin client, not a mock", () => {
+  test("check-new-route-eval-evidence.ts imports NO eval store and NO admin client — the credential was removed", () => {
+    // INVERTED BY SECURITY_FINDINGS_9751bd11, finding 1, and deliberately.
+    //
+    // This used to assert the opposite: that the PR gate imported the real
+    // eval store and the Supabase admin client rather than a mock. The
+    // property it protected was "this gate does not fake evidence" — and that
+    // still holds, but it is now satisfied by the gate not CLAIMING to check
+    // evidence at all, instead of by it holding a credential.
+    //
+    // The gate ran from a `pull_request` job on the PR's own checkout while
+    // SUPABASE_SERVICE_ROLE_KEY was in the environment. That key bypasses RLS
+    // entirely, so PR-authored code could read it. The lookup was removed
+    // rather than re-credentialed; a new pair now stops for a human.
     const src = stripComments(read("scripts/check-new-route-eval-evidence.ts"));
-    assert.match(src, /from "@\/lib\/eval\/eval-store"/);
-    assert.match(src, /from "@\/lib\/supabase\/supabaseAdmin"/);
+    assert.doesNotMatch(src, /from "@\/lib\/eval\/eval-store"/);
+    assert.doesNotMatch(src, /from "@\/lib\/supabase\/supabaseAdmin"/);
+    // And it still fails closed on a new pair — stricter than before, since
+    // a pair that already had evidence no longer auto-passes.
+    assert.match(src, /MANUAL_MODEL_EVAL_EVIDENCE_VERIFICATION_REQUIRED/);
+
+    // The workflow_dispatch regression script is untouched and still real.
+    const dispatch = stripComments(read("scripts/check-model-eval-regression.ts"));
+    assert.match(dispatch, /from "@\/lib\/eval\/eval-store"/);
   });
 });
 
