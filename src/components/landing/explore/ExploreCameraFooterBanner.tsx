@@ -108,12 +108,12 @@ export default function ExploreCameraFooterBanner() {
           {FOOTER_COLUMNS.map((col) => (
             <div key={col.heading}>
               <h3 className="mb-3 text-sm font-medium text-white/60">{col.heading}</h3>
-              <div className="flex flex-col items-start gap-2">
+              <div className="flex flex-col items-start gap-3">
                 {col.items.map((item) => (
                   <button
                     key={item}
                     type="button"
-                    className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-white/10 px-3 text-left text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
+                    className="appearance-none border-0 bg-transparent p-0 text-left text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] transition-opacity hover:opacity-70 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
                   >
                     {item}
                   </button>
@@ -124,12 +124,12 @@ export default function ExploreCameraFooterBanner() {
         </div>
       </div>
 
-      <div className="mt-10 flex flex-wrap justify-center gap-2 border-t border-white/15 pt-8 xl:justify-end">
+      <div className="mt-10 flex flex-wrap justify-center gap-6 border-t border-white/15 pt-8 xl:justify-end">
         {SOCIAL_LABELS.map((label) => (
           <button
             key={label}
             type="button"
-            className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-white/10 px-3 text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
+            className="appearance-none border-0 bg-transparent p-0 text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] transition-opacity hover:opacity-70 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
           >
             {label}
           </button>
