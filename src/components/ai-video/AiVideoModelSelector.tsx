@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronRight, Search, Sparkles, Volume2 } from "lucide-react";
 import {
   ALL_MODELS,
   FEATURED_MODELS,
+  iconForModel,
   type AiVideoFamily,
   type AiVideoModel,
   type BadgeKind,
@@ -42,6 +43,34 @@ function BadgePill({ kind }: { kind: BadgeKind }) {
       {kind}
     </span>
   );
+}
+
+/**
+ * The panel's leading icon tile: a 40×40 square whose 1.5px ring is white on
+ * the top half and accent on the bottom, matching the tile the Marketing
+ * Studio and Cinema Studio pickers already use.
+ */
+function ModelIconTile({ model }: { model: AiVideoModel }) {
+  const icon = iconForModel(model.name);
+  return (
+    <div
+      className="relative mr-2 size-10 shrink-0 rounded-[12px] p-[1.5px]"
+      style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 50%, #D97757 50%, #D97757 100%)" }}
+    >
+      <div className="flex size-full items-center justify-center overflow-hidden rounded-[10.5px] bg-[radial-gradient(ellipse_at_center,rgba(18,18,18,0.95)_0%,rgba(28,28,28,0.90)_100%)]">
+        {icon ? createElement(icon, { className: "size-4.5 text-white" }) : null}
+      </div>
+    </div>
+  );
+}
+
+/** The prompt bar's own icon: bare and accent-coloured, no tile.
+ *  Rendered through createElement because the icon comes back from a lookup —
+ *  assigning it to a capitalised local and using JSX reads to the linter as
+ *  defining a component mid-render. */
+function TriggerIcon({ name }: { name: string }) {
+  const icon = iconForModel(name);
+  return icon ? createElement(icon, { className: "size-4 shrink-0 text-[#D97757]" }) : null;
 }
 
 function Chip({ label }: { label: string }) {
@@ -86,15 +115,7 @@ function ModelRow({
         selected ? "bg-white/5" : ""
       }`}
     >
-      {!compact && (
-        <div
-          className={`mr-2 flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/5 shadow-[inset_0_2px_3px_0_rgba(255,255,255,0.03)] ${
-            selected ? "text-[#D97757]" : "text-white/40"
-          }`}
-        >
-          <Sparkles className="size-4" />
-        </div>
-      )}
+      {!compact && <ModelIconTile model={model} />}
 
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -169,12 +190,16 @@ export default function AiVideoModelSelector({
     return hits;
   }, [trimmed]);
 
-  useEffect(() => {
-    if (!open) {
+  /** Closing clears the search and any open family flyout, so the panel
+   *  always reopens on the full tree. Done here rather than in an effect —
+   *  it is a reaction to the event, not state to synchronise. */
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
       setQuery("");
       setFlyout(null);
     }
-  }, [open]);
+  };
 
   const showFlyout = (el: HTMLButtonElement, family: AiVideoFamily) => {
     const rect = el.getBoundingClientRect();
@@ -183,11 +208,11 @@ export default function AiVideoModelSelector({
 
   const pick = (name: string) => {
     onSelect(name);
-    setOpen(false);
+    handleOpenChange(false);
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -196,7 +221,7 @@ export default function AiVideoModelSelector({
           aria-label={`Model: ${selected}`}
           className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-white/[0.04] bg-white/5 px-2 transition-colors hover:bg-white/10 focus:outline-none"
         >
-          <Sparkles className="size-4 shrink-0 text-[#D97757]" />
+          <TriggerIcon name={selected} />
           <span className="px-1 text-xs font-semibold text-white">{selected}</span>
         </button>
       </Popover.Trigger>

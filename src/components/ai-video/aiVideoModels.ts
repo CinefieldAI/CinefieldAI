@@ -11,7 +11,64 @@
  *    some, and 2:1 / 3:2 / 2:3 appear on exactly one model each.
  */
 
+import type { ComponentType, SVGProps } from "react";
+import { Clapperboard } from "lucide-react";
+import {
+  FluxIcon,
+  GoogleIcon,
+  GrokIcon,
+  HappyHorseIcon,
+  HiggsfieldIcon,
+  KlingIcon,
+  MinimaxIcon,
+  OpenAISoraIcon,
+  SeedanceIcon,
+} from "@/components/cinema-studio/icons/ProviderIcons";
+import WanIcon from "@/components/cinema-studio/icons/WanIcon";
+
 export type BadgeKind = "New" | "Premium" | "Exclusive" | "Unlimited";
+
+export type ProviderIcon = ComponentType<SVGProps<SVGSVGElement>>;
+
+/** Provider brand icons, reusing the same components the Cinema Studio
+ *  pickers already map these families to, so one model looks the same
+ *  everywhere in the app. */
+const ICONS = {
+  seedance: SeedanceIcon as ProviderIcon,
+  google: GoogleIcon as ProviderIcon,
+  kling: KlingIcon as ProviderIcon,
+  sora: OpenAISoraIcon as ProviderIcon,
+  grok: GrokIcon as ProviderIcon,
+  flux: FluxIcon as ProviderIcon,
+  minimax: MinimaxIcon as ProviderIcon,
+  happyhorse: HappyHorseIcon as ProviderIcon,
+  cinefield: HiggsfieldIcon as ProviderIcon,
+  wan: WanIcon as ProviderIcon,
+  cinemaStudio: Clapperboard as unknown as ProviderIcon,
+} as const;
+
+/**
+ * Brand icon for a model or family. Matched on the name so a family card and
+ * every submodel under it resolve to the same icon without repeating it on
+ * ~70 entries. Anything with no in-house brand icon (nothing currently)
+ * falls through to undefined and renders without one.
+ */
+export function iconForModel(name: string): ProviderIcon | undefined {
+  if (name.startsWith("Seedance") || name.startsWith("Enhanced Seedance")) return ICONS.seedance;
+  if (name.startsWith("MiniMax") || name.startsWith("Minimax")) return ICONS.minimax;
+  if (name.startsWith("FLUX")) return ICONS.flux;
+  if (name.startsWith("Kling")) return ICONS.kling;
+  if (name.startsWith("Sora") || name.startsWith("OpenAI Sora")) return ICONS.sora;
+  if (name.startsWith("Google Veo") || name.startsWith("Gemini")) return ICONS.google;
+  // Cinema Studio keeps the clapperboard it uses everywhere else, so it stays
+  // distinct from the rest of the Cinefield family.
+  if (name.startsWith("Cinema Studio")) return ICONS.cinemaStudio;
+  if (name.startsWith("Cinefield")) return ICONS.cinefield;
+  if (name.startsWith("Wan")) return ICONS.wan;
+  if (name.startsWith("Grok")) return ICONS.grok;
+  if (name.startsWith("HappyHorse")) return ICONS.happyhorse;
+  return undefined;
+}
 
 export interface AiVideoModel {
   id: string;
