@@ -27,17 +27,40 @@ const OAUTH_CALLBACK_PATH = "/sign-in/sso-callback";
 // Static helper components — declared at module scope (not inside
 // PasswordSignIn) so they aren't recreated every render.
 
+/**
+ * The auth surface must not assert an agreement that does not exist.
+ *
+ * This previously read "By continuing, you agree to our Privacy Policy and
+ * Terms of Use" and linked to /privacy and /terms — neither of which existed,
+ * and neither of which has counsel-approved content today. That sentence
+ * claimed a contract had been formed by reference to documents nobody could
+ * read. Creating the pages alone would not have fixed it: the false part was
+ * the assertion of acceptance, not the broken link.
+ *
+ * So the claim is gone and the status is stated plainly instead. No versioned
+ * legal acceptance is recorded anywhere in this product, and nothing here may
+ * imply that continuing, signing up or purchasing constitutes acceptance.
+ *
+ * Phase 29 (DEFERRED_PENDING_LEGAL_COUNSEL) owns the real documents and the
+ * acceptance record. When counsel-approved text exists, this component is
+ * where the genuine consent language belongs — not before.
+ *
+ * Scope note: this is the one function unlocked from the otherwise locked auth
+ * modal, for this correction only. Layout, styling, Clerk flow, OAuth and error
+ * handling are untouched.
+ */
 function LegalFooter() {
   return (
     <p className="text-xs text-gray-500 text-center">
-      By continuing, you agree to our{" "}
-      <Link href="/privacy" className="text-[#D97757] hover:text-[#e98566]">
-        Privacy Policy
-      </Link>{" "}
-      and{" "}
+      Cinefield’s{" "}
       <Link href="/terms" className="text-[#D97757] hover:text-[#e98566]">
         Terms of Use
-      </Link>
+      </Link>{" "}
+      and{" "}
+      <Link href="/privacy" className="text-[#D97757] hover:text-[#e98566]">
+        Privacy Notice
+      </Link>{" "}
+      are being prepared and are not published yet.
     </p>
   );
 }
