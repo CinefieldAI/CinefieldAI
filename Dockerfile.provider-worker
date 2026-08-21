@@ -57,9 +57,13 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# tini forwards ECS SIGTERM and reaps zombies. Install only this one runtime OS
-# package, then run as an unprivileged service account.
+# tini forwards ECS SIGTERM and reaps zombies. The stock Node image also ships
+# npm/npx/corepack for developer convenience; this worker never installs
+# packages at runtime, so retaining them only adds executable surface and their
+# own transitive CVEs. Remove package managers while preserving the Node binary.
 RUN apk add --no-cache tini \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx \
   && addgroup -S -g 1001 cinefield \
   && adduser -S -D -u 1001 -G cinefield -h /app -s /sbin/nologin cinefield
 
