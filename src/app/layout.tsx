@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Barlow_Condensed } from "next/font/google";
 import { AuthModalProvider } from "@/context/AuthModalContext";
 import ProfileSynchronizer from "@/components/auth/ProfileSynchronizer";
 import CinefieldAuthModal from "@/components/auth/CinefieldAuthModal";
@@ -9,6 +9,13 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+});
+
+const barlowCondensed = Barlow_Condensed({
+  variable: "--font-barlow-condensed",
+  subsets: ["latin"],
+  weight: ["900", "800", "700"],
+  style: ["normal"],
 });
 
 const geistMono = Geist_Mono({
@@ -32,7 +39,7 @@ export default function RootLayout({
         <ProfileSynchronizer />
         <html
           lang="en"
-          className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} ${barlowCondensed.variable} h-full antialiased`}
         >
           <body className="min-h-full flex flex-col">
             {children}

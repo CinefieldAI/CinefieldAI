@@ -415,7 +415,21 @@ export default function MarketingStudioProductWorkspace() {
                   {/* HERO SECTION */}
                   <div className="relative z-10 flex min-h-[238px] w-full max-w-[640px] flex-col items-center justify-center text-center">
                     <p className="mb-4 font-grotesk text-sm font-bold uppercase tracking-normal text-white/50">MARKETING STUDIO</p>
-                    <h1 className="font-grotesk text-[40px] font-bold uppercase leading-[48px] tracking-[-1.6px] text-white">
+                    <h1
+                      className="text-center uppercase whitespace-nowrap"
+                      style={{
+                        fontFamily: "var(--font-barlow-condensed), 'Barlow Condensed', sans-serif",
+                        fontWeight: 900,
+                        fontSize: "clamp(40px, 5vw, 64px)",
+                        lineHeight: 1.05,
+                        letterSpacing: "0.03em",
+                        background:
+                          "linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 30%, #ADADAD 60%, #7A7A7A 100%)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text",
+                      }}
+                    >
                       TURN ANY PRODUCT<br />INTO A VIDEO AD
                     </h1>
                   </div>
