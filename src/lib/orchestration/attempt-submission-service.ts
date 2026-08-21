@@ -5,6 +5,7 @@ import { executeGeneration } from "./orchestrator";
 import { readPersistedProviderJob } from "./status-manager";
 import { readAttempt } from "./attempt-repository";
 import { createFieldLogger } from "@/lib/observability/logger";
+import { assertGenerationBillingAuthorized } from "@/lib/billing/generation-credit-gate";
 import {
   recordExecutionFailure,
   recordExecutionSuccess,
@@ -72,6 +73,16 @@ export async function submitAttempt(params: {
   attemptId: string;
 }): Promise<AttemptSubmissionOutcome> {
   const admin = getSupabaseAdminClient();
+
+  // SECURITY — second independent billing gate, immediately before the
+  // provider-submission state machine. The HTTP/Temporal entry boundary
+  // creates the hold; this worker boundary only verifies it. Therefore a
+  // future route/workflow regression cannot silently restore unpaid provider
+  // execution, and a missing hold causes zero provider calls.
+  await assertGenerationBillingAuthorized({
+    generationId: params.generationId,
+    clerkUserId: params.clerkUserId,
+  });
 
   // ---- B3 gate: atomic claim, evidence must be provably absent -------------
   const claimed = await claimAttemptForSubmission(admin, params.attemptId);
