@@ -3,14 +3,14 @@
 -- ===========================================================================
 -- The application tests cover the ordering of the completion boundary. These
 -- cover what the database refuses no matter what any worker believes:
--- duplicate canonical originals, finalization without facts, and verification
+-- duplicate canonical outputs, finalization without facts, and verification
 -- hooks that default to a passing value.
 -- ===========================================================================
 
 \set ON_ERROR_STOP on
 
 -- ---------------------------------------------------------------------------
--- PROOF A1 — one canonical original per generation
+-- PROOF A1 — one canonical original per generation/output slot
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -26,12 +26,14 @@ BEGIN
           'quarantine/output/' || v_user || '/a/original.png');
 
   BEGIN
+    -- Both rows default to output_index=0, so retry of the same output slot
+    -- must converge even though later output slots may legitimately coexist.
     INSERT INTO media_assets (clerk_user_id, generation_id, source, role, media_type, bucket, object_key)
     VALUES (v_user, v_gen, 'provider_output', 'original', 'image', 'cinefield-media',
             'quarantine/output/' || v_user || '/b/original.png');
-    RAISE EXCEPTION 'PROOF A1 FAILED: a second canonical original was accepted';
+    RAISE EXCEPTION 'PROOF A1 FAILED: a second canonical output for slot 0 was accepted';
   EXCEPTION WHEN unique_violation THEN
-    RAISE NOTICE 'PROOF A1 PASS: one canonical original per generation; retry converges';
+    RAISE NOTICE 'PROOF A1 PASS: one canonical original per generation/output slot; retry converges';
   END;
 END $$;
 
@@ -164,12 +166,15 @@ END $$;
 
 
 -- ---------------------------------------------------------------------------
--- PROOF A7 — Phase 9-A is additive; earlier invariants intact
+-- PROOF A7 — current media identity and earlier invariants remain intact
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_original_uniq';
-  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF A7 FAILED: canonical-original index missing'; END IF;
+  -- Phase 27 widened the old single-original identity to
+  -- (generation_id, output_index). The current invariant is therefore this
+  -- index, not the retired media_assets_generation_original_uniq name.
+  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_output_uniq';
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF A7 FAILED: generation/output canonical index missing'; END IF;
 
   PERFORM 1 FROM information_schema.tables
    WHERE table_schema = 'public' AND table_name = 'workflow_start_outbox';
@@ -181,7 +186,7 @@ BEGIN
   PERFORM 1 FROM pg_indexes WHERE indexname = 'generations_user_idempotency_uniq';
   IF NOT FOUND THEN RAISE EXCEPTION 'PROOF A7 FAILED: generation idempotency index disappeared'; END IF;
 
-  RAISE NOTICE 'PROOF A7 PASS: Phase 9-A is additive; earlier invariants intact';
+  RAISE NOTICE 'PROOF A7 PASS: current media identity and earlier invariants intact';
 END $$;
 
 
