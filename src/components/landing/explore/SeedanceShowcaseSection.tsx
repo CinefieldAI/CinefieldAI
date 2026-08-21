@@ -11,86 +11,86 @@ export const SHOWCASE_VIDEOS: ShowcaseVideo[] = [
   {
     id: "1",
     user: "banksy_pancake_gold22",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 55,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_1_banksy_pancake_gold22.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_1_banksy_pancake_gold22.mp4"
   },
   {
     id: "2",
     user: "gaziziz",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 46,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_2_gaziziz.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_2_gaziziz.mp4"
   },
   {
     id: "3",
     user: "arpanetus",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 99,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_3_arpanetus.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_3_arpanetus.mp4"
   },
   {
     id: "4",
     user: "folkemerald1346",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 270,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_4_folkemerald1346.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_4_folkemerald1346.mp4"
   },
   {
     id: "5",
     user: "smartbeetle1651",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 93,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_5_smartbeetle1651.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_5_smartbeetle1651.mp4"
   },
   {
     id: "6",
     user: "jighit",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 20,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_6_jighit.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_6_jighit.mp4"
   },
   {
     id: "7",
     user: "higgsfield_hall_of_fame",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 33,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_7_higgsfield_hall_of_fame.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_7_higgsfield_hall_of_fame.mp4"
   },
   {
     id: "8",
     user: "bourgeois_mean",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 36,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_8_bourgeois_mean.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_8_bourgeois_mean.mp4"
   },
   {
     id: "9",
     user: "jennifer_lopez",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 35,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_9_jennifer_lopez.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_9_jennifer_lopez.mp4"
   },
   {
     id: "10",
     user: "artificial_penguin",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 17,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_10_artificial_penguin.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_10_artificial_penguin.mp4"
   },
   {
     id: "11",
     user: "land_art_pencil",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 99,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_1_banksy_pancake_gold22.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_1_banksy_pancake_gold22.mp4"
   },
   {
     id: "12",
     user: "futurist_ice_special",
-    avatar: "/Klon kopya fotos _videos/seedance_showcase_assets/default_avatar.png",
+    avatar: "/Klon kopya fotos _videos/seedance 2.5/default_avatar.png",
     likes: 86,
-    videoSrc: "/Klon kopya fotos _videos/seedance_showcase_assets/showcase_card_2_gaziziz.mp4"
+    videoSrc: "/Klon kopya fotos _videos/seedance 2.5/showcase_card_2_gaziziz.mp4"
   }
 ];
 

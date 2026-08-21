@@ -9,7 +9,7 @@ export default function PromoBannerSection() {
           className="relative isolate block aspect-[351/197] w-full overflow-hidden rounded-lg bg-[#1c1e21] text-left ring-1 ring-inset ring-white/20 transition-opacity hover:opacity-95 lg:aspect-auto lg:self-stretch lg:min-h-[264px] md:rounded-[20px]"
         >
           <video
-            src="/Klon kopya fotos _videos/seedance_showcase_assets/promo_exclusive_seedance_2_5_1080p.mp4#t=0.001"
+            src="/Klon kopya fotos _videos/seedance 2.5/promo_exclusive_seedance_2_5_1080p.mp4#t=0.001"
             aria-hidden="true"
             playsInline
             disablePictureInPicture
@@ -24,7 +24,7 @@ export default function PromoBannerSection() {
             disablePictureInPicture
             preload="metadata"
             aria-hidden="true"
-            src="/Klon kopya fotos _videos/seedance_showcase_assets/promo_exclusive_seedance_2_5_1080p.mp4"
+            src="/Klon kopya fotos _videos/seedance 2.5/promo_exclusive_seedance_2_5_1080p.mp4"
             className="pointer-events-none absolute inset-0 size-full object-cover"
           >
             Your browser does not support the video.
@@ -102,7 +102,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="/Klon kopya fotos _videos/seedance_showcase_assets/seedance_logo.png"
+              src="/Klon kopya fotos _videos/seedance 2.5/seedance_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -163,7 +163,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="/Klon kopya fotos _videos/seedance_showcase_assets/spc_explore_icon.png"
+              src="/Klon kopya fotos _videos/seedance 2.5/spc_explore_icon.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -186,7 +186,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="/Klon kopya fotos _videos/seedance_showcase_assets/claude_logo.png"
+              src="/Klon kopya fotos _videos/seedance 2.5/claude_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -209,7 +209,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="/Klon kopya fotos _videos/seedance_showcase_assets/seedance_logo.png"
+              src="/Klon kopya fotos _videos/seedance 2.5/seedance_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -251,7 +251,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="/Klon kopya fotos _videos/seedance_showcase_assets/cinema_studio_logo.png"
+              src="/Klon kopya fotos _videos/seedance 2.5/cinema_studio_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">

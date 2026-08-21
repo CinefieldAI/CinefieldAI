@@ -16,7 +16,7 @@ export default function FilmFestivalBannerSection() {
             loading="eager"
             decoding="async"
             className="absolute bottom-12 right-[min(2.7%,2.375rem)] hidden h-auto w-[min(51.14%,45rem)] max-w-none object-contain md:block z-10"
-            src="/Klon kopya fotos _videos/seedance_showcase_assets/award_trophy.webp"
+            src="/Klon kopya fotos _videos/seedance 2.5/award_trophy.webp"
           />
         </div>
 
