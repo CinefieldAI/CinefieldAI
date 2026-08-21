@@ -191,12 +191,15 @@ END $$;
 
 
 -- ---------------------------------------------------------------------------
--- PROOF B7 — earlier invariants intact
+-- PROOF B7 — earlier/current invariants intact
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_original_uniq';
-  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF B7 FAILED: 9-A canonical index missing'; END IF;
+  -- Phase 27 superseded the old single-original index with the widened
+  -- generation/output identity. The ingest gate must preserve that current
+  -- canonical-output invariant.
+  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_output_uniq';
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF B7 FAILED: generation/output canonical index missing'; END IF;
 
   PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_owner_checksum_idx';
   IF NOT FOUND THEN RAISE EXCEPTION 'PROOF B7 FAILED: tenant-scoped checksum index missing'; END IF;
@@ -205,5 +208,5 @@ BEGIN
    WHERE table_schema = 'public' AND table_name = 'workflow_start_outbox';
   IF NOT FOUND THEN RAISE EXCEPTION 'PROOF B7 FAILED: M6 table disappeared'; END IF;
 
-  RAISE NOTICE 'PROOF B7 PASS: Phase 9-B is additive; earlier invariants intact';
+  RAISE NOTICE 'PROOF B7 PASS: Phase 9-B and current media identity invariants intact';
 END $$;
