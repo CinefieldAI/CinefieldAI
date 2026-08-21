@@ -126,13 +126,13 @@ export default function ComposerBar({
         className="absolute inset-x-0 bottom-0 flex items-end gap-2"
         style={{ height: resizeHeight }}
       >
-      {/* LEFT IMAGE/VIDEO SELECTOR - MATCHES /GENERATE MODE TOGGLE SHAPE */}
+      {/* LEFT IMAGE/VIDEO SELECTOR - MATCHES /GENERATE MODE TOGGLE SHAPE.
+          Fixed height and bottom-anchored (via the row's items-end) so it
+          stays put at its original size while the main bar grows taller —
+          it does not stretch or travel upward with the resize. */}
       <div
-        className={`relative z-50 flex w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white ${
-          resizeController.isResizing ? "" : "transition-[height] duration-150 ease-out"
-        }`}
+        className="relative z-50 flex h-[116px] min-h-[116px] w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white"
         style={{
-          height: resizeHeight,
           background:
             "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
           border: "1px solid rgba(217, 119, 87, 0.45)",
@@ -184,8 +184,11 @@ export default function ComposerBar({
           cornerLabel="Resize marketing prompt width and height"
         />
 
-        {/* LEFT: PROMPT INPUT + IMAGE CONTROLS */}
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-3 pr-3">
+        {/* LEFT: PROMPT INPUT + IMAGE CONTROLS. justify-end (not -center) so
+            this group stays locked to the bottom of the bar as it grows
+            taller — the new empty space opens up above it, it never drifts
+            upward. */}
+        <div className="flex min-w-0 flex-1 flex-col justify-end gap-3 pr-3">
           <div className="flex items-start gap-3">
             <input
               type="text"

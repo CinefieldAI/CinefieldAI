@@ -28,7 +28,7 @@ export default function MarketingStudioSidebar({
         type="button"
         onClick={onToggleCollapse}
         className={cn(
-          "fixed top-3.5 z-[100] pointer-events-auto flex size-7 shrink-0 items-center justify-center text-white transition-all duration-300 ease-out cursor-pointer p-0 bg-transparent border-0 group",
+          "fixed top-[70px] z-[100] pointer-events-auto flex size-7 shrink-0 items-center justify-center text-white transition-all duration-300 ease-out cursor-pointer p-0 bg-transparent border-0 group",
           isCollapsed ? "left-4" : "left-[212px]"
         )}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -71,7 +71,7 @@ export default function MarketingStudioSidebar({
       {/* SIDEBAR PANEL */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-40 hidden h-dvh md:block transition-transform duration-300 ease-out border-r border-white/[0.04] bg-[#0d0f10]/95 backdrop-blur-xl",
+          "fixed left-0 top-14 z-40 hidden h-[calc(100dvh-3.5rem)] md:block transition-transform duration-300 ease-out border-r border-white/[0.04] bg-[#0d0f10]/95 backdrop-blur-xl",
           isCollapsed ? "-translate-x-full" : "translate-x-0"
         )}
         style={{ width: "199px" }}

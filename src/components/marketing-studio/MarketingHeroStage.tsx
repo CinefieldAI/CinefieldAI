@@ -251,7 +251,7 @@ export default function MarketingHeroStage() {
       {/* TOP PILL BADGE */}
       <span
         data-ms2-marketing-studio-badge="true"
-        className="relative z-10 isolate mb-3 flex h-6 items-center justify-center gap-1 overflow-hidden rounded-full border border-white/10 px-2.5"
+        className="relative z-10 isolate mb-3 flex h-7 items-center justify-center gap-1 overflow-hidden rounded-full border border-white/10 px-3.5"
       >
         <span
           aria-hidden="true"
@@ -269,7 +269,7 @@ export default function MarketingHeroStage() {
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-transparent to-white/30 mix-blend-hard-light"
         />
         <span
-          className="relative whitespace-nowrap bg-clip-text text-[11px] font-bold uppercase tracking-wide text-transparent"
+          className="relative whitespace-nowrap bg-clip-text text-xs font-bold uppercase tracking-wide text-transparent"
           style={{
             backgroundImage: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.4) 90%)",
           }}

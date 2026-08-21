@@ -15,7 +15,7 @@ import YourAppModal from "@/components/marketing-studio/YourAppModal";
 import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
 import MarketingHeroStage from "@/components/marketing-studio/MarketingHeroStage";
 import MarketingStudioSidebar from "@/components/marketing-studio/MarketingStudioSidebar";
-import NavbarActions from "@/components/landing/NavbarActions";
+import Navbar from "@/components/landing/Navbar";
 import ComposerBar, {
   MARKETING_COMPOSER_DEFAULT_HEIGHT,
   MARKETING_COMPOSER_DEFAULT_WIDTH,
@@ -367,15 +367,19 @@ export default function MarketingStudioProductWorkspace() {
       }}
     >
 
-      {/* No top Navbar on this page — see the note above the removed
-          hover-reveal effect. Navigation runs through the sidebar below.
-          The navbar's action group is still surfaced here, as a fixed card
-          in the top-right corner: same shared NavbarActions component, so
-          Search / Pricing / Assets / account behave exactly as they do in
-          the navbar. It is always visible — nothing hover-reveals. */}
-      <div className="fixed right-4 top-4 z-50 flex items-center gap-2.5 rounded-2xl border border-white/10 bg-black/60 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-        <NavbarActions />
-      </div>
+      {/* Full shared Navbar, same as every other standalone page (Shorts
+          Studio, Explainer) — transparent here (see the isTransparentHost
+          check in Navbar.tsx) so the page's own hero gradient shows through
+          instead of the usual black bar. The panel/view callbacks are noops:
+          this page has no AppShell view state, and Navbar's own links already
+          navigate by route regardless of them. */}
+      <Navbar
+        activePanel={null}
+        onOpenImagePanel={() => {}}
+        onOpenVideoPanel={() => {}}
+        onOpenAudioPanel={() => {}}
+        onSetView={() => {}}
+      />
 
       {/* OFFICIAL HIGGSFIELD SIDEBAR WITH COLLAPSE TOGGLE */}
       <MarketingStudioSidebar

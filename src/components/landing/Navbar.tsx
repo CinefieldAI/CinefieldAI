@@ -280,16 +280,27 @@ export default function Navbar({
     goToSection();
   };
 
+  // Marketing Studio's product page has its own hero background (a warm
+  // radial gradient) directly under the navbar — the usual black bar would
+  // sit on top of it as a visible seam, so the navbar goes fully transparent
+  // there and only its links/actions render, matching the page's transparent
+  // fixed-actions card it already used before this row existed.
+  const isTransparentHost = pathname === "/marketing-studio/product";
+
   return (
     <header
       className="sticky top-0 z-51 grid h-14 w-full grid-cols-[1fr_auto] items-center pr-4 transition-all duration-300 md:grid-cols-[auto_1fr_auto]"
-      style={{
-        background: isScrolled ? "rgba(0,0,0,0.96)" : "rgba(0,0,0,0.8)",
-        borderBottom: "none",
-        boxShadow: isScrolled ? "0 4px 20px rgba(0,0,0,0.6)" : "none",
-        backdropFilter: "blur(40px)",
-        WebkitBackdropFilter: "blur(40px)",
-      }}
+      style={
+        isTransparentHost
+          ? { background: "transparent", borderBottom: "none", boxShadow: "none" }
+          : {
+              background: isScrolled ? "rgba(0,0,0,0.96)" : "rgba(0,0,0,0.8)",
+              borderBottom: "none",
+              boxShadow: isScrolled ? "0 4px 20px rgba(0,0,0,0.6)" : "none",
+              backdropFilter: "blur(40px)",
+              WebkitBackdropFilter: "blur(40px)",
+            }
+      }
     >
       {/* Column 1: logo */}
       <div className="flex items-center gap-2 pl-4 md:pl-6">
