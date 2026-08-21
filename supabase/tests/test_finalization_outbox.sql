@@ -233,4 +233,94 @@ BEGIN
   RAISE NOTICE 'PROOF O PASS: one terminal state, one agreeing event';
 END $$;
 
+-- ===========================================================================
+-- PROOF P — a completed generation settles its held credits transactionally
+-- ===========================================================================
+DO $$
+DECLARE
+  v_user text := 'user_bill_complete_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_gen uuid;
+  v_res uuid;
+  v_balance integer;
+  v_reserved integer;
+  v_status text;
+BEGIN
+  INSERT INTO profiles (clerk_user_id, credits, plan) VALUES (v_user, 0, 'pro');
+  PERFORM grant_credits(v_user, 100, 'grant', 'seed:' || v_user);
+  INSERT INTO projects (clerk_user_id, title) VALUES (v_user, 'billing complete') RETURNING id INTO v_project;
+  v_gen := (create_generation_tx(v_user, v_project, 'image', 'fal', 'real-model', 'p') ->> 'generation_id')::uuid;
+  v_res := (reserve_credits(v_user, 30, 'generation:' || v_gen::text, v_gen, '{}'::jsonb) ->> 'reservation_id')::uuid;
+  PERFORM claim_generation_tx(v_gen, 'validating', NULL);
+
+  PERFORM complete_generation_tx(v_gen, 'out.png', 'fal', 'text-to-image', false);
+
+  SELECT status INTO v_status FROM credit_reservations WHERE id = v_res;
+  SELECT balance, reserved INTO v_balance, v_reserved FROM credit_wallets WHERE clerk_user_id = v_user;
+  ASSERT v_status = 'settled', 'P: completion must settle the reservation, got ' || v_status;
+  ASSERT v_balance = 70 AND v_reserved = 0,
+    'P: completion must consume the hold exactly once; balance=' || v_balance || ', reserved=' || v_reserved;
+  RAISE NOTICE 'PROOF P PASS: completed generation settles its credit hold in the same transaction';
+END $$;
+
+-- ===========================================================================
+-- PROOF Q — a non-retryable failure refunds its held credits
+-- ===========================================================================
+DO $$
+DECLARE
+  v_user text := 'user_bill_fail_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_gen uuid;
+  v_res uuid;
+  v_balance integer;
+  v_reserved integer;
+  v_status text;
+BEGIN
+  INSERT INTO profiles (clerk_user_id, credits, plan) VALUES (v_user, 0, 'pro');
+  PERFORM grant_credits(v_user, 100, 'grant', 'seed:' || v_user);
+  INSERT INTO projects (clerk_user_id, title) VALUES (v_user, 'billing fail') RETURNING id INTO v_project;
+  v_gen := (create_generation_tx(v_user, v_project, 'image', 'fal', 'real-model', 'p') ->> 'generation_id')::uuid;
+  v_res := (reserve_credits(v_user, 30, 'generation:' || v_gen::text, v_gen, '{}'::jsonb) ->> 'reservation_id')::uuid;
+  PERFORM claim_generation_tx(v_gen, 'validating', NULL);
+
+  PERFORM fail_generation_tx(v_gen, 'failed', 'PROVIDER_FAILED', false);
+
+  SELECT status INTO v_status FROM credit_reservations WHERE id = v_res;
+  SELECT balance, reserved INTO v_balance, v_reserved FROM credit_wallets WHERE clerk_user_id = v_user;
+  ASSERT v_status = 'refunded', 'Q: non-retryable failure must refund the reservation, got ' || v_status;
+  ASSERT v_balance = 100 AND v_reserved = 0,
+    'Q: refund must restore the full balance; balance=' || v_balance || ', reserved=' || v_reserved;
+  RAISE NOTICE 'PROOF Q PASS: non-retryable failure refunds its credit hold';
+END $$;
+
+-- ===========================================================================
+-- PROOF R — a retryable failure preserves the SAME hold for the retry
+-- ===========================================================================
+DO $$
+DECLARE
+  v_user text := 'user_bill_retry_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_gen uuid;
+  v_res uuid;
+  v_balance integer;
+  v_reserved integer;
+  v_status text;
+BEGIN
+  INSERT INTO profiles (clerk_user_id, credits, plan) VALUES (v_user, 0, 'pro');
+  PERFORM grant_credits(v_user, 100, 'grant', 'seed:' || v_user);
+  INSERT INTO projects (clerk_user_id, title) VALUES (v_user, 'billing retry') RETURNING id INTO v_project;
+  v_gen := (create_generation_tx(v_user, v_project, 'image', 'fal', 'real-model', 'p') ->> 'generation_id')::uuid;
+  v_res := (reserve_credits(v_user, 30, 'generation:' || v_gen::text, v_gen, '{}'::jsonb) ->> 'reservation_id')::uuid;
+  PERFORM claim_generation_tx(v_gen, 'validating', NULL);
+
+  PERFORM fail_generation_tx(v_gen, 'retry me', 'PROVIDER_TIMEOUT', true);
+
+  SELECT status INTO v_status FROM credit_reservations WHERE id = v_res;
+  SELECT balance, reserved INTO v_balance, v_reserved FROM credit_wallets WHERE clerk_user_id = v_user;
+  ASSERT v_status = 'held', 'R: retryable failure must keep the existing hold, got ' || v_status;
+  ASSERT v_balance = 70 AND v_reserved = 30,
+    'R: retry must not refund and re-reserve; balance=' || v_balance || ', reserved=' || v_reserved;
+  RAISE NOTICE 'PROOF R PASS: retryable failure keeps one durable credit hold';
+END $$;
+
 SELECT 'FINALIZATION PROOFS PASSED' AS result;
