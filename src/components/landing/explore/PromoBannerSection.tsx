@@ -102,7 +102,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore/image-generate-block/seedance-logo.png"
+              src="/Klon kopya fotos _videos/seedance_showcase_assets/seedance_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -163,7 +163,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore-image/spc-explore-icon.png"
+              src="/Klon kopya fotos _videos/seedance_showcase_assets/spc_explore_icon.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -186,7 +186,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore/image-generate-block/claude-logo.png"
+              src="/Klon kopya fotos _videos/seedance_showcase_assets/claude_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -209,7 +209,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore/image-generate-block/seedance-logo.png"
+              src="/Klon kopya fotos _videos/seedance_showcase_assets/seedance_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
@@ -251,7 +251,7 @@ export default function PromoBannerSection() {
               alt=""
               aria-hidden="true"
               className="relative size-5 drop-shadow-[0px_3px_2px_rgba(0,0,0,0.15)]"
-              src="https://static.higgsfield.ai/explore/image-generate-block/cinema-studio.png"
+              src="/Klon kopya fotos _videos/seedance_showcase_assets/cinema_studio_logo.png"
             />
           </div>
           <div className="relative flex w-full flex-col gap-1">
