@@ -69,6 +69,9 @@ jobs:
             test ! -e /app/node_modules
             test ! -e /app/package.json
             test ! -e /app/package-lock.json
+            ! command -v npm >/dev/null 2>&1
+            ! command -v npx >/dev/null 2>&1
+            ! command -v corepack >/dev/null 2>&1
             node --check /app/provider-worker.cjs
           '
 
