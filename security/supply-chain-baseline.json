@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-08-21",
-  "sourceWorkflowRun": 32517923234,
+  "capturedAt": "2026-08-22",
+  "sourceWorkflowRun": 32532462122,
   "npmProduction": {
     "critical": 0,
     "high": 10
   },
   "providerWorkerImage": {
-    "critical": 11,
-    "high": 180
+    "critical": 0,
+    "high": 0
   }
 }
