@@ -323,7 +323,7 @@ export default function Navbar({
                 onClick={(event) =>
                   handleNavTriggerClick(event, () => handleFeatureSelect("create"))
                 }
-                className={`text-[14px] ${
+                className={`text-[15px] ${
                   activePanel === "image"
                     ? "bg-white/10 text-[#D97757]"
                     : ""
@@ -347,7 +347,7 @@ export default function Navbar({
                     handleVideoFeatureSelect("Create Video"),
                   )
                 }
-                className={`text-[14px] ${
+                className={`text-[15px] ${
                   activePanel === "video" ||
                   pathname.startsWith("/video/")
                     ? "bg-white/10 text-[#D97757]"
@@ -376,7 +376,7 @@ export default function Navbar({
                     goToAudioWorkspace({ mode: audioMode ?? "voiceover" }),
                   )
                 }
-                className={`text-[14px] ${
+                className={`text-[15px] ${
                   activePanel === "audio" ||
                   pathname.startsWith("/audio/")
                     ? "bg-white/10 text-[#D97757]"
