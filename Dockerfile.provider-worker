@@ -26,6 +26,10 @@ RUN npm ci --ignore-scripts
 # allow-list from drifting behind new worker imports.
 COPY worker ./worker
 COPY src ./src
+# The embedded policy engine imports this registry JSON at build time. It is
+# bundled into the generated worker artifact; the policies directory itself is
+# never copied to the final runtime stage.
+COPY policies ./policies
 
 # `esbuild` is already locked in package-lock.json by the repository toolchain.
 # It is used only in this disposable build stage. `react-server` resolves the
