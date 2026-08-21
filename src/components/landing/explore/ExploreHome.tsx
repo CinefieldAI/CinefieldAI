@@ -3,6 +3,7 @@ import PromoBannerSection from "./PromoBannerSection";
 import FilmFestivalBannerSection from "./FilmFestivalBannerSection";
 import SeedanceShowcaseSection from "./SeedanceShowcaseSection";
 import SeedanceCommunityShowcase from "./SeedanceCommunityShowcase";
+import SupercomputerBannerSection from "./SupercomputerBannerSection";
 
 interface FooterColumn {
   heading: string;
@@ -54,6 +55,9 @@ export default function ExploreHome() {
 
       {/* Seedance 2.5 Community Showcase Grid (12 videos, gradient fade, floating view all button) */}
       <SeedanceCommunityShowcase />
+
+      {/* Supercomputer Banner section (neon green border, grid pattern, logo & CTA) */}
+      <SupercomputerBannerSection />
 
       {/* Footer mega-block — shell only, plain text, no links/routing yet */}
       <section className="mt-16 border-t border-white/10 bg-white/[0.02]">
