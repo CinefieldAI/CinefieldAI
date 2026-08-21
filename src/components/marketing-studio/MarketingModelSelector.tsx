@@ -257,6 +257,14 @@ export default function MarketingModelSelector({
     },
   });
 
+  // Typing narrows flatRows, which can leave nav.activeIndex pointing past the
+  // end of the new list (or at an unrelated row) — reset it so ArrowDown from
+  // the search box always lands on a row that actually exists.
+  useEffect(() => {
+    if (open) nav.setActiveIndex(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
   useEffect(() => {
     if (open && scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
   }, [open]);

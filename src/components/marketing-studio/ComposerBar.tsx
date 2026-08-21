@@ -128,8 +128,11 @@ export default function ComposerBar({
       >
       {/* LEFT IMAGE/VIDEO SELECTOR - MATCHES /GENERATE MODE TOGGLE SHAPE */}
       <div
-        className="relative z-50 flex h-[116px] min-h-[116px] w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white"
+        className={`relative z-50 flex w-[68px] min-w-[68px] shrink-0 rounded-[20px] border-2 p-1 animate-pulse-orange-white ${
+          resizeController.isResizing ? "" : "transition-[height] duration-150 ease-out"
+        }`}
         style={{
+          height: resizeHeight,
           background:
             "linear-gradient(180deg, rgba(217,119,87,0.28) 0%, rgba(217,119,87,0.16) 55%, rgba(217,119,87,0.10) 100%), #141414",
           border: "1px solid rgba(217, 119, 87, 0.45)",

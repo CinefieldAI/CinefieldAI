@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import { AtSign, Check, ChevronDown, Clock, Minus, Monitor, Palette, Plus, Volume2, X } from "lucide-react";
 import { useListboxNav } from "@/hooks/useListboxNav";
+import { useToolbarNav } from "@/hooks/useToolbarNav";
 import MarketingImageModelSelector from "./MarketingImageModelSelector";
 import MarketingVideoModelSelector from "./MarketingVideoModelSelector";
 
@@ -544,6 +545,8 @@ export default function MarketingPromptControls({
   const setAspectRatio = mode === "image" ? setImageAspectRatio : setVideoAspectRatio;
   const setCount = mode === "image" ? setImageCount : setVideoBatch;
 
+  const toolbarNav = useToolbarNav();
+
   const handleVideoModelChange = (name: string) => {
     const nextControls = VIDEO_MODEL_CONTROLS[name] ?? DEFAULT_VIDEO_CONTROLS;
     const nextAspect = nextControls.find((control) => control.type === "aspect");
@@ -650,7 +653,10 @@ export default function MarketingPromptControls({
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div
+      {...toolbarNav.containerProps}
+      className="prompt-control-row flex min-w-0 items-center gap-1.5"
+    >
       <button
         type="button"
         aria-label="Add"

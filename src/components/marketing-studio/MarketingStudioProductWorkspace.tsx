@@ -13,6 +13,7 @@ import SelectAvatarPanel from "@/components/marketing-studio/SelectAvatarPanel";
 import AppPanel from "@/components/marketing-studio/AppPanel";
 import YourAppModal from "@/components/marketing-studio/YourAppModal";
 import HomeHeroVideoStack from "@/components/marketing-studio/HomeHeroVideoStack";
+import MarketingHeroStage from "@/components/marketing-studio/MarketingHeroStage";
 import MarketingStudioSidebar from "@/components/marketing-studio/MarketingStudioSidebar";
 import NavbarActions from "@/components/landing/NavbarActions";
 import ComposerBar, {
@@ -413,26 +414,7 @@ export default function MarketingStudioProductWorkspace() {
                 // HOME VIEW - MAIN PRODUCT LANDING WITH HERO, COMPOSER, AND STYLE CARDS
                 <section className="relative mx-auto mt-4 flex w-full max-w-[1232px] flex-col items-center gap-8 px-8 pb-20">
                   {/* HERO SECTION */}
-                  <div className="relative z-10 flex min-h-[238px] w-full max-w-[640px] flex-col items-center justify-center text-center">
-                    <p className="mb-4 font-grotesk text-sm font-bold uppercase tracking-normal text-white/50">MARKETING STUDIO</p>
-                    <h1
-                      className="text-center uppercase whitespace-nowrap"
-                      style={{
-                        fontFamily: "var(--font-barlow-condensed), 'Barlow Condensed', sans-serif",
-                        fontWeight: 900,
-                        fontSize: "clamp(40px, 5vw, 64px)",
-                        lineHeight: 1.05,
-                        letterSpacing: "0.03em",
-                        background:
-                          "linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 30%, #ADADAD 60%, #7A7A7A 100%)",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        backgroundClip: "text",
-                      }}
-                    >
-                      TURN ANY PRODUCT<br />INTO A VIDEO AD
-                    </h1>
-                  </div>
+                  <MarketingHeroStage />
 
                   {/* INLINE COMPOSER - Normal flow */}
                   <div ref={composerWrapperRef} className="relative z-10 flex min-h-[166px] w-full justify-center pb-8">
