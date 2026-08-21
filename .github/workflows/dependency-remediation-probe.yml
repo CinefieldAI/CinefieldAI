@@ -2,9 +2,9 @@ name: Dependency Remediation Probe
 
 # Temporary security-remediation workbench. It does NOT commit, deploy or
 # mutate any remote service. It resolves a candidate package.json + lockfile
-# on a clean GitHub runner, audits production dependencies, and uploads the
-# candidate files for review. Delete this workflow after the candidate is
-# either adopted or rejected.
+# from scratch on a clean GitHub runner, audits production dependencies, and
+# uploads the candidate files for review. Delete this workflow after the
+# candidate is either adopted or rejected.
 
 on:
   pull_request:
@@ -24,7 +24,10 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          # @supabase/supabase-js 2.112+ declares Node >=22. Test the candidate
+          # on the same major used by the worker runtime instead of tolerating
+          # an unsupported-engine CI configuration.
+          node-version: 22
 
       - name: Prepare minimal same-line security updates
         run: |
@@ -32,16 +35,20 @@ jobs:
           const fs = require('node:fs');
           const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
-          // Stay on the current framework/Trigger.dev minor lines. No major
+          // Stay on the current framework/Trigger.dev release lines. No major
           // application migration is part of this security patch.
           p.dependencies.next = '16.2.11';
           p.devDependencies['eslint-config-next'] = '16.2.11';
           p.dependencies['@trigger.dev/sdk'] = '4.5.10';
           p.devDependencies['trigger.dev'] = '4.5.10';
 
-          // Narrow overrides for advisories currently present in the locked
-          // production tree. Prefer patched versions within the same package
-          // major except sharp, whose published fix starts at 0.35.0.
+          // The current Supabase SDK already requires Node 22; make that
+          // repository contract explicit for deploys and future CI jobs.
+          p.engines = { ...(p.engines || {}), node: '>=22.0.0' };
+
+          // These are the transitive packages carrying the current production
+          // HIGH advisories. Resolve patched versions in a CLEAN lockfile so
+          // npm itself validates the graph rather than hand-editing it.
           p.overrides = {
             ...(p.overrides || {}),
             'engine.io@<6.6.7': '6.6.7',
@@ -53,13 +60,15 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           NODE
 
-      - name: Resolve candidate lockfile without running install scripts
-        run: npm install --package-lock-only --ignore-scripts
+      - name: Resolve candidate lockfile from scratch
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --package-lock-only --ignore-scripts
 
-      - name: Verify lockfile reproducibility
-        run: npm ci --ignore-scripts
+      - name: Verify lockfile reproducibility with real install scripts
+        run: npm ci
 
-      - name: Production audit
+      - name: Production audit must have no HIGH or CRITICAL findings
         run: |
           npm audit --omit=dev --json > dependency-remediation-audit.json || true
           node <<'NODE'
@@ -75,6 +84,9 @@ jobs:
 
       - name: Next production build
         run: npm run build
+
+      - name: C2PA native/runtime compatibility proof
+        run: npm run c2pa:verify-sample
 
       - name: Upload candidate dependency files and audit
         if: always()
