@@ -4,6 +4,7 @@ import { createElement, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronRight, Search, Sparkles, Volume2 } from "lucide-react";
+import { GLASS_PANEL } from "./AiVideoControls";
 import {
   ALL_MODELS,
   FEATURED_MODELS,
@@ -240,7 +241,7 @@ export default function AiVideoModelSelector({
             const target = event.target;
             if (target instanceof Node && flyoutRef.current?.contains(target)) event.preventDefault();
           }}
-          className="z-[100000] flex max-h-[min(40rem,calc(100vh-32px))] w-100 max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[rgba(28,30,32,0.95)] outline-none backdrop-blur-[28px]"
+          className={`z-[100000] flex max-h-[min(40rem,calc(100vh-32px))] w-100 max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl outline-none ${GLASS_PANEL}`}
         >
           <label className="flex h-[41px] min-h-[41px] items-center gap-2 border-b border-white/[0.06] px-1.5 py-0.5">
             <Search className="size-4 shrink-0 text-white/40" />
@@ -323,7 +324,7 @@ export default function AiVideoModelSelector({
         createPortal(
           <div
             ref={flyoutRef}
-            className="hide-scrollbar fixed z-[100001] max-h-[400px] min-w-[280px] overflow-y-auto overscroll-contain rounded-xl bg-[#1c1e20] p-1.5 shadow-xl shadow-black/30"
+            className={`hide-scrollbar fixed z-[100001] max-h-[400px] min-w-[280px] overflow-y-auto overscroll-contain rounded-xl p-1.5 shadow-xl shadow-black/30 ${GLASS_PANEL}`}
             style={{ top: flyout.top, left: flyout.left }}
             onMouseEnter={() => setFlyout(flyout)}
           >

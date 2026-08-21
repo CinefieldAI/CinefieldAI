@@ -6,6 +6,15 @@ import * as Popover from "@radix-ui/react-popover";
 import { Clock, Volume2, VolumeX } from "lucide-react";
 import { useListboxNav } from "@/hooks/useListboxNav";
 
+/**
+ * The prompt bar's own glass, reused by every panel that opens out of it so
+ * the whole control surface reads as one material. Heavier blur than the bar
+ * itself because these float over playing video — the bar only ever sits on
+ * the page background.
+ */
+export const GLASS_PANEL =
+  "border border-white/[0.06] bg-white/[0.07] backdrop-blur-[64px] backdrop-saturate-150";
+
 /** Shared look for every pill in the prompt bar's control row. */
 const CONTROL_CLASS =
   "flex h-8 shrink-0 items-center gap-1 rounded-lg border border-white/[0.04] bg-white/5 px-2 transition-colors hover:bg-white/10 focus:outline-none";
@@ -85,7 +94,7 @@ export function AspectRatioControl({
           onKeyDown={nav.handleKeyDown}
           onOpenAutoFocus={nav.handleOpenAutoFocus}
           onEscapeKeyDown={nav.handleEscapeKeyDown}
-          className="z-[100000] w-45 overflow-hidden rounded-[20px] border border-white/[0.04] bg-[rgba(35,38,42,0.75)] outline-none backdrop-blur-[40px]"
+          className={`z-[100000] w-45 overflow-hidden rounded-[20px] outline-none ${GLASS_PANEL}`}
         >
           <div className="px-3 py-2 text-xs font-medium text-zinc-500">ASPECT RATIO</div>
           <div className="grid grid-cols-2" role="listbox" aria-label="Aspect ratio">
@@ -155,7 +164,7 @@ export function DurationSliderControl({
           align="start"
           sideOffset={8}
           collisionPadding={16}
-          className="z-[100000] w-[334px] rounded-2xl border border-white/[0.04] bg-[rgba(35,38,42,0.75)] p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] outline-none backdrop-blur-[40px]"
+          className={`z-[100000] w-[334px] rounded-2xl p-2 shadow-[0_4px_4px_rgba(0,0,0,0.12)] outline-none ${GLASS_PANEL}`}
         >
           <div className="px-1 pb-1 text-xs font-medium text-white/45">Duration</div>
           <div className="relative h-9 overflow-hidden rounded-md bg-white/5">
@@ -228,7 +237,7 @@ export function DurationListControl({
           onKeyDown={nav.handleKeyDown}
           onOpenAutoFocus={nav.handleOpenAutoFocus}
           onEscapeKeyDown={nav.handleEscapeKeyDown}
-          className="z-[100000] w-45 overflow-hidden rounded-[20px] border border-white/[0.04] bg-[rgba(35,38,42,0.75)] outline-none backdrop-blur-[40px]"
+          className={`z-[100000] w-45 overflow-hidden rounded-[20px] outline-none ${GLASS_PANEL}`}
         >
           <div className="px-3 py-2 text-xs font-medium text-zinc-500">DURATION</div>
           <div className="grid grid-cols-1" role="listbox" aria-label="Duration">
