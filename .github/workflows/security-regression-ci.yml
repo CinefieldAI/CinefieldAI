@@ -2,7 +2,7 @@ name: Security Regression CI
 
 # Focused release gate for security-sensitive application and database paths.
 # It does not deploy or mutate any remote environment. SQL proofs run against
-# a disposable local PostgreSQL container and are destroyed by the test script.
+# disposable local PostgreSQL containers and are destroyed by the test scripts.
 
 on:
   pull_request:
@@ -45,3 +45,5 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Apply every migration and run database race/invariant proofs
         run: bash supabase/tests/run_pg_tests.sh
+      - name: Prove Supabase internal-function execution boundaries
+        run: bash supabase/tests/run_supabase_function_hardening_test.sh
