@@ -183,3 +183,59 @@ BEGIN
 
   RAISE NOTICE 'PROOF A7 PASS: Phase 9-A is additive; earlier invariants intact';
 END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- PROOF A8 — service-role style writes cannot cross tenant/project ownership
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_owner_a text := 'user_a8_a_' || gen_random_uuid()::text;
+  v_owner_b text := 'user_a8_b_' || gen_random_uuid()::text;
+  v_project_b uuid;
+BEGIN
+  INSERT INTO profiles (clerk_user_id) VALUES (v_owner_a), (v_owner_b);
+  INSERT INTO projects (clerk_user_id, title)
+  VALUES (v_owner_b, 'tenant-b-project')
+  RETURNING id INTO v_project_b;
+
+  BEGIN
+    INSERT INTO media_assets
+      (clerk_user_id, project_id, source, role, media_type, bucket, object_key)
+    VALUES
+      (v_owner_a, v_project_b, 'browser_upload', 'original', 'image', 'cinefield-media',
+       'quarantine/input/' || v_owner_a || '/cross-tenant/original.png');
+    RAISE EXCEPTION 'PROOF A8 FAILED: cross-tenant project binding was accepted';
+  EXCEPTION WHEN foreign_key_violation THEN
+    RAISE NOTICE 'PROOF A8 PASS: cross-tenant media/project binding is rejected at DB boundary';
+  END;
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- PROOF A9 — same-tenant project binding remains legitimate
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_owner text := 'user_a9_' || gen_random_uuid()::text;
+  v_project uuid;
+  v_asset uuid;
+BEGIN
+  INSERT INTO profiles (clerk_user_id) VALUES (v_owner);
+  INSERT INTO projects (clerk_user_id, title)
+  VALUES (v_owner, 'same-tenant-project')
+  RETURNING id INTO v_project;
+
+  INSERT INTO media_assets
+    (clerk_user_id, project_id, source, role, media_type, bucket, object_key)
+  VALUES
+    (v_owner, v_project, 'browser_upload', 'original', 'image', 'cinefield-media',
+     'quarantine/input/' || v_owner || '/same-tenant/original.png')
+  RETURNING id INTO v_asset;
+
+  IF v_asset IS NULL THEN
+    RAISE EXCEPTION 'PROOF A9 FAILED: legitimate same-tenant binding was not created';
+  END IF;
+
+  RAISE NOTICE 'PROOF A9 PASS: legitimate same-tenant media/project binding still works';
+END $$;
