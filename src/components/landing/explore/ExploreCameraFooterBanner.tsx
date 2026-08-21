@@ -113,7 +113,7 @@ export default function ExploreCameraFooterBanner() {
                   <button
                     key={item}
                     type="button"
-                    className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-left text-sm font-medium text-white shadow-none outline-none"
+                    className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-left text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
                   >
                     {item}
                   </button>
@@ -129,7 +129,7 @@ export default function ExploreCameraFooterBanner() {
           <button
             key={label}
             type="button"
-            className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-sm font-medium text-white shadow-none outline-none"
+            className="inline-grid h-8 appearance-none items-center rounded-full border-0 bg-black/10 px-3 text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
           >
             {label}
           </button>
