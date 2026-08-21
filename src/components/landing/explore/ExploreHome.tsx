@@ -4,6 +4,7 @@ import FilmFestivalBannerSection from "./FilmFestivalBannerSection";
 import SeedanceShowcaseSection from "./SeedanceShowcaseSection";
 import SeedanceCommunityShowcase from "./SeedanceCommunityShowcase";
 import SupercomputerBannerSection from "./SupercomputerBannerSection";
+import GptImage2CommunityShowcase from "./GptImage2CommunityShowcase";
 
 interface FooterColumn {
   heading: string;
@@ -58,6 +59,9 @@ export default function ExploreHome() {
 
       {/* Supercomputer Banner section (neon green border, grid pattern, logo & CTA) */}
       <SupercomputerBannerSection />
+
+      {/* GPT Image 2 Community Showcase Grid (16 image cards, gradient fade, floating view all button) */}
+      <GptImage2CommunityShowcase />
 
       {/* Footer mega-block — shell only, plain text, no links/routing yet */}
       <section className="mt-16 border-t border-white/10 bg-white/[0.02]">
