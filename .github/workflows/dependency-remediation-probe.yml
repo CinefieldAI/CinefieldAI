@@ -47,8 +47,8 @@ jobs:
           p.engines = { ...(p.engines || {}), node: '>=22.0.0' };
 
           // These are the transitive packages carrying the current production
-          // HIGH advisories. Resolve patched versions in a CLEAN lockfile so
-          // npm itself validates the graph rather than hand-editing it.
+          // HIGH advisories. Resolve patched versions in a CLEAN dependency
+          // tree so npm itself validates the graph rather than hand-editing it.
           p.overrides = {
             ...(p.overrides || {}),
             'engine.io@<6.6.7': '6.6.7',
@@ -60,13 +60,19 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           NODE
 
-      - name: Resolve candidate lockfile from scratch
+      - name: Resolve candidate dependency tree from scratch
         run: |
           rm -rf node_modules package-lock.json
-          npm install --package-lock-only --ignore-scripts
+          # A real install is intentional. npm's package-lock-only path can
+          # produce an override graph that its own `npm ci` later rejects.
+          # Scripts stay off for this resolution pass; the next step performs
+          # a clean, normal install and exercises the real native hooks.
+          npm install --ignore-scripts
 
       - name: Verify lockfile reproducibility with real install scripts
-        run: npm ci
+        run: |
+          rm -rf node_modules
+          npm ci
 
       - name: Production audit must have no HIGH or CRITICAL findings
         run: |
