@@ -11,7 +11,7 @@ import { spaceGrotesk } from "@/lib/fonts/spaceGrotesk";
  * it plays automatically; until one exists the poster gradient shows through
  * and the sound button simply has nothing to unmute.
  */
-const HERO_VIDEO_SRC = "/ai-video/hero.mp4";
+const HERO_VIDEO_SRC = "/hero.mp4";
 
 // Structure/sizing cloned from the reference site's own /ai-video hero (full
 // -bleed background video, centered title/subtitle/CTA, prompt bar overlaid
