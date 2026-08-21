@@ -1,4 +1,11 @@
+import Link from "next/link";
 import { spaceGrotesk } from "@/lib/fonts/spaceGrotesk";
+
+// Only items with a real destination here are live — everything else in
+// FOOTER_COLUMNS stays an inert button until it gets built out.
+const ACTIVE_LINKS: Record<string, string> = {
+  "AI Video": "/ai-video",
+};
 
 interface FooterColumn {
   heading: string;
@@ -109,15 +116,20 @@ export default function ExploreCameraFooterBanner() {
             <div key={col.heading}>
               <h3 className="mb-3 text-sm font-medium text-white/60">{col.heading}</h3>
               <div className="flex flex-col items-start gap-3">
-                {col.items.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className="appearance-none border-0 bg-transparent p-0 text-left text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] transition-opacity hover:opacity-70 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none"
-                  >
-                    {item}
-                  </button>
-                ))}
+                {col.items.map((item) => {
+                  const href = ACTIVE_LINKS[item];
+                  const className =
+                    "appearance-none border-0 bg-transparent p-0 text-left text-sm font-medium text-white shadow-none outline-none [-webkit-tap-highlight-color:transparent] transition-opacity hover:opacity-70 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none active:shadow-none";
+                  return href ? (
+                    <Link key={item} href={href} className={className}>
+                      {item}
+                    </Link>
+                  ) : (
+                    <button key={item} type="button" className={className}>
+                      {item}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
