@@ -38,36 +38,24 @@ function selectorAvailability(
   });
 }
 
-/**
- * TEMPORARY, PICKER-ONLY EXCEPTION — requested explicitly by the site owner
- * while Cinefield has no real users yet, so these three no longer read
- * "Unavailable" or block selection here.
+/*
+ * A picker-only availability override used to live here: three Gemini ids
+ * (nano-banana-pro, nano-banana-2, nano-banana-2-lite) returned "available"
+ * unconditionally, ahead of the resolution above.
  *
- * This does NOT touch `productionExecutionDurability` in gemini-provider.ts
- * or the server's Phase 8 eligibility gate in model-router.ts — both stay
- * honest: Gemini genuinely has no crash-recovery path yet (interactions.create
- * hands back no job handle to reconcile after a worker dies mid-generation),
- * and closing that gap is real Phase-9-media-plane work, not a flag flip. So
- * pressing Generate on one of these can still be refused server-side with
- * `provider_execution_not_restart_safe` until that work exists — this only
- * changes what the picker itself shows and allows.
+ * It was removed because it had drifted into a lie the user could act on.
+ * Those models carry `productionExecutionDurability: "not_proven"`, so they
+ * are not `productionReady`, so canonical availability answers "unavailable"
+ * in EVERY runtime state — including when the runtime map says true. The
+ * picker was therefore offering a model the server would refuse with
+ * `provider_execution_not_restart_safe`, and the only thing the override
+ * bought was a click that fails later instead of a row that reads honestly.
  *
- * Remove this exception once these three either have a proven durable
- * execution path, or the decision is made not to ship them.
+ * There is now exactly one availability answer, `selectorAvailability`, and
+ * the picker and the Generate guard cannot disagree. If these models should
+ * become offerable, the durable execution path is what has to change — in
+ * gemini-provider.ts, not in this component.
  */
-const PICKER_UNLOCKED_MODEL_IDS = new Set<string>([
-  "nano-banana-pro",
-  "nano-banana-2",
-  "nano-banana-2-lite",
-]);
-
-function pickerAvailability(
-  modelId: string,
-  runtime: Map<string, boolean> | null
-): RuntimeAvailability {
-  if (PICKER_UNLOCKED_MODEL_IDS.has(modelId)) return "available";
-  return selectorAvailability(modelId, runtime);
-}
 import {
   Check,
   ChevronDown,
@@ -595,7 +583,7 @@ export default function ModelSelector({
     // A model the server will refuse must not become the active selection —
     // otherwise Generate looks normal and fails at the boundary. "checking"
     // is not permission: unresolved runtime data means we have not heard yes.
-    if (!canOfferForGeneration(pickerAvailability(id, runtimeAvailability))) return;
+    if (!canOfferForGeneration(selectorAvailability(id, runtimeAvailability))) return;
     onChange(id);
     setOpen(false);
     setQuery("");
@@ -965,7 +953,7 @@ export default function ModelSelector({
                               key={key}
                               model={m}
                               unavailableLabel={availabilityLabel(
-                                pickerAvailability(m.id, runtimeAvailability)
+                                selectorAvailability(m.id, runtimeAvailability)
                               )}
                               value={value}
                               onSelect={select}

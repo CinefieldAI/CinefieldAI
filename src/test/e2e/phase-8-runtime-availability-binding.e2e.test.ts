@@ -367,6 +367,45 @@ test("the model selector consumes RUNTIME availability, not the build flag alone
   );
 });
 
+test("no picker-only allowlist can override canonical runtime eligibility", () => {
+  // A previous batch shipped exactly this: PICKER_UNLOCKED_MODEL_IDS returned
+  // "available" for three Gemini ids ahead of the shared resolution, so a row
+  // read offerable while the server refused with
+  // `provider_execution_not_restart_safe`. It was removed; this guard is what
+  // stops the shape returning under a different name.
+  const code = readSource("src/components/cinema-studio/ModelSelector.tsx")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\r\n/g, "\n");
+
+  // 1. No literal availability verdict — it must come from the shared resolver.
+  assert.ok(
+    !/return\s+"available"/.test(code),
+    "availability must come from resolveRuntimeAvailability, never a literal verdict"
+  );
+
+  // 2. No model-id membership test may decide availability. An allowlist is the
+  //    mechanism that failed before, whatever it gets called next time.
+  for (const shape of [
+    /new Set<string>\(\[[\s\S]{0,400}?"nano-banana/,
+    /_MODEL_IDS[^=\n]*=\s*new Set/,
+    /\.has\(modelId\)\s*\)?\s*return/,
+  ]) {
+    assert.ok(!shape.test(code), `a picker-only availability allowlist is forbidden (${shape})`);
+  }
+
+  // 3. Every selection gate reads the one function that asks the shared resolver.
+  const gated = [...code.matchAll(/canOfferForGeneration\(([A-Za-z_]+)\(/g)].map((m) => m[1]);
+  assert.ok(gated.length > 0, "the selection gate must still exist");
+  for (const fn of gated) {
+    assert.equal(
+      fn,
+      "selectorAvailability",
+      "the gate must read canonical availability, not a picker-local variant"
+    );
+  }
+});
+
 test("the Generate funnel guards an ALREADY-SELECTED model", () => {
   // Blocking the row is not enough: a model can be the selection before the
   // picker is ever opened, or become unavailable while the page is open.
