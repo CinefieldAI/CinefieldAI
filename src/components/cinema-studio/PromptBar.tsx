@@ -659,6 +659,7 @@ export default function PromptBar(props: PromptBarProps) {
 
   // Kling 2.6 — Enhance toggle + Start Frame (General preset tile is visual-only for now).
   const [kling26Enhance, setKling26Enhance] = useState(true);
+  const [kling3Enhance, setKling3Enhance] = useState(true);
   const [kling26AudioVoice, setKling26AudioVoice] = useState(true);
   const [kling26StartFrame, setKling26StartFrame] = useState<string | null>(null);
 
@@ -2336,20 +2337,6 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Sound - every remaining model the reference shows one on. */}
-            {hasSoundChip && (
-              <button
-                type="button"
-                onClick={() => (sound ? setSoundConfirmOpen(true) : onSoundChange(true))}
-                aria-label="Toggle sound"
-                aria-pressed={sound}
-                className={`${PILL} ${sound ? "text-white" : "text-neutral-400"}`}
-              >
-                {sound ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
-                {sound ? "On" : "Off"}
-              </button>
-            )}
-
             {/* Seed chip - Higgsfield family only, placed after Duration (before Sound) */}
             {isHiggsfield && (
               <SeedControl
@@ -2477,6 +2464,20 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* Enhance chip - Kling 3.0, same toggle Kling 2.6 carries. */}
+            {isKling3 && (
+              <button
+                type="button"
+                onClick={() => setKling3Enhance((v) => !v)}
+                aria-label="Toggle enhance"
+                aria-pressed={kling3Enhance}
+                className={`${PILL} ${kling3Enhance ? "text-[#D97757]" : "text-neutral-400"}`}
+              >
+                <EnhanceIcon />
+                {kling3Enhance ? "On" : "Off"}
+              </button>
+            )}
+
             {/* Enhance chip - Kling 2.6 only */}
             {isKling2_6 && (
               <button
@@ -2488,6 +2489,20 @@ export default function PromptBar(props: PromptBarProps) {
               >
                 <EnhanceIcon />
                 {kling26Enhance ? "On" : "Off"}
+              </button>
+            )}
+
+            {/* Sound - every remaining model the reference shows one on. */}
+            {hasSoundChip && (
+              <button
+                type="button"
+                onClick={() => (sound ? setSoundConfirmOpen(true) : onSoundChange(true))}
+                aria-label="Toggle sound"
+                aria-pressed={sound}
+                className={`${PILL} ${sound ? "text-white" : "text-neutral-400"}`}
+              >
+                {sound ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+                {sound ? "On" : "Off"}
               </button>
             )}
 
@@ -2811,6 +2826,20 @@ export default function PromptBar(props: PromptBarProps) {
             </>
           )}
 
+          {/* Grok Imagine Edit — the clip it edits. */}
+          {isGrokImagineEdit && (
+            <FrameCard
+              label="Video Reference"
+              value={extraFrames.start}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setExtraFrames((s2) => ({ ...s2, start: null }))}
+            />
+          )}
+
           {/* Seedance 2.5 Edit — the clip being edited. */}
           {isSeedance25Edit && (
             <FrameCard
@@ -3095,17 +3124,31 @@ export default function PromptBar(props: PromptBarProps) {
                   }))
                 }
               />
-              <FrameCard
-                variant="general"
-                label={seedanceProPanels[seedanceProModelKey].preset}
-                value={null}
-                ariaHaspopup="dialog"
-                ariaExpanded={motionPresetsPanelOpen}
-                onOpenPicker={() => {
-                  setAssetsPickerOpen(false);
-                  setMotionPresetsPanelOpen(true);
-                }}
-              />
+              {isSeedance15Pro ? (
+                <FrameCard
+                  label="End Frame"
+                  value={extraFrames.end}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setMotionPresetsPanelOpen(false);
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setExtraFrames((s2) => ({ ...s2, end: null }))}
+                />
+              ) : (
+                <FrameCard
+                  variant="general"
+                  label={seedanceProPanels[seedanceProModelKey].preset}
+                  value={null}
+                  ariaHaspopup="dialog"
+                  ariaExpanded={motionPresetsPanelOpen}
+                  onOpenPicker={() => {
+                    setAssetsPickerOpen(false);
+                    setMotionPresetsPanelOpen(true);
+                  }}
+                />
+              )}
             </>
           )}
 

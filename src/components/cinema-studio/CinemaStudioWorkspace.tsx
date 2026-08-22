@@ -135,7 +135,9 @@ export default function CinemaStudioWorkspace() {
     aspectRatio: string;
     resolution: string;
     startFrame: string | null;
-  }>({ aspectRatio: "1:1", resolution: "720p", startFrame: null });
+    // Turbo opens on 16:9, like Kling 3.0 and 2.6 — 1:1 leads the list only
+    // on Omni and O1.
+  }>({ aspectRatio: "16:9", resolution: "720p", startFrame: null });
 
   // Cinema Studio 3.0 Director's Panel settings
   const [cinema3Genre, setCinema3Genre] = useState("General");
