@@ -11,6 +11,8 @@ interface KlingAdvancedSettingsPanelProps {
   orientation: "video" | "image";
   onOrientationChange: (value: "video" | "image") => void;
   portalContainer?: HTMLElement | null;
+  /** Drops the trigger's text, leaving the gear on its own. */
+  iconOnly?: boolean;
 }
 
 const PILL =
@@ -24,6 +26,7 @@ export default function KlingAdvancedSettingsPanel({
   orientation,
   onOrientationChange,
   portalContainer,
+  iconOnly = false,
 }: KlingAdvancedSettingsPanelProps) {
   return (
     <Popover.Root open={isOpen} onOpenChange={onOpenChange}>
@@ -31,14 +34,17 @@ export default function KlingAdvancedSettingsPanel({
         <button
           type="button"
           aria-label="Advanced Settings"
-          className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+          title="Advanced Settings"
+          className={`flex h-8 items-center gap-1.5 rounded-lg border py-1 text-xs font-semibold text-white transition-all duration-200 ease-out focus:outline-none ${
+            iconOnly ? "w-8 justify-center px-0" : "px-2.5"
+          } ${
             isOpen
               ? "border-[#D97757] bg-[rgba(17,17,18,0.98)]"
               : "border-white/15 bg-[rgba(18,19,21,0.95)] hover:border-white/30 hover:bg-[rgba(26,28,31,0.98)]"
           }`}
         >
           <Settings2 className="size-3.5 text-neutral-400" />
-          Advanced Settings
+          {!iconOnly && "Advanced Settings"}
         </button>
       </Popover.Trigger>
       <Popover.Portal container={portalContainer}>

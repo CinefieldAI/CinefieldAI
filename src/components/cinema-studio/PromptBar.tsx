@@ -8,6 +8,8 @@ import {
   ChevronDown,
   Minus,
   Plus,
+  Grip,
+  UserRound,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -37,6 +39,8 @@ import KlingCharacterPanel from "./KlingCharacterPanel";
 import KlingSceneControl from "./KlingSceneControl";
 import KlingMotionCard from "./KlingMotionCard";
 import KlingCharacterCard from "./KlingCharacterCard";
+import KlingMediaCard from "./KlingMediaCard";
+import KlingMotionLibraryModal from "./KlingMotionLibraryModal";
 import MotionPresetsPanel from "./MotionPresetsPanel";
 import BitrateControl from "./BitrateControl";
 import SeedControl from "./SeedControl";
@@ -577,7 +581,8 @@ export default function PromptBar(props: PromptBarProps) {
   const [klingMcSettings, setKlingMcSettings] = useState({
     advancedPrompt: "",
     orientation: "video" as "video" | "image",
-    sceneControl: "Image",
+    // The reference opens on Off, with Video and Image as the opt-ins.
+    sceneControl: "Off",
   });
   const [klingMcMotionModalOpen, setKlingMcMotionModalOpen] = useState(false);
   const [klingMcCharacterPanelOpen, setKlingMcCharacterPanelOpen] = useState(false);
@@ -2526,6 +2531,7 @@ export default function PromptBar(props: PromptBarProps) {
             {isKlingMotionControlNon3 && (
               <>
                 <KlingAdvancedSettingsPanel
+                  iconOnly
                   isOpen={klingMcAdvancedSettingsOpen}
                   onOpenChange={setKlingMcAdvancedSettingsOpen}
                   advancedPrompt={klingMcSettings.advancedPrompt}
@@ -2544,13 +2550,10 @@ export default function PromptBar(props: PromptBarProps) {
                   onChange={(sceneControl) => setKlingMcSettings((s) => ({ ...s, sceneControl }))}
                   options={["Off", "Video", "Image"]}
                   label="Scene control"
+                  caption="Scene control"
                   showValue
                   portalContainer={portalRoot}
                 />
-
-                <KlingMotionCard onClick={() => setKlingMcMotionModalOpen(true)} />
-
-                <KlingCharacterCard onClick={() => setKlingMcCharacterPanelOpen(true)} />
               </>
             )}
 
@@ -2822,6 +2825,25 @@ export default function PromptBar(props: PromptBarProps) {
                 label="General"
                 value={null}
                 onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Kling Motion Control — Motion and Character open the same dialog
+              shape, one for the clip to copy and one for the character. */}
+          {isKlingMotionControlNon3 && (
+            <>
+              <KlingMediaCard
+                label="Motion"
+                icon={<Grip className="size-3.5" />}
+                onClick={() => setKlingMcMotionModalOpen(true)}
+                ariaExpanded={klingMcMotionModalOpen}
+              />
+              <KlingMediaCard
+                label="Character"
+                icon={<UserRound className="size-3.5" />}
+                onClick={() => setKlingMcCharacterPanelOpen(true)}
+                ariaExpanded={klingMcCharacterPanelOpen}
               />
             </>
           )}
@@ -3386,13 +3408,25 @@ export default function PromptBar(props: PromptBarProps) {
       {/* Kling Motion Control (non-3.0) Modals and Panels — isolated instances */}
       {isKlingMotionControlNon3 && (
         <>
-          <KlingMotionModal
+          <KlingMotionLibraryModal
             isOpen={klingMcMotionModalOpen}
             onClose={() => setKlingMcMotionModalOpen(false)}
+            titleLines={["Copy Any Motion with", "Your Character"]}
+            subtitle="Copy motion from any video and place your character into the same movement"
+            primaryLabel="Add motion to copy"
+            primaryHint="Video duration: 3–30 seconds"
+            secondaryLabel="Add your character"
+            secondaryHint="Image with visible face and body"
           />
-          <KlingCharacterPanel
+          <KlingMotionLibraryModal
             isOpen={klingMcCharacterPanelOpen}
             onClose={() => setKlingMcCharacterPanelOpen(false)}
+            titleLines={["Copy Any Motion with", "Your Character"]}
+            subtitle="Copy motion from any video and place your character into the same movement"
+            primaryLabel="Add motion to copy"
+            primaryHint="Video duration: 3–30 seconds"
+            secondaryLabel="Add your character"
+            secondaryHint="Image with visible face and body"
           />
         </>
       )}

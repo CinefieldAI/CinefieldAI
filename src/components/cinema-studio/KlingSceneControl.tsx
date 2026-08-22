@@ -16,6 +16,8 @@ interface KlingSceneControlProps {
   label?: string;
   /** Shows the current value inline in the trigger, next to the label (off by default, matches the locked caller). */
   showValue?: boolean;
+  /** Caption above the options, e.g. "SCENE CONTROL". Omitted by the locked caller. */
+  caption?: string;
 }
 
 const PILL =
@@ -32,6 +34,7 @@ export default function KlingSceneControl({
   options = SCENE_OPTIONS,
   label = "Scene Control",
   showValue = false,
+  caption,
 }: KlingSceneControlProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalOpen;
@@ -63,8 +66,15 @@ export default function KlingSceneControl({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-[100000] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 w-[120px] pointer-events-auto"
+          className={`z-[100000] rounded-2xl border border-[rgba(217,217,217,0.08)] bg-[rgba(24,26,30,0.92)] shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-[24px] p-1 pointer-events-auto ${
+            caption ? "w-[170px]" : "w-[120px]"
+          }`}
         >
+          {caption && (
+            <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
+              {caption}
+            </div>
+          )}
           {options.map((opt) => {
             const selected = opt === value;
             return (
