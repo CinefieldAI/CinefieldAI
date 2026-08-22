@@ -2,7 +2,9 @@
  * AI Video model tree and per-model control shapes, transcribed from a live
  * audit of the reference site's own /ai-video landing-page prompt bar
  * (structure, control vocabulary and option sets only). Every "Higgsfield"
- * name is Cinefield's own here.
+ * name is Cinefield's own here, and the reference's New / Premium /
+ * Exclusive / Unlimited badges are carried across as nothing at all — model
+ * rows here are a name, an optional speaker icon and the chips.
  *
  * Everything below is keyed by **model id**, not by name, because the
  * reference genuinely ships two different models called `Kling 3.0 Omni` and
@@ -33,10 +35,6 @@ import {
   SeedanceIcon,
 } from "@/components/cinema-studio/icons/ProviderIcons";
 import WanIcon from "@/components/cinema-studio/icons/WanIcon";
-
-/** The reference marks New / Premium / Exclusive too; Cinefield deliberately
- *  shows none of those, so `Unlimited` is the only badge that survives. */
-export type BadgeKind = "Unlimited";
 
 export type ProviderIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -83,7 +81,6 @@ export function iconForModel(name: string): ProviderIcon | undefined {
 export interface AiVideoModel {
   id: string;
   name: string;
-  badges?: BadgeKind[];
   /** Speaker icon next to the name — the model generates sound itself. This
    *  is independent of whether the prompt bar gets an audio toggle. */
   sound?: boolean;
@@ -445,12 +442,11 @@ export const ALL_MODELS: AiVideoFamily[] = [
   {
     id: "seedance-unlimited",
     name: "Seedance 2.0 Unlimited Family",
-    badges: ["Unlimited"],
     description: "Unlimited models for advanced generation",
     submodels: [
-      { id: "seedance_unlimited", name: "Enhanced Seedance 2.0 Fast", badges: ["Unlimited"], chips: ["720p", "4s-15s"] },
-      { id: "seedance_mini_unlimited", name: "Seedance 2.0 Mini", badges: ["Unlimited"], chips: ["720p", "4s-15s"] },
-      { id: "seedance_2_unlimited", name: "Seedance 2.0", badges: ["Unlimited"], chips: ["1080p", "4s-15s"] },
+      { id: "seedance_unlimited", name: "Enhanced Seedance 2.0 Fast", chips: ["720p", "4s-15s"] },
+      { id: "seedance_mini_unlimited", name: "Seedance 2.0 Mini", chips: ["720p", "4s-15s"] },
+      { id: "seedance_2_unlimited", name: "Seedance 2.0", chips: ["1080p", "4s-15s"] },
     ],
   },
   {

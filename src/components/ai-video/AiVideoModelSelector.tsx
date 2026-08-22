@@ -12,7 +12,6 @@ import {
   iconForModel,
   type AiVideoFamily,
   type AiVideoModel,
-  type BadgeKind,
 } from "./aiVideoModels";
 
 /**
@@ -29,20 +28,6 @@ import {
  * two models called `Kling 3.0 Omni` and two called `Kling O1 Video`, and
  * matching on the label would highlight both rows of a pair at once.
  */
-
-function BadgePill({ kind }: { kind: BadgeKind }) {
-  return (
-    <span
-      className="inline-flex h-4 -skew-x-12 items-center rounded-sm px-1 font-grotesk text-[10px] font-bold uppercase leading-none text-white"
-      style={{
-        backgroundImage:
-          "linear-gradient(90deg, rgb(50,89,180) 0%, rgb(60,140,255) 50%, rgb(0,200,210) 75%, rgb(120,201,230) 100%)",
-      }}
-    >
-      {kind}
-    </span>
-  );
-}
 
 /**
  * The panel's leading icon tile: a 40×40 square whose 1.5px ring is white on
@@ -120,9 +105,6 @@ function ModelRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-white">{model.name}</span>
           {model.sound && <Volume2 className="size-3 text-white/45" />}
-          {model.badges?.map((badge) => (
-            <BadgePill key={badge} kind={badge} />
-          ))}
         </div>
 
         {model.chips && model.chips.length > 0 ? (
