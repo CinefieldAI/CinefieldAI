@@ -237,18 +237,53 @@ test("no KMS key is creatable without Terraform-level destroy protection (Phase 
   }
 });
 
-test("no backend points at a bucket that does not exist", () => {
+test("no backend hard-codes state location — the block stays PARTIAL", () => {
+  // Phase 18-A settled this: each root declares an EMPTY `backend "s3" {}` and
+  // the bucket/key/table arrive out-of-band from environments/<env>/backend.hcl
+  // at `init -backend-config=` time. The block's presence is the contract, not
+  // a violation of it — what must never appear is a committed VALUE, because a
+  // hard-coded bucket in this file is one editable line away from a dev apply
+  // writing production's state key.
+  //
+  // This guard used to forbid `backend "s3"` outright, which described the tree
+  // before 0107bca added the partial block and stopped matching reality.
   for (const environment of ["dev", "production"]) {
     const code = stripComments(read(join(INFRA, "environments", environment, "versions.tf")));
-    assert.ok(
-      !/backend\s+"s3"/.test(code),
-      `${environment} must not hard-code a remote backend before state ownership is decided`
+
+    const block = /backend\s+"s3"\s*\{([\s\S]*?)\}/.exec(code);
+    assert.ok(block, `${environment} must declare a backend block for remote state`);
+
+    assert.equal(
+      block[1].trim(),
+      "",
+      `${environment} must keep the backend PARTIAL — state location belongs in backend.hcl, never committed here`
     );
+
+    for (const value of [/bucket\s*=/, /dynamodb_table\s*=/, /\bkey\s*=/]) {
+      assert.ok(
+        !value.test(code),
+        `${environment} must not commit a state location (${value}) anywhere in versions.tf`
+      );
+    }
   }
 });
 
-test("the README states plainly that nothing was applied and validation did not run", () => {
+test("the README states plainly what was applied and what was only validated", () => {
   const readme = read(join(INFRA, "README.md"));
-  assert.ok(/[Nn]othing here has been applied/.test(readme));
-  assert.ok(/were NOT run|not installed/.test(readme), "the unverified-HCL limitation must be stated");
+
+  // The honest claim has two halves, and BOTH must survive. Dropping the first
+  // would let the tree read as deployed; dropping the second would understate
+  // the checking that 0107bca actually performed.
+  assert.ok(
+    /[Nn]othing here has been applied/.test(readme),
+    "the README must keep saying no AWS resource here was created by Terraform"
+  );
+  assert.ok(
+    /validate/.test(readme) && /init -backend=false/.test(readme),
+    "the README must name the checks that DID run, so 'not applied' is not read as 'not checked'"
+  );
+  assert.ok(
+    !/were NOT run|not installed/.test(readme),
+    "fmt/init/validate now run (0107bca); the README must not re-assert the closed gap"
+  );
 });

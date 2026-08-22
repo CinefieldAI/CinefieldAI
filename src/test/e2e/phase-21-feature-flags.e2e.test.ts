@@ -200,9 +200,16 @@ describe("Phase 21 composes with Phase 20 contract governance for its own new ev
   });
 
   test("the domain event is emitted best-effort, after the durable write and audit row already succeeded — never a reason the mutation itself is reported as failed", () => {
-    const src = stripComments(read("src/lib/admin/feature-flag-admin-service.ts"));
-    const afterWrite = src.slice(src.indexOf("await recordTier0Execution(admin, {\n    requestId,\n    action,\n    actorClerkUserId,\n    target: { type: \"feature_flag\", id: key },\n    outcome: \"executed\""));
-    assert.match(afterWrite, /enqueueEventStandalone/);
+    // Line endings are normalised before the search. Git checks this tree out
+    // with CRLF on Windows, so a needle written with \n found nothing, and
+    // `slice(-1)` then reduced the haystack to a single character — the guard
+    // failed on the platform rather than on the property it defends.
+    const src = stripComments(read("src/lib/admin/feature-flag-admin-service.ts")).replace(/\r\n/g, "\n");
+    const marker =
+      'await recordTier0Execution(admin, {\n    requestId,\n    action,\n    actorClerkUserId,\n    target: { type: "feature_flag", id: key },\n    outcome: "executed"';
+    const at = src.indexOf(marker);
+    assert.notEqual(at, -1, "the durable write + audit row must still precede the event emit");
+    assert.match(src.slice(at), /enqueueEventStandalone/);
   });
 });
 
