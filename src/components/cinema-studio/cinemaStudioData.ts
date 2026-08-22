@@ -91,6 +91,14 @@ export interface ModelInfo {
   characterStyle?: boolean;
   /** All-models entries may expand into a submenu of variants. */
   submodels?: ModelInfo[];
+  /** Replaces the resolution chip's text, for ranges like "480p-720p". */
+  resolutionLabel?: string;
+  /** Drops the resolution chip — Marketing Studio Video shows none. */
+  hideResolution?: boolean;
+  /** Drops the duration chip. */
+  hideDuration?: boolean;
+  /** Plain chips after the duration, e.g. "Edit Video", "Audio". */
+  extraChips?: string[];
   /** Per-model icon (LucideIcon or image path string or React Component). */
   icon?: LucideIcon | string | React.ComponentType<{ className?: string }>;
   isAdded?: boolean;
@@ -218,7 +226,12 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
       // Order follows the reference's own Featured row: the 2.5 pair leads,
       // then the 2.0 trio, then H3.
       vfeat("seedance-2.5", "Seedance 2.5", SEEDANCE_ICON, "1080p", "4s-30s", ["NEW"], true),
-      vfeat("seedance-2.5-edit", "Seedance 2.5 Edit", SEEDANCE_ICON, "720p", "5s", ["NEW"], true),
+      {
+        ...vfeat("seedance-2.5-edit", "Seedance 2.5 Edit", SEEDANCE_ICON, "720p", "5s", ["NEW"], true),
+        resolutionLabel: "480p-720p",
+        hideDuration: true,
+        extraChips: ["Edit Video", "Audio"],
+      },
       vfeat("seedance-2.0", "Seedance 2.0", SEEDANCE_ICON, "4K", "4s-15s"),
       vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", SEEDANCE_ICON, "720p", "4s-15s"),
       vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", SEEDANCE_ICON, "720p", "4s-15s"),
@@ -244,13 +257,16 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "High-dynamic, VFX-ready, fastest and most affordable",
         MinimaxIcon,
         [
-          // 768p is these models' own default; 1080p is the step up.
-          vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "768p", "6s-10s", undefined, true),
-          vsub("minimax-2.3", "Minimax Hailuo 2.3", "768p", "6s-10s", undefined, true),
+          vsub("minimax-h3", "MiniMax H3", "2K", "5s-15s", ["NEW"]),
+          // The chip carries each model's top resolution. The 2.3 pair still
+          // opens at 768p — PromptBar applies that on selection.
+          vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "1080p", "6s-10s", undefined, true),
+          vsub("minimax-2.3", "Minimax Hailuo 2.3", "1080p", "6s-10s", undefined, true),
           vsub("minimax-02-fast", "Minimax Hailuo 02 Fast", "512p", "6s-10s"),
           vsub("minimax-02", "Minimax Hailuo 02", "1080p", "6s-10s"),
         ],
       ),
+      vfeat("flux-3-video", "FLUX.3 Video", FluxIcon, "1080p", "5s-20s", ["NEW"], true),
       vparent(
         "kling",
         "Kling",
@@ -272,6 +288,7 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
           {
             ...vsub("kling-o1-video-edit", "Kling O1 Video Edit", "1080p", "3s-10s"),
             defaultDuration: 7,
+            extraChips: ["Edit Video"],
           },
           vsub("kling-motion-control", "Kling Motion Control", "1080p", "3s-30s"),
           vsub("kling-3.0-motion-control", "Kling 3.0 Motion Control", "1080p", "3s-30s"),
@@ -286,12 +303,10 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Multi-shot video with sound generation",
         SORA_ICON,
         [
-          vsub("sora-2", "Sora 2", "720p", "4s-12s"),
-          vsub("sora-3.1-lite", "Sora 3.1 Lite", "720p", "6s-10s"),
-          vsub("sora-2-pro", "Sora 2 Pro", "1080p", "4s-12s"),
-          vsub("sora-2-3.1-fast", "Sora 2 3.1 Fast", "1080p", "6s-10s"),
-          vsub("sora-2-max", "Sora 2 Max", "1080p", "4s-12s"),
-          vsub("sora-2-pro-max", "Sora 2 Pro Max", "1080p", "4s-12s"),
+          vsub("sora-2", "Sora 2", "720p", "4s-12s", undefined, true),
+          vsub("sora-2-pro", "Sora 2 Pro", "1080p", "4s-12s", undefined, true),
+          vsub("sora-2-max", "Sora 2 Max", "1080p", "4s-12s", undefined, true),
+          vsub("sora-2-pro-max", "Sora 2 Pro Max", "1080p", "4s-12s", undefined, true),
         ],
       ),
       vparent(
@@ -300,18 +315,27 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Precision video with sound control",
         GOOGLE_ICON,
         [
-          vsub("veo-3.1", "Google Veo 3.1", "1080p", "4s-8s"),
-          vsub("veo-3.1-fast", "Google Veo 3.1 Fast", "1080p", "4s-8s"),
-          vsub("veo-3-fast", "Google Veo 3 Fast", "1080p", "4s-8s"),
-          vsub("veo-3", "Google Veo 3", "1080p", "4s-8s"),
+          vsub("veo-3.1-lite", "Google Veo 3.1 Lite", "1080p", "4s-8s", undefined, true),
+          vsub("veo-3.1-fast", "Google Veo 3.1 Fast", "1080p", "4s-8s", undefined, true),
+          vsub("veo-3.1", "Google Veo 3.1", "1080p", "4s-8s", undefined, true),
+          // The Veo 3 pair is fixed at 8s, unlike the 3.1 models.
+          vsub("veo-3-fast", "Google Veo 3 Fast", "1080p", "8s", undefined, true),
+          vsub("veo-3", "Google Veo 3", "1080p", "8s", undefined, true),
         ],
       ),
+      vfeat("gemini-omni-flash", "Gemini Omni Flash", GOOGLE_ICON, "720p", "4s-10s"),
       vparent(
         "higgsfield",
         "Cinefield",
         "Advanced camera controls and effect presets",
         Sparkles,
         [
+          {
+            ...vsub("marketing-studio-video", "Marketing Studio Video", "1080p", "5s-30s", ["NEW"]),
+            hideResolution: true,
+          },
+          vsub("cinema-studio-4.0", "Cinema Studio 4.0 Video", "1080p", "4s-30s", ["NEW"]),
+          vsub("cinema-studio-3.5", "Cinematic Studio Video 3.5", "1080p", "4s-15s"),
           vsub("higgsfield-lite", "Cinefield Lite", "720p", "3s-5s"),
           vsub("higgsfield-standard", "Cinefield Standard", "720p", "3s-5s"),
           vsub("higgsfield-turbo", "Cinefield Turbo", "720p", "3s-5s"),
@@ -337,6 +361,16 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "Cinematic, multi-shot video creation",
         SEEDANCE_ICON,
         [
+          { ...vsub("seedance-2.5", "Seedance 2.5", "1080p", "4s-30s", ["NEW"], true), icon: SEEDANCE_ICON },
+          {
+            ...vsub("seedance-2.5-edit", "Seedance 2.5 Edit", "720p", "5s", ["NEW"], true),
+            icon: SEEDANCE_ICON,
+            // This row carries a resolution range and two mode chips in place
+            // of a duration.
+            resolutionLabel: "480p-720p",
+            hideDuration: true,
+            extraChips: ["Edit Video", "Audio"],
+          },
           { ...vsub("seedance-2.0-fast", "Seedance 2.0 Fast", "720p", "4s-15s"), icon: SEEDANCE_ICON },
           { ...vsub("seedance-2.0-mini", "Seedance 2.0 Mini", "720p", "4s-15s"), icon: SEEDANCE_ICON },
           { ...vsub("seedance-2.0", "Seedance 2.0", "4K", "4s-15s"), icon: SEEDANCE_ICON },
@@ -346,12 +380,23 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         ],
       ),
       vparent(
-        "happyhorse-cat",
-        "HappyHorse",
-        "",
-        HappyHorseIcon,
-        [vsub("happyhorse", "HappyHorse", "1080p", "3s-15s")],
+        "grok-imagine",
+        "Grok Imagine",
+        "Perfect motion with advanced video control",
+        GROK_ICON,
+        [
+          vsub("grok-base", "Grok Imagine", "720p", "1s-15s"),
+          vsub("grok-imagine-1.5", "Grok Imagine 1.5", "720p", "1s-15s"),
+          {
+            // The edit entry carries a description instead of chips.
+            ...vsub("grok-imagine-edit", "Grok Imagine Edit", "720p", "1s-15s"),
+            description: "Edit videos with text prompts",
+            hideResolution: true,
+            hideDuration: true,
+          },
+        ],
       ),
+      vfeat("happyhorse", "HappyHorse", HappyHorseIcon, "1080p", "3s-15s", undefined, true),
     ],
   },
 ];

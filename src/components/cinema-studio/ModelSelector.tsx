@@ -313,14 +313,21 @@ function VideoFlatRow({
         </div>
         {model.durationLabel ? (
           <span className="flex items-center gap-2 text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
-            <span className="flex items-center gap-1">
-              <Diamond className="size-3" />
-              {model.resolution}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="size-3" />
-              {model.durationLabel}
-            </span>
+            {!model.hideResolution && (
+              <span className="flex items-center gap-1">
+                <Diamond className="size-3" />
+                {model.resolutionLabel ?? model.resolution}
+              </span>
+            )}
+            {!model.hideDuration && (
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                {model.durationLabel}
+              </span>
+            )}
+            {model.extraChips?.map((c) => (
+              <span key={c}>{c}</span>
+            ))}
           </span>
         ) : model.description ? (
           <span className="block truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
@@ -513,16 +520,29 @@ function VideoParentRow({
                       {s.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
                       {s.badges?.map((b) => <VersionBadge key={b} badge={b} />)}
                     </span>
-                    <span className="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <Diamond className="size-3" />
-                        {s.resolution}
+                    {s.description ? (
+                      <span className="mt-0.5 block truncate text-[10px] font-normal text-gray-400">
+                        {s.description}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="size-3" />
-                        {s.durationLabel ?? `${s.durations[0]}s`}
+                    ) : (
+                      <span className="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-400">
+                        {!s.hideResolution && (
+                          <span className="flex items-center gap-1">
+                            <Diamond className="size-3" />
+                            {s.resolutionLabel ?? s.resolution}
+                          </span>
+                        )}
+                        {!s.hideDuration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="size-3" />
+                            {s.durationLabel ?? `${s.durations[0]}s`}
+                          </span>
+                        )}
+                        {s.extraChips?.map((c) => (
+                          <span key={c}>{c}</span>
+                        ))}
                       </span>
-                    </span>
+                    )}
                   </span>
                   <span className="flex shrink-0 items-center gap-1">
                     {sel && <Check className="size-4 text-[#D97757]" />}
