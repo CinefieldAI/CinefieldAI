@@ -1835,7 +1835,11 @@ export default function PromptBar(props: PromptBarProps) {
                       ? ["16:9", "9:16", "1:1", "4:3", "3:4"]
                       : isWan
                         ? ["16:9", "9:16", "4:3", "3:4", "1:1"]
-                        : undefined)
+                        : isGrokImagine || isGrokImagine15
+                          ? // The only models offering 3:2 and 2:3, and the
+                            // only ones that drop 21:9.
+                            ["Auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"]
+                          : undefined)
                   }
                 />
               )

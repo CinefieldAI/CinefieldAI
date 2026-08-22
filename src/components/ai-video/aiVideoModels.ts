@@ -246,12 +246,12 @@ export const ALL_MODELS: AiVideoFamily[] = [
     submodels: [
       { id: "kling-30", name: "Kling 3.0", sound: true, chips: ["4K", "3s-15s"] },
       { id: "kling-30-turbo", name: "Kling 3.0 Turbo", sound: true, chips: ["1080p", "3s-15s"] },
-      { id: "kling-30-omni-p", name: "Kling 3.0 Omni", badges: ["Premium", "Exclusive"], chips: ["4K", "3s-15s"] },
-      { id: "kling-30-omni", name: "Kling 3.0 Omni", badges: ["Exclusive"], chips: ["4K", "3s-15s"] },
+      // The reference lists this model and "Kling O1 Video" twice each; those
+      // are duplicates in its own data, so only one of each is carried here.
+      { id: "kling-30-omni", name: "Kling 3.0 Omni", badges: ["Premium", "Exclusive"], chips: ["4K", "3s-15s"] },
       { id: "kling-30-omni-edit", name: "Kling 3.0 Omni Edit", badges: ["Exclusive"], chips: ["1080p", "3s-10s"] },
       { id: "kling-26", name: "Kling 2.6", sound: true, chips: ["1080p", "5s-10s"] },
       { id: "kling-o1", name: "Kling O1 Video", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
-      { id: "kling-o1-2", name: "Kling O1 Video", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
       { id: "kling-o1-edit", name: "Kling O1 Video Edit", badges: ["Premium"], chips: ["1080p", "3s-10s", "Edit Video"] },
       { id: "kling-mc", name: "Kling Motion Control", chips: ["1080p", "3s-30s"] },
       { id: "kling-30-mc", name: "Kling 3.0 Motion Control", chips: ["1080p", "3s-30s"] },

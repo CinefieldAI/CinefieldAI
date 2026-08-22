@@ -256,14 +256,15 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         [
           vsub("kling-3.0", "Kling 3.0", "4K", "3s-15s", undefined, true),
           vsub("kling-3.0-turbo", "Kling 3.0 Turbo", "1080p", "3s-15s", undefined, true),
+          // The reference lists "Kling 3.0 Omni" and "Kling O1 Video" twice
+          // each; those are duplicates in its own data, so only one of each
+          // is carried here.
           vsub("kling-3.0-omni", "Kling 3.0 Omni", "4K", "3s-15s"),
-          vsub("kling-3.0-mini", "Kling 3.0 Omni", "4K", "3s-15s"),
           {
             ...vsub("kling-3.0-omni-edit", "Kling 3.0 Omni Edit", "1080p", "3s-10s"),
             defaultDuration: 4,
           },
           vsub("kling-2.6", "Kling 2.6", "1080p", "5s-10s", undefined, true),
-          vsub("kling-2.6-max", "Kling O1 Video", "1080p", "5s-10s"),
           vsub("kling-01-video", "Kling O1 Video", "1080p", "5s-10s"),
           {
             ...vsub("kling-o1-video-edit", "Kling O1 Video Edit", "1080p", "3s-10s"),
@@ -671,6 +672,10 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
   { value: "4:3", description: "Standard", shape: [4, 3] },
   { value: "16:9", description: "Widescreen", shape: [16, 9] },
   { value: "21:9", description: "Cinematic", shape: [21, 9] },
+  // Only the Grok Imagine models offer these two; they are restricted to it
+  // through AspectRatioDropdown's `options` prop rather than shown globally.
+  { value: "3:2", description: "Classic photo", shape: [3, 2] },
+  { value: "2:3", description: "Portrait photo", shape: [2, 3] },
 ];
 export const RESOLUTIONS = ["720p", "1080p", "2K", "4K"];
 export const BATCHES = ["1/4", "2/4", "3/4", "4/4"];
