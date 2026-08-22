@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { extractRoutePairs } from "./check-new-route-eval-evidence";
@@ -197,4 +197,108 @@ test("S1-6  no migration change means the gate still passes cleanly", () => {
   // touch no model_routes seed block.
   assert.ok(main.includes("no new migration files in this change"));
   assert.ok(main.includes("none touch model_routes"));
+});
+
+// ---------------------------------------------------------------------------
+// S1-7 — repo-wide PR-CI secret exposure policy
+// ---------------------------------------------------------------------------
+//
+// S1-2 and S1-3 above pin ONE file and ONE job by string slicing. That was
+// enough to prove the finding was fixed, and not enough to keep it fixed: it
+// cannot see a second workflow, a `secrets: inherit` forward, or a reusable
+// workflow call, because none of those contain the literal `secrets.`.
+//
+// This guard states the policy instead of the shape. A job that CAN run on a
+// pull_request may reference no repository secret, by any mechanism. A job
+// fenced to a non-PR event may, because a skipped job receives nothing and
+// dispatching one is a deliberate act by someone with write access.
+
+/** Split a workflow into jobs: `[name, body]`, body ending at the next job. */
+function workflowJobs(source: string): { name: string; body: string }[] {
+  const code = source.replace(/^\s*#.*$/gm, "");
+  const jobsAt = code.search(/^jobs:\s*$/m);
+  if (jobsAt < 0) return [];
+  const jobsBlock = code.slice(jobsAt);
+  const heads = [...jobsBlock.matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)];
+  return heads.map((h, i) => ({
+    name: h[1],
+    body: jobsBlock.slice(h.index!, i + 1 < heads.length ? heads[i + 1].index! : undefined),
+  }));
+}
+
+/** The `on:` block only — never a job's own `if:`. */
+function workflowTriggers(source: string): string {
+  const code = source.replace(/^\s*#.*$/gm, "");
+  const onAt = code.search(/^on:\s*$/m);
+  if (onAt < 0) return code.slice(0, code.search(/^jobs:/m) + 1 || undefined);
+  const rest = code.slice(onAt);
+  const end = rest.search(/^(jobs|permissions|env|concurrency|defaults):/m);
+  return end < 0 ? rest : rest.slice(0, end);
+}
+
+/** True when this job is fenced to an event that a pull_request cannot satisfy. */
+function fencedToNonPrEvent(jobBody: string): boolean {
+  const guard = /if:\s*[^\n]*github\.event_name\s*===?\s*'(workflow_dispatch|schedule|push|release)'/.exec(
+    jobBody
+  );
+  return guard !== null;
+}
+
+function readWorkflows(): { file: string; source: string }[] {
+  const dir = path.join(ROOT, ".github/workflows");
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
+    .map((f) => ({ file: f, source: readFileSync(path.join(dir, f), "utf8") }));
+}
+
+test("S1-7  no PR-reachable job may receive a repository secret, by ANY mechanism", () => {
+  for (const { file, source } of readWorkflows()) {
+    const triggers = workflowTriggers(source);
+
+    // `pull_request_target` runs with the base repo's secrets against a fork's
+    // code. It is never acceptable here, whatever the job does.
+    assert.ok(
+      !/pull_request_target/.test(triggers),
+      `${file}: pull_request_target hands secrets to fork-authored code`
+    );
+
+    if (!/^\s*pull_request:?/m.test(triggers)) continue; // not PR-reachable at all
+
+    for (const { name, body } of workflowJobs(source)) {
+      if (fencedToNonPrEvent(body)) continue; // a skipped job receives nothing
+
+      for (const [mechanism, shape] of [
+        ["a secrets.* expression", /secrets\./],
+        ["secrets: inherit", /secrets:\s*inherit/],
+        ["explicit secret forwarding", /secrets:\s*\n\s+\S+:\s*\$\{\{\s*secrets\./],
+      ] as const) {
+        assert.ok(
+          !shape.test(body),
+          `${file}:${name} is reachable from a pull_request and uses ${mechanism}`
+        );
+      }
+
+      // A reusable workflow call inherits the caller's secrets context, so it
+      // needs its own fence rather than trust in the callee.
+      if (/uses:\s*\.\//.test(body)) {
+        assert.ok(
+          !/secrets:/.test(body),
+          `${file}:${name} calls a reusable workflow with a secrets block from a PR-reachable job`
+        );
+      }
+    }
+  }
+});
+
+test("S1-8  the policy still permits a deliberately credentialed non-PR job", () => {
+  // The guard must not become a blanket secret ban — that would push someone
+  // to delete the fence rather than the secret. eval-ci.yml is the live proof
+  // that a dispatch-only job may still hold one.
+  const evalCi = readFileSync(path.join(ROOT, ".github/workflows/eval-ci.yml"), "utf8");
+  const dispatchJob = workflowJobs(evalCi).find((j) => fencedToNonPrEvent(j.body));
+  assert.ok(dispatchJob, "eval-ci.yml must still fence its credentialed job to workflow_dispatch");
+  assert.ok(
+    /secrets\./.test(dispatchJob.body),
+    "and that fenced job is exactly where the surviving credential is allowed to live"
+  );
 });

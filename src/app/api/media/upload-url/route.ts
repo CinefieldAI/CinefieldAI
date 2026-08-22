@@ -185,9 +185,24 @@ export async function POST(request: Request): Promise<NextResponse> {
         method: presigned.method,
         expiresInSeconds: presigned.expiresInSeconds,
         // Echoed so the client can set the headers it was signed with. Neither
-        // is an instruction the client chose — both are values the server
-        // bound into the signature, and a PUT that disagrees with either is
-        // rejected by the storage provider rather than accepted.
+        // is an instruction the client chose — both are server-side values.
+        //
+        // THEY ARE NOT EQUALLY ENFORCED, and the difference matters:
+        //
+        //   requiredContentLength IS cryptographically bound. SigV4 puts it in
+        //   X-Amz-SignedHeaders (`content-length;host`), so a PUT of a
+        //   different size fails the signature at the storage provider.
+        //
+        //   requiredContentType is NOT bound. It is absent from
+        //   X-Amz-SignedHeaders, and two presigns that differ only in content
+        //   type produce the SAME signature — the storage provider will accept
+        //   a PUT that declares something else entirely.
+        //
+        // So the declared type is metadata, never a security control. The real
+        // MIME defence is Phase 9-B: `ingest-gate.ts` sniffs the actual bytes
+        // and rejects `declared_mime_mismatch`, and the asset stays pending and
+        // quarantined until it passes. Do not remove that check on the belief
+        // that presigning already covers it.
         requiredContentType: contentType,
         requiredContentLength: presigned.contentLength,
         maxBytes: MAX_UPLOAD_BYTES,
