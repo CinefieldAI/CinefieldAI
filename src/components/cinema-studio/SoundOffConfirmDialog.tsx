@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+
 interface SoundOffConfirmDialogProps {
   isOpen: boolean;
   onCancel: () => void;
@@ -17,7 +19,10 @@ export default function SoundOffConfirmDialog({
 }: SoundOffConfirmDialogProps) {
   if (!isOpen) return null;
 
-  return (
+  // Portalled to the body: the prompt bar animates in on a transform, and a
+  // transformed ancestor becomes the containing block for position:fixed, so
+  // "inset-0" resolved to the bar's own box and this opened behind the navbar.
+  return createPortal(
     <div
       className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onCancel}
@@ -52,6 +57,7 @@ export default function SoundOffConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

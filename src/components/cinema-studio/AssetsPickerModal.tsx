@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarClock,
   Check,
@@ -98,7 +99,11 @@ export default function AssetsPickerModal({
       }
     : undefined;
 
-  return (
+  // Portalled to the body. The prompt bar animates in on a transform, and a
+  // transformed ancestor becomes the containing block for position:fixed —
+  // "inset-0" was resolving to the prompt bar's own box, which is why this
+  // opened under the navbar instead of centred on the viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
@@ -166,7 +171,8 @@ export default function AssetsPickerModal({
           {activeTab === "liked" && <EmptyTab label="No liked assets yet" />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -219,7 +225,7 @@ function GeminiAssetsPicker({
   const sectionLabel =
     tabs.find((tab) => tab.id === activeTab)?.label ?? "Uploads";
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm"
       onMouseDown={(event) => {
@@ -372,7 +378,8 @@ function GeminiAssetsPicker({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

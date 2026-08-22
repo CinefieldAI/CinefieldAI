@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 
 interface PresetItem {
@@ -80,7 +81,10 @@ export default function MotionPresetsPanel({
     return inCategory && matchesQuery;
   });
 
-  return (
+  // Portalled to the body: the prompt bar animates in on a transform, and a
+  // transformed ancestor becomes the containing block for position:fixed, so
+  // "inset-0" resolved to the bar's own box and this opened behind the navbar.
+  return createPortal(
     <div
       className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
@@ -159,6 +163,7 @@ export default function MotionPresetsPanel({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
