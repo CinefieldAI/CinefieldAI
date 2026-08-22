@@ -8,6 +8,7 @@ import { GLASS_PANEL } from "./AiVideoControls";
 import {
   ALL_MODELS,
   FEATURED_MODELS,
+  getModelName,
   iconForModel,
   type AiVideoFamily,
   type AiVideoModel,
@@ -23,23 +24,20 @@ import {
  * Searching flattens the tree: the two section headings collapse to a single
  * "All models" list and family cards are replaced by the submodels that
  * matched, so a search result is always something you can actually pick.
+ *
+ * Selection travels as a model **id**, never a name — the Kling family holds
+ * two models called `Kling 3.0 Omni` and two called `Kling O1 Video`, and
+ * matching on the label would highlight both rows of a pair at once.
  */
 
 function BadgePill({ kind }: { kind: BadgeKind }) {
-  const unlimited = kind === "Unlimited";
   return (
     <span
-      className={`inline-flex h-4 -skew-x-12 items-center rounded-sm px-1 font-grotesk text-[10px] font-bold uppercase leading-none ${
-        unlimited ? "text-white" : "bg-[#D7FF2F] text-black"
-      }`}
-      style={
-        unlimited
-          ? {
-              backgroundImage:
-                "linear-gradient(90deg, rgb(50,89,180) 0%, rgb(60,140,255) 50%, rgb(0,200,210) 75%, rgb(120,201,230) 100%)",
-            }
-          : undefined
-      }
+      className="inline-flex h-4 -skew-x-12 items-center rounded-sm px-1 font-grotesk text-[10px] font-bold uppercase leading-none text-white"
+      style={{
+        backgroundImage:
+          "linear-gradient(90deg, rgb(50,89,180) 0%, rgb(60,140,255) 50%, rgb(0,200,210) 75%, rgb(120,201,230) 100%)",
+      }}
     >
       {kind}
     </span>
@@ -162,8 +160,9 @@ export default function AiVideoModelSelector({
   selected,
   onSelect,
 }: {
+  /** Id of the selected model. */
   selected: string;
-  onSelect: (name: string) => void;
+  onSelect: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -171,6 +170,7 @@ export default function AiVideoModelSelector({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const flyoutRef = useRef<HTMLDivElement | null>(null);
 
+  const selectedName = getModelName(selected);
   const trimmed = query.trim().toLowerCase();
 
   /** Searching flattens families into their matching submodels, so every
@@ -180,8 +180,8 @@ export default function AiVideoModelSelector({
     const hits: AiVideoModel[] = [];
     const seen = new Set<string>();
     const push = (model: AiVideoModel) => {
-      if (!model.name.toLowerCase().includes(trimmed) || seen.has(model.name)) return;
-      seen.add(model.name);
+      if (!model.name.toLowerCase().includes(trimmed) || seen.has(model.id)) return;
+      seen.add(model.id);
       hits.push(model);
     };
     for (const card of ALL_MODELS) {
@@ -207,8 +207,8 @@ export default function AiVideoModelSelector({
     setFlyout({ family, top: Math.max(8, Math.min(rect.top, window.innerHeight - 420)), left: rect.right + 10 });
   };
 
-  const pick = (name: string) => {
-    onSelect(name);
+  const pick = (id: string) => {
+    onSelect(id);
     handleOpenChange(false);
   };
 
@@ -219,11 +219,11 @@ export default function AiVideoModelSelector({
           type="button"
           aria-haspopup="listbox"
           aria-expanded={open}
-          aria-label={`Model: ${selected}`}
+          aria-label={`Model: ${selectedName}`}
           className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-white/[0.04] bg-white/5 px-2 transition-colors hover:bg-white/10 focus:outline-none"
         >
-          <TriggerIcon name={selected} />
-          <span className="px-1 text-xs font-semibold text-white">{selected}</span>
+          <TriggerIcon name={selectedName} />
+          <span className="px-1 text-xs font-semibold text-white">{selectedName}</span>
         </button>
       </Popover.Trigger>
 
@@ -272,8 +272,8 @@ export default function AiVideoModelSelector({
                     <ModelRow
                       key={model.id}
                       model={model}
-                      selected={model.name === selected}
-                      onSelect={() => pick(model.name)}
+                      selected={model.id === selected}
+                      onSelect={() => pick(model.id)}
                       onHover={() => setFlyout(null)}
                     />
                   ))}
@@ -286,8 +286,8 @@ export default function AiVideoModelSelector({
                   <ModelRow
                     key={model.id}
                     model={model}
-                    selected={model.name === selected}
-                    onSelect={() => pick(model.name)}
+                    selected={model.id === selected}
+                    onSelect={() => pick(model.id)}
                     onHover={() => setFlyout(null)}
                   />
                 ))}
@@ -296,8 +296,8 @@ export default function AiVideoModelSelector({
                 {ALL_MODELS.map((card) => {
                   const isFamily = !!card.submodels?.length;
                   const selectedHere = isFamily
-                    ? !!card.submodels?.some((sub) => sub.name === selected)
-                    : card.name === selected;
+                    ? !!card.submodels?.some((sub) => sub.id === selected)
+                    : card.id === selected;
                   return (
                     <ModelRow
                       key={card.id}
@@ -307,7 +307,7 @@ export default function AiVideoModelSelector({
                       // A family card is display-only: hovering reveals its
                       // submodels, clicking it is a deliberate no-op.
                       onSelect={() => {
-                        if (!isFamily) pick(card.name);
+                        if (!isFamily) pick(card.id);
                       }}
                       onHover={(el) => (isFamily ? showFlyout(el, card) : setFlyout(null))}
                     />
@@ -333,8 +333,8 @@ export default function AiVideoModelSelector({
                 key={sub.id}
                 model={sub}
                 compact
-                selected={sub.name === selected}
-                onSelect={() => pick(sub.name)}
+                selected={sub.id === selected}
+                onSelect={() => pick(sub.id)}
               />
             ))}
           </div>,

@@ -4,11 +4,19 @@
  * (structure, control vocabulary and option sets only). Every "Higgsfield"
  * name is Cinefield's own here.
  *
- * Two things the audit settled that are easy to get wrong:
+ * Everything below is keyed by **model id**, not by name, because the
+ * reference genuinely ships two different models called `Kling 3.0 Omni` and
+ * two called `Kling O1 Video` — both pairs are shown in its Kling flyout, and
+ * name-keying would collapse each pair into one row and light both up at once.
+ *
+ * Three things the audit settled that are easy to get wrong:
  *  - Duration is TWO different controls: a continuous slider for models with
  *    a range, and a fixed option list for models with discrete steps.
- *  - The aspect-ratio set is per model, not global — `Auto` only exists on
- *    some, and 2:1 / 3:2 / 2:3 appear on exactly one model each.
+ *  - A control that is absent is absent for real. Kling 2.5 Turbo shows only
+ *    the model pill and a duration; Kling Motion Control shows neither.
+ *  - Ratio sets, duration sets and defaults are per model, not per family:
+ *    Google Veo 3.1 Lite gets `Auto` while Veo 3.1 and 3.1 Fast do not, and
+ *    Sora defaults to its longest duration rather than its shortest.
  */
 
 import type { ComponentType, SVGProps } from "react";
@@ -26,7 +34,9 @@ import {
 } from "@/components/cinema-studio/icons/ProviderIcons";
 import WanIcon from "@/components/cinema-studio/icons/WanIcon";
 
-export type BadgeKind = "New" | "Premium" | "Exclusive" | "Unlimited";
+/** The reference marks New / Premium / Exclusive too; Cinefield deliberately
+ *  shows none of those, so `Unlimited` is the only badge that survives. */
+export type BadgeKind = "Unlimited";
 
 export type ProviderIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -95,6 +105,7 @@ export interface AiVideoControlSpec {
   defaultDuration?: string;
   /** Per-model ratio set. Omitted entirely when the model has no ratio control. */
   ratios?: string[];
+  defaultRatio?: string;
   /** Whether the prompt bar gets the audio toggle. Note: several models show a
    *  speaker icon on their card but still have no toggle — sound is baked in
    *  and can't be switched off. */
@@ -102,106 +113,224 @@ export interface AiVideoControlSpec {
 }
 
 /** Ratio sets, named where they repeat across models. */
-const RATIOS_FULL = ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"];
-const RATIOS_NO_AUTO = ["16:9", "9:16", "21:9", "4:3", "1:1", "3:4"];
+const RATIOS_SEEDANCE_2 = ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"];
+const RATIOS_SEEDANCE_25 = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
 const RATIOS_WIDE_TALL = ["16:9", "9:16"];
+const RATIOS_KLING = ["16:9", "9:16", "1:1"];
+const RATIOS_KLING_SQUARE_FIRST = ["1:1", "16:9", "9:16"];
+
+/** Every second between 3s and 10s — three Kling editing models offer this. */
+const DURATIONS_3_TO_10 = ["3s", "4s", "5s", "6s", "7s", "8s", "9s", "10s"];
 
 export const AI_VIDEO_CONTROLS: Record<string, AiVideoControlSpec> = {
-  // Seedance 2.0 family — slider, full ratio set, audio toggle
-  "Seedance 2.0": { durationRange: [4, 15], defaultDuration: "8s", ratios: RATIOS_FULL, audio: true },
-  "Seedance 2.0 Fast": { durationRange: [4, 15], defaultDuration: "8s", ratios: RATIOS_FULL, audio: true },
-  "Seedance 2.0 Mini": { durationRange: [4, 15], defaultDuration: "8s", ratios: RATIOS_FULL, audio: true },
-  "Enhanced Seedance 2.0 Fast": { durationRange: [4, 15], defaultDuration: "8s", ratios: RATIOS_FULL, audio: true },
+  /* -------------------------------------------------- Minimax Hailuo */
+  minimax_h3: {
+    durationRange: [5, 15],
+    defaultDuration: "5s",
+    ratios: ["Auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    defaultRatio: "Auto",
+  },
+  // The four Hailuo models below have no ratio control at all.
+  "minimax-2.3-fast": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
+  "minimax-2.3": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
+  "minimax-fast": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
+  minimax: { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
 
-  // Seedance 2.5 — longer range, no Auto
-  "Seedance 2.5": { durationRange: [4, 30], defaultDuration: "5s", ratios: RATIOS_NO_AUTO, audio: true },
-  // Edit model: audio only, no duration or ratio at all
-  "Seedance 2.5 Edit": { audio: true },
-  "Seedance 1.5 Pro": { durationRange: [4, 12], defaultDuration: "5s", ratios: RATIOS_FULL, audio: true },
-  "Seedance Pro": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Seedance Pro Fast": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
+  /* -------------------------------------------------- FLUX.3 */
+  // The only model with a 2:1 ratio.
+  flux_3_video: {
+    durationRange: [5, 20],
+    defaultDuration: "5s",
+    ratios: ["Auto", "21:9", "2:1", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    defaultRatio: "Auto",
+    audio: true,
+  },
 
-  // Minimax Hailuo
-  "MiniMax H3": { durationRange: [5, 15], defaultDuration: "5s", ratios: RATIOS_FULL },
-  "Minimax Hailuo 2.3": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
-  "Minimax Hailuo 2.3 Fast": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
-  "Minimax Hailuo 02": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
-  "Minimax Hailuo 02 Fast": { durationOptions: ["6s", "10s"], defaultDuration: "6s" },
+  /* -------------------------------------------------- Kling */
+  kling3_0: { durationRange: [3, 15], defaultDuration: "5s", ratios: RATIOS_KLING, audio: true },
+  kling3_0_turbo: { durationRange: [3, 15], defaultDuration: "5s", ratios: RATIOS_KLING },
+  kling_o3_flf: {
+    durationOptions: ["5s", "10s"],
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+    audio: true,
+  },
+  kling_o3_image_reference: {
+    durationOptions: ["5s", "10s"],
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+    audio: true,
+  },
+  "kling-video-reference-o3": {
+    durationOptions: DURATIONS_3_TO_10,
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+  },
+  kling2_6: { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_KLING, audio: true },
+  "kling-omni-flf": {
+    durationOptions: ["5s", "10s"],
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+  },
+  "kling-omni-image-reference": {
+    durationOptions: ["5s", "10s"],
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+  },
+  "kling-video-edit": {
+    durationOptions: DURATIONS_3_TO_10,
+    defaultDuration: "5s",
+    ratios: RATIOS_KLING_SQUARE_FIRST,
+  },
+  // Motion Control strips the row down to nothing but the model itself.
+  "kling-2-6-motion-control": {},
+  "kling-3-motion-control": {},
+  // These three carry a duration and nothing else.
+  "kling-v2-5-turbo": { durationOptions: ["5s", "10s"], defaultDuration: "5s" },
+  "kling-v2-1": { durationOptions: ["5s", "10s"], defaultDuration: "5s" },
+  "kling-v2-1-master": { durationOptions: ["5s", "10s"], defaultDuration: "5s" },
 
-  "Gemini Omni Flash": {
+  /* -------------------------------------------------- OpenAI Sora 2 */
+  // Sound is baked in, so no toggle despite the speaker icon. All four
+  // default to their longest duration rather than their shortest.
+  open_sora_video: {
+    durationOptions: ["4s", "8s", "12s"],
+    defaultDuration: "12s",
+    ratios: RATIOS_WIDE_TALL,
+  },
+  "sora-pro": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "12s", ratios: RATIOS_WIDE_TALL },
+  "sora-2-max": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "12s", ratios: RATIOS_WIDE_TALL },
+  "sora-2-pro-max": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "12s", ratios: RATIOS_WIDE_TALL },
+
+  /* -------------------------------------------------- Google Veo */
+  // Lite is the only Veo with an audio toggle and an `Auto` ratio.
+  "veo-3-1-lite": {
+    durationOptions: ["4s", "6s", "8s"],
+    defaultDuration: "8s",
+    ratios: ["Auto", "16:9", "9:16"],
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  "veo-3-1-fast": { durationOptions: ["4s", "6s", "8s"], defaultDuration: "8s", ratios: RATIOS_WIDE_TALL },
+  "veo-3-1-preview": { durationOptions: ["4s", "6s", "8s"], defaultDuration: "8s", ratios: RATIOS_WIDE_TALL },
+  // Veo 3 is fixed at 8s, so it has no duration control at all.
+  "veo-3-fast": { ratios: RATIOS_WIDE_TALL },
+  "veo-3-preview": { ratios: RATIOS_WIDE_TALL },
+
+  /* -------------------------------------------------- Gemini */
+  "gemini-omni": {
     durationOptions: ["4s", "6s", "8s", "10s"],
     defaultDuration: "8s",
     ratios: RATIOS_WIDE_TALL,
   },
 
-  // Kling
-  "Kling 3.0": { durationRange: [3, 15], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"], audio: true },
-  "Kling 3.0 Turbo": { durationRange: [3, 15], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"], audio: true },
-  "Kling 3.0 Omni": { durationRange: [3, 15], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"] },
-  "Kling 3.0 Omni Edit": { durationRange: [3, 10], defaultDuration: "5s", ratios: ["1:1", "16:9", "9:16"] },
-  "Kling 2.6": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"], audio: true },
-  "Kling O1 Video": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: ["1:1", "16:9", "9:16"] },
-  "Kling O1 Video Edit": {
-    durationOptions: ["6s", "10s", "3s", "4s", "5s", "7s", "8s", "9s"],
-    defaultDuration: "6s",
-    ratios: ["1:1", "16:9", "9:16"],
-  },
-  // Motion Control strips the row down to nothing but the model itself
-  "Kling Motion Control": {},
-  "Kling 3.0 Motion Control": {},
-  "Kling 2.5 Turbo": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"] },
-  "Kling 2.1": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"] },
-  "Kling 2.1 Master": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: ["16:9", "9:16", "1:1"] },
-
-  // Sora — sound is baked in, so no toggle despite the speaker icon
-  "Sora 2": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Sora 2 Pro": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Sora 2 Max": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Sora 2 Pro Max": { durationOptions: ["4s", "8s", "12s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-
-  // Veo — same, sound baked in
-  "Google Veo 3.1": { durationOptions: ["4s", "8s", "6s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Google Veo 3.1 Fast": { durationOptions: ["4s", "8s", "6s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Google Veo 3.1 Lite": { durationOptions: ["4s", "8s", "6s"], defaultDuration: "4s", ratios: RATIOS_WIDE_TALL },
-  "Google Veo 3": { durationOptions: ["8s"], defaultDuration: "8s", ratios: RATIOS_WIDE_TALL },
-  "Google Veo 3 Fast": { durationOptions: ["8s"], defaultDuration: "8s", ratios: RATIOS_WIDE_TALL },
-
-  // Cinefield's own camera-control family
-  "Cinema Studio 4.0 Video": { durationRange: [4, 30], defaultDuration: "5s", ratios: RATIOS_NO_AUTO, audio: true },
-  "Cinefield Lite": { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
-  "Cinefield Standard": { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
-  "Cinefield Turbo": { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
-
-  // Wan
-  "Wan 2.7": { durationRange: [2, 15], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Wan 2.6": { durationRange: [5, 15], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Wan 2.5": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Wan 2.5 Fast": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Wan 2.2": { durationOptions: ["5s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-  "Wan 2.2 Fast": { durationOptions: ["5s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
-
-  // FLUX.3 — the only model with a 2:1 ratio
-  "FLUX.3 Video": {
-    durationRange: [5, 20],
+  /* -------------------------------------------------- Cinefield */
+  cinematic_studio_video_4_0: {
+    durationRange: [4, 30],
     defaultDuration: "5s",
-    ratios: ["Auto", "21:9", "2:1", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    ratios: RATIOS_SEEDANCE_25,
+    audio: true,
+  },
+  lite: { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
+  standard: { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
+  turbo: { durationOptions: ["3s", "5s"], defaultDuration: "3s" },
+
+  /* -------------------------------------------------- Wan */
+  wan2_7: {
+    durationRange: [2, 15],
+    defaultDuration: "5s",
+    ratios: ["16:9", "9:16", "4:3", "3:4", "1:1"],
+  },
+  wan2_6: { durationOptions: ["5s", "10s", "15s"], defaultDuration: "5s" },
+  wan2_5_video: { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
+  "wan2_5_video-fast": { durationOptions: ["5s", "10s"], defaultDuration: "5s", ratios: RATIOS_WIDE_TALL },
+  // Wan 2.2 offers 3s and 5s but opens on 5s; the Fast variant is fixed and
+  // shows no control at all.
+  wan: { durationOptions: ["3s", "5s"], defaultDuration: "5s" },
+  wan_fast: {},
+
+  /* -------------------------------------------------- Seedance Unlimited */
+  seedance_unlimited: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  seedance_mini_unlimited: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  seedance_2_unlimited: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
     audio: true,
   },
 
-  // Grok — the only model with 3:2 and 2:3
-  "Grok Imagine": {
-    durationRange: [1, 15],
+  /* -------------------------------------------------- Seedance */
+  seedance_2_5: {
+    durationRange: [4, 30],
     defaultDuration: "5s",
-    ratios: ["Auto", "16:9", "4:3", "1:1", "3:4", "9:16", "3:2", "2:3"],
+    ratios: RATIOS_SEEDANCE_25,
+    audio: true,
   },
-  "Grok Imagine 1.5": {
-    durationRange: [1, 15],
-    defaultDuration: "5s",
-    ratios: ["Auto", "16:9", "4:3", "1:1", "3:4", "9:16", "3:2", "2:3"],
+  // Edit model: audio only, no duration or ratio at all.
+  seedance_2_5_edit: { audio: true },
+  seedance_2_0_fast: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
+    audio: true,
   },
-  "Grok Imagine Edit": {},
+  seedance_2_0_mini: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  seedance_2_0: {
+    durationRange: [4, 15],
+    defaultDuration: "8s",
+    ratios: RATIOS_SEEDANCE_2,
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  "seedance-1-5": {
+    durationOptions: ["4s", "8s", "12s"],
+    defaultDuration: "8s",
+    ratios: ["Auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+    defaultRatio: "Auto",
+    audio: true,
+  },
+  seedance_pro: { durationOptions: ["5s", "10s"], defaultDuration: "5s" },
+  seedance_pro_fast: { durationOptions: ["5s", "10s"], defaultDuration: "5s" },
 
-  HappyHorse: {
+  /* -------------------------------------------------- Grok */
+  // The only models with 3:2 and 2:3. Plain Grok Imagine opens at its
+  // maximum duration, the 1.5 revision at 5s.
+  grok_video: {
+    durationRange: [1, 15],
+    defaultDuration: "15s",
+    ratios: ["Auto", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "1:1"],
+    defaultRatio: "Auto",
+  },
+  grok_video_v15: {
+    durationRange: [1, 15],
+    defaultDuration: "5s",
+    ratios: ["Auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
+    defaultRatio: "Auto",
+  },
+  "grok-video-edit": {},
+
+  /* -------------------------------------------------- HappyHorse */
+  "happy-horse": {
     durationRange: [3, 15],
     defaultDuration: "5s",
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
@@ -210,113 +339,118 @@ export const AI_VIDEO_CONTROLS: Record<string, AiVideoControlSpec> = {
 
 /** Horizontal-equivalent quick-access list shown above the full tree. */
 export const FEATURED_MODELS: AiVideoModel[] = [
-  { id: "f-seedance-25", name: "Seedance 2.5", badges: ["New"], chips: ["1080p", "4s-30s"] },
-  { id: "f-seedance-25-edit", name: "Seedance 2.5 Edit", badges: ["New"], chips: ["480p-720p", "Edit Video", "Audio"] },
-  { id: "f-seedance-20", name: "Seedance 2.0", chips: ["4K", "4s-15s"] },
-  { id: "f-seedance-20-fast", name: "Seedance 2.0 Fast", chips: ["720p", "4s-15s"] },
-  { id: "f-seedance-20-mini", name: "Seedance 2.0 Mini", chips: ["720p", "4s-15s"] },
-  { id: "f-minimax-h3", name: "MiniMax H3", badges: ["New"], chips: ["2K", "5s-15s"] },
-  { id: "f-gemini-omni", name: "Gemini Omni Flash", chips: ["720p", "4s-10s"] },
-  { id: "f-kling-30", name: "Kling 3.0", sound: true, chips: ["4K", "3s-15s"] },
-  { id: "f-kling-30-mc", name: "Kling 3.0 Motion Control", chips: ["1080p", "3s-30s"] },
-  { id: "f-flux-3", name: "FLUX.3 Video", sound: true, badges: ["New"], chips: ["1080p", "5s-20s"] },
-  { id: "f-grok-15", name: "Grok Imagine 1.5", chips: ["720p", "1s-15s"] },
+  { id: "seedance_2_5", name: "Seedance 2.5", chips: ["1080p", "4s-30s"] },
+  { id: "seedance_2_5_edit", name: "Seedance 2.5 Edit", chips: ["480p-720p", "Edit Video", "Audio"] },
+  { id: "seedance_2_0", name: "Seedance 2.0", chips: ["4K", "4s-15s"] },
+  { id: "seedance_2_0_fast", name: "Seedance 2.0 Fast", chips: ["720p", "4s-15s"] },
+  { id: "seedance_2_0_mini", name: "Seedance 2.0 Mini", chips: ["720p", "4s-15s"] },
+  { id: "minimax_h3", name: "MiniMax H3", chips: ["2K", "5s-15s"] },
+  { id: "gemini-omni", name: "Gemini Omni Flash", chips: ["720p", "4s-10s"] },
+  { id: "kling3_0", name: "Kling 3.0", sound: true, chips: ["4K", "3s-15s"] },
+  { id: "kling-3-motion-control", name: "Kling 3.0 Motion Control", chips: ["1080p", "3s-30s"] },
+  { id: "flux_3_video", name: "FLUX.3 Video", sound: true, chips: ["1080p", "5s-20s"] },
+  { id: "grok_video_v15", name: "Grok Imagine 1.5", chips: ["720p", "1s-15s"] },
 ];
 
 /** The full list. Cards with `submodels` open a family flyout on hover and
- *  are not selectable themselves; the rest select directly. */
+ *  are not selectable themselves; the rest select directly. A family whose
+ *  only child is the family itself (FLUX.3, Gemini, HappyHorse) is flattened
+ *  into a plain selectable card, exactly as the reference renders it. */
 export const ALL_MODELS: AiVideoFamily[] = [
   {
-    id: "minimax-hailuo",
+    id: "minimax-model",
     name: "Minimax Hailuo",
     description: "High-dynamic, VFX-ready, fastest and most affordable",
     submodels: [
-      { id: "minimax-h3", name: "MiniMax H3", badges: ["New"], chips: ["2K", "5s-15s"] },
-      { id: "hailuo-23-fast", name: "Minimax Hailuo 2.3 Fast", chips: ["1080p", "6s-10s"] },
-      { id: "hailuo-23", name: "Minimax Hailuo 2.3", badges: ["Premium"], chips: ["1080p", "6s-10s"] },
-      { id: "hailuo-02-fast", name: "Minimax Hailuo 02 Fast", chips: ["512p", "6s-10s"] },
-      { id: "hailuo-02", name: "Minimax Hailuo 02", badges: ["Premium"], chips: ["1080p", "6s-10s"] },
+      { id: "minimax_h3", name: "MiniMax H3", chips: ["2K", "5s-15s"] },
+      { id: "minimax-2.3-fast", name: "Minimax Hailuo 2.3 Fast", chips: ["1080p", "6s-10s"] },
+      { id: "minimax-2.3", name: "Minimax Hailuo 2.3", chips: ["1080p", "6s-10s"] },
+      { id: "minimax-fast", name: "Minimax Hailuo 02 Fast", chips: ["512p", "6s-10s"] },
+      { id: "minimax", name: "Minimax Hailuo 02", chips: ["1080p", "6s-10s"] },
     ],
   },
-  { id: "flux-3-video", name: "FLUX.3 Video", sound: true, badges: ["New"], chips: ["1080p", "5s-20s"] },
+  { id: "flux_3_video", name: "FLUX.3 Video", sound: true, chips: ["1080p", "5s-20s"] },
   {
     id: "kling",
     name: "Kling",
     description: "Perfect motion with advanced video control",
     submodels: [
-      { id: "kling-30", name: "Kling 3.0", sound: true, chips: ["4K", "3s-15s"] },
-      { id: "kling-30-turbo", name: "Kling 3.0 Turbo", sound: true, chips: ["1080p", "3s-15s"] },
-      // The reference lists this model and "Kling O1 Video" twice each; those
-      // are duplicates in its own data, so only one of each is carried here.
-      { id: "kling-30-omni", name: "Kling 3.0 Omni", badges: ["Premium", "Exclusive"], chips: ["4K", "3s-15s"] },
-      { id: "kling-30-omni-edit", name: "Kling 3.0 Omni Edit", badges: ["Exclusive"], chips: ["1080p", "3s-10s"] },
-      { id: "kling-26", name: "Kling 2.6", sound: true, chips: ["1080p", "5s-10s"] },
-      { id: "kling-o1", name: "Kling O1 Video", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
-      { id: "kling-o1-edit", name: "Kling O1 Video Edit", badges: ["Premium"], chips: ["1080p", "3s-10s", "Edit Video"] },
-      { id: "kling-mc", name: "Kling Motion Control", chips: ["1080p", "3s-30s"] },
-      { id: "kling-30-mc", name: "Kling 3.0 Motion Control", chips: ["1080p", "3s-30s"] },
-      { id: "kling-25-turbo", name: "Kling 2.5 Turbo", chips: ["1080p", "5s-10s"] },
-      { id: "kling-21", name: "Kling 2.1", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
-      { id: "kling-21-master", name: "Kling 2.1 Master", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
+      { id: "kling3_0", name: "Kling 3.0", sound: true, chips: ["4K", "3s-15s"] },
+      { id: "kling3_0_turbo", name: "Kling 3.0 Turbo", sound: true, chips: ["1080p", "3s-15s"] },
+      // Two distinct models share the name `Kling 3.0 Omni`, and two more
+      // share `Kling O1 Video`. The reference shows all four rows; they are
+      // told apart by id, not by label.
+      { id: "kling_o3_flf", name: "Kling 3.0 Omni", chips: ["4K", "3s-15s"] },
+      { id: "kling_o3_image_reference", name: "Kling 3.0 Omni", chips: ["4K", "3s-15s"] },
+      { id: "kling-video-reference-o3", name: "Kling 3.0 Omni Edit", chips: ["1080p", "3s-10s"] },
+      { id: "kling2_6", name: "Kling 2.6", sound: true, chips: ["1080p", "5s-10s"] },
+      { id: "kling-omni-flf", name: "Kling O1 Video", chips: ["1080p", "5s-10s"] },
+      { id: "kling-omni-image-reference", name: "Kling O1 Video", chips: ["1080p", "5s-10s"] },
+      { id: "kling-video-edit", name: "Kling O1 Video Edit", chips: ["1080p", "3s-10s", "Edit Video"] },
+      { id: "kling-2-6-motion-control", name: "Kling Motion Control", chips: ["1080p", "3s-30s"] },
+      { id: "kling-3-motion-control", name: "Kling 3.0 Motion Control", chips: ["1080p", "3s-30s"] },
+      { id: "kling-v2-5-turbo", name: "Kling 2.5 Turbo", chips: ["1080p", "5s-10s"] },
+      { id: "kling-v2-1", name: "Kling 2.1", chips: ["1080p", "5s-10s"] },
+      { id: "kling-v2-1-master", name: "Kling 2.1 Master", chips: ["1080p", "5s-10s"] },
     ],
   },
   {
-    id: "openai-sora-2",
+    id: "sora2-video",
     name: "OpenAI Sora 2",
     description: "Multi-shot video with sound generation",
     submodels: [
-      { id: "sora-2", name: "Sora 2", badges: ["Premium"], sound: true, chips: ["720p", "4s-12s"] },
-      { id: "sora-2-pro", name: "Sora 2 Pro", badges: ["Premium"], sound: true, chips: ["1080p", "4s-12s"] },
-      { id: "sora-2-max", name: "Sora 2 Max", badges: ["Premium"], sound: true, chips: ["1080p", "4s-12s"] },
-      { id: "sora-2-pro-max", name: "Sora 2 Pro Max", badges: ["Premium"], sound: true, chips: ["1080p", "4s-12s"] },
+      { id: "open_sora_video", name: "Sora 2", sound: true, chips: ["720p", "4s-12s"] },
+      { id: "sora-pro", name: "Sora 2 Pro", sound: true, chips: ["1080p", "4s-12s"] },
+      { id: "sora-2-max", name: "Sora 2 Max", sound: true, chips: ["1080p", "4s-12s"] },
+      { id: "sora-2-pro-max", name: "Sora 2 Pro Max", sound: true, chips: ["1080p", "4s-12s"] },
     ],
   },
   {
-    id: "google-veo",
+    id: "veo",
     name: "Google Veo",
     description: "Precision video with sound control",
     submodels: [
-      { id: "veo-31-lite", name: "Google Veo 3.1 Lite", sound: true, chips: ["1080p", "4s-8s"] },
-      { id: "veo-31-fast", name: "Google Veo 3.1 Fast", badges: ["Premium"], sound: true, chips: ["1080p", "4s-8s"] },
-      { id: "veo-31", name: "Google Veo 3.1", badges: ["Premium"], sound: true, chips: ["1080p", "4s-8s"] },
-      { id: "veo-3-fast", name: "Google Veo 3 Fast", badges: ["Premium"], sound: true, chips: ["1080p", "8s"] },
-      { id: "veo-3", name: "Google Veo 3", badges: ["Premium"], sound: true, chips: ["1080p", "8s"] },
+      { id: "veo-3-1-lite", name: "Google Veo 3.1 Lite", sound: true, chips: ["1080p", "4s-8s"] },
+      { id: "veo-3-1-fast", name: "Google Veo 3.1 Fast", sound: true, chips: ["1080p", "4s-8s"] },
+      { id: "veo-3-1-preview", name: "Google Veo 3.1", sound: true, chips: ["1080p", "4s-8s"] },
+      { id: "veo-3-fast", name: "Google Veo 3 Fast", sound: true, chips: ["1080p", "8s"] },
+      { id: "veo-3-preview", name: "Google Veo 3", sound: true, chips: ["1080p", "8s"] },
     ],
   },
-  { id: "gemini-omni-flash", name: "Gemini Omni Flash", chips: ["720p", "4s-10s"] },
+  { id: "gemini-omni", name: "Gemini Omni Flash", chips: ["720p", "4s-10s"] },
   {
-    id: "cinefield",
+    id: "higgsfield",
     name: "Cinefield",
     description: "Advanced camera controls and effect presets",
     submodels: [
-      { id: "cinema-studio-40", name: "Cinema Studio 4.0 Video", badges: ["New"], chips: ["1080p", "4s-30s"] },
-      { id: "cinefield-lite", name: "Cinefield Lite", badges: ["Premium"], chips: ["720p", "3s-5s"] },
-      { id: "cinefield-standard", name: "Cinefield Standard", badges: ["Premium"], chips: ["720p", "3s-5s"] },
-      { id: "cinefield-turbo", name: "Cinefield Turbo", badges: ["Premium"], chips: ["720p", "3s-5s"] },
+      { id: "cinematic_studio_video_4_0", name: "Cinema Studio 4.0 Video", chips: ["1080p", "4s-30s"] },
+      { id: "lite", name: "Cinefield Lite", chips: ["720p", "3s-5s"] },
+      { id: "standard", name: "Cinefield Standard", chips: ["720p", "3s-5s"] },
+      { id: "turbo", name: "Cinefield Turbo", chips: ["720p", "3s-5s"] },
     ],
   },
   {
-    id: "wan",
+    id: "wan-2.2",
     name: "Wan",
     description: "Camera-controlled video with sound, more freedom",
     submodels: [
-      { id: "wan-27", name: "Wan 2.7", chips: ["1080p", "2s-15s"] },
-      { id: "wan-26", name: "Wan 2.6", chips: ["1080p", "5s-15s"] },
-      { id: "wan-25", name: "Wan 2.5", badges: ["Premium"], sound: true, chips: ["1080p", "5s-10s"] },
-      { id: "wan-25-fast", name: "Wan 2.5 Fast", badges: ["Premium"], sound: true, chips: ["1080p", "5s-10s"] },
-      { id: "wan-22", name: "Wan 2.2", badges: ["Premium"], chips: ["720p", "5s"] },
-      { id: "wan-22-fast", name: "Wan 2.2 Fast", chips: ["720p", "5s"] },
+      { id: "wan2_7", name: "Wan 2.7", chips: ["1080p", "2s-15s"] },
+      { id: "wan2_6", name: "Wan 2.6", chips: ["1080p", "5s-15s"] },
+      { id: "wan2_5_video", name: "Wan 2.5", sound: true, chips: ["1080p", "5s-10s"] },
+      { id: "wan2_5_video-fast", name: "Wan 2.5 Fast", sound: true, chips: ["1080p", "5s-10s"] },
+      { id: "wan", name: "Wan 2.2", chips: ["720p", "5s"] },
+      { id: "wan_fast", name: "Wan 2.2 Fast", chips: ["720p", "5s"] },
     ],
   },
   {
-    id: "seedance-20-unlimited",
+    id: "seedance-unlimited",
     name: "Seedance 2.0 Unlimited Family",
     badges: ["Unlimited"],
     description: "Unlimited models for advanced generation",
     submodels: [
-      { id: "enhanced-seedance-20-fast", name: "Enhanced Seedance 2.0 Fast", badges: ["Unlimited"], chips: ["720p", "4s-15s"] },
-      { id: "u-seedance-20-mini", name: "Seedance 2.0 Mini", badges: ["Unlimited", "Exclusive"], chips: ["720p", "4s-15s"] },
-      { id: "u-seedance-20", name: "Seedance 2.0", badges: ["Unlimited"], chips: ["1080p", "4s-15s"] },
+      { id: "seedance_unlimited", name: "Enhanced Seedance 2.0 Fast", badges: ["Unlimited"], chips: ["720p", "4s-15s"] },
+      { id: "seedance_mini_unlimited", name: "Seedance 2.0 Mini", badges: ["Unlimited"], chips: ["720p", "4s-15s"] },
+      { id: "seedance_2_unlimited", name: "Seedance 2.0", badges: ["Unlimited"], chips: ["1080p", "4s-15s"] },
     ],
   },
   {
@@ -324,33 +458,48 @@ export const ALL_MODELS: AiVideoFamily[] = [
     name: "Seedance",
     description: "Cinematic, multi-shot video creation",
     submodels: [
-      { id: "seedance-25", name: "Seedance 2.5", badges: ["New"], chips: ["1080p", "4s-30s"] },
-      { id: "seedance-25-edit", name: "Seedance 2.5 Edit", badges: ["New"], chips: ["480p-720p", "Edit Video", "Audio"] },
-      { id: "seedance-20-fast", name: "Seedance 2.0 Fast", chips: ["720p", "4s-15s"] },
-      { id: "seedance-20-mini", name: "Seedance 2.0 Mini", badges: ["Exclusive"], chips: ["720p", "4s-15s"] },
-      { id: "seedance-20", name: "Seedance 2.0", chips: ["4K", "4s-15s"] },
-      { id: "seedance-15-pro", name: "Seedance 1.5 Pro", chips: ["720p", "4s-12s"] },
-      { id: "seedance-pro", name: "Seedance Pro", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
-      { id: "seedance-pro-fast", name: "Seedance Pro Fast", badges: ["Premium"], chips: ["1080p", "5s-10s"] },
+      { id: "seedance_2_5", name: "Seedance 2.5", chips: ["1080p", "4s-30s"] },
+      { id: "seedance_2_5_edit", name: "Seedance 2.5 Edit", chips: ["480p-720p", "Edit Video", "Audio"] },
+      { id: "seedance_2_0_fast", name: "Seedance 2.0 Fast", chips: ["720p", "4s-15s"] },
+      { id: "seedance_2_0_mini", name: "Seedance 2.0 Mini", chips: ["720p", "4s-15s"] },
+      { id: "seedance_2_0", name: "Seedance 2.0", chips: ["4K", "4s-15s"] },
+      { id: "seedance-1-5", name: "Seedance 1.5 Pro", chips: ["720p", "4s-12s"] },
+      { id: "seedance_pro", name: "Seedance Pro", chips: ["1080p", "5s-10s"] },
+      { id: "seedance_pro_fast", name: "Seedance Pro Fast", chips: ["1080p", "5s-10s"] },
     ],
   },
   {
-    id: "grok-imagine",
+    id: "grok",
     name: "Grok Imagine",
     description: "Perfect motion with advanced video control",
     submodels: [
-      { id: "grok", name: "Grok Imagine", chips: ["720p", "1s-15s"] },
-      { id: "grok-15", name: "Grok Imagine 1.5", chips: ["720p", "1s-15s"] },
-      { id: "grok-edit", name: "Grok Imagine Edit", description: "Edit videos with text prompts" },
+      { id: "grok_video", name: "Grok Imagine", chips: ["720p", "1s-15s"] },
+      { id: "grok_video_v15", name: "Grok Imagine 1.5", chips: ["720p", "1s-15s"] },
+      { id: "grok-video-edit", name: "Grok Imagine Edit", description: "Edit videos with text prompts" },
     ],
   },
-  { id: "happyhorse", name: "HappyHorse", sound: true, chips: ["1080p", "3s-15s"] },
+  { id: "happy-horse", name: "HappyHorse", sound: true, chips: ["1080p", "3s-15s"] },
 ];
 
-export const AI_VIDEO_DEFAULT_MODEL = "Seedance 2.0";
+export const AI_VIDEO_DEFAULT_MODEL = "seedance_2_0";
 
-/** Flat lookup of every selectable model name, used to resolve a search hit
- *  or a family submodel back to its control spec. */
-export function getControlSpec(modelName: string): AiVideoControlSpec {
-  return AI_VIDEO_CONTROLS[modelName] ?? {};
+/** Flat lookup of every selectable model, so a search hit, a family submodel
+ *  or a stored id all resolve back to the same entry. */
+const MODELS_BY_ID = new Map<string, AiVideoModel>();
+for (const card of ALL_MODELS) {
+  if (card.submodels) for (const sub of card.submodels) MODELS_BY_ID.set(sub.id, sub);
+  else MODELS_BY_ID.set(card.id, card);
+}
+
+export function getModel(id: string): AiVideoModel | undefined {
+  return MODELS_BY_ID.get(id);
+}
+
+/** Label for the prompt bar's model pill. */
+export function getModelName(id: string): string {
+  return MODELS_BY_ID.get(id)?.name ?? id;
+}
+
+export function getControlSpec(id: string): AiVideoControlSpec {
+  return AI_VIDEO_CONTROLS[id] ?? {};
 }

@@ -13,7 +13,11 @@ import { AI_VIDEO_DEFAULT_MODEL, getControlSpec } from "./aiVideoModels";
  * control row beneath it, with Generate as a tall block on the right.
  *
  * Which controls exist is entirely model-driven — an Edit or Motion Control
- * model legitimately leaves nothing but the model pill and Generate.
+ * model legitimately leaves nothing but the model pill and Generate, and the
+ * three that do appear always come in the order duration, ratio, sound.
+ *
+ * `model` holds a model **id**, not a display name; two Kling models share
+ * each of two names.
  */
 export default function AiVideoPromptBar() {
   const [prompt, setPrompt] = useState("");
@@ -23,17 +27,18 @@ export default function AiVideoPromptBar() {
 
   const spec = getControlSpec(model);
   const [duration, setDuration] = useState(spec.defaultDuration ?? "");
-  const [ratio, setRatio] = useState(spec.ratios?.[0] ?? "");
+  const [ratio, setRatio] = useState(spec.defaultRatio ?? spec.ratios?.[0] ?? "");
   const [audioOn, setAudioOn] = useState(true);
 
   /** Every model carries its own duration range and ratio set, so a value
    *  the new model doesn't offer has to snap back to one it does rather
-   *  than carry over. */
-  const handleModelChange = (name: string) => {
-    const next = getControlSpec(name);
-    setModel(name);
+   *  than carry over. The opening ratio is not always the first in the list —
+   *  Seedance opens on `Auto`, Kling on `16:9`, Kling O1 on `1:1`. */
+  const handleModelChange = (id: string) => {
+    const next = getControlSpec(id);
+    setModel(id);
     setDuration(next.defaultDuration ?? "");
-    setRatio(next.ratios?.[0] ?? "");
+    setRatio(next.defaultRatio ?? next.ratios?.[0] ?? "");
     setAudioOn(true);
   };
 
