@@ -254,13 +254,96 @@ const REF_RATIOS: Record<string, string[]> = {
   "grok-base": ["Auto", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "1:1"],
   "grok-imagine-1.5": ["Auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
   "happyhorse": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+  // Kling lists the same three ratios in two different orders.
+  "kling-3.0": ["16:9", "9:16", "1:1"],
+  "kling-3.0-turbo": ["16:9", "9:16", "1:1"],
+  "kling-2.6": ["16:9", "9:16", "1:1"],
+  "kling-3.0-omni": ["1:1", "16:9", "9:16"],
+  "kling-3.0-mini": ["1:1", "16:9", "9:16"],
+  "kling-01-video": ["1:1", "16:9", "9:16"],
+  "kling-o1-video-edit": ["1:1", "16:9", "9:16"],
   "wan-2.7": ["16:9", "9:16", "4:3", "3:4", "1:1"],
   "wan-2.5": ["16:9", "9:16"],
   "wan-2.5-fast": ["16:9", "9:16"],
 };
 
+/* Duration is a slider on some models and a fixed list of steps on others,
+ * and the steps are not derivable from the range — Sora's 4s-12s is 4/8/12,
+ * Veo's 4s-8s is 4/6/8. These are the lists the reference actually renders;
+ * a model that is missing here keeps the slider built from its own range. */
+const REF_DURATION_LIST: Record<string, number[]> = {
+  "minimax-2.3-fast": [6, 10],
+  "minimax-2.3": [6, 10],
+  "minimax-02-fast": [6, 10],
+  "minimax-02": [6, 10],
+  "kling-3.0-omni": [5, 10],
+  "kling-3.0-omni-edit": [3, 4, 5, 6, 7, 8, 9, 10],
+  "kling-2.6": [5, 10],
+  "kling-o1-video-edit": [3, 4, 5, 6, 7, 8, 9, 10],
+  "kling-2.5-turbo": [5, 10],
+  "kling-2.1": [5, 10],
+  "kling-2.1-master": [5, 10],
+  "sora-2": [4, 8, 12],
+  "sora-2-pro": [4, 8, 12],
+  "sora-2-max": [4, 8, 12],
+  "sora-2-pro-max": [4, 8, 12],
+  "veo-3.1-lite": [4, 6, 8],
+  "veo-3.1": [4, 6, 8],
+  "veo-3.1-fast": [4, 6, 8],
+  "gemini-omni-flash": [4, 6, 8, 10],
+  "higgsfield-lite": [3, 5],
+  "higgsfield-standard": [3, 5],
+  "higgsfield-turbo": [3, 5],
+  "wan-2.6": [5, 10, 15],
+  "wan-2.5": [5, 10],
+  "wan-2.5-fast": [5, 10],
+  "wan-2.2": [3, 5],
+  "seedance-1.5-pro": [4, 8, 12],
+  "seedance-pro": [5, 10],
+  "seedance-pro-fast": [5, 10],
+};
+
+/* Models that carry a sound toggle on the reference. Cinema Studio 4.0 and
+ * the Seedance 2.0/2.5 family render their own further down and are not
+ * listed here. Turning sound OFF asks for confirmation; turning it back on
+ * is immediate. */
+const SOUND_MODELS = new Set([
+  "minimax-2.3-fast",
+  "minimax-2.3",
+  "minimax-02-fast",
+  "minimax-02",
+  "flux-3-video",
+  "kling-3.0",
+  "kling-3.0-omni",
+  "kling-3.0-mini",
+  "kling-2.6",
+  "kling-2.5-turbo",
+  "kling-2.1",
+  "kling-2.1-master",
+  "veo-3.1-lite",
+  "veo-3",
+  "veo-3-fast",
+  "higgsfield-lite",
+  "higgsfield-standard",
+  "higgsfield-turbo",
+  "wan-2.5",
+  "wan-2.5-fast",
+  "wan-2.2",
+  "wan-2.2-fast",
+  "seedance-1.5-pro",
+  "seedance-pro",
+  "seedance-pro-fast",
+]);
+
+/** Slider bounds that disagree with the range on the model's own card. */
+const REF_DURATION_RANGE: Record<string, number[]> = {
+  "kling-01-video": [3, 10],
+};
+
 const REF_RESOLUTIONS: Record<string, string[]> = {
   "flux-3-video": ["720p", "1080p"],
+  // Turbo stops at 1080p; only plain 3.0 and Omni reach 4K.
+  "kling-3.0-turbo": ["720p", "1080p"],
   "kling-3.0-motion-control": ["720p", "1080p"],
   "sora-2-pro": ["720p", "1080p"],
   "sora-2-max": ["720p", "1080p"],
@@ -421,6 +504,17 @@ export default function PromptBar(props: PromptBarProps) {
     "startFrame" | "endFrame" | null
   >(null);
   const [soundConfirmOpen, setSoundConfirmOpen] = useState(false);
+  // Google Veo 3.1 / 3.1 Fast — "Mode: Frames | Ingredients", the reference's
+  // own two options for these two models.
+  const [veo31Mode, setVeo31Mode] = useState("frames");
+  const [seedanceProMultiShot, setSeedanceProMultiShot] = useState("off");
+  // Frame cards for the models that were missing theirs entirely (MiniMax H3,
+  // Kling 2.6, the Veo models other than Lite). One slot pair, since no model
+  // here shows more than a start and an end frame.
+  const [extraFrames, setExtraFrames] = useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
+  });
 
   // Minimax Hailuo family — Start/End Frame reference images. aspectRatio/
   // resolution/duration/sound reuse the shared top-level state (not isolated),
@@ -668,11 +762,13 @@ export default function PromptBar(props: PromptBarProps) {
   const isSeedance25 = model === "seedance-2.5";
 
   // Seedance 2.0 family detection
+  const isSeedance25Edit = model === "seedance-2.5-edit";
   const isSeedance2Family =
     model === "seedance-2.0" ||
     model === "seedance-2.0-mini" ||
     model === "seedance-2.0-fast" ||
-    isSeedance25;
+    isSeedance25 ||
+    isSeedance25Edit;
 
   // Seedance Pro Fast detection — a distinct model ("seedance-pro-fast") from
   // the "Seedance 2.0" family above; do not conflate the two.
@@ -820,7 +916,6 @@ export default function PromptBar(props: PromptBarProps) {
   const isWanNoRatio = model === "wan-2.6" || model === "wan-2.2" || model === "wan-2.2-fast";
   const isWanNoResolution = model === "wan-2.2" || model === "wan-2.2-fast";
   const isSeedanceProPair = model === "seedance-pro" || model === "seedance-pro-fast";
-  const isSeedance25Edit = model === "seedance-2.5-edit";
   const isGrokImagineEdit = model === "grok-imagine-edit";
   // Only the base Sora 2 hides its resolution chip; Pro/Max/Pro Max show one.
   const isSoraBase = model === "sora-2";
@@ -830,6 +925,9 @@ export default function PromptBar(props: PromptBarProps) {
   const isVeoNonLite =
     model === "veo-3.1" || model === "veo-3.1-fast" || model === "veo-3" || model === "veo-3-fast";
   const refRatios = REF_RATIOS[model] ?? null;
+  const hasSoundChip = SOUND_MODELS.has(model);
+  const refDurationList = REF_DURATION_LIST[model] ?? null;
+  const refDurationRange = REF_DURATION_RANGE[model] ?? null;
   const refResolutions = REF_RESOLUTIONS[model] ?? null;
 
   /* ---------------------------------------------------------------- */
@@ -941,6 +1039,9 @@ export default function PromptBar(props: PromptBarProps) {
   if (model !== prevModelForOmniMode) {
     setPrevModelForOmniMode(model);
     if (isKling3Omni) setKlingOmniMode(model === "kling-3.0-mini" ? "elements" : "frames");
+    // Seedance 2.5 Edit is the edit mode; its menu opens already on it.
+    if (isSeedance25Edit) setSeedance25Mode("edit");
+    else if (isSeedance25) setSeedance25Mode("references");
   }
 
   // Set Kling 2.6 defaults
@@ -979,7 +1080,7 @@ export default function PromptBar(props: PromptBarProps) {
   // Set Google Veo 3.1 Lite's Aspect default to "Auto" (confirmed via live click-audit)
   useEffect(() => {
     if (isVeo31Lite) {
-      onAspectRatioChange("auto");
+      onAspectRatioChange("Auto");
     }
   }, [isVeo31Lite, onAspectRatioChange]);
 
@@ -1046,6 +1147,15 @@ export default function PromptBar(props: PromptBarProps) {
 
   // The edit entry has neither a ratio nor a duration chip, so only its
   // resolution needs pinning into its own 480p/720p list.
+  // The Veo models other than Lite have no "Auto"; without this the chip kept
+  // showing a value that was not in its own list.
+  useEffect(() => {
+    if (isVeoNonLite) {
+      onAspectRatioChange("16:9");
+      onResolutionChange("720p");
+    }
+  }, [isVeoNonLite, onAspectRatioChange, onResolutionChange]);
+
   useEffect(() => {
     if (isGrokImagineEdit) {
       onResolutionChange("720p");
@@ -1812,7 +1922,7 @@ export default function PromptBar(props: PromptBarProps) {
             {/* Seedance 2.5 input-mode menu. Sits right after the assets
                 buttons, where the reference puts it, and shows the current
                 mode as its own label. */}
-            {isSeedance25 && (
+            {(isSeedance25 || isSeedance25Edit) && (
               <Popover.Root open={seedance25ModeOpen} onOpenChange={setSeedance25ModeOpen}>
                 <Popover.Trigger asChild>
                   <button
@@ -1885,6 +1995,7 @@ export default function PromptBar(props: PromptBarProps) {
                 />
               ) : isKling3Turbo ? (
                 <Kling3AspectRatioControl
+                  options={refRatios ?? undefined}
                   value={kling3TurboSettings.aspectRatio}
                   onChange={(value) =>
                     onKling3TurboSettingsChange((s) => ({ ...s, aspectRatio: value }))
@@ -1898,6 +2009,7 @@ export default function PromptBar(props: PromptBarProps) {
                 />
               ) : isKling3 || isKling3Omni || isKling2_6 || isKlingO1Video || isKlingO1VideoEdit ? (
                 <Kling3AspectRatioControl
+                  options={refRatios ?? undefined}
                   value={aspectRatio}
                   onChange={onAspectRatioChange}
                   isOpen={activePromptPopover === "aspectRatio"}
@@ -2155,7 +2267,7 @@ export default function PromptBar(props: PromptBarProps) {
               !isCinema25 && (
               <DurationPopover
                 value={duration}
-                durations={durations}
+                durations={refDurationList ?? refDurationRange ?? durations}
                 onChange={onDurationChange}
                 portalContainer={portalRoot}
                 isOpen={activePromptPopover === "duration"}
@@ -2163,7 +2275,7 @@ export default function PromptBar(props: PromptBarProps) {
                   if (open) setActivePromptPopover("duration");
                   else if (activePromptPopover === "duration") setActivePromptPopover(null);
                 }}
-                mode={isHiggsfield ? "buttons" : undefined}
+                mode={refDurationList ? "buttons" : isHiggsfield ? "buttons" : undefined}
                 align={isCinema35 ? "center" : undefined}
                 width={isCinema35 ? 200 : undefined}
                 collisionPadding={isCinema35 ? 12 : undefined}
@@ -2224,6 +2336,20 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
+            {/* Sound - every remaining model the reference shows one on. */}
+            {hasSoundChip && (
+              <button
+                type="button"
+                onClick={() => (sound ? setSoundConfirmOpen(true) : onSoundChange(true))}
+                aria-label="Toggle sound"
+                aria-pressed={sound}
+                className={`${PILL} ${sound ? "text-white" : "text-neutral-400"}`}
+              >
+                {sound ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+                {sound ? "On" : "Off"}
+              </button>
+            )}
+
             {/* Seed chip - Higgsfield family only, placed after Duration (before Sound) */}
             {isHiggsfield && (
               <SeedControl
@@ -2233,6 +2359,43 @@ export default function PromptBar(props: PromptBarProps) {
                 onSeedChange={setHiggsfieldSeed}
                 isOpen={higgsfieldSeedOpen}
                 onOpenChange={setHiggsfieldSeedOpen}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Multi-shot - Seedance Pro and Pro Fast. Two options here, not the
+                three Kling offers. */}
+            {isSeedanceProPair && (
+              <Kling3MultiShotControl
+                value={seedanceProMultiShot}
+                onChange={setSeedanceProMultiShot}
+                options={[
+                  { value: "off", label: "Off" },
+                  { value: "custom", label: "Custom" },
+                ]}
+                isOpen={activePromptPopover === "multiShot"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("multiShot");
+                  else if (activePromptPopover === "multiShot") setActivePromptPopover(null);
+                }}
+                portalContainer={portalRoot}
+              />
+            )}
+
+            {/* Mode - Google Veo 3.1 and 3.1 Fast only. */}
+            {(model === "veo-3.1" || model === "veo-3.1-fast") && (
+              <KlingModeControl
+                value={veo31Mode}
+                onChange={setVeo31Mode}
+                options={[
+                  { value: "frames", label: "Frames" },
+                  { value: "ingredients", label: "Ingredients" },
+                ]}
+                isOpen={activePromptPopover === "mode"}
+                onOpenChange={(open) => {
+                  if (open) setActivePromptPopover("mode");
+                  else if (activePromptPopover === "mode") setActivePromptPopover(null);
+                }}
                 portalContainer={portalRoot}
               />
             )}
@@ -2282,8 +2445,9 @@ export default function PromptBar(props: PromptBarProps) {
                 value={klingOmniMode}
                 onChange={(value) => setKlingOmniMode(value as "frames" | "elements")}
                 options={[
-                  { value: "frames", label: "Frames" },
+                  // The reference lists Elements first on both Kling models.
                   { value: "elements", label: "Elements" },
+                  { value: "frames", label: "Frames" },
                 ]}
                 isOpen={activePromptPopover === "mode"}
                 onOpenChange={(open) => {
@@ -2300,8 +2464,9 @@ export default function PromptBar(props: PromptBarProps) {
                 value={klingO1Mode}
                 onChange={(value) => setKlingO1Mode(value as "frames" | "elements")}
                 options={[
-                  { value: "frames", label: "Frames" },
+                  // The reference lists Elements first on both Kling models.
                   { value: "elements", label: "Elements" },
+                  { value: "frames", label: "Frames" },
                 ]}
                 isOpen={activePromptPopover === "mode"}
                 onOpenChange={(open) => {
@@ -2646,6 +2811,91 @@ export default function PromptBar(props: PromptBarProps) {
             </>
           )}
 
+          {/* Seedance 2.5 Edit — the clip being edited. */}
+          {isSeedance25Edit && (
+            <FrameCard
+              label="Video to edit"
+              value={extraFrames.start}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setExtraFrames((s2) => ({ ...s2, start: null }))}
+            />
+          )}
+
+          {/* MiniMax H3 — start frame only. */}
+          {isMiniMaxH3 && (
+            <FrameCard
+              label="Start Frame"
+              value={extraFrames.start}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setExtraFrames((s2) => ({ ...s2, start: null }))}
+            />
+          )}
+
+          {/* Kling 2.6 — start frame plus the General preset card. */}
+          {isKling2_6 && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={extraFrames.start}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setExtraFrames((s2) => ({ ...s2, start: null }))}
+              />
+              <FrameCard
+                variant="general"
+                label="General"
+                value={null}
+                onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+              />
+            </>
+          )}
+
+          {/* Google Veo, other than Lite. The 3.1 pair shows start and end
+              frames; the Veo 3 pair adds the General preset card. */}
+          {isVeoNonLite && (
+            <>
+              <FrameCard
+                label="Start Frame"
+                value={extraFrames.start}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setExtraFrames((s2) => ({ ...s2, start: null }))}
+              />
+              <FrameCard
+                label="End Frame"
+                value={extraFrames.end}
+                onOpenPicker={() => {
+                  setActivePromptPopover(null);
+                  setAssetsPickerTab("uploads");
+                  setAssetsPickerOpen(true);
+                }}
+                onRemove={() => setExtraFrames((s2) => ({ ...s2, end: null }))}
+              />
+              {isVeo3Pair && (
+                <FrameCard
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+                />
+              )}
+            </>
+          )}
+
           {/* Google Veo 3.1 Lite */}
           {isVeo31Lite && (
             <>
@@ -2738,8 +2988,9 @@ export default function PromptBar(props: PromptBarProps) {
             </>
           )}
 
-          {/* Wan */}
-          {isWan && (
+          {/* Wan — 2.6 shows no cards at all, 2.7 pairs start with end, and the
+              rest pair start with the General preset card. */}
+          {isWan && model !== "wan-2.6" && (
             <>
               <FrameCard
                 label="Start Frame"
@@ -2752,17 +3003,26 @@ export default function PromptBar(props: PromptBarProps) {
                 }}
                 onRemove={() => setWanFrames((s) => ({ ...s, startFrame: null }))}
               />
-              <FrameCard
-                label="End Frame"
-                value={wanFrames.endFrame}
-                onOpenPicker={() => {
-                  setActivePromptPopover(null);
-                  setWanFrameMode("endFrame");
-                  setAssetsPickerTab("uploads");
-                  setAssetsPickerOpen(true);
-                }}
-                onRemove={() => setWanFrames((s) => ({ ...s, endFrame: null }))}
-              />
+              {model === "wan-2.7" ? (
+                <FrameCard
+                  label="End Frame"
+                  value={wanFrames.endFrame}
+                  onOpenPicker={() => {
+                    setActivePromptPopover(null);
+                    setWanFrameMode("endFrame");
+                    setAssetsPickerTab("uploads");
+                    setAssetsPickerOpen(true);
+                  }}
+                  onRemove={() => setWanFrames((s2) => ({ ...s2, endFrame: null }))}
+                />
+              ) : (
+                <FrameCard
+                  variant="general"
+                  label="General"
+                  value={null}
+                  onOpenPicker={() => setMotionPresetsPanelOpen(true)}
+                />
+              )}
             </>
           )}
 
@@ -3030,8 +3290,9 @@ export default function PromptBar(props: PromptBarProps) {
         }}
       />
 
-      {/* "Turn sound off?" confirm — Google Veo 3.1 Lite only */}
-      {isVeo31Lite && (
+      {/* "Turn sound off?" confirm — every model with the shared sound chip.
+          It was built for Google Veo 3.1 Lite but nothing ever opened it. */}
+      {hasSoundChip && (
         <SoundOffConfirmDialog
           isOpen={soundConfirmOpen}
           onCancel={() => setSoundConfirmOpen(false)}

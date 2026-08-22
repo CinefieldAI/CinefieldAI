@@ -17,13 +17,13 @@ interface Veo31AspectRatioControlProps {
 
 /** Google Veo 3.1 Lite-specific aspect ratio options — confirmed via live click-audit: Auto (default), 16:9, 9:16. */
 const VEO31_ASPECT_RATIOS = [
-  { value: "auto", description: "Recommended" },
+  { value: "Auto", description: "Recommended" },
   { value: "16:9", description: "Widescreen" },
   { value: "9:16", description: "Stories/Reels" },
 ];
 
 function ShapeIcon({ value, active }: { value: string; active?: boolean }) {
-  if (value === "auto") {
+  if (value === "Auto") {
   return (
       <span className="flex h-6 w-8 shrink-0 items-center justify-center">
         <span
@@ -70,7 +70,7 @@ export default function Veo31AspectRatioControl({
   const controlledOpen = isOpen !== undefined ? isOpen : open;
   const options = includeAuto
     ? VEO31_ASPECT_RATIOS
-    : VEO31_ASPECT_RATIOS.filter((opt) => opt.value !== "auto");
+    : VEO31_ASPECT_RATIOS.filter((opt) => opt.value !== "Auto");
 
   const isModified = value !== "16:9";
 

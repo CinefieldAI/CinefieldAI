@@ -275,15 +275,20 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         [
           vsub("kling-3.0", "Kling 3.0", "4K", "3s-15s", undefined, true),
           vsub("kling-3.0-turbo", "Kling 3.0 Turbo", "1080p", "3s-15s", undefined, true),
-          // The reference lists "Kling 3.0 Omni" and "Kling O1 Video" twice
-          // each; those are duplicates in its own data, so only one of each
-          // is carried here.
+          // The reference lists "Kling 3.0 Omni" twice under the same name, but
+          // the two rows are not the same model: the first opens in Frames
+          // mode with a 5s/10s duration list and start/end frames, the second
+          // in Elements mode with a 3s-15s slider and Multi-shot. PromptBar
+          // already told them apart by id, so both rows are carried.
           vsub("kling-3.0-omni", "Kling 3.0 Omni", "4K", "3s-15s"),
+          vsub("kling-3.0-mini", "Kling 3.0 Omni", "4K", "3s-15s"),
           {
             ...vsub("kling-3.0-omni-edit", "Kling 3.0 Omni Edit", "1080p", "3s-10s"),
             defaultDuration: 4,
           },
           vsub("kling-2.6", "Kling 2.6", "1080p", "5s-10s", undefined, true),
+          // "Kling O1 Video" is also listed twice, but those two rows are
+          // identical in name, chips and controls, so only one is carried.
           vsub("kling-01-video", "Kling O1 Video", "1080p", "5s-10s"),
           {
             ...vsub("kling-o1-video-edit", "Kling O1 Video Edit", "1080p", "3s-10s"),

@@ -11,9 +11,13 @@ interface Kling3AspectRatioControlProps {
   onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
   portalContainer?: HTMLElement | null;
+  /** Reorders (or narrows) the three ratios — the reference does not list
+   *  them in the same order on every Kling model. */
+  options?: string[];
 }
 
-/** Kling 3.0-specific aspect ratio options (only 1:1, 16:9, 9:16). */
+/** Kling's three ratios. The order below is the Omni/O1 order; Kling 3.0,
+ *  3.0 Turbo and 2.6 list them 16:9 first, which callers pass via `options`. */
 const KLING3_ASPECT_RATIOS = [
   { value: "1:1", description: "Square", shape: [1, 1] as [number, number] },
   { value: "16:9", description: "Widescreen", shape: [16, 9] as [number, number] },
@@ -81,11 +85,17 @@ export default function Kling3AspectRatioControl({
   onOpenChange,
   isOpen,
   portalContainer,
+  options,
 }: Kling3AspectRatioControlProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
 
-  const isModified = value !== "16:9";
+  const ORDERED = options
+    ? options
+        .map((v) => KLING3_ASPECT_RATIOS.find((o) => o.value === v))
+        .filter((o): o is (typeof KLING3_ASPECT_RATIOS)[number] => !!o)
+    : KLING3_ASPECT_RATIOS;
+  const isModified = value !== ORDERED[0]?.value;
 
   const handleOpenChange = (newOpen: boolean) => {
     if (isOpen === undefined) setOpen(newOpen);
@@ -93,16 +103,16 @@ export default function Kling3AspectRatioControl({
   };
 
   const nav = useListboxNav({
-    count: KLING3_ASPECT_RATIOS.length,
-    selectedIndex: KLING3_ASPECT_RATIOS.findIndex((opt) => opt.value === value),
+    count: ORDERED.length,
+    selectedIndex: ORDERED.findIndex((opt) => opt.value === value),
     open: controlledOpen,
     onActivate: (index) => {
-      const opt = KLING3_ASPECT_RATIOS[index];
+      const opt = ORDERED[index];
       if (!opt) return;
       onChange(opt.value);
     },
     onSelect: (index) => {
-      const opt = KLING3_ASPECT_RATIOS[index];
+      const opt = ORDERED[index];
       if (!opt) return;
       onChange(opt.value);
       handleOpenChange(false);
@@ -139,7 +149,7 @@ export default function Kling3AspectRatioControl({
         >
           <p className="px-2 py-1.5 text-xs font-semibold text-white/70">Aspect ratio</p>
           <div role="listbox" aria-label="Select ratio" className="hide-scrollbar max-h-[min(70vh,560px)] overflow-y-auto">
-          {KLING3_ASPECT_RATIOS.map((opt, index) => {
+          {ORDERED.map((opt, index) => {
             const selected = opt.value === value;
             return (
               <button
