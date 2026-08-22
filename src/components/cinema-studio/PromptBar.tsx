@@ -344,6 +344,23 @@ export default function PromptBar(props: PromptBarProps) {
     startFrame: string | null;
     endFrame: string | null;
   }>({ multiShot: "custom", startFrame: null, endFrame: null });
+
+  // Grok Imagine 1.5 offers a start frame but no end frame, so it keeps its
+  // own single slot rather than borrowing a start/end pair.
+  const [grok15StartFrame, setGrok15StartFrame] = useState<string | null>(null);
+
+  /** Seedance 2.5's input mode. The reference collapses what other surfaces
+   *  split into a References/Extend toggle plus a Sequel/Prequel direction
+   *  into this one four-way menu. */
+  const SEEDANCE25_MODES = [
+    { value: "references", label: "References" },
+    { value: "sequel", label: "Sequel" },
+    { value: "prequel", label: "Prequel" },
+    { value: "edit", label: "Edit video" },
+  ] as const;
+  const [seedance25Mode, setSeedance25Mode] =
+    useState<(typeof SEEDANCE25_MODES)[number]["value"]>("references");
+  const [seedance25ModeOpen, setSeedance25ModeOpen] = useState(false);
   const [kling3ReferenceMode, setKling3ReferenceMode] = useState<
     "startFrame" | "endFrame" | null
   >(null);
@@ -697,6 +714,12 @@ export default function PromptBar(props: PromptBarProps) {
   // Grok Imagine — "grok-1.5" and "grok-edit" were removed from the catalog per
   // explicit request; only the base "Grok Imagine" model remains.
   const isGrokImagine = model === "grok-base";
+
+  // Models added from the reference's own Featured row. MiniMax H3 is the one
+  // model there with no resolution control at all — it reports 2K as a fixed
+  // fact, not a choice — so it opts out of the resolution pill below.
+  const isMiniMaxH3 = model === "minimax-h3";
+  const isGrokImagine15 = model === "grok-imagine-1.5";
 
   // Higgsfield family (Lite/Standard/Turbo) — only "Lite" is confirmed via
   // live click-audit; the other two share identical catalog metadata (720p,
@@ -1474,8 +1497,9 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
-            {/* Grok Imagine Plus Button - plain "Add assets", no References submenu confirmed */}
-            {isGrokImagine && (
+            {/* Grok Imagine Plus Button - plain "Add assets", no References
+                submenu confirmed. 1.5 carries the same button. */}
+            {(isGrokImagine || isGrokImagine15) && (
               <button
                 type="button"
                 onClick={() => {
@@ -1676,6 +1700,53 @@ export default function PromptBar(props: PromptBarProps) {
 
             <ModelSelector value={model} onChange={onModelChange} mode={mode} portalContainer={portalRoot} />
 
+            {/* Seedance 2.5 input-mode menu. Sits right after the assets
+                buttons, where the reference puts it, and shows the current
+                mode as its own label. */}
+            {isSeedance25 && (
+              <Popover.Root open={seedance25ModeOpen} onOpenChange={setSeedance25ModeOpen}>
+                <Popover.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Input mode: ${
+                      SEEDANCE25_MODES.find((m) => m.value === seedance25Mode)?.label
+                    }`}
+                    className={`${PILL} ${seedance25ModeOpen ? "text-white" : "text-neutral-300"}`}
+                  >
+                    {SEEDANCE25_MODES.find((m) => m.value === seedance25Mode)?.label}
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal container={portalRoot}>
+                  <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="z-[100000] w-40 rounded-xl border border-white/10 bg-[rgba(12,12,13,0.98)] p-1 shadow-2xl outline-none"
+                  >
+                    {SEEDANCE25_MODES.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() => {
+                          setSeedance25Mode(m.value);
+                          setSeedance25ModeOpen(false);
+                        }}
+                        className={`flex w-full items-center rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors ${
+                          seedance25Mode === m.value
+                            ? "bg-white/10 text-white"
+                            : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            )}
+
+
             {/* Aspect Ratio - Hidden for Kling 3.0 Motion Control, Kling 3.0 Omni Edit,
                 Kling Motion Control (non-3.0), Kling 2.5 Turbo/2.1, Kling 2.1 Master, Grok Imagine,
                 Higgsfield, and Minimax Hailuo 2.3 Fast/02/2.3 (none of these show it in their chip row) */}
@@ -1778,6 +1849,7 @@ export default function PromptBar(props: PromptBarProps) {
               !isOpenAISora &&
               !isHiggsfield &&
               !isNanoBananaPro &&
+              !isMiniMaxH3 &&
               !isNanoBanana2Lite && (
               <ResolutionPopover
                 value={isKling3Turbo ? kling3TurboSettings.resolution : resolution}
@@ -2008,6 +2080,26 @@ export default function PromptBar(props: PromptBarProps) {
               />
             )}
 
+            {/* Sound + batch - Seedance 2.0/2.5 family. The reference puts both
+                after Bitrate on every model in this family, Mini included
+                (Mini only drops Bitrate, not these). Reuses the same sound
+                button and BatchStepper Cinema Studio 4.0 renders above. */}
+            {isSeedance2Family && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSoundChange(!sound)}
+                  aria-label="Toggle sound"
+                  aria-pressed={sound}
+                  className={`${PILL} ${sound ? "text-white" : "text-neutral-400"}`}
+                >
+                  {sound ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+                  {sound ? "On" : "Off"}
+                </button>
+                <BatchStepper value={batch} onChange={onBatchChange} />
+              </>
+            )}
+
             {/* Seed chip - Higgsfield family only, placed after Duration (before Sound) */}
             {isHiggsfield && (
               <SeedControl
@@ -2186,6 +2278,21 @@ export default function PromptBar(props: PromptBarProps) {
                 onRemove={() => onCinema25AssignReference(2, null)}
               />
             </>
+          )}
+
+          {/* Grok Imagine 1.5 - start frame only, marked optional */}
+          {isGrokImagine15 && (
+            <FrameCard
+              variant="cinema25"
+              label="Start Frame"
+              value={grok15StartFrame}
+              onOpenPicker={() => {
+                setActivePromptPopover(null);
+                setAssetsPickerTab("uploads");
+                setAssetsPickerOpen(true);
+              }}
+              onRemove={() => setGrok15StartFrame(null)}
+            />
           )}
 
           {/* Kling 3.0 */}
