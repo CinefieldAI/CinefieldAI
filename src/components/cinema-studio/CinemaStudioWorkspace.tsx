@@ -30,6 +30,7 @@ import CinemaStudioImagePanel from "./CinemaStudioImagePanel";
 import ImageForm from "@/components/image-tools/ImageForm";
 import NanoBananaProDrawWorkspace from "@/components/image-tools/NanoBananaProDrawWorkspace";
 import { getModel, type CinemaStudioSettings } from "./cinemaStudioData";
+import { spaceGrotesk } from "@/lib/fonts/spaceGrotesk";
 
 type ModalKey = "genre" | "style" | "camera" | null;
 
@@ -451,9 +452,10 @@ export default function CinemaStudioWorkspace() {
           className="pointer-events-none absolute inset-x-0 top-32 md:top-36 z-5 flex justify-center px-4"
           style={{ opacity: 1, transition: "opacity 300ms ease-out" }}
         >
-          <h1 className="text-center text-2xl sm:text-3xl md:text-[34px] font-black uppercase leading-tight tracking-wider text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] [font-feature-settings:'ss04'_1]">
-            <span className="block">Direct anything</span>
-            <span className="block">you imagine</span>
+          <h1
+            className={`${spaceGrotesk.className} w-[36.9375rem] max-w-full whitespace-nowrap bg-[linear-gradient(180deg,rgba(255,255,255,1)_14%,rgba(255,255,255,0.41)_100%)] bg-clip-text text-center text-[clamp(1.25rem,6vw,2.5rem)] font-bold uppercase leading-[clamp(1.625rem,7vw,2.25rem)] tracking-[-0.04em] text-transparent [font-feature-settings:'ss04'_1]`}
+          >
+            Bring your stories to life
           </h1>
         </div>
 
