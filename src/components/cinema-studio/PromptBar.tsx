@@ -34,11 +34,7 @@ import ResolutionPopover from "./ResolutionPopover";
 import DurationPopover from "./DurationPopover";
 import AssetsPickerModal from "./AssetsPickerModal";
 import KlingAdvancedSettingsPanel from "./KlingAdvancedSettingsPanel";
-import KlingMotionModal from "./KlingMotionModal";
-import KlingCharacterPanel from "./KlingCharacterPanel";
 import KlingSceneControl from "./KlingSceneControl";
-import KlingMotionCard from "./KlingMotionCard";
-import KlingCharacterCard from "./KlingCharacterCard";
 import KlingMediaCard from "./KlingMediaCard";
 import KlingMotionLibraryModal from "./KlingMotionLibraryModal";
 import MotionPresetsPanel from "./MotionPresetsPanel";
@@ -2232,6 +2228,7 @@ export default function PromptBar(props: PromptBarProps) {
             {isKling3MotionControl && (
               <>
                 <KlingAdvancedSettingsPanel
+                  iconOnly
                   isOpen={klingAdvancedSettingsOpen}
                   onOpenChange={setKlingAdvancedSettingsOpen}
                   advancedPrompt={klingAdvancedPrompt}
@@ -2248,12 +2245,12 @@ export default function PromptBar(props: PromptBarProps) {
                   onChange={(value) =>
                     setKlingMotionControlSettings((s) => ({ ...s, sceneControl: value }))
                   }
+                  options={["Off", "Video", "Image"]}
+                  label="Scene control"
+                  caption="Scene control"
+                  showValue
                   portalContainer={portalRoot}
                 />
-
-                <KlingMotionCard onClick={() => setMotionModalOpen(true)} />
-
-                <KlingCharacterCard onClick={() => setCharacterPanelOpen(true)} />
               </>
             )}
 
@@ -2829,6 +2826,24 @@ export default function PromptBar(props: PromptBarProps) {
             </>
           )}
 
+          {/* Kling 3.0 Motion Control — same pair, its own state. */}
+          {isKling3MotionControl && (
+            <>
+              <KlingMediaCard
+                label="Motion"
+                icon={<Grip className="size-3.5" />}
+                onClick={() => setMotionModalOpen(true)}
+                ariaExpanded={motionModalOpen}
+              />
+              <KlingMediaCard
+                label="Character"
+                icon={<UserRound className="size-3.5" />}
+                onClick={() => setCharacterPanelOpen(true)}
+                ariaExpanded={characterPanelOpen}
+              />
+            </>
+          )}
+
           {/* Kling Motion Control — Motion and Character open the same dialog
               shape, one for the clip to copy and one for the character. */}
           {isKlingMotionControlNon3 && (
@@ -3400,8 +3415,26 @@ export default function PromptBar(props: PromptBarProps) {
       {/* Kling 3.0 Motion Control Modals and Panels (LOCKED) */}
       {isKling3MotionControl && (
         <>
-          <KlingMotionModal isOpen={motionModalOpen} onClose={() => setMotionModalOpen(false)} />
-          <KlingCharacterPanel isOpen={characterPanelOpen} onClose={() => setCharacterPanelOpen(false)} />
+          <KlingMotionLibraryModal
+            isOpen={motionModalOpen}
+            onClose={() => setMotionModalOpen(false)}
+            titleLines={["Copy Any Motion with", "Your Character"]}
+            subtitle="Copy motion from any video and place your character into the same movement"
+            primaryLabel="Add motion to copy"
+            primaryHint="Video duration: 3–30 seconds"
+            secondaryLabel="Add your character"
+            secondaryHint="Image with visible face and body"
+          />
+          <KlingMotionLibraryModal
+            isOpen={characterPanelOpen}
+            onClose={() => setCharacterPanelOpen(false)}
+            titleLines={["Copy Any Motion with", "Your Character"]}
+            subtitle="Copy motion from any video and place your character into the same movement"
+            primaryLabel="Add motion to copy"
+            primaryHint="Video duration: 3–30 seconds"
+            secondaryLabel="Add your character"
+            secondaryHint="Image with visible face and body"
+          />
         </>
       )}
 
