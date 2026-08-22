@@ -15,19 +15,15 @@
  * test can reach a provider with one of these. Do not remove the guard to
  * "just try it once" — that is exactly what it exists to prevent.
  *
+ * These used to also carry a 🚫 prefix on their display label. That marker
+ * was removed on request; the block itself is unaffected, since it has
+ * always matched on id rather than on the label. The tradeoff is that the
+ * UI no longer signals which models cannot run — picking one now fails
+ * silently at the registry instead of warning up front.
+ *
  * This module is deliberately free of server-only imports so both the
  * browser and the server can use it.
  */
-
-/** Prefix shown on every blocked model label in the UI. */
-export const BLOCKED_MODEL_PREFIX = "🚫";
-
-/**
- * Tailwind classes for a blocked model's label. The cyan matches the
- * existing bright accent already used elsewhere in the prompt surfaces
- * (#00e5ff), so this introduces no new colour into the design system.
- */
-export const BLOCKED_MODEL_LABEL_CLASS = "text-[#00e5ff]";
 
 /**
  * Canonical blocked ids. Matching is done on the id, lowercased — these are
@@ -35,11 +31,6 @@ export const BLOCKED_MODEL_LABEL_CLASS = "text-[#00e5ff]";
  * /assets/higgsfield/* files on disk keep resolving.
  */
 const BLOCKED_ID_SUBSTRINGS = ["higgsfield", "cinefield-soul", "cinefield-lite"] as const;
-
-/** True when a model label carries the blocked marker. Cheap enough for render paths. */
-export function isBlockedModelLabel(label: string | null | undefined): boolean {
-  return typeof label === "string" && label.trimStart().startsWith(BLOCKED_MODEL_PREFIX);
-}
 
 /**
  * True when a model id belongs to a blocked entry. Used by the registry

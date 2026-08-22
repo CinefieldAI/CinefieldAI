@@ -757,7 +757,7 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {selectedModel === "🚫 Cinefield Soul Cinema" && (
+                  {selectedModel === "Cinefield Soul Cinema" && (
                     <>
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -936,7 +936,7 @@ export default function PromptComposer({
                     </>
                   )}
 
-                  {(selectedModel === "🚫 Cinefield Soul 2.0" || selectedModel === "🚫 Cinefield Soul") && (
+                  {(selectedModel === "Cinefield Soul 2.0" || selectedModel === "Cinefield Soul") && (
                     <>
                       {capabilities.aspectRatioOptions && (
                         <AspectRatioPopover
@@ -962,7 +962,7 @@ export default function PromptComposer({
                       {/* Reference parity placeholders — inert on purpose. The
                           two Souls differ: 2.0 also shows Color Transfer and
                           opens with the toggle Off; the original shows On. */}
-                      {selectedModel === "🚫 Cinefield Soul 2.0" ? (
+                      {selectedModel === "Cinefield Soul 2.0" ? (
                         <>
                           <DeadControl label="Color Transfer" icon={<Blend className="h-4 w-4" />} />
                           <DeadControl label="Off" />

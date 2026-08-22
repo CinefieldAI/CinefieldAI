@@ -151,8 +151,8 @@ type ModelListItem = {
 
 const FEATURED_MODELS_LIST: ModelListItem[] = [
   { id: "cinematic-locations", label: "Cinematic Locations", description: "Rich environments with cinematic lighting", icon: "pin" },
-  { id: "higgsfield-soul-2", label: "🚫 Cinefield Soul 2.0", description: "Next generation ultra-realistic fashion visuals", icon: "google" },
-  { id: "higgsfield-soul-cinema", label: "🚫 Cinefield Soul Cinema", description: "Cinema-grade visual creation", icon: "google" },
+  { id: "higgsfield-soul-2", label: "Cinefield Soul 2.0", description: "Next generation ultra-realistic fashion visuals", icon: "google" },
+  { id: "higgsfield-soul-cinema", label: "Cinefield Soul Cinema", description: "Cinema-grade visual creation", icon: "google" },
   { id: "gpt-image-2", label: "GPT Image 2", description: "4K images with near-perfect text rendering", icon: "openai" },
   { id: "seedream-5-pro", label: "Seedream 5.0 Pro", description: "Logically consistent images with intelligent visual reasoning", icon: "seedream" },
   { id: "seedream-4-5", label: "Seedream 4.5", description: "ByteDance's next-gen 4K image model", icon: "seedream" },
@@ -165,9 +165,9 @@ const FEATURED_MODELS_LIST: ModelListItem[] = [
 const ALL_MODELS_LIST: ModelListItem[] = [
   { id: "auto", label: "Auto", description: "Automatically pick the best model for your prompt", icon: "google" },
   { id: "nano-banana", label: "Nano Banana", description: "Google's standard generation model", icon: "google" },
-  { id: "higgsfield-soul", label: "🚫 Cinefield Soul", description: "Ultra-realistic fashion visuals", icon: "google" },
-  { id: "higgsfield-face-swap", label: "🚫 Cinefield Face Swap", description: "Seamless face swapping", icon: "google" },
-  { id: "higgsfield-character-swap", label: "🚫 Cinefield Character Swap", description: "Seamless character swapping", icon: "google" },
+  { id: "higgsfield-soul", label: "Cinefield Soul", description: "Ultra-realistic fashion visuals", icon: "google" },
+  { id: "higgsfield-face-swap", label: "Cinefield Face Swap", description: "Seamless face swapping", icon: "google" },
+  { id: "higgsfield-character-swap", label: "Cinefield Character Swap", description: "Seamless character swapping", icon: "google" },
   { id: "seedream-4-0", label: "Seedream 4.0", description: "ByteDance's advanced image editing model", icon: "seedream" },
   { id: "gpt-image-1-5", label: "GPT Image 1.5", description: "True-color precision rendering", icon: "openai" },
   { id: "grok-imagine", label: "Grok Imagine", description: "Versatile image styles by xAI", icon: "grok" },
@@ -841,7 +841,7 @@ export default function ImageForm({
                 </>
               )}
 
-              {config.label === "🚫 Cinefield Soul Cinema" && (
+              {config.label === "Cinefield Soul Cinema" && (
                 <>
                   <ModelSelectorDropdown
                     config={config}
@@ -1066,7 +1066,7 @@ export default function ImageForm({
                 </>
               )}
 
-              {config.label === "🚫 Cinefield Soul 2.0" && (
+              {config.label === "Cinefield Soul 2.0" && (
                 <>
                   {capabilities.assetUpload && (
                     <AssetsButtonGroup onOpenPicker={openUploadsPicker} showElementButton={false} />

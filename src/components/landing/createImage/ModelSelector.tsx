@@ -7,7 +7,6 @@ import ModelItem from "./ModelItem";
 import { ALL_MODELS, FEATURED_MODELS, type CreateImageModel } from "./createImageData";
 import { useListboxNav } from "@/hooks/useListboxNav";
 import { getSharedModelIcon } from "@/lib/modelIconRegistry";
-import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 
 interface ModelSelectorProps {
   selected: string;
@@ -149,7 +148,7 @@ export default function ModelSelector({
           )}
           <span
             className={`max-w-[140px] truncate ${
-              isBlockedModelLabel(selected) ? BLOCKED_MODEL_LABEL_CLASS : "text-white"
+              "text-white"
             }`}
           >
             {selected}

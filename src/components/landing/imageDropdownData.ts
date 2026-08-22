@@ -169,12 +169,12 @@ export interface ImageModel {
 // Cinefield Popcorn.
 export const IMAGE_DROPDOWN_MODELS: ImageModel[] = [
   {
-    name: "🚫 Cinefield Soul 2.0",
+    name: "Cinefield Soul 2.0",
     meta: "Next generation ultra-realistic fashion visuals",
     icon: Sparkles,
   },
   {
-    name: "🚫 Cinefield Soul Cinema",
+    name: "Cinefield Soul Cinema",
     meta: "Cinema-grade visual creation",
     icon: Sparkles,
   },

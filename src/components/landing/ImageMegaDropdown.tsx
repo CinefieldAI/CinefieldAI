@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Check } from "lucide-react";
-import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 import {
   IMAGE_DROPDOWN_MODELS,
   IMAGE_FEATURES,
@@ -89,9 +88,7 @@ export default function ImageMegaDropdown({
           <div className="flex flex-1 flex-col min-w-0 justify-center gap-0.5">
             <span
               className={`truncate text-[16px] font-semibold leading-5 ${
-                isBlockedModelLabel(model.name)
-                  ? BLOCKED_MODEL_LABEL_CLASS
-                  : "text-white"
+                "text-white"
               }`}
             >
               {model.name}

@@ -264,7 +264,7 @@ const FEATURED_CREATE_MODELS: WorkflowModel[] = [
   },
   {
     id: "higgsfield-dop",
-    name: "🚫 Cinefield DOP",
+    name: "Cinefield DOP",
     description: "VFX and camera control",
     icon: Clapperboard,
     quality: "1080p",
@@ -325,7 +325,7 @@ const EDIT_MODELS: WorkflowModel[] = [
   },
   {
     id: "higgsfield-reframe",
-    name: "🚫 Cinefield Reframe",
+    name: "Cinefield Reframe",
     description: "Reframe and resize videos to any aspect ratio",
     icon: WandSparkles,
   },
@@ -436,14 +436,14 @@ const CREATE_MODEL_GROUPS: WorkflowModelGroup[] = [
     modelNames: ["FLUX.3 Video"],
   },
   {
-    name: "🚫 Cinefield",
+    name: "Cinefield",
     description: "Advanced camera controls and effect presets",
     icon: Clapperboard,
     modelNames: [
       "Cinematic Studio Video 3.5",
-      "🚫 Cinefield Lite",
-      "🚫 Cinefield Standard",
-      "🚫 Cinefield Turbo",
+      "Cinefield Lite",
+      "Cinefield Standard",
+      "Cinefield Turbo",
     ],
   },
   {
@@ -503,9 +503,9 @@ const ADDITIONAL_CREATE_MODELS: WorkflowModel[] = [
   { id: "google-veo-3.1-fast", name: "Google Veo 3.1 Fast", description: "Fast Veo 3.1 generation", icon: GoogleIcon, quality: "1080p", duration: "4s-8s", audio: true },
   { id: "google-veo-3-fast", name: "Google Veo 3 Fast", description: "Fast Veo 3 generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
   { id: "google-veo-3", name: "Google Veo 3", description: "Google video generation", icon: GoogleIcon, quality: "1080p", duration: "8s", audio: true },
-  { id: "higgsfield-lite", name: "🚫 Cinefield Lite", description: "Lightweight cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
-  { id: "higgsfield-standard", name: "🚫 Cinefield Standard", description: "Standard cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
-  { id: "higgsfield-turbo", name: "🚫 Cinefield Turbo", description: "Fast cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-lite", name: "Cinefield Lite", description: "Lightweight cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-standard", name: "Cinefield Standard", description: "Standard cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
+  { id: "higgsfield-turbo", name: "Cinefield Turbo", description: "Fast cinematic generation", icon: Clapperboard, quality: "720p", duration: "3s-5s" },
   { id: "wan-2.6", name: "Wan 2.6", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-15s" },
   { id: "wan-2.5", name: "Wan 2.5", description: "Wan video generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
   { id: "wan-2.5-fast", name: "Wan 2.5 Fast", description: "Fast Wan generation", icon: WanIcon, quality: "1080p", duration: "5s-10s" },
@@ -753,28 +753,28 @@ type CinefieldCapabilities = {
 // preset figure with Mix + Change, single image upload, plain textarea,
 // Enhance switch, Model row plus the square "Open advanced settings" button.
 const CINEFIELD_MODEL_CAPABILITIES: Record<string, CinefieldCapabilities> = {
-  "🚫 Cinefield Lite": {
+  "Cinefield Lite": {
     presetName: "Cinefield DoP",
     durationOptions: ["3s", "5s"],
     durationDefault: "5s",
     steps: { min: 20, max: 70, default: 20 },
     credits: "10",
   },
-  "🚫 Cinefield Standard": {
+  "Cinefield Standard": {
     presetName: "Cinefield DoP",
     durationOptions: ["3s", "5s"],
     durationDefault: "5s",
     steps: { min: 20, max: 70, default: 20 },
     credits: "10",
   },
-  "🚫 Cinefield Turbo": {
+  "Cinefield Turbo": {
     presetName: "Cinefield DoP",
     durationOptions: ["3s", "5s"],
     durationDefault: "5s",
     steps: { min: 20, max: 70, default: 20 },
     credits: "10",
   },
-  "🚫 Cinefield DOP": {
+  "Cinefield DOP": {
     presetName: "Cinefield DoP",
     durationOptions: ["3s", "5s"],
     durationDefault: "5s",
@@ -986,9 +986,9 @@ const NAVBAR_MODEL_TARGETS: Record<
     workflow: "create-video",
     modelName: "Seedance 1.5 Pro",
   },
-  "🚫 Cinefield DOP": {
+  "Cinefield DOP": {
     workflow: "create-video",
-    modelName: "🚫 Cinefield DOP",
+    modelName: "Cinefield DOP",
   },
 };
 
@@ -3577,7 +3577,9 @@ export default function StandaloneVideoCreationPanel({
         <div
           role="tablist"
           aria-label="Video workflow"
-          className="flex shrink-0 gap-3 overflow-x-auto border-b border-white/[0.07] px-4 pt-3 [scrollbar-width:none]"
+          // All three labels have to fit the 20rem panel without the last one
+          // clipping, so the row is tightened rather than left to scroll.
+          className="flex shrink-0 gap-2 overflow-x-auto border-b border-white/[0.07] px-3 pt-3 [scrollbar-width:none]"
         >
           {WORKFLOWS.map((item) => {
             const selected = workflow === item.value;
@@ -3588,7 +3590,7 @@ export default function StandaloneVideoCreationPanel({
                 role="tab"
                 aria-selected={selected}
                 onClick={() => changeWorkflow(item.value)}
-                className={`h-9 shrink-0 whitespace-nowrap border-b-2 text-[16px] font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
+                className={`h-9 shrink-0 whitespace-nowrap border-b-2 text-[16px] font-medium tracking-tight transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-500 ${
                   selected ? "text-white" : "text-zinc-500 hover:text-zinc-200"
                 } ${selected ? "border-b-white" : "border-b-transparent"}`}
               >

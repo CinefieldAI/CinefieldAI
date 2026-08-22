@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
-import { BLOCKED_MODEL_LABEL_CLASS, isBlockedModelLabel } from "@/lib/blockedModels";
 import {
   isOrchestrationModel,
   isProductionReadyModel,
@@ -227,7 +226,7 @@ function ImageRow({
         </div>
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-        <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+        <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
           {model.name}
         </span>
         <p className="truncate text-[10px] font-normal text-white/45 group-hover/model-row:text-white/60">
@@ -318,7 +317,7 @@ function VideoFlatRow({
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
         <div className="flex items-center gap-1.5">
-          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.sound && <Volume2 className="size-3 shrink-0 text-gray-400" />}
@@ -469,7 +468,7 @@ function VideoParentRow({
           </div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col gap-0.5 items-start">
-          <span className={`truncate text-xs font-semibold ${isBlockedModelLabel(model.name) ? BLOCKED_MODEL_LABEL_CLASS : active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
+          <span className={`truncate text-xs font-semibold ${active ? "text-white font-bold" : "text-white/90 group-hover/model-row:text-white"}`}>
             {model.name}
           </span>
           {model.description && (
@@ -518,9 +517,7 @@ function VideoParentRow({
                     <span className="flex items-center gap-1.5">
                       <span
                         className={`truncate text-xs font-medium ${
-                          isBlockedModelLabel(s.name)
-                            ? BLOCKED_MODEL_LABEL_CLASS
-                            : "text-white"
+                          "text-white"
                         }`}
                       >
                         {s.name}
@@ -831,9 +828,7 @@ export default function ModelSelector({
               )}
               <span
                 className={`max-w-[140px] truncate text-xs font-semibold ${
-                  isBlockedModelLabel(selected.name)
-                    ? BLOCKED_MODEL_LABEL_CLASS
-                    : "text-white"
+                  "text-white"
                 }`}
               >
                 {selected.name}
@@ -864,9 +859,7 @@ export default function ModelSelector({
               )}
               <span
                 className={`max-w-[140px] truncate ${
-                  isBlockedModelLabel(selected.name)
-                    ? BLOCKED_MODEL_LABEL_CLASS
-                    : "text-white"
+                  "text-white"
                 }`}
               >
                 {selected.name}

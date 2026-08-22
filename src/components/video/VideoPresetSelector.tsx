@@ -19,7 +19,7 @@ const MODEL_CHIPS: { name: string; isNew?: boolean }[] = [
   { name: "Seedance 2.0 Fast", isNew: true },
   { name: "Exclusive Seedance 2.0 Mini", isNew: true },
   { name: "Seedance 2.0" },
-  { name: "🚫 Cinefield DoP" },
+  { name: "Cinefield DoP" },
   { name: "HappyHorse" },
   { name: "Kling 3.0 Omni" },
   { name: "Kling 2.5" },
@@ -39,7 +39,7 @@ const MODEL_CHIPS: { name: string; isNew?: boolean }[] = [
   { name: "Wan 2.2" },
   { name: "Seedance Pro" },
   { name: "Seedance 1.5 Pro" },
-  { name: "🚫 Cinefield" },
+  { name: "Cinefield" },
 ];
 
 const CATEGORIES = [
@@ -114,7 +114,7 @@ function modelsForPreset(index: number): string[] {
   const extras = [0, 1, 2, 3].map(
     (k) => names[(index * 5 + k * 7) % names.length],
   );
-  return Array.from(new Set(["🚫 Cinefield DoP", "🚫 Cinefield", ...extras]));
+  return Array.from(new Set(["Cinefield DoP", "Cinefield", ...extras]));
 }
 
 // Gradient placeholder tiles in the project's stand-in style — the

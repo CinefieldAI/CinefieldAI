@@ -16,7 +16,7 @@ import {
 import WanIcon from "@/components/cinema-studio/icons/WanIcon";
 
 /**
- * Blocked models carry a leading 🚫 marker in their display label (see
+ * Blocked models carry a leading marker in their display label (see
  * lib/blockedModels.ts). Stripping it here keeps icon lookup working off the
  * plain name, so the marker stays a pure presentation concern and every key
  * in the table below can remain marker-free.

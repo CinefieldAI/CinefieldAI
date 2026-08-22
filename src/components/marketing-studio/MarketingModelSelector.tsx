@@ -33,7 +33,7 @@ interface MarketingModelSelectorProps {
 }
 
 function cleanName(name: string) {
-  return name.replace(/^\s*🚫\s*/, "").replace(/^Higgsfield\b/, "Cinefield").trim();
+  return name.replace(/^Higgsfield\b/, "Cinefield").trim();
 }
 
 function SectionIcon({ all }: { all: boolean }) {
