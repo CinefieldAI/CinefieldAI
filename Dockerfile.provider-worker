@@ -1,80 +1,79 @@
 # Cinefield provider worker — production container (Phase 6R Package B).
 #
-# Builds and runs ONLY worker/provider-worker.ts: the SQS consumer that pulls
-# provider.submit commands off cinefield-provider.fifo and drives them
-# through the existing ProviderAdapter boundary. This image never starts the
-# Next.js web server and is never deployed behind a load balancer.
+# Builds and runs ONLY the provider-worker runtime. The production image must
+# never contain the repository's development toolchain: earlier revisions ran
+# TypeScript through `tsx` in production and therefore copied every devDependency
+# (including Supabase CLI, Depot CLI and esbuild) into the ECS image. Those tools
+# were not reachable application features, but their bundled Go/native binaries
+# materially expanded the vulnerability and attack surface.
 #
-# Runs as a long-lived AWS ECS Fargate task. Credentials come from the ECS
-# task role via the AWS SDK's default provider chain — no access key is ever
-# baked into this image, and none is read from a build arg.
+# The build stage may use the locked development tree. The runtime receives one
+# bundled JavaScript artifact and no node_modules directory at all.
 
-# ---- deps: install ALL dependencies once, reused by both later stages -----
-FROM node:22-bookworm-slim AS deps
+# ---- build: resolve the worker graph and compile it once -------------------
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-# npm ci needs the full lockfile-declared tree (dev deps included: tsx and
-# typescript run the worker directly from .ts source — there is no compile
-# step for this package, matching how the worker already runs in dev).
+
+COPY package.json package-lock.json tsconfig.json ./
+# Scripts are unnecessary for the bundle and can execute third-party install
+# hooks. The lockfile is authoritative; no floating install occurs here.
 RUN npm ci --ignore-scripts
 
-# ---- runtime: only what worker/provider-worker.ts actually imports --------
-FROM node:22-bookworm-slim AS runtime
+# Build input only. Nothing copied into this stage automatically reaches the
+# final image. Copying the complete source tree here is intentional: esbuild
+# follows the REAL import graph from worker/provider-worker.ts and emits only
+# reachable runtime code. This also prevents the former hand-maintained COPY
+# allow-list from drifting behind new worker imports.
+COPY worker ./worker
+COPY src ./src
+# The embedded policy engine imports this registry JSON at build time. It is
+# bundled into the generated worker artifact; the policies directory itself is
+# never copied to the final runtime stage.
+COPY policies ./policies
+
+# `esbuild` is already locked in package-lock.json by the repository toolchain.
+# It is used only in this disposable build stage. `react-server` resolves the
+# server-only marker to its non-throwing export while bundling. Third-party
+# packages that are actually imported by the worker are bundled into this file;
+# unrelated application packages (Next.js, Trigger.dev CLI, c2pa-node, etc.) do
+# not enter the runtime merely because they exist in the monorepo dependency
+# tree.
+RUN ./node_modules/.bin/esbuild worker/provider-worker.ts \
+      --bundle \
+      --platform=node \
+      --target=node22 \
+      --format=cjs \
+      --conditions=react-server \
+      --tsconfig=tsconfig.json \
+      --outfile=dist/provider-worker.cjs \
+      --log-level=warning \
+  && node --check dist/provider-worker.cjs
+
+# ---- runtime: minimal long-lived ECS worker -------------------------------
+# Alpine is sufficient because the provider worker bundle has no native-module
+# runtime edge. The C2PA native processor is deliberately installed only by the
+# Temporal/media runtime through the existing media-processor seam, not here.
+FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Non-root: a compromised worker process gets no more than it needs.
-RUN groupadd --system --gid 1001 cinefield \
-  && useradd --system --uid 1001 --gid cinefield --home-dir /app --shell /usr/sbin/nologin cinefield
+# tini forwards ECS SIGTERM and reaps zombies. The stock Node image also ships
+# npm/npx/corepack for developer convenience; this worker never installs
+# packages at runtime, so retaining them only adds executable surface and their
+# own transitive CVEs. Remove package managers while preserving the Node binary.
+RUN apk add --no-cache tini \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx \
+  && addgroup -S -g 1001 cinefield \
+  && adduser -S -D -u 1001 -G cinefield -h /app -s /sbin/nologin cinefield
 
-# tini is Debian's minimal init: it reaps zombies and, critically, forwards
-# SIGTERM to the actual node process. Without a PID-1 init, ECS's SIGTERM at
-# task stop can be swallowed by Node's default handling instead of reaching
-# provider-worker.ts's own `process.on("SIGTERM", ...)` drain logic. Runs as
-# root, before the file copies below — apt-get itself requires it.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini \
-  && rm -rf /var/lib/apt/lists/*
+COPY --from=build --chown=cinefield:cinefield /app/dist/provider-worker.cjs ./provider-worker.cjs
 
-# --chown on every COPY sets ownership in the same pass as the copy itself.
-# A separate `RUN chown -R /app` after copying node_modules was measured at
-# over 15 minutes (tens of thousands of small files, recursive chown) —
-# --chown is the standard, fast alternative for exactly this case.
-COPY --from=deps --chown=cinefield:cinefield /app/node_modules ./node_modules
-COPY --chown=cinefield:cinefield package.json package-lock.json tsconfig.json ./
-
-# Runtime-required source only. No src/app (Next.js pages/routes), no public
-# assets, no docs, no other worker's UI-adjacent code — this image's module
-# graph starts at worker/provider-worker.ts and everything below is exactly
-# what that graph can reach (verified by grepping every "@/..." import
-# reachable from it).
-COPY --chown=cinefield:cinefield worker ./worker
-COPY --chown=cinefield:cinefield src/lib/orchestration ./src/lib/orchestration
-COPY --chown=cinefield:cinefield src/lib/supabase ./src/lib/supabase
-COPY --chown=cinefield:cinefield src/lib/contracts ./src/lib/contracts
-COPY --chown=cinefield:cinefield src/lib/aws ./src/lib/aws
-COPY --chown=cinefield:cinefield src/types ./src/types
-# model-registry.ts imports blockedModels.ts; the Cloudflare Workers AI
-# provider (registered in provider-registry.ts) imports lib/cloudflare/* for
-# its gateway config/client. Both are reachable from the worker's own module
-# graph even though the worker never calls Cloudflare directly.
-COPY --chown=cinefield:cinefield src/lib/blockedModels.ts ./src/lib/blockedModels.ts
-COPY --chown=cinefield:cinefield src/lib/cloudflare ./src/lib/cloudflare
-
-# .env, .env.local and any local secret file are excluded by .dockerignore
-# before the build context is even sent to the daemon — not filtered here.
-
+# Security invariant: the final stage intentionally has no application
+# node_modules, package manager metadata, source tree, CLI binaries or build
+# toolchain. Credentials continue to come only from the ECS task role / runtime
+# environment; no secret or build argument is copied into the image.
 USER cinefield
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-
-# --conditions=react-server: worker/activities pulls in the existing Phase 6
-# orchestration chain, which is marked "server-only" (a React marker package
-# that throws outside a React Server Component runtime unless this condition
-# is set). It must come AFTER cli.mjs in argv — tsx's own CLI parses and
-# forwards it internally; passed before cli.mjs it is consumed by node itself
-# and never reaches tsx's loader, which is what "server-only" needs to see.
-# No --env-file-if-exists here — ECS injects environment variables and
-# Secrets Manager references directly into the task, there is no .env.local
-# in the image to load.
-CMD ["node", "node_modules/tsx/dist/cli.mjs", "--conditions=react-server", "worker/provider-worker.ts"]
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "provider-worker.cjs"]

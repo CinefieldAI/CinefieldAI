@@ -1,0 +1,89 @@
+name: Dependency Remediation Probe
+
+# Temporary security-remediation workbench. It does NOT commit, deploy or
+# mutate any remote service. It resolves a candidate package.json + lockfile
+# from scratch on a clean GitHub runner, audits production dependencies, and
+# uploads the candidate files for review. Delete this workflow after the
+# candidate is either adopted or rejected.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dependency-remediation-probe.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Prepare final production dependency candidate
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+          p.dependencies.next = '16.3.1';
+          p.devDependencies['eslint-config-next'] = '16.3.1';
+          p.dependencies['@trigger.dev/sdk'] = '4.5.12';
+          p.devDependencies['trigger.dev'] = '4.5.12';
+          p.engines = { ...(p.engines || {}), node: '>=22.0.0' };
+
+          // The old package is deprecated and pins vulnerable sharp 0.34.3.
+          // Replace it with ContentAuth's maintained Node SDK.
+          delete p.dependencies['c2pa-node'];
+          p.dependencies['@contentauth/c2pa-node'] = '0.9.1';
+
+          // Trigger.dev 4.5.12 still pins socket.io-client 4.7.5 in its core
+          // package. Override only that direct child to the current 4.x client;
+          // do not globally force engine.io/ws versions outside their owners'
+          // dependency ranges.
+          p.overrides = {
+            '@trigger.dev/core': {
+              'socket.io-client': '4.8.3'
+            }
+          };
+
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          NODE
+
+      - name: Resolve candidate dependency tree from scratch
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --ignore-scripts
+
+      - name: Verify lockfile reproducibility with real install scripts
+        run: |
+          rm -rf node_modules
+          npm ci
+
+      - name: Production audit must have zero HIGH / CRITICAL findings
+        run: |
+          npm audit --omit=dev --json > dependency-remediation-audit.json || true
+          node <<'NODE'
+          const fs = require('node:fs');
+          const a = JSON.parse(fs.readFileSync('dependency-remediation-audit.json', 'utf8'));
+          const v = a.metadata?.vulnerabilities || {};
+          console.log(JSON.stringify(v, null, 2));
+          if ((v.critical || 0) > 0 || (v.high || 0) > 0) process.exit(1);
+          NODE
+
+      - name: Upload candidate dependency files and audit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dependency-remediation-candidate-${{ github.sha }}
+          path: |
+            package.json
+            package-lock.json
+            dependency-remediation-audit.json
+          retention-days: 7

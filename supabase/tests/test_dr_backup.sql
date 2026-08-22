@@ -194,12 +194,14 @@ END $$;
 
 
 -- ---------------------------------------------------------------------------
--- PROOF D7 — earlier invariants intact
+-- PROOF D7 — earlier/current invariants intact
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_original_uniq';
-  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF D7 FAILED: 9-A canonical index missing'; END IF;
+  -- Phase 27 superseded the single-original index with a multi-output-safe
+  -- canonical identity. DR must preserve the current invariant.
+  PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_generation_output_uniq';
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROOF D7 FAILED: generation/output canonical index missing'; END IF;
 
   PERFORM 1 FROM pg_indexes WHERE indexname = 'media_assets_owner_checksum_idx';
   IF NOT FOUND THEN RAISE EXCEPTION 'PROOF D7 FAILED: 9-B tenant checksum index missing'; END IF;
@@ -211,5 +213,5 @@ BEGIN
    WHERE table_schema = 'public' AND table_name = 'workflow_start_outbox';
   IF NOT FOUND THEN RAISE EXCEPTION 'PROOF D7 FAILED: M6 table disappeared'; END IF;
 
-  RAISE NOTICE 'PROOF D7 PASS: Phase 9-D is additive; earlier invariants intact';
+  RAISE NOTICE 'PROOF D7 PASS: Phase 9-D and current media identity invariants intact';
 END $$;

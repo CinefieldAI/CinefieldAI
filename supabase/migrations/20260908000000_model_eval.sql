@@ -106,10 +106,10 @@ CREATE TABLE IF NOT EXISTS "public"."model_eval_results" (
     -- dimension with no live judge configured) — see
     -- src/lib/eval/scorers/*.ts. NEVER a fabricated number standing in for
     -- "not measured."
-    "adherence_score" "real",
-    "quality_score" "real",
-    "consistency_score" "real",
-    "safety_score" "real",
+    "adherence_score" real,
+    "quality_score" real,
+    "consistency_score" real,
+    "safety_score" real,
     "latency_ms" integer,
     "cost_amount" numeric,
     "cost_currency" "text",

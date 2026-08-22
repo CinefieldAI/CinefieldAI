@@ -5,11 +5,12 @@ name: Supply Chain CI (Phase 24-A/24-B/24-C)
 # required checks through that same registry). Two jobs:
 #
 #   1. scan (every PR + every push to main): generates a real CycloneDX
-#      SBOM and an npm dependency-vulnerability report
-#      (scripts/generate-sbom.ts), and scans the locally-built
-#      provider-worker container image with Trivy. Reports risk; blocks
-#      only if a tool itself fails to run — see generate-sbom.ts's own
-#      header for why it does not gate on pre-existing vulnerability counts.
+#      SBOM and an npm production-dependency vulnerability report, scans the
+#      locally-built provider-worker image with Trivy, then FAILS if CRITICAL
+#      or HIGH debt grows above the reviewed baseline in
+#      security/supply-chain-baseline.json. Existing debt remains visible and
+#      must trend downward; it is no longer possible for a green check to hide
+#      a regression merely because the scanner itself exited successfully.
 #
 #   2. attest (push to main only): re-generates the SBOM, issues a real
 #      GitHub Artifact Attestation for it (keyless — GitHub OIDC + Sigstore
@@ -20,11 +21,11 @@ name: Supply Chain CI (Phase 24-A/24-B/24-C)
 #      attestation subject digest) to the step summary and as a retained
 #      artifact — never a secret, a signed URL, or a credential.
 #
-# Honest scope: this repository has no application-level production-deploy
-# execution path (Vercel deploys externally from main) — see
-# src/lib/deployment/deployment-policy-gate.ts's own header. "Doğrulanmamış
-# artifact production'a çıkamıyor" is enforced at the point this repository
-# actually controls: a PR cannot merge to main without this job passing.
+# Honest scope: the baseline gate is COUNT-based because the original scanner
+# retained only aggregate npm audit data. It prevents HIGH/CRITICAL debt from
+# increasing but cannot distinguish a one-for-one advisory replacement. The
+# full Trivy JSON is retained as evidence for review; a future identity-level
+# baseline can tighten this without weakening today's regression gate.
 
 on:
   pull_request:
@@ -48,30 +49,54 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          # Supabase JS 2.112+ requires Node >=22; scan the graph under a
+          # supported runtime instead of accepting EBADENGINE warnings.
+          node-version: 22
 
       - run: npm ci
 
       - name: Generate SBOM + dependency vulnerability report
         run: npx tsx scripts/generate-sbom.ts --out sbom-out
 
-      - name: Upload SBOM + audit report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: sbom-${{ github.sha }}
-          path: sbom-out/
-          retention-days: 90
-
       - name: Build provider-worker image (local only, never pushed)
         run: docker build -f Dockerfile.provider-worker -t cinefield-provider-worker:ci .
 
-      - name: Trivy container scan (reports, does not gate — same reasoning as the dependency scan above)
+      - name: Prove provider-worker runtime excludes the development toolchain
+        run: |
+          docker run --rm --entrypoint /bin/sh cinefield-provider-worker:ci -c '
+            set -eu
+            test -f /app/provider-worker.cjs
+            test ! -e /app/node_modules
+            test ! -e /app/package.json
+            test ! -e /app/package-lock.json
+            ! command -v npm >/dev/null 2>&1
+            ! command -v npx >/dev/null 2>&1
+            ! command -v corepack >/dev/null 2>&1
+            node --check /app/provider-worker.cjs
+          '
+
+      - name: Trivy container scan — retain machine-readable evidence
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # v0.24.0
         with:
           image-ref: cinefield-provider-worker:ci
-          format: table
+          format: json
+          output: trivy-results.json
           exit-code: "0"
           severity: "CRITICAL,HIGH"
+
+      - name: Block HIGH / CRITICAL regression above reviewed baseline
+        run: npx tsx scripts/check-supply-chain-baseline.ts
+
+      - name: Upload SBOM + audit + Trivy evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: supply-chain-${{ github.sha }}
+          path: |
+            sbom-out/
+            trivy-results.json
+            security/supply-chain-baseline.json
+          retention-days: 90
 
   attest:
     name: Attest release provenance (main only)
@@ -87,7 +112,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 22
 
       - run: npm ci
 

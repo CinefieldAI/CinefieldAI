@@ -1,0 +1,51 @@
+name: Security Regression CI
+
+# Focused release gate for security-sensitive application and database paths.
+# It does not deploy or mutate any remote environment. SQL proofs run against
+# disposable local PostgreSQL containers and are destroyed by the test scripts.
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/billing/**"
+      - "src/lib/credits.ts"
+      - "src/lib/pricing/**"
+      - "src/lib/orchestration/**"
+      - "src/app/api/generate/**"
+      - "src/app/api/media/**"
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - "next.config.ts"
+      - ".github/workflows/security-regression-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  application-security-contract:
+    name: billing boundary + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # Supabase JS 2.112+ requires Node >=22. Security tests should run
+          # on a supported runtime rather than silently accepting EBADENGINE.
+          node-version: 22
+      - run: npm ci
+      - name: Billing execution-boundary regression proof
+        run: >-
+          node --conditions=react-server --import tsx --test
+          src/lib/orchestration/generation-execution-service.billing.test.ts
+      - name: TypeScript compile check
+        run: npx tsc --noEmit -p tsconfig.json
+
+  postgres-security-invariants:
+    name: throwaway PostgreSQL security proofs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Apply every migration and run database race/invariant proofs
+        run: bash supabase/tests/run_pg_tests.sh
+      - name: Prove Supabase internal-function execution boundaries
+        run: bash supabase/tests/run_supabase_function_hardening_test.sh

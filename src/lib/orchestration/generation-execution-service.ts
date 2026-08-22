@@ -9,6 +9,7 @@ import {
 import { resolveIntentStartedInline } from "./workflow-start-intent";
 import type { OrchestrationResult } from "./types";
 import { createFieldLogger } from "@/lib/observability/logger";
+import { ensureGenerationBillingAuthorized } from "@/lib/billing/generation-credit-gate";
 
 /**
  * Cinefield production generation execution boundary (Phase 6R-B).
@@ -23,6 +24,7 @@ import { createFieldLogger } from "@/lib/observability/logger";
  * THE CHAIN THIS ESTABLISHES
  *   authenticated server boundary
  *     -> resolveGenerationOwner()        (server-controlled, request-blind)
+ *     -> billing authorization           (server-priced, atomic credit hold)
  *     -> startGenerationWorkflow()       (existing, deterministic workflow id)
  *     -> Temporal owns the lifecycle
  *     -> submitGeneration activity -> SQS CommandBus
@@ -84,6 +86,8 @@ export interface GenerationExecutionDeps {
    * relay a queue of work that is already done.
    */
   resolveStartIntent: (generationId: string) => Promise<void>;
+  /** Test seam for the billing gate; production uses the real implementation. */
+  authorizeBilling?: typeof ensureGenerationBillingAuthorized;
 }
 
 async function retireStartIntent(generationId: string): Promise<void> {
@@ -102,6 +106,7 @@ const defaultDeps: GenerationExecutionDeps = {
   startWorkflow: startGenerationWorkflow,
   runDirect: executeGeneration,
   resolveStartIntent: retireStartIntent,
+  authorizeBilling: ensureGenerationBillingAuthorized,
 };
 
 /**
@@ -137,6 +142,12 @@ export async function executeGenerationRequest(
     log({ generationId: params.generationId, owner, result: "refused" });
     return { outcome: "unavailable", reason: "temporal_generation_disabled" };
   }
+
+  // SECURITY: this is the shared boundary behind /api/generate and every
+  // compatibility execution route. A route cannot bypass billing merely by
+  // supplying an existing generation id: real provider work is authorized
+  // here, before Temporal or the direct-dev orchestrator can start.
+  await (deps.authorizeBilling ?? ensureGenerationBillingAuthorized)(params);
 
   if (owner === "temporal") {
     try {
