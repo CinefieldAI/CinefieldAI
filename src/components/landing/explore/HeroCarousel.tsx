@@ -35,8 +35,15 @@ export default function HeroCarousel() {
 
   return (
     <div className="group relative">
-      <div ref={scrollerRef} onScroll={updateScrollState} className="hide-scrollbar grid min-w-0 overflow-x-scroll px-4">
-        <ul className="flex min-w-0 gap-5 *:flex-[0_0_19.5rem] md:*:flex-[0_0_25rem] xl:*:flex-[0_0_32rem]">
+      {/* No horizontal padding of its own: the page container already pads,
+          and a second inset here pushed the row 16px further in than every
+          section below it. */}
+      <div ref={scrollerRef} onScroll={updateScrollState} className="hide-scrollbar grid min-w-0 overflow-x-scroll">
+        {/* Card widths are picked so the row lands just past a whole number
+            of cards — the next one stays half-visible, which is what tells
+            the eye the row scrolls. At the 1400px cap that works out to
+            three full cards plus half of the fourth. */}
+        <ul className="flex min-w-0 gap-5 *:flex-[0_0_19.5rem] md:*:flex-[0_0_21.5rem] xl:*:flex-[0_0_23rem]">
           {HERO_CARDS_DATA.map((card) => (
             <li key={card.id}>
               <div className="group/card relative grid grid-flow-row-dense gap-3 rounded-lg transition active:brightness-75">
