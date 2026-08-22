@@ -213,13 +213,20 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
   {
     label: "Featured models",
     models: [
+      // Order follows the reference's own Featured row: the 2.5 pair leads,
+      // then the 2.0 trio, then H3.
+      vfeat("seedance-2.5", "Seedance 2.5", SEEDANCE_ICON, "1080p", "4s-30s", ["NEW"], true),
+      vfeat("seedance-2.5-edit", "Seedance 2.5 Edit", SEEDANCE_ICON, "720p", "5s", ["NEW"], true),
       vfeat("seedance-2.0", "Seedance 2.0", SEEDANCE_ICON, "4K", "4s-15s"),
-      vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", SEEDANCE_ICON, "720p", "4s-15s"),
       vfeat("seedance-2.0-fast", "Seedance 2.0 Fast", SEEDANCE_ICON, "720p", "4s-15s"),
+      vfeat("seedance-2.0-mini", "Seedance 2.0 Mini", SEEDANCE_ICON, "720p", "4s-15s"),
+      vfeat("minimax-h3", "MiniMax H3", MinimaxIcon, "2K", "5s-15s", ["NEW"]),
       vfeat("gemini-omni-flash", "Gemini Omni Flash", GOOGLE_ICON, "720p", "4s-10s"),
       vfeat("kling-3.0", "Kling 3.0", KLING_ICON, "4K", "3s-15s", undefined, true),
       vfeat("kling-3.0-turbo", "Kling 3.0 Turbo", KLING_ICON, "1080p", "3s-15s"),
       vfeat("kling-3.0-motion-control", "Kling 3.0 Motion Control", KLING_ICON, "1080p", "3s-30s"),
+      vfeat("flux-3-video", "FLUX.3 Video", FluxIcon, "1080p", "5s-20s", ["NEW"], true),
+      vfeat("grok-imagine-1.5", "Grok Imagine 1.5", GROK_ICON, "720p", "1s-15s"),
       vfeat("happyhorse", "HappyHorse", HappyHorseIcon, "1080p", "3s-15s", undefined, true),
       vfeat("grok-base", "Grok Imagine", GROK_ICON, "720p", "1s-15s"),
       vfeat("veo-3.1-lite", "Google Veo 3.1 Lite", GOOGLE_ICON, "1080p", "4s-8s", undefined, true),

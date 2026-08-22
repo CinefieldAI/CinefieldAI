@@ -600,11 +600,17 @@ export default function PromptBar(props: PromptBarProps) {
   // Cinema Studio 4.0 detection
   const isCinema40 = model === "cinema-studio-4.0";
 
+  // Seedance 2.5 — shares the 2.0 family's control row (assets, batch,
+  // bitrate, sound) but ships with its own defaults, so it is tracked
+  // separately where those differ.
+  const isSeedance25 = model === "seedance-2.5";
+
   // Seedance 2.0 family detection
   const isSeedance2Family =
     model === "seedance-2.0" ||
     model === "seedance-2.0-mini" ||
-    model === "seedance-2.0-fast";
+    model === "seedance-2.0-fast" ||
+    isSeedance25;
 
   // Seedance Pro Fast detection — a distinct model ("seedance-pro-fast") from
   // the "Seedance 2.0" family above; do not conflate the two.
@@ -929,10 +935,11 @@ export default function PromptBar(props: PromptBarProps) {
   useEffect(() => {
     if (isSeedance2Family) {
       onResolutionChange("1080p");
-      onDurationChange(7);
-      onSoundChange(false);
+      // 2.5 opens at 5s with sound already on; the 2.0 models do not.
+      onDurationChange(isSeedance25 ? 5 : 7);
+      onSoundChange(isSeedance25);
     }
-  }, [isSeedance2Family, onResolutionChange, onDurationChange, onSoundChange]);
+  }, [isSeedance2Family, isSeedance25, onResolutionChange, onDurationChange, onSoundChange]);
 
   // Set Higgsfield family defaults
   useEffect(() => {
