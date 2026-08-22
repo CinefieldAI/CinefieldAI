@@ -1574,7 +1574,10 @@ function WorkflowModelPanel({
                     </div>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                        {/* Same type scale as the main list rows — a family's
+                            submodels shouldn't read larger than the list they
+                            opened from. */}
+                        <span className="truncate text-xs font-semibold text-white">
                           {model.name}
                         </span>
                         {model.badge && (
@@ -1606,7 +1609,7 @@ function WorkflowModelPanel({
                           )}
                         </span>
                       ) : (
-                        <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-zinc-500">
+                        <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-white/45">
                           {model.description}
                           {crossTab && targetLabel && (
                             <span className="shrink-0 text-[10px] text-zinc-600">
@@ -1669,7 +1672,9 @@ function WorkflowModelPanel({
                 }`}
               >
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[16px] font-semibold leading-5 text-white">
+                  {/* Matches the main list's type scale — the flyout is a
+                      continuation of that list, not a bigger heading. */}
+                  <span className="truncate text-xs font-semibold text-white">
                     {model.name}
                   </span>
                   {model.badge && (
