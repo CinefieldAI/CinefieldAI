@@ -77,7 +77,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   description: string;
-  resolution: "4K" | "2K" | "1080p" | "720p" | "512p";
+  resolution: "4K" | "2K" | "1080p" | "768p" | "720p" | "512p";
   durations: number[];
   /** Human-readable duration range, e.g. "6s-10s" (for submenu display). */
   durationLabel?: string;
@@ -105,6 +105,8 @@ const RES_CRED: Record<string, number> = {
   "4K": 200,
   "2K": 150,
   "1080p": 120,
+  // The Minimax Hailuo models are the only ones offering 768p.
+  "768p": 70,
   "720p": 60,
   "512p": 40,
 };
@@ -242,8 +244,9 @@ export const MODEL_CATEGORIES: ModelCategory[] = [
         "High-dynamic, VFX-ready, fastest and most affordable",
         MinimaxIcon,
         [
-          vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "1080p", "6s-10s"),
-          vsub("minimax-2.3", "Minimax Hailuo 2.3", "1080p", "6s-10s"),
+          // 768p is these models' own default; 1080p is the step up.
+          vsub("minimax-2.3-fast", "Minimax Hailuo 2.3 Fast", "768p", "6s-10s", undefined, true),
+          vsub("minimax-2.3", "Minimax Hailuo 2.3", "768p", "6s-10s", undefined, true),
           vsub("minimax-02-fast", "Minimax Hailuo 02 Fast", "512p", "6s-10s"),
           vsub("minimax-02", "Minimax Hailuo 02", "1080p", "6s-10s"),
         ],

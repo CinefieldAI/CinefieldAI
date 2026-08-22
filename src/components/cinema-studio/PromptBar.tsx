@@ -1007,10 +1007,13 @@ export default function PromptBar(props: PromptBarProps) {
   // defaults its Quality chip to 1080p), Sound defaults Off.
   useEffect(() => {
     if (isMinimaxHailuo) {
-      onResolutionChange("1080p");
-      onSoundChange(false);
+      // The 2.3 pair opens at 768p with sound on; the 02 pair still opens at
+      // 1080p silent, even 02 Fast despite being 512p-native.
+      onResolutionChange(isMinimax23Family ? "768p" : "1080p");
+      onSoundChange(isMinimax23Family);
+      if (isMinimax23Family) onDurationChange(6);
     }
-  }, [isMinimaxHailuo, onResolutionChange, onSoundChange]);
+  }, [isMinimaxHailuo, isMinimax23Family, onResolutionChange, onSoundChange, onDurationChange]);
 
   // "02" family shows a Duration chip defaulting to 6s (the "2.3" family has none).
   useEffect(() => {
@@ -2031,7 +2034,6 @@ export default function PromptBar(props: PromptBarProps) {
               !isKling3 &&
               !isKling3OmniEdit &&
               !isKlingMotionControlNon3 &&
-              !isMinimax23Family &&
               !isCinema25 && (
               <DurationPopover
                 value={duration}
