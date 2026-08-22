@@ -238,6 +238,51 @@ function AutoSettingsToggle({
   );
 }
 
+/* Option lists read off the reference, model by model, by opening every
+ * chip's panel. A model absent from a map keeps whatever fallback the control
+ * already had; an executable model's registry capabilities still win over
+ * both. Ratio order is the reference's own — its lists are not all sorted the
+ * same way. */
+const REF_RATIOS: Record<string, string[]> = {
+  "minimax-h3": ["Auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+  "flux-3-video": ["Auto", "21:9", "2:1", "16:9", "4:3", "1:1", "3:4", "9:16"],
+  "seedance-2.5": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+  "seedance-2.0": ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+  "seedance-2.0-fast": ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+  "seedance-2.0-mini": ["Auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+  "seedance-1.5-pro": ["Auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+  "grok-base": ["Auto", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "1:1"],
+  "grok-imagine-1.5": ["Auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
+  "happyhorse": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+  "wan-2.7": ["16:9", "9:16", "4:3", "3:4", "1:1"],
+  "wan-2.5": ["16:9", "9:16"],
+  "wan-2.5-fast": ["16:9", "9:16"],
+};
+
+const REF_RESOLUTIONS: Record<string, string[]> = {
+  "flux-3-video": ["720p", "1080p"],
+  "kling-3.0-motion-control": ["720p", "1080p"],
+  "sora-2-pro": ["720p", "1080p"],
+  "sora-2-max": ["720p", "1080p"],
+  "sora-2-pro-max": ["720p", "1080p"],
+  "veo-3.1": ["720p", "1080p", "4K"],
+  "veo-3.1-fast": ["720p", "1080p", "4K"],
+  "veo-3": ["720p", "1080p"],
+  "veo-3-fast": ["720p", "1080p"],
+  "wan-2.5": ["480p", "720p", "1080p"],
+  "seedance-2.5": ["480p", "720p", "1080p"],
+  "seedance-2.5-edit": ["480p", "720p", "1080p"],
+  "seedance-2.0": ["480p", "720p", "1080p", "4K"],
+  "seedance-2.0-fast": ["480p", "720p"],
+  "seedance-2.0-mini": ["480p", "720p"],
+  "seedance-1.5-pro": ["480p", "720p", "1080p"],
+  "seedance-pro": ["480p", "720p", "1080p"],
+  "seedance-pro-fast": ["480p", "720p", "1080p"],
+  "grok-base": ["480p", "720p"],
+  "grok-imagine-1.5": ["480p", "720p", "1080p"],
+  "grok-imagine-edit": ["480p", "720p"],
+};
+
 /** Shared h-8 control-pill style with solid black background and thin orange border. */
 const PILL =
   "flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(217,119,87,0.45)] bg-[rgba(4,4,5,0.98)] px-2.5 py-1 text-xs font-semibold text-white transition-all duration-200 ease-out hover:border-[#D97757] hover:bg-[rgba(16,16,17,0.98)] focus:outline-none";
@@ -720,6 +765,7 @@ export default function PromptBar(props: PromptBarProps) {
   // fact, not a choice — so it opts out of the resolution pill below.
   const isMiniMaxH3 = model === "minimax-h3";
   const isGrokImagine15 = model === "grok-imagine-1.5";
+  const isFlux3Video = model === "flux-3-video";
 
   // Higgsfield family (Lite/Standard/Turbo) — only "Lite" is confirmed via
   // live click-audit; the other two share identical catalog metadata (720p,
@@ -767,6 +813,24 @@ export default function PromptBar(props: PromptBarProps) {
   // explicit follow-up request, but WITHOUT the "+" References popover or
   // Enhance chip (not asked for on this model).
   const isMinimax23PlainOnly = model === "minimax-2.3";
+
+  // Re-audited against the reference on 2026-08-22 by selecting every model in
+  // every family panel and opening each chip's panel. These carry no aspect
+  // ratio chip there; Grok Imagine, which used to be on this list, does.
+  const isWanNoRatio = model === "wan-2.6" || model === "wan-2.2" || model === "wan-2.2-fast";
+  const isWanNoResolution = model === "wan-2.2" || model === "wan-2.2-fast";
+  const isSeedanceProPair = model === "seedance-pro" || model === "seedance-pro-fast";
+  const isSeedance25Edit = model === "seedance-2.5-edit";
+  const isGrokImagineEdit = model === "grok-imagine-edit";
+  // Only the base Sora 2 hides its resolution chip; Pro/Max/Pro Max show one.
+  const isSoraBase = model === "sora-2";
+  // The Veo 3 models drop "Auto"; only 3.1 Lite offers it.
+  const isVeo3Pair = model === "veo-3" || model === "veo-3-fast";
+  const isWan22Fast = model === "wan-2.2-fast";
+  const isVeoNonLite =
+    model === "veo-3.1" || model === "veo-3.1-fast" || model === "veo-3" || model === "veo-3-fast";
+  const refRatios = REF_RATIOS[model] ?? null;
+  const refResolutions = REF_RESOLUTIONS[model] ?? null;
 
   /* ---------------------------------------------------------------- */
   /* PHASE 7-F — canonical capability binding                          */
@@ -953,6 +1017,48 @@ export default function PromptBar(props: PromptBarProps) {
       onDurationChange(5);
     }
   }, [isGrokImagine, onDurationChange]);
+
+  // Every model whose reference ratio panel leads with "Auto" also opens on
+  // "Auto"; ours opened on 16:9 because nothing set it. Read off the reference
+  // on 2026-08-22, one model at a time.
+  useEffect(() => {
+    if (isMiniMaxH3) {
+      onAspectRatioChange("Auto");
+      onDurationChange(5);
+    }
+  }, [isMiniMaxH3, onAspectRatioChange, onDurationChange]);
+
+  useEffect(() => {
+    if (isFlux3Video) {
+      onAspectRatioChange("Auto");
+      onResolutionChange("720p");
+      onDurationChange(5);
+    }
+  }, [isFlux3Video, onAspectRatioChange, onResolutionChange, onDurationChange]);
+
+  useEffect(() => {
+    if (isGrokImagine || isGrokImagine15) {
+      onAspectRatioChange("Auto");
+      onResolutionChange("720p");
+      onDurationChange(5);
+    }
+  }, [isGrokImagine, isGrokImagine15, onAspectRatioChange, onResolutionChange, onDurationChange]);
+
+  // The edit entry has neither a ratio nor a duration chip, so only its
+  // resolution needs pinning into its own 480p/720p list.
+  useEffect(() => {
+    if (isGrokImagineEdit) {
+      onResolutionChange("720p");
+    }
+  }, [isGrokImagineEdit, onResolutionChange]);
+
+  useEffect(() => {
+    if (isSeedance15Pro) {
+      onAspectRatioChange("Auto");
+      onResolutionChange("720p");
+      onDurationChange(8);
+    }
+  }, [isSeedance15Pro, onAspectRatioChange, onResolutionChange, onDurationChange]);
 
   // Set Seedance 2.0 family defaults
   useEffect(() => {
@@ -1758,10 +1864,14 @@ export default function PromptBar(props: PromptBarProps) {
               !isKlingMotionControlNon3 &&
               !isKling25TurboOr21 &&
               !isKling21Master &&
-              !isGrokImagine &&
               !isHiggsfield &&
               !isMinimaxSimplified &&
-              !isMinimax23PlainOnly && (
+              !isMinimax23PlainOnly &&
+              !isMinimax02Family &&
+              !isWanNoRatio &&
+              !isSeedanceProPair &&
+              !isSeedance25Edit &&
+              !isGrokImagineEdit && (
               isGeminiOmniFlash ? (
                 <GeminiAspectRatioControl
                   value={aspectRatio}
@@ -1808,7 +1918,7 @@ export default function PromptBar(props: PromptBarProps) {
                     else if (activePromptPopover === "aspectRatio") setActivePromptPopover(null);
                   }}
                 />
-              ) : isOpenAISora ? (
+              ) : isOpenAISora || isVeoNonLite ? (
                 <Veo31AspectRatioControl
                   value={aspectRatio}
                   onChange={onAspectRatioChange}
@@ -1834,6 +1944,7 @@ export default function PromptBar(props: PromptBarProps) {
                     // Canonical first: an executable model's ratios come from
                     // the registry, never from this file.
                     canonicalRatios ??
+                    refRatios ??
                     (isHappyHorse
                       ? ["16:9", "9:16", "1:1", "4:3", "3:4"]
                       : isWan
@@ -1853,7 +1964,8 @@ export default function PromptBar(props: PromptBarProps) {
             {!isGeminiOmniFlash &&
               !isKling2_6 &&
               !isKling21Master &&
-              !isOpenAISora &&
+              !isSoraBase &&
+              !isWanNoResolution &&
               !isHiggsfield &&
               !isNanoBananaPro &&
               !isMiniMaxH3 &&
@@ -1875,6 +1987,7 @@ export default function PromptBar(props: PromptBarProps) {
                 collisionPadding={isCinema35 ? 12 : undefined}
                 options={
                   canonicalResolutions ??
+                  refResolutions ??
                   (isCinema25
                     ? ["720p", "1080p"]
                     : isCinema40
@@ -2026,14 +2139,19 @@ export default function PromptBar(props: PromptBarProps) {
               </>
             )}
 
-            {/* Duration - Hidden for Kling 3.0 Motion Control, Kling 3.0 (plain, confirmed
-                absent from the live click-audit — Multi-shot is its only time control),
-                Kling 3.0 Omni Edit, Kling Motion Control (non-3.0), and Minimax Hailuo "2.3" family */}
+            {/* Duration — absent on both Motion Control cards, the Veo 3 pair,
+                Wan 2.2 Fast, Grok Imagine Edit and Seedance 2.5 Edit.
+                Kling 3.0 and Kling 3.0 Omni Edit used to be on this list on the
+                strength of an earlier audit; the 2026-08-22 sweep opened both
+                and found a duration control (a 3s-15s slider, and a 3s-10s
+                list), so they are back. */}
             {isVideo &&
               !isKling3MotionControl &&
-              !isKling3 &&
-              !isKling3OmniEdit &&
               !isKlingMotionControlNon3 &&
+              !isVeo3Pair &&
+              !isWan22Fast &&
+              !isGrokImagineEdit &&
+              !isSeedance25Edit &&
               !isCinema25 && (
               <DurationPopover
                 value={duration}

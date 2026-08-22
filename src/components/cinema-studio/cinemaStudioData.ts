@@ -722,6 +722,8 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
   { value: "21:9", description: "Cinematic", shape: [21, 9] },
   // Only the Grok Imagine models offer these two; they are restricted to it
   // through AspectRatioDropdown's `options` prop rather than shown globally.
+  // FLUX.3 Video is the only model offering 2:1.
+  { value: "2:1", description: "Panorama", shape: [2, 1] },
   { value: "3:2", description: "Classic photo", shape: [3, 2] },
   { value: "2:3", description: "Portrait photo", shape: [2, 3] },
 ];

@@ -47,7 +47,13 @@ function DynamicAspectIcon({ value }: { value: string }) {
             ? [3, 4]
             : value === "21:9"
               ? [21, 9]
-              : [16, 9];
+              : value === "2:1"
+                ? [2, 1]
+                : value === "3:2"
+                  ? [3, 2]
+                  : value === "2:3"
+                    ? [2, 3]
+                    : [16, 9];
   const [w, h] = shape;
   const scale = 14 / Math.max(w, h);
   const width = Math.round(w * scale);
@@ -80,8 +86,13 @@ export default function AspectRatioDropdown({
 }: AspectRatioDropdownProps) {
   const [open, setOpen] = useState(false);
   const controlledOpen = isOpen !== undefined ? isOpen : open;
+  // Ordered by the caller, not by the master list: the reference does not
+  // order every model's ratio panel the same way, so a filter over
+  // ASPECT_RATIO_OPTIONS would silently re-sort them.
   const visibleOptions = options
-    ? ASPECT_RATIO_OPTIONS.filter((opt) => options.includes(opt.value))
+    ? options
+        .map((v) => ASPECT_RATIO_OPTIONS.find((opt) => opt.value === v))
+        .filter((opt): opt is (typeof ASPECT_RATIO_OPTIONS)[number] => !!opt)
     : ASPECT_RATIO_OPTIONS;
 
   const defaultRatio = visibleOptions[0]?.value ?? "16:9";
