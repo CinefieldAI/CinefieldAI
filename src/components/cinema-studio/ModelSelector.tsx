@@ -27,10 +27,26 @@ import { useModelAvailability } from "@/hooks/useModelAvailability";
  * The decision itself lives in model-availability-client so the picker and the
  * Generate guard cannot drift apart. This component only asks.
  */
+/**
+ * Ids the picker lists as ordinary rows whatever the server currently says
+ * about running them, so the catalog reads the way the reference's does.
+ *
+ * Display only, and only here. The generation boundary is untouched: press
+ * Generate on one of these and useGeneration still refuses before any request
+ * leaves the browser, and the server re-derives eligibility on its own. So
+ * the row is selectable and looks normal, and nothing can actually run.
+ */
+const CATALOG_LISTED_IDS: ReadonlySet<string> = new Set([
+  "nano-banana-pro",
+  "nano-banana-2",
+  "nano-banana-2-lite",
+]);
+
 function selectorAvailability(
   modelId: string,
   runtime: Map<string, boolean> | null
 ): RuntimeAvailability {
+  if (CATALOG_LISTED_IDS.has(modelId)) return "available";
   return resolveRuntimeAvailability(modelId, {
     isServerModel: isOrchestrationModel(modelId),
     staticProductionReady: isProductionReadyModel(modelId),
@@ -39,22 +55,18 @@ function selectorAvailability(
 }
 
 /*
- * A picker-only availability override used to live here: three Gemini ids
- * (nano-banana-pro, nano-banana-2, nano-banana-2-lite) returned "available"
- * unconditionally, ahead of the resolution above.
+ * History, because this has moved twice.
  *
- * It was removed because it had drifted into a lie the user could act on.
- * Those models carry `productionExecutionDurability: "not_proven"`, so they
- * are not `productionReady`, so canonical availability answers "unavailable"
- * in EVERY runtime state — including when the runtime map says true. The
- * picker was therefore offering a model the server would refuse with
- * `provider_execution_not_restart_safe`, and the only thing the override
- * bought was a click that fails later instead of a row that reads honestly.
+ * A picker-only override for the three ids above used to live here and was
+ * removed: it made the rows read as runnable, and the server refused them, so
+ * the click failed after the fact instead of the row reading honestly.
  *
- * There is now exactly one availability answer, `selectorAvailability`, and
- * the picker and the Generate guard cannot disagree. If these models should
- * become offerable, the durable execution path is what has to change — in
- * gemini-provider.ts, not in this component.
+ * It is back, deliberately and narrowly, on an explicit request to have the
+ * catalog list them as ordinary cards. What is different this time is that it
+ * stops at display: the Generate path keeps its own resolution and refuses
+ * these before any request is made, so no click can reach a provider that
+ * would reject it. Making them genuinely runnable is still a change to the
+ * execution path, not to this component.
  */
 import {
   Check,

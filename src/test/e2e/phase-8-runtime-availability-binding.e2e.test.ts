@@ -367,34 +367,38 @@ test("the model selector consumes RUNTIME availability, not the build flag alone
   );
 });
 
-test("no picker-only allowlist can override canonical runtime eligibility", () => {
-  // A previous batch shipped exactly this: PICKER_UNLOCKED_MODEL_IDS returned
-  // "available" for three Gemini ids ahead of the shared resolution, so a row
-  // read offerable while the server refused with
-  // `provider_execution_not_restart_safe`. It was removed; this guard is what
-  // stops the shape returning under a different name.
-  const code = readSource("src/components/cinema-studio/ModelSelector.tsx")
+/** Source with comments removed, so prose about a rule is not the rule. */
+const stripSourceComments = (source: string) =>
+  source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "")
     .replace(/\r\n/g, "\n");
 
-  // 1. No literal availability verdict — it must come from the shared resolver.
-  assert.ok(
-    !/return\s+"available"/.test(code),
-    "availability must come from resolveRuntimeAvailability, never a literal verdict"
+test("a picker-only allowlist may not reach the generation path", () => {
+  // A previous batch shipped PICKER_UNLOCKED_MODEL_IDS: three ids returned
+  // "available" ahead of the shared resolution, so a row read offerable AND
+  // the click went through, and the server refused it after the fact.
+  //
+  // A display-scoped exception is now allowed on purpose — the catalog lists
+  // those ids as ordinary cards. What must not come back is the part that
+  // broke: the exception reaching anything that can start a generation. So
+  // this pins where it is allowed to live rather than forbidding it outright,
+  // and the funnel tests below prove the boundary still refuses.
+  const code = stripSourceComments(
+    readSource("src/components/cinema-studio/ModelSelector.tsx")
   );
 
-  // 2. No model-id membership test may decide availability. An allowlist is the
-  //    mechanism that failed before, whatever it gets called next time.
-  for (const shape of [
-    /new Set<string>\(\[[\s\S]{0,400}?"nano-banana/,
-    /_MODEL_IDS[^=\n]*=\s*new Set/,
-    /\.has\(modelId\)\s*\)?\s*return/,
-  ]) {
-    assert.ok(!shape.test(code), `a picker-only availability allowlist is forbidden (${shape})`);
-  }
+  // 1. A literal verdict may live inside selectorAvailability and nowhere else.
+  const fnStart = code.indexOf("function selectorAvailability");
+  assert.ok(fnStart > 0, "selectorAvailability must exist");
+  const fnEnd = code.indexOf("\n}", fnStart);
+  const outside = code.slice(0, fnStart) + code.slice(fnEnd);
+  assert.ok(
+    !/return\s+"available"/.test(outside),
+    "only selectorAvailability may answer with a literal verdict"
+  );
 
-  // 3. Every selection gate reads the one function that asks the shared resolver.
+  // 2. Every selection gate still reads that one function.
   const gated = [...code.matchAll(/canOfferForGeneration\(([A-Za-z_]+)\(/g)].map((m) => m[1]);
   assert.ok(gated.length > 0, "the selection gate must still exist");
   for (const fn of gated) {
@@ -404,6 +408,14 @@ test("no picker-only allowlist can override canonical runtime eligibility", () =
       "the gate must read canonical availability, not a picker-local variant"
     );
   }
+
+  // 3. The generation funnel carries no exception of its own — it resolves
+  //    availability the canonical way for every id, including these.
+  const hook = stripSourceComments(readSource("src/hooks/useGeneration.ts"));
+  assert.ok(
+    !/nano-banana/.test(hook) && !/return\s+"available"/.test(hook),
+    "the generation funnel must not carry a per-model availability exception"
+  );
 });
 
 test("the Generate funnel guards an ALREADY-SELECTED model", () => {
