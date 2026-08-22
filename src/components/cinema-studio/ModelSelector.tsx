@@ -617,46 +617,9 @@ export default function ModelSelector({
 
   const categories = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) {
-      if (!value) return source;
-
-      // Flatten all models with their category label in canonical original order
-      const allFlatModels: { model: ModelInfo; categoryLabel: string }[] = [];
-      for (const cat of source) {
-        for (const m of cat.models) {
-          allFlatModels.push({ model: m, categoryLabel: cat.label });
-        }
-      }
-
-      // Find selected model index (direct match or submodel match)
-      const selectedIdx = allFlatModels.findIndex(
-        (item) => item.model.id === value || item.model.submodels?.some((sub) => sub.id === value)
-      );
-
-      if (selectedIdx < 0) return source;
-
-      // Rotate model list so selected model is first, followed by original next items, then wrapped start items
-      const rotatedList = [
-        ...allFlatModels.slice(selectedIdx),
-        ...allFlatModels.slice(0, selectedIdx),
-      ];
-
-      // Group consecutive models belonging to the same category
-      const rotatedCategories: { label: string; models: ModelInfo[] }[] = [];
-      for (const item of rotatedList) {
-        const lastCat = rotatedCategories[rotatedCategories.length - 1];
-        if (lastCat && lastCat.label === item.categoryLabel) {
-          lastCat.models.push(item.model);
-        } else {
-          rotatedCategories.push({
-            label: item.categoryLabel,
-            models: [item.model],
-          });
-        }
-      }
-
-      return rotatedCategories;
-    }
+    // The list keeps its canonical order whatever is selected — the selected
+    // row is marked with a checkmark and the orange card, it does not move.
+    if (!q) return source;
 
     const match = (m: ModelInfo) =>
       m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
